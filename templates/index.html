@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitHub Gallery</title>
+<style>
+  :root {
+    --bg: #131720;
+    --surface: #1b212e;
+    --surface-2: #232b3b;
+    --line: #2c3548;
+    --text: #e6eaf2;
+    --muted: #8b94a7;
+    --accent: #7aa2f7;
+    --danger: #f7768e;
+    --radius: 10px;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  a { color: inherit; text-decoration: none; }
+
+  /* ---------- 顶栏 ---------- */
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 28px;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  }
+  .logo { font-family: var(--mono); font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
+  .logo .slash { color: var(--accent); }
+  .addbar { flex: 1; min-width: 260px; display: flex; gap: 8px; max-width: 640px; }
+  .addbar input {
+    flex: 1; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); color: var(--text);
+    padding: 9px 14px; font-family: var(--mono); font-size: 13px;
+    transition: border-color .15s;
+  }
+  .addbar input:focus { outline: none; border-color: var(--accent); }
+  .addbar input::placeholder { color: var(--muted); }
+  button {
+    background: var(--accent); color: #10141c; border: 0;
+    border-radius: var(--radius); padding: 9px 18px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .85; }
+  button:disabled { opacity: .45; cursor: wait; }
+  button.ghost {
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--line); font-weight: 500;
+  }
+  button.ghost:hover { color: var(--text); border-color: var(--muted); opacity: 1; }
+  .llm-badge {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 99px; padding: 3px 10px;
+    white-space: nowrap;
+  }
+  .llm-badge.on { color: #9ece6a; border-color: #9ece6a44; }
+
+  /* ---------- 工具行 ---------- */
+  .toolbar {
+    max-width: 1240px; margin: 22px auto 0; padding: 0 28px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .toolbar input[type=search] {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 99px; color: var(--text);
+    padding: 7px 16px; font-size: 13px; width: 220px;
+  }
+  .toolbar input[type=search]:focus { outline: none; border-color: var(--accent); }
+  .chip {
+    font-size: 12.5px; padding: 5px 13px; border-radius: 99px;
+    background: var(--surface); border: 1px solid var(--line);
+    color: var(--muted); cursor: pointer; user-select: none;
+    transition: all .15s;
+  }
+  .chip:hover { color: var(--text); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #10141c; font-weight: 600; }
+
+  /* ---------- 分区与卡片 ---------- */
+  main { max-width: 1240px; margin: 0 auto; padding: 10px 28px 80px; }
+  .cat-title {
+    font-family: var(--mono); font-size: 14px; color: var(--muted);
+    margin: 34px 0 14px; display: flex; align-items: baseline; gap: 10px;
+  }
+  .cat-title::before { content: "//"; color: var(--accent); font-weight: 700; }
+  .cat-title .count { font-size: 11px; opacity: .6; }
+  .grid {
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px 18px 14px;
+    border-top: 2px solid var(--lang-color, var(--line));
+    display: flex; flex-direction: column; gap: 10px;
+    transition: transform .15s, border-color .15s;
+  }
+  .card:hover { transform: translateY(-2px); border-color: var(--muted); border-top-color: var(--lang-color, var(--muted)); }
+  .card-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .repo-name { font-family: var(--mono); font-size: 14.5px; font-weight: 700; word-break: break-all; }
+  .repo-name .owner { color: var(--muted); font-weight: 400; }
+  .repo-name:hover { color: var(--accent); }
+  .stars { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .summary { font-size: 13.5px; color: var(--text); opacity: .92; flex: 1; }
+  .notes { font-size: 12.5px; color: #e0af68; background: #e0af6812; border-radius: 6px; padding: 6px 10px; }
+  .card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .lang { font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+  .lang-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lang-color, var(--muted)); }
+  .tag {
+    font-size: 11px; color: var(--muted); background: var(--surface-2);
+    padding: 2px 9px; border-radius: 99px; cursor: pointer;
+  }
+  .tag:hover { color: var(--accent); }
+  .card-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid var(--line); padding-top: 10px; margin-top: 2px;
+  }
+  .pushed { font-family: var(--mono); font-size: 11px; color: var(--muted); opacity: .7; }
+  .actions { display: flex; gap: 4px; }
+  .icon-btn {
+    background: none; border: 0; padding: 4px 7px; border-radius: 6px;
+    color: var(--muted); font-size: 13px; cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); opacity: 1; }
+  .icon-btn.del:hover { color: var(--danger); }
+
+  /* ---------- 空状态 / 提示 ---------- */
+  .empty {
+    text-align: center; margin: 90px auto; color: var(--muted);
+    font-family: var(--mono); font-size: 14px;
+  }
+  .empty .big { font-size: 40px; margin-bottom: 14px; }
+  #toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    background: var(--surface-2); border: 1px solid var(--line);
+    padding: 10px 22px; border-radius: 99px; font-size: 13px;
+    opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 50;
+  }
+  #toast.show { opacity: 1; }
+  #toast.err { border-color: var(--danger); color: var(--danger); }
+
+  /* ---------- 编辑弹窗 ---------- */
+  dialog {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 26px; width: min(480px, 92vw);
+  }
+  dialog::backdrop { background: #0009; backdrop-filter: blur(3px); }
+  dialog h3 { font-family: var(--mono); font-size: 15px; margin-bottom: 18px; }
+  dialog label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 5px; }
+  dialog input, dialog textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--text); padding: 8px 12px; font-size: 13.5px;
+    font-family: inherit;
+  }
+  dialog input:focus, dialog textarea:focus { outline: none; border-color: var(--accent); }
+  dialog textarea { resize: vertical; min-height: 64px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+  @media (max-width: 640px) {
+    header, .toolbar, main { padding-left: 16px; padding-right: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">github<span class="slash">/</span>gallery</div>
+  <form class="addbar" id="addForm">
+    <input id="urlInput" placeholder="粘贴 GitHub 仓库地址,回车收藏 → AI 自动理解归档" autocomplete="off">
+    <button id="addBtn" type="submit">收藏</button>
+  </form>
+  <span class="llm-badge" id="llmBadge">LLM: 检测中…</span>
+</header>
+
+<div class="toolbar">
+  <input type="search" id="searchInput" placeholder="搜索名称 / 摘要 / 标签…">
+  <div id="chips" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+</div>
+
+<main id="main"></main>
+<div id="toast"></div>
+
+<dialog id="editDialog">
+  <h3>// 编辑收藏</h3>
+  <form id="editForm" method="dialog">
+    <label>分类</label><input name="category">
+    <label>摘要</label><textarea name="summary"></textarea>
+    <label>标签(逗号分隔)</label><input name="tags">
+    <label>我的备注</label><textarea name="notes" placeholder="为什么收藏它、怎么用、踩过的坑…"></textarea>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" onclick="editDialog.close()">取消</button>
+      <button type="submit">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// GitHub 常见语言配色(可自行扩充)
+const LANG_COLORS = {
+  Python:"#3572A5", JavaScript:"#f1e05a", TypeScript:"#3178c6", Go:"#00ADD8",
+  Rust:"#dea584", Java:"#b07219", C:"#555555", "C++":"#f34b7d", "C#":"#178600",
+  HTML:"#e34c26", CSS:"#563d7c", Vue:"#41b883", Shell:"#89e051", Ruby:"#701516",
+  Kotlin:"#A97BFF", Swift:"#F05138", PHP:"#4F5D95", Dart:"#00B4AB",
+  "Jupyter Notebook":"#DA5B0B", Lua:"#000080", Zig:"#ec915c",
+};
+const langColor = l => LANG_COLORS[l] ||
+  (l ? `hsl(${[...l].reduce((a,c)=>a+c.charCodeAt(0),0)%360} 55% 60%)` : "var(--line)");
+
+let repos = [], activeCat = null, search = "", editingId = null;
+const $ = id => document.getElementById(id);
+const esc = s => (s ?? "").toString().replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toast(msg, isErr = false) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "show" + (isErr ? " err" : "");
+  setTimeout(() => t.className = "", 2600);
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: {"Content-Type": "application/json"}, ...opts });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+  return r.json();
+}
+
+async function load() {
+  repos = await api("/api/repos");
+  render();
+}
+
+function render() {
+  const kw = search.trim().toLowerCase();
+  const filtered = repos.filter(r => {
+    if (activeCat && r.category !== activeCat) return false;
+    if (!kw) return true;
+    return [r.name, r.owner, r.summary, r.description, r.notes,
+            ...(r.tags||[]), ...(r.topics||[])].join(" ").toLowerCase().includes(kw);
+  });
+
+  // 分类 chips
+  const cats = [...new Set(repos.map(r => r.category))].sort();
+  $("chips").innerHTML = cats.map(c =>
+    `<span class="chip ${c===activeCat?"active":""}" data-cat="${esc(c)}">${esc(c)}</span>`).join("");
+
+  if (!repos.length) {
+    $("main").innerHTML = `<div class="empty"><div class="big">⌘</div>
+      粘贴第一个 GitHub 地址开始收藏<br>AI 会自动生成摘要和分类</div>`;
+    return;
+  }
+  if (!filtered.length) {
+    $("main").innerHTML = `<div class="empty">没有匹配的收藏</div>`;
+    return;
+  }
+
+  // 按分类分组渲染
+  const groups = {};
+  filtered.forEach(r => (groups[r.category] ??= []).push(r));
+  $("main").innerHTML = Object.entries(groups).map(([cat, list]) => `
+    <div class="cat-title">${esc(cat)} <span class="count">${list.length} repos</span></div>
+    <div class="grid">${list.map(card).join("")}</div>`).join("");
+}
+
+function card(r) {
+  const color = langColor(r.language);
+  return `
+  <div class="card" style="--lang-color:${color}">
+    <div class="card-head">
+      <a class="repo-name" href="${esc(r.url)}" target="_blank" rel="noopener">
+        <span class="owner">${esc(r.owner)}/</span>${esc(r.name)}</a>
+      <span class="stars">★ ${r.stars >= 1000 ? (r.stars/1000).toFixed(1)+"k" : r.stars}</span>
+    </div>
+    <div class="summary">${esc(r.summary || r.description)}</div>
+    ${r.notes ? `<div class="notes">✎ ${esc(r.notes)}</div>` : ""}
+    <div class="card-meta">
+      ${r.language ? `<span class="lang"><span class="lang-dot"></span>${esc(r.language)}</span>` : ""}
+      ${(r.tags||[]).map(t => `<span class="tag" data-tag="${esc(t)}">${esc(t)}</span>`).join("")}
+    </div>
+    <div class="card-foot">
+      <span class="pushed">updated ${esc(r.pushed_at || "—")}</span>
+      <span class="actions">
+        <button class="icon-btn" title="编辑" data-edit="${r.id}">✎</button>
+        <button class="icon-btn" title="重新抓取并分析" data-refresh="${r.id}">⟳</button>
+        <button class="icon-btn del" title="删除" data-del="${r.id}">✕</button>
+      </span>
+    </div>
+  </div>`;
+}
+
+// ---------- 事件 ----------
+$("addForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const url = $("urlInput").value.trim();
+  if (!url) return;
+  const btn = $("addBtn");
+  btn.disabled = true; btn.textContent = "分析中…";
+  try {
+    await api("/api/repos", { method: "POST", body: JSON.stringify({ url }) });
+    $("urlInput").value = "";
+    toast("已收藏并完成 AI 归档");
+    await load();
+  } catch (err) { toast(err.message, true); }
+  btn.disabled = false; btn.textContent = "收藏";
+});
+
+$("searchInput").addEventListener("input", e => { search = e.target.value; render(); });
+
+document.addEventListener("click", async e => {
+  const chip = e.target.closest(".chip");
+  if (chip) { activeCat = activeCat === chip.dataset.cat ? null : chip.dataset.cat; return render(); }
+  const tag = e.target.closest(".tag");
+  if (tag) { $("searchInput").value = search = tag.dataset.tag; return render(); }
+
+  const del = e.target.closest("[data-del]");
+  if (del && confirm("确定删除这条收藏?")) {
+    await api(`/api/repos/${del.dataset.del}`, { method: "DELETE" });
+    toast("已删除"); return load();
+  }
+  const refresh = e.target.closest("[data-refresh]");
+  if (refresh) {
+    refresh.textContent = "…";
+    try { await api(`/api/repos/${refresh.dataset.refresh}/refresh`, { method: "POST" });
+          toast("已重新分析"); await load(); }
+    catch (err) { toast(err.message, true); }
+    return;
+  }
+  const edit = e.target.closest("[data-edit]");
+  if (edit) {
+    const r = repos.find(x => x.id == edit.dataset.edit);
+    editingId = r.id;
+    const f = $("editForm");
+    f.category.value = r.category; f.summary.value = r.summary;
+    f.tags.value = (r.tags||[]).join(", "); f.notes.value = r.notes;
+    $("editDialog").showModal();
+  }
+});
+
+$("editForm").addEventListener("submit", async () => {
+  const f = $("editForm");
+  await api(`/api/repos/${editingId}`, { method: "PATCH", body: JSON.stringify({
+    category: f.category.value.trim() || "未分类",
+    summary: f.summary.value.trim(),
+    notes: f.notes.value.trim(),
+    tags: f.tags.value.split(/[,,]/).map(s => s.trim()).filter(Boolean),
+  })});
+  toast("已保存"); load();
+});
+
+// ---------- 启动 ----------
+api("/api/config").then(c => {
+  const b = $("llmBadge");
+  b.textContent = c.llm_enabled ? `LLM: ${c.model}` : "LLM: 未配置(降级模式)";
+  b.classList.toggle("on", c.llm_enabled);
+});
+load();
+</script>
+</body>
+</html>

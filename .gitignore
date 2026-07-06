@@ -1,0 +1,39 @@
+# Python bytecode/cache
+__pycache__/
+.pycache-tmp/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local database/runtime files
+gallery.db
+*.sqlite
+*.sqlite3
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.uv-cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
