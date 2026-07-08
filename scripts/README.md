@@ -5,7 +5,7 @@
 ## Mental Model
 
 ```text
-dev.sh       本地 Astro 开发入口
+dev.sh       本地 Astro 开发和 dev server 管理入口
 verify.sh    一次性验证入口
 catalog.sh   catalog 项目维护入口
   import     .tmp/import-batches 安全导入入口
@@ -17,17 +17,21 @@ catalog.sh   catalog 项目维护入口
 
 | Entrypoint | Owns | Does Not Own |
 | --- | --- | --- |
-| `dev.sh` | `npm run dev`、`npm run preview`、`npm run build` 的稳定入口。 | 后台进程、部署、远程服务。 |
+| `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、catalog 内容生成。 |
 | `verify.sh` | build/catalog/content 验证，包括 projects、collections、taxonomy、site 和被引用详情文件。 | README 或 `docs/` 漂移检查。 |
 | `catalog.sh` | project list/validate/new、collection list/show/new/delete/update、import batch validate/plan/diff/apply。 | GitHub API 抓取、taxonomy 自动修改、schema 之外的字段生成、全量替换 catalog。 |
 
 ## Commands
 
-Requires Node.js 20 or newer.
+Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgrep`, `lsof`; `logs` also uses `tail`).
 
 ```sh
 ./scripts/dev.sh start
-./scripts/dev.sh start --host 0.0.0.0
+./scripts/dev.sh start --host 0.0.0.0 --port 4321
+./scripts/dev.sh status
+./scripts/dev.sh restart
+./scripts/dev.sh stop
+./scripts/dev.sh logs
 ./scripts/dev.sh preview
 ./scripts/dev.sh build
 
@@ -67,6 +71,14 @@ Requires Node.js 20 or newer.
 ## Verification Boundary
 
 `verify.sh` 不检查维护文档。文档只解释已实现规则，代码和 loader 才是真相源。
+
+## Dev Server Management
+
+`dev.sh start` 会后台启动 Astro dev server，并把 pid、端口和日志写入 `.run/dev.pid`、`.run/dev.port`、`.run/dev.log`。只有探测到真实监听端口后才报告 `started`；进程存在但未监听端口会返回退出码 4。`status` 同样只在探测到监听端口时返回 running。如果当前仓库目录下已经存在 `astro dev` / `npm run dev`，`start` 会接管并拒绝重复启动；如果发现多个 dev server，运行 `./scripts/dev.sh restart` 收敛为一个。`start` / `stop` / `restart` 通过 `.run/dev.lock` 串行执行，避免并发启动互相覆盖运行状态。
+
+`dev.sh start` 直接运行项目本地 Astro CLI，并把参数透传给 `astro dev`。未传 `--host` 时默认绑定 `127.0.0.1`，避免部分环境中 `localhost` 解析到 IPv6 后绑定失败；host 会写入 `.run/dev.host`，供 `status` 显示 URL。
+
+`dev.sh stop` 和 `restart` 只会停止当前仓库 cwd 下的 dev server，杀进程前会校验 cwd 和命令，避免误杀其他项目。
 
 `catalog` 和 `content` 当前都通过 `npm run build` 触发可执行校验。项目、专题、taxonomy、site 和详情文件引用都由 schema/loader 在构建期验证。未来如果构建变慢，可以新增更窄的 catalog-only 校验，但仍应复用 schema/loader，不在 shell 里重写合同。
 
