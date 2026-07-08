@@ -1,0 +1,52 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import ProjectCard from "@/components/ProjectCard.astro";
+import { getCatalogSnapshot, getCategory, getTag } from "@/lib/catalog/projects";
+
+const { projects, taxonomy } = await getCatalogSnapshot();
+const activeCategories = taxonomy.categories.filter((category) =>
+  projects.some((project) => project.category === category.id)
+);
+const activeTags = taxonomy.tags.filter((tag) => projects.some((project) => project.tags.includes(tag.id)));
+---
+
+<BaseLayout title="GitHub Gallery">
+  <section class="hero">
+    <p class="eyebrow">Curated GitHub Projects</p>
+    <h1>用统一合同维护可长期迭代的 GitHub 项目展馆。</h1>
+    <p class="lead">
+      每个项目独立目录，配置由公共加载方法读取和校验；页面只消费结构化结果，避免后期字段漂移。
+    </p>
+    <div class="stats" aria-label="Gallery stats">
+      <span class="stat"><strong>{projects.length}</strong><span>Projects</span></span>
+      <span class="stat"><strong>{activeCategories.length}</strong><span>Categories</span></span>
+      <span class="stat"><strong>{activeTags.length}</strong><span>Active tags</span></span>
+    </div>
+  </section>
+
+  <section aria-labelledby="projects-heading">
+    <div class="section-heading">
+      <h2 id="projects-heading">Projects</h2>
+    </div>
+    <div class="project-grid">
+      {
+        projects.map((project) => (
+          <ProjectCard
+            project={project}
+            category={getCategory(taxonomy, project.category)}
+            tags={project.tags.map((tag) => getTag(taxonomy, tag))}
+          />
+        ))
+      }
+    </div>
+  </section>
+
+  <section id="categories" aria-labelledby="categories-heading">
+    <div class="section-heading">
+      <h2 id="categories-heading">Categories</h2>
+    </div>
+    <ul class="taxonomy-list">
+      {activeCategories.map((category) => <li><a href={`/categories/${category.id}/`}>{category.name}</a></li>)}
+    </ul>
+  </section>
+</BaseLayout>

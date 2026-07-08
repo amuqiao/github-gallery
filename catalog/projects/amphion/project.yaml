@@ -1,0 +1,27 @@
+schema_version: 1
+id: amphion
+name: Amphion
+repo: https://github.com/open-mmlab/Amphion
+summary: Toolkit for audio, music, and speech generation research and development.
+category: ai
+tags:
+  - audio
+  - machine-learning
+  - research
+  - toolkit
+  - pytorch
+status: unknown
+details:
+  type: markdown
+  path: ./details.md
+meta:
+  languages:
+    - Python
+quality:
+  use_cases:
+    - Audio generation research.
+    - Speech and music generation experiments.
+relations:
+  related_projects:
+    - f5-tts
+    - cosyvoice

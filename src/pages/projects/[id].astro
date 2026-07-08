@@ -1,0 +1,66 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { loadProjectDetail } from "@/lib/catalog/details";
+import {
+  getAllProjects,
+  getCatalogSnapshot,
+  getCategory,
+  getRelatedProjects,
+  getTag,
+  type Project
+} from "@/lib/catalog/projects";
+
+export async function getStaticPaths() {
+  const projects = await getAllProjects();
+  return projects.map((project) => ({
+    params: { id: project.id },
+    props: { project }
+  }));
+}
+
+const { project } = Astro.props as { project: Project };
+const { taxonomy } = await getCatalogSnapshot();
+const category = getCategory(taxonomy, project.category);
+const tags = project.tags.map((tag) => getTag(taxonomy, tag));
+const relatedProjects = await getRelatedProjects(project);
+const detail = await loadProjectDetail(project);
+const DetailContent = detail?.Content;
+---
+
+<BaseLayout title={`${project.name} - GitHub Gallery`} description={project.summary}>
+  <article class="project-detail">
+    <header class="hero">
+      <p class="eyebrow">{category.name}</p>
+      <h1>{project.name}</h1>
+      <p class="lead">{project.summary}</p>
+      <div class="project-detail__meta">
+        <span>Status: {project.status}</span>
+        {project.meta?.license && <span>License: {project.meta.license}</span>}
+      </div>
+      <div class="project-detail__tags">
+        {tags.map((tag) => <a href={`/tags/${tag.id}/`}>{tag.name}</a>)}
+      </div>
+      <p><a href={project.repo}>Open repository</a></p>
+    </header>
+
+    {
+      detail && (
+        <section class="detail-body">
+          {DetailContent && <DetailContent />}
+        </section>
+      )
+    }
+    {
+      relatedProjects.length > 0 && (
+        <section>
+          <h2>Related Projects</h2>
+          <ul class="taxonomy-list">
+            {relatedProjects.map((relatedProject) => (
+              <li><a href={relatedProject.route}>{relatedProject.name}</a></li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+  </article>
+</BaseLayout>

@@ -1,0 +1,41 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import ProjectCard from "@/components/ProjectCard.astro";
+import {
+  getCatalogSnapshot,
+  getCategory,
+  getTag,
+  type TaxonomyItem
+} from "@/lib/catalog/projects";
+
+export async function getStaticPaths() {
+  const { taxonomy } = await getCatalogSnapshot();
+  return taxonomy.categories.map((category) => ({
+    params: { category: category.id },
+    props: { category }
+  }));
+}
+
+const { category } = Astro.props as { category: TaxonomyItem };
+const { taxonomy, projectsByCategory } = await getCatalogSnapshot();
+const projects = projectsByCategory.get(category.id) ?? [];
+---
+
+<BaseLayout title={`${category.name} - GitHub Gallery`} description={category.description}>
+  <section class="hero">
+    <p class="eyebrow">Category</p>
+    <h1>{category.name}</h1>
+    {category.description && <p class="lead">{category.description}</p>}
+  </section>
+  <div class="project-grid">
+    {
+      projects.map((project) => (
+        <ProjectCard
+          project={project}
+          category={getCategory(taxonomy, project.category)}
+          tags={project.tags.map((tag) => getTag(taxonomy, tag))}
+        />
+      ))
+    }
+  </div>
+</BaseLayout>

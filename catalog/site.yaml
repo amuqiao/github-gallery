@@ -1,0 +1,7 @@
+title: GitHub Gallery
+description: A contract-driven static gallery for curated GitHub projects.
+navigation:
+  - label: Projects
+    href: /
+  - label: Categories
+    href: /#categories

@@ -1,0 +1,57 @@
+categories:
+  - id: ai
+    name: AI
+    description: Machine learning, generative AI, and AI-assisted creative tools.
+  - id: developer-tools
+    name: Developer Tools
+    description: Tools for building, testing, shipping, or maintaining software.
+  - id: frontend
+    name: Frontend
+    description: Browser, UI, rendering, and frontend application projects.
+  - id: backend
+    name: Backend
+    description: Server-side frameworks, APIs, workers, and services.
+  - id: data
+    name: Data
+    description: Data engineering, storage, analytics, and workflow projects.
+  - id: infrastructure
+    name: Infrastructure
+    description: Deployment, operations, networking, and platform infrastructure.
+
+tags:
+  - id: audio
+    name: Audio
+    description: Audio processing, speech, music, or sound generation.
+  - id: machine-learning
+    name: Machine Learning
+    description: Projects centered on machine learning models or workflows.
+  - id: text-to-speech
+    name: Text to Speech
+    description: Projects that synthesize speech from text.
+  - id: voice-cloning
+    name: Voice Cloning
+    description: Projects that clone or adapt a voice from reference audio.
+  - id: voice-conversion
+    name: Voice Conversion
+    description: Projects that transform one voice into another.
+  - id: multilingual
+    name: Multilingual
+    description: Projects with multi-language or cross-language capability.
+  - id: webui
+    name: Web UI
+    description: Projects that include a browser-based interface.
+  - id: research
+    name: Research
+    description: Projects mainly useful for experiments, papers, or reproducible research.
+  - id: toolkit
+    name: Toolkit
+    description: Projects that provide reusable tools, libraries, or end-to-end workflows.
+  - id: training
+    name: Training
+    description: Projects that include model training or fine-tuning workflows.
+  - id: inference
+    name: Inference
+    description: Projects focused on running models or generating outputs.
+  - id: pytorch
+    name: PyTorch
+    description: Projects implemented primarily with PyTorch.

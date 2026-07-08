@@ -1,0 +1,27 @@
+schema_version: 1
+id: cosyvoice
+name: CosyVoice
+repo: https://github.com/FunAudioLLM/CosyVoice
+summary: Multilingual large voice generation project with inference, training, and deployment workflows.
+category: ai
+tags:
+  - audio
+  - text-to-speech
+  - voice-cloning
+  - multilingual
+  - training
+status: unknown
+details:
+  type: markdown
+  path: ./details.md
+meta:
+  languages:
+    - Python
+quality:
+  use_cases:
+    - Multilingual voice generation.
+    - End-to-end TTS workflow exploration.
+relations:
+  related_projects:
+    - f5-tts
+    - fish-speech

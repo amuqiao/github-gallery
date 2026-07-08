@@ -1,0 +1,28 @@
+schema_version: 1
+id: openvoice
+name: OpenVoice
+repo: https://github.com/myshell-ai/OpenVoice
+summary: Instant voice cloning project focused on tone color cloning and style control.
+category: ai
+tags:
+  - audio
+  - voice-cloning
+  - multilingual
+  - inference
+  - research
+status: unknown
+details:
+  type: markdown
+  path: ./details.md
+meta:
+  license: MIT
+  languages:
+    - Python
+quality:
+  use_cases:
+    - Instant voice cloning.
+    - Voice style control experiments.
+relations:
+  related_projects:
+    - fish-speech
+    - xtts
