@@ -286,6 +286,34 @@ const { title, description = site.description } = Astro.props;
         padding-top: 28px;
       }
 
+      .block-stack {
+        display: grid;
+        max-width: 820px;
+        gap: 16px;
+      }
+
+      .content-block {
+        border-top: 1px solid var(--line);
+        padding-top: 20px;
+      }
+
+      .content-block h2 {
+        margin-bottom: 10px;
+        font-size: 1.2rem;
+      }
+
+      .block-list,
+      .block-link-list {
+        margin: 0;
+        padding-left: 1.2rem;
+        color: var(--muted);
+      }
+
+      .block-link-list a {
+        color: var(--accent-strong);
+        font-weight: 700;
+      }
+
       .detail-body img {
         max-width: 100%;
         height: auto;

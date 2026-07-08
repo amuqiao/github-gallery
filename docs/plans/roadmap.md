@@ -1,31 +1,35 @@
 # Roadmap
 
+本文只记录尚未实现但值得继续推进的工作。已经实现的事实应移动到 `docs/current/`，配置合同应写在 `docs/contract/`。
+
 ## Current Baseline
 
-- Astro static site skeleton exists.
-- Project configs are loaded through a shared catalog layer.
-- Project configs are validated at build time.
-- Eight sample projects exist to exercise the contract.
+- Astro static site 骨架已存在。
+- 项目配置通过共享 catalog loader 加载。
+- 项目配置在构建时通过 Zod schema 和 loader 跨文件校验。
+- 项目合同采用 Stable Core + Typed Extension Blocks。
+- 8 个示例项目已迁移到 typed blocks。
 
 ## Remaining Gaps
 
-- Search and client-side filtering are not implemented.
-- GitHub repository metadata such as stars, license refresh, and last activity is not automated.
-- Project screenshots and cover images are supported by contract but not populated in the sample data.
-- MDX and HTML detail formats are reserved but not implemented in `schema_version: 1`.
+- 本地搜索和客户端筛选尚未实现。
+- GitHub stars、license 刷新、last activity 等生成元数据尚未自动化。
+- `media-gallery` block 尚未实现。
+- MDX 和 HTML 详情格式尚未实现。
 
 ## Planned Work
 
-- Add local search over project name, summary, category, and tags.
-- Add a narrow validation command if build-time validation becomes too slow for content-only edits.
-- Add optional generated metadata under a separate generated data surface.
-- Add project covers after the asset policy is finalized.
-- Add MDX only after the Astro MDX integration is installed and verified.
-- Add HTML details only after sanitization rules are implemented and tested.
+- 增加基于项目名称、摘要、分类、标签的本地搜索。
+- 如果内容编辑变慢，增加更窄的配置验证命令。
+- 增加单独的 generated metadata 数据面，避免覆盖手写项目事实。
+- 资产发布策略稳定后，增加 `media-gallery` block。
+- 安装并验证 Astro MDX integration 后，再考虑 MDX 详情。
+- 实现安全 sanitization 和渲染隔离后，再考虑 HTML 详情。
 
 ## Acceptance
 
-- Search works without changing the `project.yaml` contract.
-- Generated metadata does not overwrite hand-maintained project facts.
-- Missing assets, unknown tags, and broken related project ids fail validation before deployment.
-- MDX or HTML detail support is moved from roadmap into the contract only after build-time validation covers it.
+- 搜索不需要修改 `project.yaml` core 合同。
+- generated metadata 不覆盖手写项目事实。
+- 缺失文件、未知标签、错误 related project id 在部署前失败。
+- 新 block type 必须有 schema、adapter、renderer、样例数据和文档。
+- MDX 或 HTML 详情只有在 build-time validation 覆盖后才能进入合同。

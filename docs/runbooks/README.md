@@ -1,6 +1,6 @@
 # Runbooks
 
-Runbooks describe repeatable maintenance procedures. They do not define configuration fields and do not replace executable schema.
+Runbooks 记录可重复维护流程。它们不定义配置字段，也不替代可执行 schema。
 
 ## Index
 

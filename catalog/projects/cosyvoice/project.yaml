@@ -17,10 +17,11 @@ details:
 meta:
   languages:
     - Python
-quality:
-  use_cases:
-    - Multilingual voice generation.
-    - End-to-end TTS workflow exploration.
+blocks:
+  - type: use-cases
+    items:
+      - Multilingual voice generation.
+      - End-to-end TTS workflow exploration.
 relations:
   related_projects:
     - f5-tts

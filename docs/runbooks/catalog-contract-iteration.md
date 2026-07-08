@@ -1,6 +1,6 @@
 # Catalog Contract Iteration Runbook
 
-本手册说明如何稳定迭代 GitHub Gallery 的配置合同。核心原则是：schema 定义字段级合同，loader 执行跨文件不变量，文档只解释已实现规则。
+本手册说明如何稳定迭代 GitHub Gallery 的配置合同。核心原则是：schema 定义字段级合同，loader 执行跨文件不变量，build 负责验证门禁，docs 只解释已实现规则。
 
 ## Mental Model
 
@@ -11,72 +11,98 @@ schema 定规则
   -> docs 解释规则
 ```
 
-这四层不能倒置。不要先在文档里发明字段，再让配置和页面跟着猜；也不要让页面绕过 loader 直接读取 YAML。字段形状归 schema，目录名、taxonomy、引用文件、related projects 这类跨文件不变量归 loader。
+这四层不能倒置。不要先在文档里发明字段，再让配置和页面跟着猜；也不要让页面绕过 loader 直接读取 YAML。
+
+字段形状归 schema；目录名、taxonomy、引用文件、related projects 这类跨文件不变量归 loader。
+
+第一版不保留无类型 `extensions` 顶层字段。任何实验内容进入配置前，都必须先明确它属于 stable core、typed block，还是未来独立数据面。
 
 ## Authority
 
 | Layer | Canonical location | Owns |
 | --- | --- | --- |
-| Schema | `src/lib/catalog/project-schema.ts` | Executable config contract. |
-| Loader | `src/lib/catalog/projects.ts` | YAML reading, schema parsing, cross-file validation, and catalog read model. |
-| Detail loader | `src/lib/catalog/details.ts` | Detail document loading for implemented detail formats. |
-| Build gate | `npm run build` | `astro check` and static build validation. |
-| Contract docs | `docs/contract/` | Human explanation of the executable schema. Start with [`project-config.md`](../contract/project-config.md). |
-| Current docs | `docs/current/` | Implemented structure and runtime path. Start with [`structure.md`](../current/structure.md). |
-| Plans | `docs/plans/` | Accepted future gaps and acceptance criteria. Start with [`roadmap.md`](../plans/roadmap.md). |
-| Runbooks | `docs/runbooks/` | Repeatable maintenance procedure. |
+| Schema | `src/lib/catalog/project-schema.ts` | 可执行配置合同。 |
+| Loader | `src/lib/catalog/projects.ts` | YAML 读取、schema parse、跨文件校验、catalog read model。 |
+| Block adapters | `src/lib/catalog/block-adapters.ts` | typed blocks 的归一化和默认标题。 |
+| Detail loader | `src/lib/catalog/details.ts` | 已实现详情格式的加载。 |
+| Build gate | `npm run build` | `astro check` 和 static build 验证。 |
+| Contract docs | `docs/contract/` | 对可执行合同的人类说明。 |
+| Current docs | `docs/current/` | 当前已实现结构和运行路径。 |
+| Plans | `docs/plans/` | 未来缺口和验收条件。 |
+| Runbooks | `docs/runbooks/` | 可重复维护流程。 |
 
 ## When Adding Or Changing A Project Field
 
-Use this order:
+按这个顺序执行：
 
-1. Update `src/lib/catalog/project-schema.ts`.
-2. Update `src/lib/catalog/projects.ts` only if the field needs validation across files, normalization, indexes, or helper access.
-3. Update sample `catalog/projects/<id>/project.yaml` only after the schema accepts the field.
-4. Update `docs/contract/project-config.md` to explain the field.
-5. Update `docs/current/structure.md` only if runtime behavior or module boundaries changed.
-6. Update `docs/plans/roadmap.md` if a future gap is opened or closed.
-7. Run `npm run build`.
+1. 判断字段属于 stable core 还是 typed block。
+2. 更新 `src/lib/catalog/project-schema.ts`。
+3. 只有字段需要跨文件校验、归一化、索引或 helper 时，才更新 `src/lib/catalog/projects.ts`。
+4. schema 接受后，再更新示例 `catalog/projects/<id>/project.yaml`。
+5. 更新 `docs/contract/project-config.md` 解释字段。
+6. 如果运行路径或模块边界变化，更新 `docs/current/structure.md`。
+7. 如果打开或关闭未来缺口，更新 `docs/plans/roadmap.md`。
+8. 运行 `npm run build`。
 
-Do not treat `docs/contract/project-config.md` as the source of truth. If the docs disagree with schema or loader behavior, the executable code is authoritative and the docs must be fixed.
+不要把 `docs/contract/project-config.md` 当成真相源。文档和 schema/loader 不一致时，以可执行代码为准，修文档。
+
+可选详情页内容优先使用 typed block。只有通用路由、筛选、身份、跨项目校验需要依赖时，才新增顶层 core 字段。
+
+`meta` 只放人工维护、相对稳定的展示事实。抓取时间、stars、last activity 等自动生成事实应进入未来的 generated metadata 数据面，不放入 `project.yaml`。
+
+## When Adding A Block Type
+
+按这个顺序执行：
+
+1. 在 `src/lib/catalog/project-schema.ts` 增加 block schema。
+2. 在 `src/lib/catalog/block-adapters.ts` 增加 adapter。
+3. 在 `src/components/blocks/` 增加或更新 renderer。
+4. 在至少一个 `catalog/projects/<id>/project.yaml` 中加入样例 block。
+5. 更新 `docs/contract/project-config.md`。
+6. 如果运行路径变化，更新 `docs/current/structure.md`。
+7. 运行 `npm run build`。
+
+不要添加 `custom` 或自由结构 block。未知 block type 必须构建失败。
+
+不要因为只是换了展示标题就新增 block type。新增 type 必须至少满足一个条件：需要不同数据结构、需要不同 adapter 归一化、需要不同 renderer，或未来有明确机器语义会被筛选、索引、校验使用。
 
 ## When Adding A Project
 
-Use this order:
+按这个顺序执行：
 
-1. Create `catalog/projects/<id>/`.
-2. Add `catalog/projects/<id>/project.yaml`.
-3. Add `catalog/projects/<id>/details.md` when `details` is declared.
-4. Use only category and tag ids from `catalog/taxonomies.yaml`.
-5. Use `relations.related_projects` only for ids that already exist.
-6. Run `npm run build`.
+1. 创建 `catalog/projects/<id>/`。
+2. 添加 `catalog/projects/<id>/project.yaml`。
+3. 声明 `details` 时，添加 `catalog/projects/<id>/details.md`。
+4. 只使用 `catalog/taxonomies.yaml` 中存在的 category 和 tag id。
+5. `relations.related_projects` 只能引用已经存在的项目 id。
+6. 运行 `npm run build`。
 
-The project directory name must match `project.yaml` `id`.
+项目目录名必须匹配 `project.yaml` 的 `id`。
 
 ## When Adding A Category Or Tag
 
-Use this order:
+按这个顺序执行：
 
-1. Add the category or tag to `catalog/taxonomies.yaml`.
-2. Reference it from project configs only after it exists in the taxonomy file.
-3. Keep categories broad and stable.
-4. Use tags for narrower or domain-specific meaning.
-5. Run `npm run build`.
+1. 先把 category 或 tag 加到 `catalog/taxonomies.yaml`。
+2. 再从项目配置中引用它。
+3. category 保持宽泛稳定。
+4. tag 用于更窄或领域相关的含义。
+5. 运行 `npm run build`。
 
-Category ids and tag ids are URL-facing identifiers. Renaming them is a route change.
+category id 和 tag id 是对外 URL 标识。重命名属于路由变更。
 
 ## When Changing Site Navigation
 
-Use this order:
+按这个顺序执行：
 
-1. Update `catalog/site.yaml`.
-2. Keep shared layout code domain-neutral.
-3. Avoid hard-coding category ids such as `ai` in `src/layouts/`.
-4. Run `npm run build`.
+1. 更新 `catalog/site.yaml`。
+2. 保持共享 layout 与具体领域解耦。
+3. 不要在 `src/layouts/` 里硬编码 `ai` 这类分类 id。
+4. 运行 `npm run build`。
 
 ## When Adding A New Detail Format
 
-`schema_version: 1` supports Markdown details only. The exact accepted shape is defined in `src/lib/catalog/project-schema.ts` and explained in [`docs/contract/project-config.md`](../contract/project-config.md).
+`schema_version: 1` 只支持 Markdown 详情。准确结构由 `src/lib/catalog/project-schema.ts` 定义，并在 [`docs/contract/project-config.md`](../contract/project-config.md) 解释。
 
 ```yaml
 details:
@@ -84,37 +110,44 @@ details:
   path: ./details.md
 ```
 
-To add MDX or HTML later:
+未来增加 MDX 或 HTML 时：
 
-1. Add the required runtime integration or sanitization first.
-2. Add executable validation in `src/lib/catalog/project-schema.ts`.
-3. Update `src/lib/catalog/details.ts`.
-4. Add at least one sample project that exercises the new path.
-5. Update `docs/contract/project-config.md`.
-6. Move the item out of `docs/plans/roadmap.md`.
-7. Run `npm run build`.
+1. 先增加必要运行时集成或 sanitization。
+2. 在 `src/lib/catalog/project-schema.ts` 增加可执行校验。
+3. 更新 `src/lib/catalog/details.ts`。
+4. 添加至少一个样例项目覆盖新路径。
+5. 更新 `docs/contract/project-config.md`。
+6. 从 `docs/plans/roadmap.md` 移出对应计划项。
+7. 运行 `npm run build`。
 
-Do not document MDX or HTML as supported in `docs/contract/` before the code validates and builds that path.
+代码没有验证和构建通过前，不要在 `docs/contract/` 中宣称 MDX 或 HTML 已支持。
 
 ## Drift Checklist
 
-Before finishing a contract-related change, check:
+完成合同相关变更前检查：
 
 ```text
-[ ] New or changed fields are defined in `project-schema.ts`.
-[ ] Pages still use `src/lib/catalog/projects.ts`; no page parses YAML directly.
-[ ] Cross-file checks belong in the loader, not in page components.
-[ ] `docs/contract/` explains implemented schema only.
-[ ] `docs/current/` describes shipped behavior only.
-[ ] `docs/plans/` contains future work only.
-[ ] `docs/note.md` remains historical and is not used as authority.
-[ ] `npm run build` passes.
+[ ] 新字段或变更字段已定义在 `project-schema.ts`。
+[ ] 可选详情内容使用 typed block，除非它属于 stable core。
+[ ] 新 block type 有 schema、adapter、renderer、样例数据和文档。
+[ ] 新 block type 不是仅用于替代 Markdown 小标题或普通列表标题。
+[ ] `meta` 没有混入抓取快照或自动生成事实。
+[ ] 没有新增无类型 `extensions`、`custom`、`extra` 等逃生口字段。
+[ ] 页面仍通过 `src/lib/catalog/projects.ts`，没有直接解析 YAML。
+[ ] 跨文件校验放在 loader，不放在页面组件。
+[ ] `docs/contract/` 只解释已实现 schema。
+[ ] `docs/current/` 只描述已发布行为。
+[ ] `docs/plans/` 只包含未来工作。
+[ ] `docs/note.md` 仍是历史笔记，不作为权威来源。
+[ ] `npm run build` 通过。
 ```
 
 ## Anti-Patterns
 
-- Adding a key to `project.yaml` because it is mentioned in documentation but not accepted by schema.
-- Adding fallback defaults in loader code to hide invalid config.
-- Letting a page read YAML directly for a one-off display.
-- Duplicating category or tag meaning in project-specific fields.
-- Describing future MDX, HTML, generated metadata, or search behavior as current behavior.
+- 因为文档提到某个 key，就直接把它写进 `project.yaml`，但 schema 不支持。
+- 把可选详情内容加成顶层字段，而不是 typed block。
+- 添加绕开 schema 的自由结构 `custom` block。
+- 在 loader 中添加 fallback 默认值来隐藏错误配置。
+- 让页面为了某个展示需求直接读取 YAML。
+- 重复表达 category 或 tag 已经表达的含义。
+- 把未来的 MDX、HTML、generated metadata、search 行为写成当前事实。

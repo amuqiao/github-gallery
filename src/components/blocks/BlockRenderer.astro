@@ -1,0 +1,29 @@
+---
+import type { AdaptedProjectBlock } from "@/lib/catalog/block-adapters";
+import LinksBlock from "./LinksBlock.astro";
+import ListBlock from "./ListBlock.astro";
+
+interface Props {
+  block: AdaptedProjectBlock;
+  index: number;
+}
+
+const { block, index } = Astro.props;
+const headingId = `${block.type}-heading-${index}`;
+
+function assertNever(value: never): never {
+  throw new Error(`Unsupported project block type: ${JSON.stringify(value)}`);
+}
+---
+
+{
+  block.type === "links" ? (
+    <LinksBlock block={block} headingId={headingId} />
+  ) : block.type === "highlights" ? (
+    <ListBlock block={block} headingId={headingId} />
+  ) : block.type === "use-cases" ? (
+    <ListBlock block={block} headingId={headingId} />
+  ) : (
+    assertNever(block)
+  )
+}

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { load } from "js-yaml";
+import { adaptProjectBlocks, type AdaptedProjectBlock } from "./block-adapters";
 import {
   projectConfigSchema,
   siteConfigSchema,
@@ -17,7 +18,8 @@ const projectsRoot = path.join(catalogRoot, "projects");
 const taxonomiesPath = path.join(catalogRoot, "taxonomies.yaml");
 const siteConfigPath = path.join(catalogRoot, "site.yaml");
 
-export type Project = ProjectConfig & {
+export type Project = Omit<ProjectConfig, "blocks"> & {
+  blocks: AdaptedProjectBlock[];
   directory: string;
   route: string;
 };
@@ -166,6 +168,7 @@ async function readProject(directoryName: string, taxonomy: TaxonomyCatalog): Pr
   assertKnownTaxonomy(config, taxonomy);
   const project = {
     ...config,
+    blocks: adaptProjectBlocks(config.blocks),
     directory,
     route: `/projects/${config.id}/`
   };
@@ -190,11 +193,7 @@ function assertKnownTaxonomy(project: ProjectConfig, taxonomy: TaxonomyCatalog):
 }
 
 async function assertReferencedFilesExist(project: Project): Promise<void> {
-  const references = [
-    project.details?.path,
-    project.media?.cover,
-    ...(project.media?.screenshots?.map((screenshot) => screenshot.path) ?? [])
-  ].filter((item): item is string => Boolean(item));
+  const references = [project.details?.path].filter((item): item is string => Boolean(item));
 
   for (const reference of references) {
     await fs.access(resolveProjectPath(project, reference));

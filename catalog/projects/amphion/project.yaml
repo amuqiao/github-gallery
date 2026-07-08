@@ -17,10 +17,11 @@ details:
 meta:
   languages:
     - Python
-quality:
-  use_cases:
-    - Audio generation research.
-    - Speech and music generation experiments.
+blocks:
+  - type: use-cases
+    items:
+      - Audio generation research.
+      - Speech and music generation experiments.
 relations:
   related_projects:
     - f5-tts

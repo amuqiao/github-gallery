@@ -25,43 +25,10 @@ export const detailsSchema = z
     }
   });
 
-export const mediaSchema = z
-  .object({
-    cover: relativePathSchema.optional(),
-    screenshots: z
-      .array(
-        z
-          .object({
-            path: relativePathSchema,
-            alt: nonEmptyString
-          })
-          .strict()
-      )
-      .optional()
-  })
-  .strict();
-
-export const linksSchema = z
-  .object({
-    homepage: z.string().url().optional(),
-    demo: z.string().url().optional(),
-    docs: z.string().url().optional()
-  })
-  .strict();
-
 export const metaSchema = z
   .object({
     license: nonEmptyString.optional(),
-    languages: z.array(nonEmptyString).min(1).optional(),
-    last_checked: z.string().date().optional()
-  })
-  .strict();
-
-export const qualitySchema = z
-  .object({
-    strengths: z.array(nonEmptyString).min(1).optional(),
-    weaknesses: z.array(nonEmptyString).min(1).optional(),
-    use_cases: z.array(nonEmptyString).min(1).optional()
+    languages: z.array(nonEmptyString).min(1).optional()
   })
   .strict();
 
@@ -70,6 +37,45 @@ export const relationsSchema = z
     related_projects: z.array(z.string().regex(slugPattern)).min(1).optional()
   })
   .strict();
+
+export const linksBlockSchema = z
+  .object({
+    type: z.literal("links"),
+    title: nonEmptyString.optional(),
+    items: z
+      .array(
+        z
+          .object({
+            label: nonEmptyString,
+            url: z.string().url()
+          })
+          .strict()
+      )
+      .min(1)
+  })
+  .strict();
+
+export const highlightsBlockSchema = z
+  .object({
+    type: z.literal("highlights"),
+    title: nonEmptyString.optional(),
+    items: z.array(nonEmptyString).min(1)
+  })
+  .strict();
+
+export const useCasesBlockSchema = z
+  .object({
+    type: z.literal("use-cases"),
+    title: nonEmptyString.optional(),
+    items: z.array(nonEmptyString).min(1)
+  })
+  .strict();
+
+export const projectBlockSchema = z.discriminatedUnion("type", [
+  linksBlockSchema,
+  highlightsBlockSchema,
+  useCasesBlockSchema
+]);
 
 export const projectConfigSchema = z
   .object({
@@ -82,12 +88,9 @@ export const projectConfigSchema = z
     tags: z.array(z.string().regex(slugPattern)).min(1).max(8),
     status: z.enum(["active", "inactive", "archived", "unknown"]),
     details: detailsSchema.optional(),
-    media: mediaSchema.optional(),
-    links: linksSchema.optional(),
     meta: metaSchema.optional(),
-    quality: qualitySchema.optional(),
     relations: relationsSchema.optional(),
-    extensions: z.record(z.unknown()).optional()
+    blocks: z.array(projectBlockSchema).optional()
   })
   .strict();
 
@@ -124,6 +127,7 @@ export const siteConfigSchema = z
   .strict();
 
 export type ProjectConfig = z.infer<typeof projectConfigSchema>;
+export type ProjectBlock = z.infer<typeof projectBlockSchema>;
 export type TaxonomyCatalog = z.infer<typeof taxonomyCatalogSchema>;
 export type TaxonomyItem = z.infer<typeof taxonomyItemSchema>;
 export type SiteConfig = z.infer<typeof siteConfigSchema>;

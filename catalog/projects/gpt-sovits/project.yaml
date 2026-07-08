@@ -18,13 +18,19 @@ meta:
   license: MIT
   languages:
     - Python
-quality:
-  strengths:
-    - Includes WebUI and data preparation tools.
-    - Useful for learning a full voice cloning workflow.
-  use_cases:
-    - Voice cloning experiments.
-    - Text-to-speech demos.
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/RVC-Boss/GPT-SoVITS
+  - type: highlights
+    items:
+      - Includes WebUI and data preparation tools.
+      - Useful for learning a full voice cloning workflow.
+  - type: use-cases
+    items:
+      - Voice cloning experiments.
+      - Text-to-speech demos.
 relations:
   related_projects:
     - rvc

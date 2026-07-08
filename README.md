@@ -1,29 +1,30 @@
 # GitHub Gallery
 
-A contract-driven static gallery for curated GitHub projects.
+一个基于合同驱动的 GitHub 项目静态展馆。
 
 ## Structure
 
 ```text
-catalog/projects/<id>/project.yaml  # machine-readable project facts
-catalog/projects/<id>/details.md    # optional human-readable detail page
-catalog/taxonomies.yaml             # shared categories and tags
-catalog/site.yaml                   # site title, description, and navigation
-src/lib/catalog/                    # shared loader and schema
-docs/contract/                      # maintainer-facing contracts
-docs/current/                       # implemented structure
-docs/plans/                         # future work
-docs/runbooks/                      # repeatable maintenance procedures
+catalog/projects/<id>/project.yaml  # 项目机器可读事实
+catalog/projects/<id>/details.md    # 可选详情正文
+catalog/taxonomies.yaml             # 共享分类和标签
+catalog/site.yaml                   # 站点标题、描述和导航
+src/lib/catalog/                    # schema、loader、adapter
+src/components/blocks/              # typed block renderers
+docs/contract/                      # 维护者可读合同说明
+docs/current/                       # 当前已实现结构
+docs/plans/                         # 未来计划
+docs/runbooks/                      # 可重复维护流程
 ```
 
 ## Maintainer Docs
 
-Read these in order when changing the catalog model:
+修改 catalog 模型时按这个顺序阅读：
 
-1. [Current structure](docs/current/structure.md)
-2. [Project config contract](docs/contract/project-config.md)
-3. [Site config contract](docs/contract/site-config.md)
-4. [Catalog contract iteration runbook](docs/runbooks/catalog-contract-iteration.md)
+1. [当前结构](docs/current/structure.md)
+2. [项目配置合同](docs/contract/project-config.md)
+3. [站点配置合同](docs/contract/site-config.md)
+4. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
 5. [Roadmap](docs/plans/roadmap.md)
 
 ## Commands

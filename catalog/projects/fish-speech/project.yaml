@@ -17,10 +17,11 @@ details:
 meta:
   languages:
     - Python
-quality:
-  use_cases:
-    - Speech generation experiments.
-    - Voice synthesis comparison.
+blocks:
+  - type: use-cases
+    items:
+      - Speech generation experiments.
+      - Voice synthesis comparison.
 relations:
   related_projects:
     - cosyvoice

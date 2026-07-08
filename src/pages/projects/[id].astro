@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import BlockRenderer from "@/components/blocks/BlockRenderer.astro";
 import { loadProjectDetail } from "@/lib/catalog/details";
 import {
   getAllProjects,
@@ -47,6 +48,13 @@ const DetailContent = detail?.Content;
       detail && (
         <section class="detail-body">
           {DetailContent && <DetailContent />}
+        </section>
+      )
+    }
+    {
+      project.blocks.length > 0 && (
+        <section class="block-stack" aria-label="Project details">
+          {project.blocks.map((block, index) => <BlockRenderer block={block} index={index} />)}
         </section>
       )
     }

@@ -17,10 +17,11 @@ details:
 meta:
   languages:
     - Python
-quality:
-  use_cases:
-    - Zero-shot TTS research.
-    - Expressive speech synthesis experiments.
+blocks:
+  - type: use-cases
+    items:
+      - Zero-shot TTS research.
+      - Expressive speech synthesis experiments.
 relations:
   related_projects:
     - xtts

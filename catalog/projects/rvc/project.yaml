@@ -17,10 +17,11 @@ details:
 meta:
   languages:
     - Python
-quality:
-  use_cases:
-    - Voice conversion.
-    - Voice model training.
+blocks:
+  - type: use-cases
+    items:
+      - Voice conversion.
+      - Voice model training.
 relations:
   related_projects:
     - gpt-sovits

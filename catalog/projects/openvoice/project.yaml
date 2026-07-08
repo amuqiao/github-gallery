@@ -18,10 +18,11 @@ meta:
   license: MIT
   languages:
     - Python
-quality:
-  use_cases:
-    - Instant voice cloning.
-    - Voice style control experiments.
+blocks:
+  - type: use-cases
+    items:
+      - Instant voice cloning.
+      - Voice style control experiments.
 relations:
   related_projects:
     - fish-speech

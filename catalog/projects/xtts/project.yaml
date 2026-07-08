@@ -17,10 +17,11 @@ details:
 meta:
   languages:
     - Python
-quality:
-  use_cases:
-    - Multilingual text-to-speech experiments.
-    - Reference-audio voice synthesis.
+blocks:
+  - type: use-cases
+    items:
+      - Multilingual text-to-speech experiments.
+      - Reference-audio voice synthesis.
 relations:
   related_projects:
     - f5-tts

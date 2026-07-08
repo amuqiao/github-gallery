@@ -1,0 +1,19 @@
+---
+import type { AdaptedProjectBlock } from "@/lib/catalog/block-adapters";
+
+type LinksBlock = Extract<AdaptedProjectBlock, { type: "links" }>;
+
+interface Props {
+  block: LinksBlock;
+  headingId: string;
+}
+
+const { block, headingId } = Astro.props;
+---
+
+<section class="content-block" aria-labelledby={headingId}>
+  <h2 id={headingId}>{block.title}</h2>
+  <ul class="block-link-list">
+    {block.items.map((item) => <li><a href={item.url}>{item.label}</a></li>)}
+  </ul>
+</section>
