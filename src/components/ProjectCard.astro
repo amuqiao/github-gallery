@@ -1,5 +1,8 @@
 ---
 import type { Project, TaxonomyItem } from "@/lib/catalog/projects";
+import Badge from "@/components/ui/Badge.astro";
+import Button from "@/components/ui/Button.astro";
+import Card from "@/components/ui/Card.astro";
 
 interface Props {
   project: Project;
@@ -11,21 +14,23 @@ interface Props {
 const { project, category, tags, headingLevel = 2 } = Astro.props;
 ---
 
-<article class="project-card">
-  <div class="project-card__meta">
-    <a class="project-card__category" href={`/categories/${category.id}/`}>{category.name}</a>
-    <span>{project.status}</span>
+<Card as="article" class="flex min-h-72 flex-col gap-3.5 p-4">
+  <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+    <Badge href={`/categories/${category.id}/`} variant="secondary">{category.name}</Badge>
+    <Badge variant="outline">{project.status}</Badge>
   </div>
   {
     headingLevel === 3 ? (
-      <h3><a href={project.route}>{project.name}</a></h3>
+      <h3 class="m-0 text-lg font-semibold leading-tight"><a class="no-underline hover:text-primary" href={project.route}>{project.name}</a></h3>
     ) : (
-      <h2><a href={project.route}>{project.name}</a></h2>
+      <h2 class="m-0 text-lg font-semibold leading-tight"><a class="no-underline hover:text-primary" href={project.route}>{project.name}</a></h2>
     )
   }
-  <p>{project.summary}</p>
-  <div class="project-card__tags" aria-label="Tags">
-    {tags.map((tag) => <a href={`/tags/${tag.id}/`}>{tag.name}</a>)}
+  <p class="m-0 text-sm text-muted-foreground">{project.summary}</p>
+  <div class="flex flex-wrap gap-1.5" aria-label="Tags">
+    {tags.map((tag) => <Badge href={`/tags/${tag.id}/`} variant="secondary">{tag.name}</Badge>)}
   </div>
-  <a class="project-card__repo" href={project.repo} aria-label={`Open ${project.name} repository`}>Repository</a>
-</article>
+  <Button class="mt-auto justify-start px-0" href={project.repo} variant="link" ariaLabel={`Open ${project.name} repository`}>
+    Repository
+  </Button>
+</Card>

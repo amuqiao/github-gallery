@@ -1,5 +1,6 @@
 ---
 import type { AdaptedProjectBlock } from "@/lib/catalog/block-adapters";
+import ContentBlock from "@/components/ui/ContentBlock.astro";
 
 type ListBlock = Extract<AdaptedProjectBlock, { type: "highlights" | "use-cases" }>;
 
@@ -11,9 +12,8 @@ interface Props {
 const { block, headingId } = Astro.props;
 ---
 
-<section class="content-block" aria-labelledby={headingId}>
-  <h2 id={headingId}>{block.title}</h2>
-  <ul class="block-list">
+<ContentBlock headingId={headingId} title={block.title}>
+  <ul class="m-0 list-disc pl-5 text-muted-foreground">
     {block.items.map((item) => <li>{item}</li>)}
   </ul>
-</section>
+</ContentBlock>

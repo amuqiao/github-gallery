@@ -22,6 +22,8 @@ catalog.sh   catalog 项目维护入口
 
 ## Commands
 
+Requires Node.js 20 or newer.
+
 ```sh
 ./scripts/dev.sh start
 ./scripts/dev.sh start --host 0.0.0.0

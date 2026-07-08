@@ -1,14 +1,16 @@
 ---
 import ProjectCard from "@/components/ProjectCard.astro";
-import { getCategory, getTag, type Project, type TaxonomyCatalog } from "@/lib/catalog/projects";
+import Badge from "@/components/ui/Badge.astro";
+import EmptyState from "@/components/ui/EmptyState.astro";
+import SectionHeader from "@/components/ui/SectionHeader.astro";
+import type { ProjectCardViewModel } from "@/lib/catalog/project-view-models";
 
 interface Props {
   id?: string;
   eyebrow?: string;
   title: string;
   description?: string;
-  projects: Project[];
-  taxonomy: TaxonomyCatalog;
+  items: ProjectCardViewModel[];
   emptyMessage?: string;
   compact?: boolean;
   cardHeadingLevel?: 2 | 3;
@@ -19,8 +21,7 @@ const {
   eyebrow,
   title,
   description,
-  projects,
-  taxonomy,
+  items,
   emptyMessage = "No projects match this view.",
   compact = false,
   cardHeadingLevel = 2
@@ -28,31 +29,34 @@ const {
 const headingId = `${id}-heading`;
 ---
 
-<section class="project-collection" id={id} aria-labelledby={headingId}>
-  <div class="project-collection__header">
-    <div>
-      {eyebrow && <p class="eyebrow">{eyebrow}</p>}
-      <h2 id={headingId}>{title}</h2>
-      {description && <p>{description}</p>}
-    </div>
-    <span class="project-count">{projects.length} projects</span>
+<section class="grid gap-5 pt-8" id={id} aria-labelledby={headingId}>
+  <div class="flex flex-col items-start justify-between gap-3 md:flex-row md:items-end">
+    <SectionHeader id={headingId} eyebrow={eyebrow} title={title} description={description} />
+    <Badge variant="outline">{items.length} projects</Badge>
   </div>
   {
-    projects.length > 0 ? (
-      <div class:list={["project-grid", compact && "project-grid--compact"]}>
+    items.length > 0 ? (
+      <div
+        class:list={[
+          "grid gap-4",
+          compact
+            ? "grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))]"
+            : "grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))]"
+        ]}
+      >
         {
-          projects.map((project) => (
+          items.map(({ project, category, tags }) => (
             <ProjectCard
               project={project}
-              category={getCategory(taxonomy, project.category)}
-              tags={project.tags.map((tag) => getTag(taxonomy, tag))}
+              category={category}
+              tags={tags}
               headingLevel={cardHeadingLevel}
             />
           ))
         }
       </div>
     ) : (
-      <p class="empty-state">{emptyMessage}</p>
+      <EmptyState message={emptyMessage} />
     )
   }
 </section>

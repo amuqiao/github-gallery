@@ -2,7 +2,9 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import PageHeader from "@/components/PageHeader.astro";
 import ProjectCollection from "@/components/ProjectCollection.astro";
+import Button from "@/components/ui/Button.astro";
 import { getCatalogSnapshot, type TaxonomyItem } from "@/lib/catalog/projects";
+import { toProjectCardViewModels } from "@/lib/catalog/project-view-models";
 
 export async function getStaticPaths() {
   const { taxonomy } = await getCatalogSnapshot();
@@ -13,11 +15,12 @@ export async function getStaticPaths() {
 }
 
 const { category } = Astro.props as { category: TaxonomyItem };
-const { taxonomy, projectsByCategory } = await getCatalogSnapshot();
+const { site, taxonomy, projectsByCategory } = await getCatalogSnapshot();
 const projects = projectsByCategory.get(category.id) ?? [];
+const projectItems = toProjectCardViewModels(projects, taxonomy);
 ---
 
-<BaseLayout title={`${category.name} - GitHub Gallery`} description={category.description}>
+<BaseLayout title={`${category.name} - GitHub Gallery`} site={site} description={category.description}>
   <PageHeader
     eyebrow="Category"
     title={category.name}
@@ -27,14 +30,13 @@ const projects = projectsByCategory.get(category.id) ?? [];
     stats={[{ value: projects.length, label: "Projects" }]}
   >
     <Fragment slot="actions">
-      <a class="button-link" href="/">All projects</a>
+      <Button href="/" variant="outline">All projects</Button>
     </Fragment>
   </PageHeader>
   <ProjectCollection
     id={`category-${category.id}`}
     title={`${category.name} projects`}
-    projects={projects}
-    taxonomy={taxonomy}
+    items={projectItems}
     emptyMessage="No projects in this category yet."
   />
 </BaseLayout>

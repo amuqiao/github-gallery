@@ -1,0 +1,23 @@
+---
+import Badge from "./Badge.astro";
+
+interface Props {
+  href: string;
+  label: string;
+  count?: number;
+  class?: string;
+}
+
+const { href, label, count, class: className } = Astro.props;
+---
+
+<a
+  class:list={[
+    "inline-flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm no-underline transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    className
+  ]}
+  href={href}
+>
+  <span>{label}</span>
+  {typeof count === "number" && <Badge variant="outline">{count}</Badge>}
+</a>

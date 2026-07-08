@@ -1,23 +1,21 @@
 ---
 import ProjectCollection from "@/components/ProjectCollection.astro";
-import type { Project, TaxonomyCatalog } from "@/lib/catalog/projects";
+import type { ProjectCardViewModel } from "@/lib/catalog/project-view-models";
 
 interface Props {
-  projects: Project[];
-  taxonomy: TaxonomyCatalog;
+  items: ProjectCardViewModel[];
 }
 
-const { projects, taxonomy } = Astro.props;
+const { items } = Astro.props;
 ---
 
 {
-  projects.length > 0 && (
+  items.length > 0 && (
     <ProjectCollection
       id="related-projects"
       eyebrow="Related"
       title="Related projects"
-      projects={projects}
-      taxonomy={taxonomy}
+      items={items}
       compact
       cardHeadingLevel={3}
     />

@@ -1,0 +1,15 @@
+---
+interface Props {
+  as?: "article" | "section" | "div";
+  class?: string;
+  ariaLabelledby?: string;
+}
+
+const { as = "div", class: className, ariaLabelledby } = Astro.props as Props;
+const cardClass = ["rounded-lg border bg-card text-card-foreground shadow-sm", className];
+const Tag = as;
+---
+
+<Tag class:list={cardClass} aria-labelledby={ariaLabelledby}>
+  <slot />
+</Tag>

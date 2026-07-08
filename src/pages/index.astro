@@ -3,16 +3,19 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import FilterPanel from "@/components/FilterPanel.astro";
 import PageHeader from "@/components/PageHeader.astro";
 import ProjectCollection from "@/components/ProjectCollection.astro";
+import Button from "@/components/ui/Button.astro";
 import { getCatalogSnapshot } from "@/lib/catalog/projects";
+import { toProjectCardViewModels } from "@/lib/catalog/project-view-models";
 
-const { projects, taxonomy } = await getCatalogSnapshot();
+const { projects, site, taxonomy } = await getCatalogSnapshot();
 const activeCategories = taxonomy.categories.filter((category) =>
   projects.some((project) => project.category === category.id)
 );
 const activeTags = taxonomy.tags.filter((tag) => projects.some((project) => project.tags.includes(tag.id)));
+const projectItems = toProjectCardViewModels(projects, taxonomy);
 ---
 
-<BaseLayout title="GitHub Gallery">
+<BaseLayout title="GitHub Gallery" site={site}>
   <PageHeader
     eyebrow="Curated GitHub Projects"
     title="GitHub Gallery"
@@ -27,8 +30,8 @@ const activeTags = taxonomy.tags.filter((tag) => projects.some((project) => proj
     ]}
   >
     <Fragment slot="actions">
-      <a class="button-link button-link--primary" href="#projects">Browse projects</a>
-      <a class="button-link" href="#categories">Browse filters</a>
+      <Button href="#projects">Browse projects</Button>
+      <Button href="#categories" variant="outline">Browse filters</Button>
     </Fragment>
   </PageHeader>
 
@@ -39,7 +42,6 @@ const activeTags = taxonomy.tags.filter((tag) => projects.some((project) => proj
     eyebrow="Collection"
     title="All projects"
     description="同一批项目通过稳定合同进入页面，卡片、筛选页和详情页都消费统一 read model。"
-    projects={projects}
-    taxonomy={taxonomy}
+    items={projectItems}
   />
 </BaseLayout>

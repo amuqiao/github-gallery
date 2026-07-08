@@ -1,4 +1,7 @@
 ---
+import Card from "@/components/ui/Card.astro";
+import SectionHeader from "@/components/ui/SectionHeader.astro";
+
 interface Stat {
   label: string;
   value: string | number;
@@ -25,25 +28,31 @@ const {
 } = Astro.props;
 ---
 
-<section class:list={["page-header", `page-header--${variant}`]}>
-  <div class="page-header__content">
-    <p class="eyebrow">{eyebrow}</p>
-    <h1>{title}</h1>
-    {description && <p class="lead">{description}</p>}
-    {Astro.slots.has("meta") && <div class="page-header__meta"><slot name="meta" /></div>}
-    {Astro.slots.has("footer") && <div class="page-header__footer"><slot name="footer" /></div>}
+<section
+  class:list={[
+    "grid gap-5 border-b py-7 md:grid-cols-[minmax(0,1fr)_minmax(240px,320px)]",
+    variant === "gallery" ? "items-end" : "items-start"
+  ]}
+>
+  <div class="grid gap-4">
+    <SectionHeader eyebrow={eyebrow} title={title} description={description} titleLevel={1} />
+    {Astro.slots.has("meta") && <div class="flex flex-wrap gap-2 text-sm text-muted-foreground"><slot name="meta" /></div>}
+    {Astro.slots.has("footer") && <div class="flex flex-wrap gap-2.5"><slot name="footer" /></div>}
   </div>
   {
     (stats.length > 0 || Astro.slots.has("actions")) && (
-      <aside class="page-header__aside" aria-label={asideLabel}>
+      <aside class="grid justify-items-start gap-3.5" aria-label={asideLabel}>
         {stats.length > 0 && (
-          <div class="stats" aria-label={statsLabel}>
+          <div class="grid w-full gap-3" aria-label={statsLabel}>
             {stats.map((stat) => (
-              <span class="stat"><strong>{stat.value}</strong><span>{stat.label}</span></span>
+              <Card class="grid gap-1 p-3.5">
+                <strong class="text-2xl leading-none">{stat.value}</strong>
+                <span class="text-sm text-muted-foreground">{stat.label}</span>
+              </Card>
             ))}
           </div>
         )}
-        {Astro.slots.has("actions") && <div class="action-row"><slot name="actions" /></div>}
+        {Astro.slots.has("actions") && <div class="flex flex-wrap gap-2.5"><slot name="actions" /></div>}
       </aside>
     )
   }

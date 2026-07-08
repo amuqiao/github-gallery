@@ -10,6 +10,8 @@ catalog/projects/<id>/details.md    # 可选详情正文
 catalog/taxonomies.yaml             # 共享分类和标签
 catalog/site.yaml                   # 站点标题、描述和导航
 src/lib/catalog/                    # schema、loader、adapter
+src/styles/global.css               # Tailwind 入口和 shadcn-style token
+src/components/ui/                  # 通用 UI primitives
 src/components/blocks/              # typed block renderers
 scripts/                            # 本地开发、验证、catalog 维护入口
 docs/contract/                      # 维护者可读合同说明
@@ -27,9 +29,17 @@ docs/runbooks/                      # 可重复维护流程
 3. [项目配置合同](docs/contract/project-config.md)
 4. [站点配置合同](docs/contract/site-config.md)
 5. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
-6. [Roadmap](docs/plans/roadmap.md)
+
+修改前端 UI 时按这个顺序阅读：
+
+1. [UI 架构](docs/current/ui-architecture.md)
+2. [Frontend UI Iteration](docs/runbooks/frontend-ui-iteration.md)
+
+长期计划见 [Roadmap](docs/plans/roadmap.md)。
 
 ## Commands
+
+Requires Node.js 20 or newer.
 
 ```sh
 npm install

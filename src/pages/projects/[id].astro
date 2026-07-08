@@ -4,6 +4,7 @@ import BlockRenderer from "@/components/blocks/BlockRenderer.astro";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import ProjectHero from "@/components/ProjectHero.astro";
 import RelatedProjects from "@/components/RelatedProjects.astro";
+import Prose from "@/components/ui/Prose.astro";
 import { loadProjectDetail } from "@/lib/catalog/details";
 import {
   getAllProjects,
@@ -13,6 +14,7 @@ import {
   getTag,
   type Project
 } from "@/lib/catalog/projects";
+import { toProjectCardViewModels } from "@/lib/catalog/project-view-models";
 
 export async function getStaticPaths() {
   const projects = await getAllProjects();
@@ -23,16 +25,17 @@ export async function getStaticPaths() {
 }
 
 const { project } = Astro.props as { project: Project };
-const { taxonomy } = await getCatalogSnapshot();
+const { site, taxonomy } = await getCatalogSnapshot();
 const category = getCategory(taxonomy, project.category);
 const tags = project.tags.map((tag) => getTag(taxonomy, tag));
 const relatedProjects = await getRelatedProjects(project);
+const relatedProjectItems = toProjectCardViewModels(relatedProjects, taxonomy);
 const detail = await loadProjectDetail(project);
 const DetailContent = detail?.Content;
 ---
 
-<BaseLayout title={`${project.name} - GitHub Gallery`} description={project.summary}>
-  <article class="project-detail">
+<BaseLayout title={`${project.name} - GitHub Gallery`} site={site} description={project.summary}>
+  <article class="grid gap-6">
     <Breadcrumbs
       items={[
         { label: "Projects", href: "/" },
@@ -44,18 +47,18 @@ const DetailContent = detail?.Content;
 
     {
       detail && (
-        <section class="detail-body">
+        <Prose>
           {DetailContent && <DetailContent />}
-        </section>
+        </Prose>
       )
     }
     {
       project.blocks.length > 0 && (
-        <section class="block-stack" aria-label="Project details">
+        <section class="grid max-w-3xl gap-4" aria-label="Project details">
           {project.blocks.map((block, index) => <BlockRenderer block={block} index={index} />)}
         </section>
       )
     }
-    <RelatedProjects projects={relatedProjects} taxonomy={taxonomy} />
+    <RelatedProjects items={relatedProjectItems} />
   </article>
 </BaseLayout>
