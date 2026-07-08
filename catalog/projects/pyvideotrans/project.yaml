@@ -29,3 +29,11 @@ blocks:
     items:
       - Video translation and dubbing workflow orchestration.
       - Comparing pluggable ASR, translation, subtitle, and TTS backends.
+notes:
+  - id: pyvideotrans-explainer
+    title: pyVideoTrans 一文读懂
+    type: html
+    path: ./notes/pyvideotrans-explainer.html
+    summary: 介绍 pyVideoTrans 的视频翻译配音流程、核心模块和适用场景。
+    display: standalone
+    html_mode: document
