@@ -1,6 +1,9 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import BlockRenderer from "@/components/blocks/BlockRenderer.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import ProjectHero from "@/components/ProjectHero.astro";
+import RelatedProjects from "@/components/RelatedProjects.astro";
 import { loadProjectDetail } from "@/lib/catalog/details";
 import {
   getAllProjects,
@@ -30,19 +33,14 @@ const DetailContent = detail?.Content;
 
 <BaseLayout title={`${project.name} - GitHub Gallery`} description={project.summary}>
   <article class="project-detail">
-    <header class="hero">
-      <p class="eyebrow">{category.name}</p>
-      <h1>{project.name}</h1>
-      <p class="lead">{project.summary}</p>
-      <div class="project-detail__meta">
-        <span>Status: {project.status}</span>
-        {project.meta?.license && <span>License: {project.meta.license}</span>}
-      </div>
-      <div class="project-detail__tags">
-        {tags.map((tag) => <a href={`/tags/${tag.id}/`}>{tag.name}</a>)}
-      </div>
-      <p><a href={project.repo}>Open repository</a></p>
-    </header>
+    <Breadcrumbs
+      items={[
+        { label: "Projects", href: "/" },
+        { label: category.name, href: `/categories/${category.id}/` },
+        { label: project.name }
+      ]}
+    />
+    <ProjectHero project={project} category={category} tags={tags} />
 
     {
       detail && (
@@ -58,17 +56,6 @@ const DetailContent = detail?.Content;
         </section>
       )
     }
-    {
-      relatedProjects.length > 0 && (
-        <section>
-          <h2>Related Projects</h2>
-          <ul class="taxonomy-list">
-            {relatedProjects.map((relatedProject) => (
-              <li><a href={relatedProject.route}>{relatedProject.name}</a></li>
-            ))}
-          </ul>
-        </section>
-      )
-    }
+    <RelatedProjects projects={relatedProjects} taxonomy={taxonomy} />
   </article>
 </BaseLayout>

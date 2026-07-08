@@ -1,0 +1,57 @@
+---
+import type { Project, TaxonomyItem } from "@/lib/catalog/projects";
+
+interface Props {
+  categories: TaxonomyItem[];
+  tags: TaxonomyItem[];
+  projects: Project[];
+}
+
+const { categories, tags, projects } = Astro.props;
+
+const countByCategory = (categoryId: string) =>
+  projects.filter((project) => project.category === categoryId).length;
+const countByTag = (tagId: string) => projects.filter((project) => project.tags.includes(tagId)).length;
+---
+
+<section class="filter-panel" id="categories" aria-labelledby="browse-heading">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Browse</p>
+      <h2 id="browse-heading">Browse by taxonomy</h2>
+    </div>
+    <a href="#projects">All projects</a>
+  </div>
+  <div class="filter-panel__grid">
+    <section aria-labelledby="category-filter-heading">
+      <h3 id="category-filter-heading">Categories</h3>
+      <ul class="taxonomy-list">
+        {
+          categories.map((category) => (
+            <li>
+              <a href={`/categories/${category.id}/`}>
+                <span>{category.name}</span>
+                <span class="taxonomy-count">{countByCategory(category.id)}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+    <section aria-labelledby="tag-filter-heading">
+      <h3 id="tag-filter-heading">Tags</h3>
+      <ul class="taxonomy-list taxonomy-list--dense">
+        {
+          tags.map((tag) => (
+            <li>
+              <a href={`/tags/${tag.id}/`}>
+                <span>{tag.name}</span>
+                <span class="taxonomy-count">{countByTag(tag.id)}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+  </div>
+</section>

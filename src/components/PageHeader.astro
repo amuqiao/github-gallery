@@ -1,0 +1,50 @@
+---
+interface Stat {
+  label: string;
+  value: string | number;
+}
+
+interface Props {
+  eyebrow: string;
+  title: string;
+  description?: string;
+  variant?: "gallery" | "filter" | "project";
+  stats?: Stat[];
+  statsLabel?: string;
+  asideLabel?: string;
+}
+
+const {
+  eyebrow,
+  title,
+  description,
+  variant = "filter",
+  stats = [],
+  statsLabel = "Page stats",
+  asideLabel = "Page actions"
+} = Astro.props;
+---
+
+<section class:list={["page-header", `page-header--${variant}`]}>
+  <div class="page-header__content">
+    <p class="eyebrow">{eyebrow}</p>
+    <h1>{title}</h1>
+    {description && <p class="lead">{description}</p>}
+    {Astro.slots.has("meta") && <div class="page-header__meta"><slot name="meta" /></div>}
+    {Astro.slots.has("footer") && <div class="page-header__footer"><slot name="footer" /></div>}
+  </div>
+  {
+    (stats.length > 0 || Astro.slots.has("actions")) && (
+      <aside class="page-header__aside" aria-label={asideLabel}>
+        {stats.length > 0 && (
+          <div class="stats" aria-label={statsLabel}>
+            {stats.map((stat) => (
+              <span class="stat"><strong>{stat.value}</strong><span>{stat.label}</span></span>
+            ))}
+          </div>
+        )}
+        {Astro.slots.has("actions") && <div class="action-row"><slot name="actions" /></div>}
+      </aside>
+    )
+  }
+</section>

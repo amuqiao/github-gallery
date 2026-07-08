@@ -5,9 +5,10 @@ interface Props {
   project: Project;
   category: TaxonomyItem;
   tags: TaxonomyItem[];
+  headingLevel?: 2 | 3;
 }
 
-const { project, category, tags } = Astro.props;
+const { project, category, tags, headingLevel = 2 } = Astro.props;
 ---
 
 <article class="project-card">
@@ -15,10 +16,16 @@ const { project, category, tags } = Astro.props;
     <a class="project-card__category" href={`/categories/${category.id}/`}>{category.name}</a>
     <span>{project.status}</span>
   </div>
-  <h2><a href={project.route}>{project.name}</a></h2>
+  {
+    headingLevel === 3 ? (
+      <h3><a href={project.route}>{project.name}</a></h3>
+    ) : (
+      <h2><a href={project.route}>{project.name}</a></h2>
+    )
+  }
   <p>{project.summary}</p>
   <div class="project-card__tags" aria-label="Tags">
     {tags.map((tag) => <a href={`/tags/${tag.id}/`}>{tag.name}</a>)}
   </div>
-  <a class="project-card__repo" href={project.repo}>Repository</a>
+  <a class="project-card__repo" href={project.repo} aria-label={`Open ${project.name} repository`}>Repository</a>
 </article>

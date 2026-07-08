@@ -23,10 +23,11 @@ docs/runbooks/                      # 可重复维护流程
 修改 catalog 模型时按这个顺序阅读：
 
 1. [当前结构](docs/current/structure.md)
-2. [项目配置合同](docs/contract/project-config.md)
-3. [站点配置合同](docs/contract/site-config.md)
-4. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
-5. [Roadmap](docs/plans/roadmap.md)
+2. [前端导航结构](docs/current/frontend-navigation.md)
+3. [项目配置合同](docs/contract/project-config.md)
+4. [站点配置合同](docs/contract/site-config.md)
+5. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
+6. [Roadmap](docs/plans/roadmap.md)
 
 ## Commands
 

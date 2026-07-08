@@ -1,0 +1,29 @@
+---
+import PageHeader from "@/components/PageHeader.astro";
+import type { Project, TaxonomyItem } from "@/lib/catalog/projects";
+
+interface Props {
+  project: Project;
+  category: TaxonomyItem;
+  tags: TaxonomyItem[];
+}
+
+const { project, category, tags } = Astro.props;
+---
+
+<PageHeader eyebrow={category.name} title={project.name} description={project.summary} variant="project">
+  <Fragment slot="meta">
+    <span>Status: {project.status}</span>
+    {project.meta?.license && <span>License: {project.meta.license}</span>}
+    {project.meta?.languages && <span>Languages: {project.meta.languages.join(", ")}</span>}
+  </Fragment>
+  <Fragment slot="footer">
+    <div class="project-detail__tags">
+      {tags.map((tag) => <a href={`/tags/${tag.id}/`}>{tag.name}</a>)}
+    </div>
+  </Fragment>
+  <Fragment slot="actions">
+    <a class="button-link button-link--primary" href={project.repo}>Open repository</a>
+    <a class="button-link" href={`/categories/${category.id}/`}>View category</a>
+  </Fragment>
+</PageHeader>

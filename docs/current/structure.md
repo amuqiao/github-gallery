@@ -13,6 +13,7 @@
 - `src/lib/catalog/projects.ts` 构建共享 catalog snapshot，包括项目索引、taxonomy 索引、关系校验和相关项目查询。
 - `src/lib/catalog/block-adapters.ts` 在渲染前适配 typed blocks。
 - `src/lib/catalog/details.ts` 加载 Markdown 详情正文。
+- `src/components/PageHeader.astro`、`src/components/ProjectCollection.astro` 等共享组件承载前端导航骨架。
 - `src/components/blocks/BlockRenderer.astro` 负责渲染 blocks。
 - `scripts/` 提供本地开发、验证和 catalog 维护入口；脚本不定义配置合同。
 
@@ -26,6 +27,8 @@ catalog/projects/<id>/project.yaml
   -> src/pages/projects/[id].astro
   -> src/pages/categories/[category].astro
   -> src/pages/tags/[tag].astro
+  -> src/components/PageHeader.astro
+  -> src/components/ProjectCollection.astro
   -> static HTML output
 
 catalog/projects/<id>/details.md
@@ -57,6 +60,8 @@ scripts/verify.sh
 `catalog/site.yaml` 是站点导航和站点级展示信息来源。
 
 `details.md` 是人类可读长文说明，不定义可筛选字段。
+
+前端导航骨架见 [`frontend-navigation.md`](frontend-navigation.md)。当前实现采用 Hub and Spoke + Filtered View + Nested Doll 的组合模式。
 
 ## Verification
 

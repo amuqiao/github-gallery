@@ -1,0 +1,58 @@
+---
+import ProjectCard from "@/components/ProjectCard.astro";
+import { getCategory, getTag, type Project, type TaxonomyCatalog } from "@/lib/catalog/projects";
+
+interface Props {
+  id?: string;
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  projects: Project[];
+  taxonomy: TaxonomyCatalog;
+  emptyMessage?: string;
+  compact?: boolean;
+  cardHeadingLevel?: 2 | 3;
+}
+
+const {
+  id = "projects",
+  eyebrow,
+  title,
+  description,
+  projects,
+  taxonomy,
+  emptyMessage = "No projects match this view.",
+  compact = false,
+  cardHeadingLevel = 2
+} = Astro.props;
+const headingId = `${id}-heading`;
+---
+
+<section class="project-collection" id={id} aria-labelledby={headingId}>
+  <div class="project-collection__header">
+    <div>
+      {eyebrow && <p class="eyebrow">{eyebrow}</p>}
+      <h2 id={headingId}>{title}</h2>
+      {description && <p>{description}</p>}
+    </div>
+    <span class="project-count">{projects.length} projects</span>
+  </div>
+  {
+    projects.length > 0 ? (
+      <div class:list={["project-grid", compact && "project-grid--compact"]}>
+        {
+          projects.map((project) => (
+            <ProjectCard
+              project={project}
+              category={getCategory(taxonomy, project.category)}
+              tags={project.tags.map((tag) => getTag(taxonomy, tag))}
+              headingLevel={cardHeadingLevel}
+            />
+          ))
+        }
+      </div>
+    ) : (
+      <p class="empty-state">{emptyMessage}</p>
+    )
+  }
+</section>

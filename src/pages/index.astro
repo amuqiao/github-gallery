@@ -1,7 +1,9 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import ProjectCard from "@/components/ProjectCard.astro";
-import { getCatalogSnapshot, getCategory, getTag } from "@/lib/catalog/projects";
+import FilterPanel from "@/components/FilterPanel.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import ProjectCollection from "@/components/ProjectCollection.astro";
+import { getCatalogSnapshot } from "@/lib/catalog/projects";
 
 const { projects, taxonomy } = await getCatalogSnapshot();
 const activeCategories = taxonomy.categories.filter((category) =>
@@ -11,42 +13,33 @@ const activeTags = taxonomy.tags.filter((tag) => projects.some((project) => proj
 ---
 
 <BaseLayout title="GitHub Gallery">
-  <section class="hero">
-    <p class="eyebrow">Curated GitHub Projects</p>
-    <h1>用统一合同维护可长期迭代的 GitHub 项目展馆。</h1>
-    <p class="lead">
-      每个项目独立目录，配置由公共加载方法读取和校验；页面只消费结构化结果，避免后期字段漂移。
-    </p>
-    <div class="stats" aria-label="Gallery stats">
-      <span class="stat"><strong>{projects.length}</strong><span>Projects</span></span>
-      <span class="stat"><strong>{activeCategories.length}</strong><span>Categories</span></span>
-      <span class="stat"><strong>{activeTags.length}</strong><span>Active tags</span></span>
-    </div>
-  </section>
+  <PageHeader
+    eyebrow="Curated GitHub Projects"
+    title="GitHub Gallery"
+    description="一个合同驱动的项目展馆：从中心页浏览项目，通过分类和标签筛选，再进入项目详情继续发现相关项目。"
+    variant="gallery"
+    statsLabel="Gallery stats"
+    asideLabel="Gallery summary and actions"
+    stats={[
+      { value: projects.length, label: "Projects" },
+      { value: activeCategories.length, label: "Categories" },
+      { value: activeTags.length, label: "Active tags" }
+    ]}
+  >
+    <Fragment slot="actions">
+      <a class="button-link button-link--primary" href="#projects">Browse projects</a>
+      <a class="button-link" href="#categories">Browse filters</a>
+    </Fragment>
+  </PageHeader>
 
-  <section aria-labelledby="projects-heading">
-    <div class="section-heading">
-      <h2 id="projects-heading">Projects</h2>
-    </div>
-    <div class="project-grid">
-      {
-        projects.map((project) => (
-          <ProjectCard
-            project={project}
-            category={getCategory(taxonomy, project.category)}
-            tags={project.tags.map((tag) => getTag(taxonomy, tag))}
-          />
-        ))
-      }
-    </div>
-  </section>
+  <FilterPanel categories={activeCategories} tags={activeTags} projects={projects} />
 
-  <section id="categories" aria-labelledby="categories-heading">
-    <div class="section-heading">
-      <h2 id="categories-heading">Categories</h2>
-    </div>
-    <ul class="taxonomy-list">
-      {activeCategories.map((category) => <li><a href={`/categories/${category.id}/`}>{category.name}</a></li>)}
-    </ul>
-  </section>
+  <ProjectCollection
+    id="projects"
+    eyebrow="Collection"
+    title="All projects"
+    description="同一批项目通过稳定合同进入页面，卡片、筛选页和详情页都消费统一 read model。"
+    projects={projects}
+    taxonomy={taxonomy}
+  />
 </BaseLayout>

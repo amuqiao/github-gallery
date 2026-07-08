@@ -1,12 +1,8 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import ProjectCard from "@/components/ProjectCard.astro";
-import {
-  getCatalogSnapshot,
-  getCategory,
-  getTag,
-  type TaxonomyItem
-} from "@/lib/catalog/projects";
+import PageHeader from "@/components/PageHeader.astro";
+import ProjectCollection from "@/components/ProjectCollection.astro";
+import { getCatalogSnapshot, type TaxonomyItem } from "@/lib/catalog/projects";
 
 export async function getStaticPaths() {
   const { taxonomy } = await getCatalogSnapshot();
@@ -22,20 +18,23 @@ const projects = projectsByCategory.get(category.id) ?? [];
 ---
 
 <BaseLayout title={`${category.name} - GitHub Gallery`} description={category.description}>
-  <section class="hero">
-    <p class="eyebrow">Category</p>
-    <h1>{category.name}</h1>
-    {category.description && <p class="lead">{category.description}</p>}
-  </section>
-  <div class="project-grid">
-    {
-      projects.map((project) => (
-        <ProjectCard
-          project={project}
-          category={getCategory(taxonomy, project.category)}
-          tags={project.tags.map((tag) => getTag(taxonomy, tag))}
-        />
-      ))
-    }
-  </div>
+  <PageHeader
+    eyebrow="Category"
+    title={category.name}
+    description={category.description ?? "Projects grouped by category."}
+    variant="filter"
+    asideLabel="Category summary and actions"
+    stats={[{ value: projects.length, label: "Projects" }]}
+  >
+    <Fragment slot="actions">
+      <a class="button-link" href="/">All projects</a>
+    </Fragment>
+  </PageHeader>
+  <ProjectCollection
+    id={`category-${category.id}`}
+    title={`${category.name} projects`}
+    projects={projects}
+    taxonomy={taxonomy}
+    emptyMessage="No projects in this category yet."
+  />
 </BaseLayout>
