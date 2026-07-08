@@ -1,14 +1,15 @@
 ---
-import type { Project, TaxonomyItem } from "@/lib/catalog/projects";
+import type { LocalizedTaxonomyItem, Project } from "@/lib/catalog/projects";
 import Badge from "@/components/ui/Badge.astro";
 import Button from "@/components/ui/Button.astro";
 import Card from "@/components/ui/Card.astro";
+import { getProjectStatusLabel } from "@/lib/catalog/project-status";
 import type { ProjectCollectionVariant } from "@/presentation/types";
 
 interface Props {
   project: Project;
-  category: TaxonomyItem;
-  tags: TaxonomyItem[];
+  category: LocalizedTaxonomyItem;
+  tags: LocalizedTaxonomyItem[];
   note?: string;
   headingLevel?: 2 | 3;
   variant?: ProjectCollectionVariant | "feature";
@@ -34,15 +35,15 @@ const cardClass = ["project-card", `project-card--${variant}`].join(" ");
         <span class="project-card__id">{project.id}</span>
       </div>
     </div>
-    <Badge href={`/categories/${category.id}/`} variant="secondary" class="project-card__category">{category.name}</Badge>
+    <Badge href={`/categories/${category.id}/`} variant="secondary" class="project-card__category">{category.label}</Badge>
   </div>
   <div class="project-card__meta">
-    <Badge variant="outline">{project.status}</Badge>
+    <Badge variant="outline">状态：{getProjectStatusLabel(project.status)}</Badge>
   </div>
   <p class="project-card__summary">{project.summary}</p>
   {note && <p class="project-card__note">{note}</p>}
   <ul class="project-card__tags" aria-label="Tags">
-    {tags.map((tag) => <li><Badge href={`/tags/${tag.id}/`} variant="secondary">{tag.name}</Badge></li>)}
+    {tags.map((tag) => <li><Badge href={`/tags/${tag.id}/`} variant="secondary">{tag.label}</Badge></li>)}
   </ul>
   <Button class="project-card__repo" href={project.repo} variant="link" ariaLabel={`Open ${project.name} repository`}>
     {project.name} repository

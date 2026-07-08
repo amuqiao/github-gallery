@@ -6,10 +6,12 @@ import {
   projectConfigSchema,
   siteConfigSchema,
   taxonomyCatalogSchema,
+  type LocaleCode,
+  type LocalizedText,
   type ProjectConfig,
   type SiteConfig,
-  type TaxonomyCatalog,
-  type TaxonomyItem
+  type TaxonomyCatalog as TaxonomyCatalogConfig,
+  type TaxonomyItem as TaxonomyItemConfig
 } from "./project-schema";
 
 const repoRoot = process.cwd();
@@ -24,7 +26,15 @@ export type Project = Omit<ProjectConfig, "blocks"> & {
   route: string;
 };
 
-export type { TaxonomyCatalog, TaxonomyItem };
+export type LocalizedTaxonomyItem = Omit<TaxonomyItemConfig, "name" | "description"> & {
+  label: string;
+  descriptionText: string;
+};
+
+export type TaxonomyCatalog = Omit<TaxonomyCatalogConfig, "categories" | "tags"> & {
+  categories: LocalizedTaxonomyItem[];
+  tags: LocalizedTaxonomyItem[];
+};
 
 export type CatalogSnapshot = {
   projects: Project[];
@@ -33,8 +43,8 @@ export type CatalogSnapshot = {
   projectsById: Map<string, Project>;
   projectsByCategory: Map<string, Project[]>;
   projectsByTag: Map<string, Project[]>;
-  categoriesById: Map<string, TaxonomyItem>;
-  tagsById: Map<string, TaxonomyItem>;
+  categoriesById: Map<string, LocalizedTaxonomyItem>;
+  tagsById: Map<string, LocalizedTaxonomyItem>;
 };
 
 let catalogSnapshot: Promise<CatalogSnapshot> | undefined;
@@ -89,7 +99,7 @@ export async function getRelatedProjects(project: Project): Promise<Project[]> {
   });
 }
 
-export function getCategory(taxonomy: TaxonomyCatalog, id: string): TaxonomyItem {
+export function getCategory(taxonomy: TaxonomyCatalog, id: string): LocalizedTaxonomyItem {
   const item = taxonomy.categories.find((category) => category.id === id);
 
   if (!item) {
@@ -99,7 +109,7 @@ export function getCategory(taxonomy: TaxonomyCatalog, id: string): TaxonomyItem
   return item;
 }
 
-export function getTag(taxonomy: TaxonomyCatalog, id: string): TaxonomyItem {
+export function getTag(taxonomy: TaxonomyCatalog, id: string): LocalizedTaxonomyItem {
   const item = taxonomy.tags.find((tag) => tag.id === id);
 
   if (!item) {
@@ -153,7 +163,29 @@ async function readTaxonomyCatalog(): Promise<TaxonomyCatalog> {
   const parsed = taxonomyCatalogSchema.parse(load(raw));
   assertUniqueIds("categories", parsed.categories);
   assertUniqueIds("tags", parsed.tags);
-  return parsed;
+  return localizeTaxonomyCatalog(parsed);
+}
+
+function localizeTaxonomyCatalog(taxonomy: TaxonomyCatalogConfig): TaxonomyCatalog {
+  const locale = taxonomy.locale.default;
+
+  return {
+    ...taxonomy,
+    categories: taxonomy.categories.map((category) => localizeTaxonomyItem(category, locale)),
+    tags: taxonomy.tags.map((tag) => localizeTaxonomyItem(tag, locale))
+  };
+}
+
+function localizeTaxonomyItem(item: TaxonomyItemConfig, locale: LocaleCode): LocalizedTaxonomyItem {
+  return {
+    id: item.id,
+    label: localizeText(item.name, locale),
+    descriptionText: localizeText(item.description, locale)
+  };
+}
+
+function localizeText(text: LocalizedText, locale: LocaleCode): string {
+  return text[locale];
 }
 
 async function readProject(directoryName: string, taxonomy: TaxonomyCatalog): Promise<Project> {
@@ -229,7 +261,7 @@ function assertUniqueIds(label: string, items: Array<{ id: string }>): void {
   }
 }
 
-function groupProjectsByCategory(projects: Project[], categories: TaxonomyItem[]): Map<string, Project[]> {
+function groupProjectsByCategory(projects: Project[], categories: LocalizedTaxonomyItem[]): Map<string, Project[]> {
   const groups = new Map(categories.map((category) => [category.id, [] as Project[]]));
 
   for (const project of projects) {
@@ -239,7 +271,7 @@ function groupProjectsByCategory(projects: Project[], categories: TaxonomyItem[]
   return groups;
 }
 
-function groupProjectsByTag(projects: Project[], tags: TaxonomyItem[]): Map<string, Project[]> {
+function groupProjectsByTag(projects: Project[], tags: LocalizedTaxonomyItem[]): Map<string, Project[]> {
   const groups = new Map(tags.map((tag) => [tag.id, [] as Project[]]));
 
   for (const project of projects) {

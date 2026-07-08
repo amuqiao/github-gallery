@@ -132,12 +132,16 @@ schema 定规则
 按这个顺序执行：
 
 1. 先把 category 或 tag 加到 `catalog/taxonomies.yaml`。
-2. 再从项目配置中引用它。
-3. category 保持宽泛稳定。
-4. tag 用于更窄或领域相关的含义。
-5. 运行 `./scripts/verify.sh check`。
+2. 同时提供 `name.zh`、`name.en`、`description.zh` 和 `description.en`。
+3. 再从项目配置中引用它。
+4. 更新时遵守 [`../contract/taxonomy-config.md`](../contract/taxonomy-config.md)。
+5. category 保持宽泛稳定。
+6. tag 用于更窄或领域相关的含义。
+7. 运行 `./scripts/verify.sh check`。
 
 category id 和 tag id 是对外 URL 标识。重命名属于路由变更。
+
+当前 taxonomy 是固定 `zh/en` 双语 registry。新增第三语言不是纯数据变更，必须先更新 schema、loader 和 import CLI。
 
 ## When Importing AI-Generated Catalog Data
 

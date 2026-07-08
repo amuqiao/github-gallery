@@ -2,15 +2,15 @@ import {
   getCategory,
   getTag,
   type Project,
-  type TaxonomyCatalog,
-  type TaxonomyItem
+  type LocalizedTaxonomyItem,
+  type TaxonomyCatalog
 } from "./projects";
 import type { Collection } from "./collections";
 
 export interface ProjectCardViewModel {
   project: Project;
-  category: TaxonomyItem;
-  tags: TaxonomyItem[];
+  category: LocalizedTaxonomyItem;
+  tags: LocalizedTaxonomyItem[];
   note?: string;
 }
 

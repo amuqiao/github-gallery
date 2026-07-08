@@ -9,7 +9,7 @@
 - 可选详情正文位于同一项目目录的 `details.md`。
 - 专题数据位于 `catalog/collections/<id>/collection.yaml`。
 - 可选专题详情正文位于同一专题目录的 `details.md`。
-- 分类和标签词表位于 `catalog/taxonomies.yaml`。
+- 分类和标签词表位于 `catalog/taxonomies.yaml`，当前使用中英文双语展示字段。
 - 站点标题、描述、导航位于 `catalog/site.yaml`。
 - 页面不直接解析 YAML，而是调用 `src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts`。
 - `src/lib/catalog/projects.ts` 构建共享 catalog snapshot，包括项目索引、taxonomy 索引、关系校验和相关项目查询。
@@ -91,6 +91,8 @@ scripts/verify.sh
 
 `collection.yaml` 是专题身份、专题路由、公开状态、项目引用顺序和策展备注的机器可读来源。专题只引用已有项目，不复制项目事实。`draft` 专题会被校验，但不会生成公开页面。
 
+`catalog/taxonomies.yaml` 是分类和标签 id、固定 `zh/en` 双语展示名、双语说明的机器可读来源。项目只引用 taxonomy id；前端从 loader 派生的 `label` 和 `descriptionText` 渲染默认语言。
+
 `catalog/site.yaml` 是站点导航和站点级展示信息来源。
 
 `src/presentation/config.ts` 是当前前端展示版本来源。它选择代码级 `layoutId` 和 `themeId`，不改变项目或专题配置合同。
@@ -107,7 +109,7 @@ UI 样式架构见 [`ui-architecture.md`](ui-architecture.md)。当前实现采�
 
 - `npm run build` 会运行 `astro check` 和 `astro build`。
 - `./scripts/verify.sh check` 是推荐的一次性验证入口，当前委托 `npm run build`。
-- 配置违反 schema、引用未知 taxonomy、引用缺失文件、引用 symlink 详情文件、路径越出项目或专题目录、related project 不存在、专题引用未知项目、专题重复引用同一项目时，构建应失败。
+- 配置违反 schema、引用未知 taxonomy、taxonomy 缺少双语字段、引用缺失文件、引用 symlink 详情文件、路径越出项目或专题目录、related project 不存在、专题引用未知项目、专题重复引用同一项目时，构建应失败。
 - `schema_version: 1` 的项目和专题只支持 Markdown 详情。
 - `schema_version: 1` 支持 `links`、`highlights`、`use-cases` blocks。
 - `./scripts/catalog.sh import validate|plan|diff|apply` 是当前 import batch 工作流入口。合同说明见 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md)，操作手册见 [`../runbooks/catalog-import-workflow.md`](../runbooks/catalog-import-workflow.md)。

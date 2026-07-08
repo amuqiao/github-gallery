@@ -20,6 +20,8 @@ const allowedTopLevelEntries = new Set(["manifest.yaml", "projects", "collection
 let lockHeld = false;
 
 const nonEmptyString = z.string().trim().min(1);
+const localeCodeSchema = z.enum(["zh", "en"]);
+const localizedTextSchema = z.object({ zh: nonEmptyString, en: nonEmptyString }).strict();
 const slugString = z.string().regex(slugPattern);
 const detailsSchema = z
   .object({
@@ -86,10 +88,38 @@ const collectionSchema = z
   .strict();
 const taxonomySchema = z
   .object({
-    categories: z.array(z.object({ id: slugString, name: nonEmptyString, description: nonEmptyString.optional() }).strict()).min(1),
-    tags: z.array(z.object({ id: slugString, name: nonEmptyString, description: nonEmptyString.optional() }).strict()).min(1)
+    schema_version: z.literal(1),
+    locale: z.object({ default: localeCodeSchema, supported: z.array(localeCodeSchema).min(1) }).strict(),
+    categories: z.array(z.object({ id: slugString, name: localizedTextSchema, description: localizedTextSchema }).strict()).min(1),
+    tags: z.array(z.object({ id: slugString, name: localizedTextSchema, description: localizedTextSchema }).strict()).min(1)
   })
-  .strict();
+  .strict()
+  .superRefine((taxonomy, ctx) => {
+    const supported = new Set(taxonomy.locale.supported);
+    if (supported.size !== taxonomy.locale.supported.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "locale.supported must not contain duplicate locales",
+        path: ["locale", "supported"]
+      });
+    }
+    if (!supported.has(taxonomy.locale.default)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "locale.default must be included in locale.supported",
+        path: ["locale", "default"]
+      });
+    }
+    for (const requiredLocale of ["zh", "en"]) {
+      if (!supported.has(requiredLocale)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `locale.supported must include ${requiredLocale}`,
+          path: ["locale", "supported"]
+        });
+      }
+    }
+  });
 const operationSchema = z
   .object({
     target: z.enum(["project", "collection"]),

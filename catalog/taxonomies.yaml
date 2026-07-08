@@ -1,57 +1,185 @@
+schema_version: 1
+locale:
+  default: zh
+  supported:
+    - zh
+    - en
+
 categories:
   - id: ai
-    name: AI
-    description: Machine learning, generative AI, and AI-assisted creative tools.
+    name:
+      zh: AI
+      en: AI
+    description:
+      zh: 机器学习、生成式 AI 和 AI 辅助创作工具。
+      en: Machine learning, generative AI, and AI-assisted creative tools.
   - id: developer-tools
-    name: Developer Tools
-    description: Tools for building, testing, shipping, or maintaining software.
+    name:
+      zh: 开发工具
+      en: Developer Tools
+    description:
+      zh: 用于构建、测试、发布或维护软件的工具。
+      en: Tools for building, testing, shipping, or maintaining software.
   - id: frontend
-    name: Frontend
-    description: Browser, UI, rendering, and frontend application projects.
+    name:
+      zh: 前端
+      en: Frontend
+    description:
+      zh: 浏览器、UI、渲染和前端应用项目。
+      en: Browser, UI, rendering, and frontend application projects.
   - id: backend
-    name: Backend
-    description: Server-side frameworks, APIs, workers, and services.
+    name:
+      zh: 后端
+      en: Backend
+    description:
+      zh: 服务端框架、API、worker 和服务项目。
+      en: Server-side frameworks, APIs, workers, and services.
   - id: data
-    name: Data
-    description: Data engineering, storage, analytics, and workflow projects.
+    name:
+      zh: 数据
+      en: Data
+    description:
+      zh: 数据工程、存储、分析和工作流项目。
+      en: Data engineering, storage, analytics, and workflow projects.
   - id: infrastructure
-    name: Infrastructure
-    description: Deployment, operations, networking, and platform infrastructure.
+    name:
+      zh: 基础设施
+      en: Infrastructure
+    description:
+      zh: 部署、运维、网络和平台基础设施项目。
+      en: Deployment, operations, networking, and platform infrastructure.
 
 tags:
   - id: audio
-    name: Audio
-    description: Audio processing, speech, music, or sound generation.
+    name:
+      zh: 音频
+      en: Audio
+    description:
+      zh: 音频处理、语音、音乐或声音生成项目。
+      en: Audio processing, speech, music, or sound generation.
   - id: machine-learning
-    name: Machine Learning
-    description: Projects centered on machine learning models or workflows.
+    name:
+      zh: 机器学习
+      en: Machine Learning
+    description:
+      zh: 以机器学习模型或工作流为核心的项目。
+      en: Projects centered on machine learning models or workflows.
   - id: text-to-speech
-    name: Text to Speech
-    description: Projects that synthesize speech from text.
+    name:
+      zh: 文本转语音
+      en: Text to Speech
+    description:
+      zh: 从文本合成语音的项目。
+      en: Projects that synthesize speech from text.
+  - id: speech-to-text
+    name:
+      zh: 语音识别
+      en: Speech to Text
+    description:
+      zh: 将语音或音频转写为文本、字幕或时间轴的项目。
+      en: Projects that transcribe speech or audio into text, subtitles, or timelines.
   - id: voice-cloning
-    name: Voice Cloning
-    description: Projects that clone or adapt a voice from reference audio.
+    name:
+      zh: 声音克隆
+      en: Voice Cloning
+    description:
+      zh: 从参考音频克隆或适配音色的项目。
+      en: Projects that clone or adapt a voice from reference audio.
   - id: voice-conversion
-    name: Voice Conversion
-    description: Projects that transform one voice into another.
+    name:
+      zh: 音色转换
+      en: Voice Conversion
+    description:
+      zh: 将一种声音转换为另一种声音的项目。
+      en: Projects that transform one voice into another.
+  - id: video-translation
+    name:
+      zh: 视频翻译
+      en: Video Translation
+    description:
+      zh: 将视频内容翻译为其他语言的项目或工作流。
+      en: Projects or workflows that translate video content into other languages.
+  - id: dubbing
+    name:
+      zh: 配音
+      en: Dubbing
+    description:
+      zh: 生成、替换或编排视频配音音轨的项目。
+      en: Projects that generate, replace, or orchestrate dubbed audio tracks.
+  - id: subtitles
+    name:
+      zh: 字幕
+      en: Subtitles
+    description:
+      zh: 生成、翻译、校对或对齐字幕的项目。
+      en: Projects that generate, translate, proofread, or align subtitles.
+  - id: translation
+    name:
+      zh: 翻译
+      en: Translation
+    description:
+      zh: 文本、字幕或多语言内容翻译相关项目。
+      en: Projects related to text, subtitle, or multilingual content translation.
+  - id: lip-sync
+    name:
+      zh: 口型同步
+      en: Lip Sync
+    description:
+      zh: 让生成语音、视频人物口型或说话画面保持同步的项目。
+      en: Projects that synchronize generated speech with lip movement or talking video.
   - id: multilingual
-    name: Multilingual
-    description: Projects with multi-language or cross-language capability.
+    name:
+      zh: 多语言
+      en: Multilingual
+    description:
+      zh: 具备多语言或跨语言能力的项目。
+      en: Projects with multi-language or cross-language capability.
   - id: webui
-    name: Web UI
-    description: Projects that include a browser-based interface.
+    name:
+      zh: Web UI
+      en: Web UI
+    description:
+      zh: 包含浏览器界面或 Web 控制台的项目。
+      en: Projects that include a browser-based interface.
   - id: research
-    name: Research
-    description: Projects mainly useful for experiments, papers, or reproducible research.
+    name:
+      zh: 研究
+      en: Research
+    description:
+      zh: 主要用于实验、论文复现或架构研究的项目。
+      en: Projects mainly useful for experiments, papers, or reproducible research.
   - id: toolkit
-    name: Toolkit
-    description: Projects that provide reusable tools, libraries, or end-to-end workflows.
+    name:
+      zh: 工具箱
+      en: Toolkit
+    description:
+      zh: 提供可复用工具、库或端到端工作流的项目。
+      en: Projects that provide reusable tools, libraries, or end-to-end workflows.
+  - id: workflow
+    name:
+      zh: 工作流
+      en: Workflow
+    description:
+      zh: 编排多个步骤、模型或服务形成完整流程的项目。
+      en: Projects that orchestrate multiple steps, models, or services into a workflow.
   - id: training
-    name: Training
-    description: Projects that include model training or fine-tuning workflows.
+    name:
+      zh: 训练
+      en: Training
+    description:
+      zh: 包含模型训练或微调流程的项目。
+      en: Projects that include model training or fine-tuning workflows.
   - id: inference
-    name: Inference
-    description: Projects focused on running models or generating outputs.
+    name:
+      zh: 推理
+      en: Inference
+    description:
+      zh: 侧重模型运行、生成输出或部署推理的项目。
+      en: Projects focused on running models or generating outputs.
   - id: pytorch
-    name: PyTorch
-    description: Projects implemented primarily with PyTorch.
+    name:
+      zh: PyTorch
+      en: PyTorch
+    description:
+      zh: 主要使用 PyTorch 实现的项目。
+      en: Projects implemented primarily with PyTorch.

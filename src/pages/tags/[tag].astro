@@ -3,7 +3,7 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import PageHeader from "@/components/PageHeader.astro";
 import ProjectCollection from "@/components/ProjectCollection.astro";
 import Button from "@/components/ui/Button.astro";
-import { getCatalogSnapshot, type TaxonomyItem } from "@/lib/catalog/projects";
+import { getCatalogSnapshot, type LocalizedTaxonomyItem } from "@/lib/catalog/projects";
 import { toProjectCardViewModels } from "@/lib/catalog/project-view-models";
 import { getActivePresentation } from "@/presentation";
 
@@ -15,18 +15,18 @@ export async function getStaticPaths() {
   }));
 }
 
-const { tag } = Astro.props as { tag: TaxonomyItem };
+const { tag } = Astro.props as { tag: LocalizedTaxonomyItem };
 const { site, taxonomy, projectsByTag } = await getCatalogSnapshot();
 const projects = projectsByTag.get(tag.id) ?? [];
 const projectItems = toProjectCardViewModels(projects, taxonomy);
 const { layout } = getActivePresentation();
 ---
 
-<BaseLayout title={`${tag.name} - GitHub Gallery`} site={site} description={tag.description}>
+<BaseLayout title={`${tag.label} - GitHub Gallery`} site={site} description={tag.descriptionText}>
   <PageHeader
     eyebrow="Tag"
-    title={tag.name}
-    description={tag.description ?? "Projects grouped by tag."}
+    title={tag.label}
+    description={tag.descriptionText}
     variant="filter"
     asideLabel="Tag summary and actions"
     stats={[{ value: projects.length, label: "Projects" }]}
@@ -37,7 +37,7 @@ const { layout } = getActivePresentation();
   </PageHeader>
   <ProjectCollection
     id={`tag-${tag.id}`}
-    title={`${tag.name} projects`}
+    title={`${tag.label} projects`}
     items={projectItems}
     emptyMessage="No projects with this tag yet."
     variant={layout.listPages.projectCollectionVariant}

@@ -1,7 +1,7 @@
 ---
 import BentoEditorialHome from "@/components/presentation/home/BentoEditorialHome.astro";
 import type { Collection } from "@/lib/catalog/collections";
-import type { Project, TaxonomyItem } from "@/lib/catalog/projects";
+import type { LocalizedTaxonomyItem, Project } from "@/lib/catalog/projects";
 import type { ProjectCardViewModel } from "@/lib/catalog/project-view-models";
 import type {
   PresentationHomeConfig,
@@ -14,8 +14,8 @@ interface Props {
   home: PresentationHomeConfig;
   projects: Project[];
   collections: Collection[];
-  activeCategories: TaxonomyItem[];
-  activeTags: TaxonomyItem[];
+  activeCategories: LocalizedTaxonomyItem[];
+  activeTags: LocalizedTaxonomyItem[];
   projectItems: ProjectCardViewModel[];
 }
 

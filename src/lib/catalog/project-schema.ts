@@ -8,6 +8,14 @@ const relativePathSchema = z
   .regex(relativePathPattern, "Path must be a relative catalog item-local path such as ./details.md");
 
 const nonEmptyString = z.string().trim().min(1);
+export const localeCodeSchema = z.enum(["zh", "en"]);
+
+export const localizedTextSchema = z
+  .object({
+    zh: nonEmptyString,
+    en: nonEmptyString
+  })
+  .strict();
 
 export const detailsSchema = z
   .object({
@@ -117,17 +125,53 @@ export const collectionConfigSchema = z
 export const taxonomyItemSchema = z
   .object({
     id: z.string().regex(slugPattern),
-    name: nonEmptyString,
-    description: nonEmptyString.optional()
+    name: localizedTextSchema,
+    description: localizedTextSchema
   })
   .strict();
 
 export const taxonomyCatalogSchema = z
   .object({
+    schema_version: z.literal(1),
+    locale: z
+      .object({
+        default: localeCodeSchema,
+        supported: z.array(localeCodeSchema).min(1)
+      })
+      .strict(),
     categories: z.array(taxonomyItemSchema).min(1),
     tags: z.array(taxonomyItemSchema).min(1)
   })
-  .strict();
+  .strict()
+  .superRefine((taxonomy, ctx) => {
+    const supported = new Set(taxonomy.locale.supported);
+
+    if (supported.size !== taxonomy.locale.supported.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "locale.supported must not contain duplicate locales",
+        path: ["locale", "supported"]
+      });
+    }
+
+    if (!supported.has(taxonomy.locale.default)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "locale.default must be included in locale.supported",
+        path: ["locale", "default"]
+      });
+    }
+
+    for (const requiredLocale of ["zh", "en"] as const) {
+      if (!supported.has(requiredLocale)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `locale.supported must include ${requiredLocale}`,
+          path: ["locale", "supported"]
+        });
+      }
+    }
+  });
 
 export const siteConfigSchema = z
   .object({
@@ -152,4 +196,6 @@ export type CollectionConfig = z.infer<typeof collectionConfigSchema>;
 export type CollectionItemConfig = z.infer<typeof collectionItemSchema>;
 export type TaxonomyCatalog = z.infer<typeof taxonomyCatalogSchema>;
 export type TaxonomyItem = z.infer<typeof taxonomyItemSchema>;
+export type LocaleCode = z.infer<typeof localeCodeSchema>;
+export type LocalizedText = z.infer<typeof localizedTextSchema>;
 export type SiteConfig = z.infer<typeof siteConfigSchema>;

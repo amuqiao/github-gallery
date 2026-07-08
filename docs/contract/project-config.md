@@ -34,8 +34,8 @@ catalog/projects/<id>/
 | `name` | 必填，项目展示名。 |
 | `repo` | 必填，项目仓库 URL。 |
 | `summary` | 必填，卡片摘要，最多 160 个字符。 |
-| `category` | 必填，必须引用 `catalog/taxonomies.yaml` 中存在的分类 id。 |
-| `tags` | 必填，1 到 8 个标签 id，必须来自 `catalog/taxonomies.yaml`。 |
+| `category` | 必填，必须引用 `catalog/taxonomies.yaml` 中存在的分类 id。taxonomy 合同见 [`taxonomy-config.md`](./taxonomy-config.md)。 |
+| `tags` | 必填，1 到 8 个标签 id，必须来自 `catalog/taxonomies.yaml`。taxonomy 合同见 [`taxonomy-config.md`](./taxonomy-config.md)。 |
 | `status` | 必填，枚举：`active`、`inactive`、`archived`、`unknown`。 |
 
 ## 可选 Core 字段

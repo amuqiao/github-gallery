@@ -8,8 +8,11 @@ tags:
   - audio
   - multilingual
   - webui
-  - toolkit
-  - text-to-speech
+  - video-translation
+  - dubbing
+  - subtitles
+  - speech-to-text
+  - workflow
 status: unknown
 details:
   type: markdown

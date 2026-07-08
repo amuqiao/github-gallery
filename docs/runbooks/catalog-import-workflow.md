@@ -81,6 +81,7 @@ notes / AI output / manual draft
 manifest.yaml 必须符合 docs/contract/catalog-import-batch.md。
 project payload 必须符合 docs/contract/project-config.md。
 collection payload 必须符合 docs/contract/collection-config.md。
+category 和 tags 必须从 docs/contract/taxonomy-config.md 对应的 taxonomy id 中选择。
 不确定的信息不要编造成机器字段；可以写入 details.md 的说明或保持字段缺省。
 ```
 

@@ -1,5 +1,5 @@
 ---
-import type { Project, TaxonomyItem } from "@/lib/catalog/projects";
+import type { LocalizedTaxonomyItem, Project } from "@/lib/catalog/projects";
 import Button from "@/components/ui/Button.astro";
 import Card from "@/components/ui/Card.astro";
 import ChipLink from "@/components/ui/ChipLink.astro";
@@ -7,8 +7,8 @@ import SectionHeader from "@/components/ui/SectionHeader.astro";
 import type { FilterPanelVariant } from "@/presentation/types";
 
 interface Props {
-  categories: TaxonomyItem[];
-  tags: TaxonomyItem[];
+  categories: LocalizedTaxonomyItem[];
+  tags: LocalizedTaxonomyItem[];
   projects: Project[];
   variant?: FilterPanelVariant;
 }
@@ -32,7 +32,7 @@ const countByTag = (tagId: string) => projects.filter((project) => project.tags.
         {
           categories.map((category) => (
             <li>
-              <ChipLink href={`/categories/${category.id}/`} label={category.name} count={countByCategory(category.id)} />
+              <ChipLink href={`/categories/${category.id}/`} label={category.label} count={countByCategory(category.id)} />
             </li>
           ))
         }
@@ -44,7 +44,7 @@ const countByTag = (tagId: string) => projects.filter((project) => project.tags.
         {
           tags.map((tag) => (
             <li>
-              <ChipLink href={`/tags/${tag.id}/`} label={tag.name} count={countByTag(tag.id)} />
+              <ChipLink href={`/tags/${tag.id}/`} label={tag.label} count={countByTag(tag.id)} />
             </li>
           ))
         }
