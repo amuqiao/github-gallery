@@ -34,7 +34,7 @@ themeId  = editorial-paper
 
 layout 决定页面族分发、section 顺序、列表密度和卡片变体。theme 决定 CSS token、字体、颜色、边框、背景和基础质感。首页精选专题由 `src/presentation/home.ts` 管理。它们都不进入 `project.yaml` 或 `collection.yaml`。
 
-项目集合卡片通过 `src/lib/catalog/project-view-models.ts` 预先解析 category、tags 和 status。`ProjectCollection` 不调用 catalog loader 的运行时 helper。
+项目集合卡片通过 `src/lib/catalog/project-view-models.ts` 预先解析 category、tags 和 maintenance_status。`ProjectCollection` 不调用 catalog loader 的运行时 helper。
 
 ## Runtime Styling Path
 
@@ -67,7 +67,8 @@ CSS 当前通过 `data-theme` 应用皮肤 token；`data-layout` 用于运行时
 | `src/presentation/config.ts` | 当前启用的 `layoutId` 和 `themeId`。 | catalog 字段、项目级展示选择。 |
 | `src/presentation/home.ts` | 首页展示内容选择，例如 featured collection id。 | layout grid、颜色、catalog schema。 |
 | `src/presentation/layouts.ts` | 页面族布局版本、首页 section 顺序、组件 variant 选择。 | 颜色、字体、项目事实。 |
-| `src/presentation/status-tones.ts` | 项目维护状态 id 到轻量视觉 tone 的映射。 | 状态文案、状态说明、taxonomy 校验。 |
+| `src/presentation/maintenance-status-tones.ts` | 项目维护状态 id 到轻量视觉 tone 的映射。 | 状态文案、状态说明、taxonomy 校验。 |
+| `src/presentation/publication-status-labels.ts` | 专题发布状态枚举到显示文案的映射。 | collection schema、发布流程规则。 |
 | `src/presentation/themes.ts` | 皮肤版本元数据。 | 页面 section 顺序、catalog 字段。 |
 | `src/presentation/types.ts` | layout/theme/variant 类型边界。 | 运行时数据读取。 |
 
@@ -95,10 +96,10 @@ CSS 当前通过 `data-theme` 应用皮肤 token；`data-layout` 用于运行时
 | `CollectionCard` | `Card`、`Badge`、`Button` | 单个专题卡片。 |
 | `FilterPanel` | `Card`、`Button`、`ChipLink`、`SectionHeader` | 首页 taxonomy 浏览入口和计数展示。 |
 | `ProjectCollection` | `SectionHeader`、`Badge`、`EmptyState`、`ProjectCard` | 已解析项目卡片集合网格。 |
-| `ProjectCard` | `Card`、`Badge`、`Button`、`ProjectStatus` | 单个项目卡片。 |
+| `ProjectCard` | `Card`、`Badge`、`Button`、`ProjectMaintenanceStatus` | 单个项目卡片。 |
 | `HomeBentoHero` | `Button`、presentation layout config | 首页 bento hero 和 gallery summary。 |
-| `ProjectStatus` | taxonomy status label、presentation status tone | 项目维护状态的轻量视觉标记。 |
-| `ProjectHero` | `PageHeader`、`Badge`、`Button`、`ProjectStatus` | 项目详情首屏。 |
+| `ProjectMaintenanceStatus` | taxonomy maintenance status label、presentation maintenance status tone | 项目维护状态的轻量视觉标记。 |
+| `ProjectHero` | `PageHeader`、`Badge`、`Button`、`ProjectMaintenanceStatus` | 项目详情首屏。 |
 | `RelatedProjects` | `ProjectCollection` | 相关项目集合。 |
 
 ## Verification

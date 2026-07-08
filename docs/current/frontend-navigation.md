@@ -50,7 +50,7 @@ Nested Doll
 
 ```text
 catalog YAML
-  -> src/lib/catalog/project-schema.ts
+  -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/projects.ts
   -> src/lib/catalog/collections.ts
   -> Astro pages

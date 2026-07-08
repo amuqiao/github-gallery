@@ -138,7 +138,7 @@ catalog/projects/<id>/details.md
 
 这不是单纯页面改版，必须先走 catalog 合同扩展：
 
-1. 在 `src/lib/catalog/project-schema.ts` 设计 `pages` 或等价字段。
+1. 在 `src/lib/catalog/catalog-schema.js` 设计 `pages` 或等价字段。
 2. 在 `src/lib/catalog/projects.ts` 增加跨文件校验。
 3. 在 `src/lib/catalog/details.ts` 支持多详情加载。
 4. 增加 Astro route。

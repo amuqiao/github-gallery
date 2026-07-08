@@ -1,6 +1,6 @@
 # Scripts
 
-`scripts/` 提供本仓库稳定的人类操作入口。它们是薄 wrapper，真正的配置合同仍由 `src/lib/catalog/project-schema.ts`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 执行。
+`scripts/` 提供本仓库稳定的人类操作入口。它们是薄 wrapper，真正的配置合同仍由 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 执行。
 
 ## Mental Model
 
@@ -50,11 +50,12 @@ Requires Node.js 20 or newer.
 ./scripts/catalog.sh collection new smoke-collection \
   --title "Smoke Collection" \
   --summary "Smoke summary." \
-  --status draft \
+  --publication-status draft \
   --project xtts
 ./scripts/catalog.sh collection add-project smoke-collection f5-tts --note "Useful comparison project."
 ./scripts/catalog.sh collection set-note smoke-collection f5-tts --note "Updated note."
 ./scripts/catalog.sh collection remove-project smoke-collection f5-tts
+./scripts/catalog.sh collection set-publication-status smoke-collection published
 ./scripts/catalog.sh collection delete smoke-collection --force
 
 ./scripts/catalog.sh import validate .tmp/import-batches/example-batch
@@ -69,11 +70,11 @@ Requires Node.js 20 or newer.
 
 `catalog` 和 `content` 当前都通过 `npm run build` 触发可执行校验。项目、专题、taxonomy、site 和详情文件引用都由 schema/loader 在构建期验证。未来如果构建变慢，可以新增更窄的 catalog-only 校验，但仍应复用 schema/loader，不在 shell 里重写合同。
 
-`catalog.sh new` 创建项目后会立即调用 `./scripts/catalog.sh validate`。如果 category、tag、status、summary 或引用文件不符合合同，最终由 schema/loader 失败退出。项目 status 和 category/tag 一样引用 `catalog/taxonomies.yaml` 中的受控 id。
+`catalog.sh new` 创建项目后会立即调用 `./scripts/catalog.sh validate`。如果 category、tag、maintenance_status、summary 或引用文件不符合合同，最终由 schema/loader 失败退出。项目 maintenance_status 和 category/tag 一样引用 `catalog/taxonomies.yaml` 中的受控 id。
 
-`catalog.sh collection` 使用结构化 YAML 读写专题配置。写操作会调用 `./scripts/verify.sh catalog`；验证失败时脚本会回滚刚才的写入。collection 字段合同仍由 `src/lib/catalog/project-schema.ts` 和 `src/lib/catalog/collections.ts` 执行。
+`catalog.sh collection` 使用结构化 YAML 读写专题配置。写操作会调用 `./scripts/verify.sh catalog`；验证失败时脚本会回滚刚才的写入。collection 字段合同仍由 `src/lib/catalog/catalog-schema.js` 和 `src/lib/catalog/collections.ts` 执行。
 
-脚本里的 id、status、必填参数检查只是为了更早给出友好错误，不是配置合同来源。脚本和 loader 不一致时，以 schema/loader 为准。
+脚本里的 id、maintenance_status、publication_status、必填参数检查只是为了更早给出友好错误，不是配置合同来源。脚本和 loader 不一致时，以 schema/loader 为准。
 
 project 和 collection 写操作共用 `.data/catalog-write.lock`。如果进程被强制终止并留下锁目录，确认没有 catalog 写操作运行后可以删除该目录，再重新执行命令。
 

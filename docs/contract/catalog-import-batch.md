@@ -1,6 +1,6 @@
 # Catalog Import Batch Contract
 
-本文解释当前已经实现的 `.tmp/import-batches/<batch-id>/` 交换合同。批次编排规则的可执行真相源是 `scripts/catalog-import-cli.mjs`；项目和专题 payload 的最终合同仍由 `src/lib/catalog/project-schema.ts`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 验证。
+本文解释当前已经实现的 `.tmp/import-batches/<batch-id>/` 交换合同。批次编排规则的可执行真相源是 `scripts/catalog-import-cli.mjs`；项目和专题 payload 的最终合同仍由 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 验证。
 
 ## Purpose
 
@@ -107,7 +107,7 @@ Import batch 预检会校验：
 
 - YAML 字段形状。
 - `id` 与 operation id 一致。
-- category、tag 和 project status 必须存在于 `catalog/taxonomies.yaml`。
+- category、tag 和 project maintenance status 必须存在于 `catalog/taxonomies.yaml`。
 - project 至少 1 个 tag。
 - related project 必须存在于当前 catalog 或同一批次创建/替换的 project。
 - collection item 必须引用存在的 project，且不能重复。

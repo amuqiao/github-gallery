@@ -2,7 +2,7 @@ schema_version: 1
 id: multilingual-tts
 title: 多语言 TTS 项目
 summary: 适合快速比较多语言文本转语音、参考音频生成和推理体验的开源项目。
-status: published
+publication_status: published
 items:
   - project: xtts
     note: 适合快速验证跨语言参考音频生成效果。

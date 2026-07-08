@@ -1,6 +1,6 @@
 # Project Config Contract
 
-本文说明 `project.yaml` 的配置合同。真正执行校验的代码在 `src/lib/catalog/project-schema.ts`；本文只解释已经实现的规则。
+本文说明 `project.yaml` 的配置合同。真正执行校验的代码在 `src/lib/catalog/catalog-schema.js`；本文只解释已经实现的规则。
 
 ## 心智模型
 
@@ -36,7 +36,7 @@ catalog/projects/<id>/
 | `summary` | 必填，卡片摘要，最多 160 个字符。 |
 | `category` | 必填，必须引用 `catalog/taxonomies.yaml` 中存在的分类 id。taxonomy 合同见 [`taxonomy-config.md`](./taxonomy-config.md)。 |
 | `tags` | 必填，1 到 8 个标签 id，必须来自 `catalog/taxonomies.yaml`。taxonomy 合同见 [`taxonomy-config.md`](./taxonomy-config.md)。 |
-| `status` | 必填，必须引用 `catalog/taxonomies.yaml` 中存在的项目状态 id。taxonomy 合同见 [`taxonomy-config.md`](./taxonomy-config.md)。 |
+| `maintenance_status` | 必填，必须引用 `catalog/taxonomies.yaml` 中存在的项目维护状态 id。taxonomy 合同见 [`taxonomy-config.md`](./taxonomy-config.md)。 |
 
 ## 可选 Core 字段
 
@@ -86,7 +86,7 @@ MDX 和 HTML 详情页是未来能力，不属于 `schema_version: 1`。只有�
 
 - 新增顶层字段前，先判断它是否真的属于 stable core。
 - 可选详情页内容优先新增 typed block。
-- 新字段必须先更新 `src/lib/catalog/project-schema.ts`。
+- 新字段必须先更新 `src/lib/catalog/catalog-schema.js`。
 - 跨文件不变量必须在 `src/lib/catalog/projects.ts` 中执行。
 - 本文只解释 schema 和 loader 已经实现的规则。
 - 第一版不提供无类型 `extensions` 顶层字段；实验内容进入代码前必须先设计成 stable core 或 typed block。

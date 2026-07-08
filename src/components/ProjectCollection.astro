@@ -47,12 +47,12 @@ const gridClass = [
     items.length > 0 ? (
       <div class={gridClass}>
         {
-          items.map(({ project, category, tags, status, note }, index) => (
+          items.map(({ project, category, tags, maintenanceStatus, note }, index) => (
             <ProjectCard
               project={project}
               category={category}
               tags={tags}
-              status={status}
+              maintenanceStatus={maintenanceStatus}
               note={note}
               headingLevel={cardHeadingLevel}
               variant={featureFirst && index === 0 ? "feature" : variant}

@@ -21,7 +21,7 @@ schema 定规则
 
 | Layer | Canonical location | Owns |
 | --- | --- | --- |
-| Schema | `src/lib/catalog/project-schema.ts` | 可执行配置合同。 |
+| Schema | `src/lib/catalog/catalog-schema.js` | 可执行配置合同。 |
 | Project loader | `src/lib/catalog/projects.ts` | project YAML 读取、schema parse、taxonomy 校验、项目关系校验、project read model。 |
 | Collection loader | `src/lib/catalog/collections.ts` | collection YAML 读取、schema parse、专题引用项目校验、collection read model。 |
 | Block adapters | `src/lib/catalog/block-adapters.ts` | typed blocks 的归一化和默认标题。 |
@@ -39,7 +39,7 @@ schema 定规则
 按这个顺序执行：
 
 1. 判断字段属于 stable core 还是 typed block。
-2. 更新 `src/lib/catalog/project-schema.ts`。
+2. 更新 `src/lib/catalog/catalog-schema.js`。
 3. 只有字段需要跨文件校验、归一化、索引或 helper 时，才更新 `src/lib/catalog/projects.ts`。
 4. schema 接受后，再更新示例 `catalog/projects/<id>/project.yaml`。
 5. 更新 `docs/contract/project-config.md` 解释字段。
@@ -57,7 +57,7 @@ schema 定规则
 
 按这个顺序执行：
 
-1. 在 `src/lib/catalog/project-schema.ts` 增加 block schema。
+1. 在 `src/lib/catalog/catalog-schema.js` 增加 block schema。
 2. 在 `src/lib/catalog/block-adapters.ts` 增加 adapter。
 3. 在 `src/components/blocks/` 增加或更新 renderer。
 4. 在至少一个 `catalog/projects/<id>/project.yaml` 中加入样例 block。
@@ -76,7 +76,7 @@ schema 定规则
 1. 创建 `catalog/projects/<id>/`，或使用 `./scripts/catalog.sh new <id> ...` 生成骨架。
 2. 添加或补全 `catalog/projects/<id>/project.yaml`。
 3. 声明 `details` 时，添加 `catalog/projects/<id>/details.md`。
-4. 只使用 `catalog/taxonomies.yaml` 中存在的 category、tag 和 status id。
+4. 只使用 `catalog/taxonomies.yaml` 中存在的 category、tag 和 maintenance_status id。
 5. `relations.related_projects` 只能引用已经存在的项目 id。
 6. 运行 `./scripts/catalog.sh validate` 或 `./scripts/verify.sh check`。
 
@@ -102,13 +102,13 @@ schema 定规则
 ./scripts/catalog.sh collection new voice-cloning \
   --title "声音克隆项目" \
   --summary "适合研究声音克隆项目。" \
-  --status draft \
+  --publication-status draft \
   --project gpt-sovits \
   --project xtts \
   --details
 
 ./scripts/catalog.sh collection add-project voice-cloning cosyvoice --note "适合研究情绪和指令控制。"
-./scripts/catalog.sh collection set-status voice-cloning published
+./scripts/catalog.sh collection set-publication-status voice-cloning published
 ```
 
 批量新增或替换专题时，同样优先使用 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。`replace` 是整 item 目录替换，适合一个专题自己的 `collection.yaml` 和 `details.md` 一起更新。
@@ -118,7 +118,7 @@ schema 定规则
 按这个顺序执行：
 
 1. 判断字段属于专题 stable core、`items` 策展备注，还是 typed block。
-2. 更新 `src/lib/catalog/project-schema.ts`。
+2. 更新 `src/lib/catalog/catalog-schema.js`。
 3. 字段需要跨文件校验、公开过滤、索引或 read model 时，更新 `src/lib/catalog/collections.ts`。
 4. 字段影响详情加载格式时，更新 `src/lib/catalog/details.ts`。
 5. 更新 `docs/contract/collection-config.md` 解释字段。
@@ -143,17 +143,17 @@ category id 和 tag id 是对外 URL 标识。重命名属于路由变更。
 
 当前 taxonomy 是固定 `zh/en` 双语 registry。新增第三语言不是纯数据变更，必须先更新 schema、loader 和 import CLI。
 
-## When Adding A Project Status
+## When Adding A Project Maintenance Status
 
 按这个顺序执行：
 
-1. 先把 status 加到 `catalog/taxonomies.yaml` 的 `statuses`。
+1. 先把 maintenance status 加到 `catalog/taxonomies.yaml` 的 `project_maintenance_statuses`。
 2. 同时提供 `name.zh`、`name.en`、`description.zh` 和 `description.en`。
-3. 如果前端会渲染它，在 `src/presentation/status-tones.ts` 增加对应 tone。
-4. 再从项目配置的 `status` 中引用它。
+3. 如果前端会渲染它，在 `src/presentation/maintenance-status-tones.ts` 增加对应 tone。
+4. 再从项目配置的 `maintenance_status` 中引用它。
 5. 运行 `./scripts/verify.sh check`。
 
-status id 是项目维护状态合同，不是筛选分类。具体视觉 tone 属于 presentation 层，不进入 taxonomy 数据合同。
+maintenance_status id 是项目维护状态合同，不是筛选分类，也不是专题发布状态。具体视觉 tone 属于 presentation 层，不进入 taxonomy 数据合同。
 
 ## When Importing AI-Generated Catalog Data
 
@@ -193,7 +193,7 @@ AI/manual output
 
 ## When Adding A New Detail Format
 
-`schema_version: 1` 只支持 Markdown 详情。准确结构由 `src/lib/catalog/project-schema.ts` 定义，并在 [`docs/contract/project-config.md`](../contract/project-config.md) 解释。
+`schema_version: 1` 只支持 Markdown 详情。准确结构由 `src/lib/catalog/catalog-schema.js` 定义，并在 [`docs/contract/project-config.md`](../contract/project-config.md) 解释。
 
 ```yaml
 details:
@@ -204,7 +204,7 @@ details:
 未来增加 MDX 或 HTML 时：
 
 1. 先增加必要运行时集成或 sanitization。
-2. 在 `src/lib/catalog/project-schema.ts` 增加可执行校验。
+2. 在 `src/lib/catalog/catalog-schema.js` 增加可执行校验。
 3. 更新 `src/lib/catalog/details.ts`。
 4. 添加至少一个样例项目覆盖新路径。
 5. 更新 `docs/contract/project-config.md`。
@@ -229,7 +229,7 @@ scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、d
 
 1. 顶层入口只做参数分发、help 和调用现有真相源。
 2. 脚本可以做参数级 fast-fail，但不能把这类检查当成配置合同来源。
-3. 不在 shell 中重写 `project-schema.ts`、`projects.ts` 或 `collections.ts` 的合同逻辑。
+3. 不在 shell 中重写 `catalog-schema.js`、`projects.ts` 或 `collections.ts` 的合同逻辑。
 4. `catalog.sh new` 只能写 `catalog/projects/<id>/project.yaml` 和可选 `details.md`，不得自动修改 taxonomy 或猜测 GitHub 元数据。
 5. `catalog.sh collection` 只能写 `catalog/collections/<id>/collection.yaml` 和可选 `details.md`，不得修改项目事实。
 6. `catalog.sh import` 只能从 `.tmp/import-batches/<batch-id>/` 写入正式 catalog，且只能执行 manifest 显式声明的 item 级操作。
@@ -244,7 +244,7 @@ scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、d
 完成合同相关变更前检查：
 
 ```text
-[ ] 新字段或变更字段已定义在 `project-schema.ts`。
+[ ] 新字段或变更字段已定义在 `catalog-schema.js`。
 [ ] 可选详情内容使用 typed block，除非它属于 stable core。
 [ ] 新 block type 有 schema、adapter、renderer、样例数据和文档。
 [ ] 新 block type 不是仅用于替代 Markdown 小标题或普通列表标题。

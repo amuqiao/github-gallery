@@ -9,7 +9,7 @@ catalog/projects/<id>/project.yaml  # 项目机器可读事实
 catalog/projects/<id>/details.md    # 可选详情正文
 catalog/collections/<id>/collection.yaml # 专题机器可读事实
 catalog/collections/<id>/details.md  # 可选专题详情正文
-catalog/taxonomies.yaml             # 共享分类、标签和项目状态词表
+catalog/taxonomies.yaml             # 共享分类、标签和项目维护状态词表
 catalog/site.yaml                   # 站点标题、描述和导航
 src/lib/catalog/                    # schema、loader、adapter
 src/styles/global.css               # Tailwind 入口和 shadcn-style token

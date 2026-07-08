@@ -11,6 +11,7 @@ import { getPublicCollections, type Collection } from "@/lib/catalog/collections
 import { getCatalogSnapshot } from "@/lib/catalog/projects";
 import { toCollectionProjectCardViewModels } from "@/lib/catalog/project-view-models";
 import { getActivePresentation } from "@/presentation";
+import { getPublicationStatusLabel } from "@/presentation/publication-status-labels";
 
 export async function getStaticPaths() {
   const collections = await getPublicCollections();
@@ -26,6 +27,7 @@ const projectItems = toCollectionProjectCardViewModels(collection, taxonomy);
 const detail = await loadCollectionDetail(collection);
 const DetailContent = detail?.Content;
 const { layout } = getActivePresentation();
+const publicationStatusLabel = getPublicationStatusLabel(collection.publication_status);
 ---
 
 <BaseLayout title={`${collection.title} - GitHub Gallery`} site={site} description={collection.summary}>
@@ -44,7 +46,7 @@ const { layout } = getActivePresentation();
       asideLabel="Collection actions"
       stats={[
         { value: projectItems.length, label: "Projects" },
-        { value: collection.status, label: "Status" }
+        { value: publicationStatusLabel, label: "Publication" }
       ]}
     >
       <Fragment slot="actions">

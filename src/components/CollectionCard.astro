@@ -3,6 +3,7 @@ import Button from "@/components/ui/Button.astro";
 import Card from "@/components/ui/Card.astro";
 import Badge from "@/components/ui/Badge.astro";
 import type { Collection } from "@/lib/catalog/collections";
+import { getPublicationStatusLabel } from "@/presentation/publication-status-labels";
 import type { CollectionGridVariant } from "@/presentation/types";
 
 interface Props {
@@ -13,11 +14,12 @@ interface Props {
 
 const { collection, headingLevel = 3, variant = "standard" } = Astro.props;
 const cardClass = ["collection-card", `collection-card--${variant}`].join(" ");
+const publicationStatusLabel = getPublicationStatusLabel(collection.publication_status);
 ---
 
 <Card as="article" class={cardClass}>
   <div class="collection-card__meta">
-    <Badge variant="secondary">{collection.status}</Badge>
+    <Badge variant="secondary">{publicationStatusLabel}</Badge>
     <Badge variant="outline">{collection.projectItems.length} projects</Badge>
   </div>
   {

@@ -1,6 +1,6 @@
 # Site Config Contract
 
-本文说明站点级配置 `catalog/site.yaml`。真正执行校验的代码在 `src/lib/catalog/project-schema.ts`。
+本文说明站点级配置 `catalog/site.yaml`。真正执行校验的代码在 `src/lib/catalog/catalog-schema.js`。
 
 ## Purpose
 

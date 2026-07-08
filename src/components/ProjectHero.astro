@@ -1,23 +1,23 @@
 ---
 import PageHeader from "@/components/PageHeader.astro";
-import ProjectStatus from "@/components/ProjectStatus.astro";
+import ProjectMaintenanceStatus from "@/components/ProjectMaintenanceStatus.astro";
 import Badge from "@/components/ui/Badge.astro";
 import Button from "@/components/ui/Button.astro";
-import type { LocalizedTaxonomyItem, LocalizedTaxonomyStatusItem, Project } from "@/lib/catalog/projects";
+import type { LocalizedProjectMaintenanceStatusItem, LocalizedTaxonomyItem, Project } from "@/lib/catalog/projects";
 
 interface Props {
   project: Project;
   category: LocalizedTaxonomyItem;
   tags: LocalizedTaxonomyItem[];
-  status: LocalizedTaxonomyStatusItem;
+  maintenanceStatus: LocalizedProjectMaintenanceStatusItem;
 }
 
-const { project, category, tags, status } = Astro.props;
+const { project, category, tags, maintenanceStatus } = Astro.props;
 ---
 
 <PageHeader eyebrow={category.label} title={project.name} description={project.summary} variant="project" asideLabel="Project actions">
   <Fragment slot="meta">
-    <ProjectStatus status={status} prefix="状态：" />
+    <ProjectMaintenanceStatus maintenanceStatus={maintenanceStatus} prefix="维护状态：" />
     {project.meta?.license && <span>License: {project.meta.license}</span>}
     {project.meta?.languages && <span>Languages: {project.meta.languages.join(", ")}</span>}
   </Fragment>

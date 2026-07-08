@@ -65,7 +65,7 @@ import_usage() {
 new_usage() {
   cat <<EOF
 用法：
-  ./scripts/catalog.sh new <id> --name <name> --repo <url> --summary <summary> --category <id> --tag <id> [--tag <id> ...] [--status <status>] [--details]
+  ./scripts/catalog.sh new <id> --name <name> --repo <url> --summary <summary> --category <id> --tag <id> [--tag <id> ...] [--maintenance-status <id>] [--details]
 
 作用域：
   创建 catalog/projects/<id>/project.yaml。
@@ -80,11 +80,12 @@ new_usage() {
   --tag         至少一个已存在 taxonomy tag id，可重复传入。
 
 可选：
-  --status      已存在 taxonomy status id；默认 unknown。
+  --maintenance-status
+                已存在 project maintenance status id；默认 unknown。
   --details     创建 Markdown 详情文件。
 
 副作用与边界：
-  不自动校验 category/tag/status 是否存在；运行 ./scripts/catalog.sh validate 由 loader 统一校验。
+  不自动校验 category/tag/maintenance_status 是否存在；运行 ./scripts/catalog.sh validate 由 loader 统一校验。
   目标目录已存在时直接失败，不覆盖已有项目。
   文件先写入临时目录，全部成功后再移动到最终目录。
 EOF
@@ -118,7 +119,7 @@ write_project_yaml() {
   local repo="$4"
   local summary="$5"
   local category="$6"
-  local status="$7"
+  local maintenance_status="$7"
   local include_details="$8"
   shift 8
   local tags=("$@")
@@ -136,7 +137,7 @@ write_project_yaml() {
     for tag in "${tags[@]}"; do
       printf "  - %s\n" "$tag"
     done
-    printf "status: %s\n" "$status"
+    printf "maintenance_status: %s\n" "$maintenance_status"
     if [[ "$include_details" == "true" ]]; then
       printf "details:\n"
       printf "  type: markdown\n"
@@ -167,7 +168,7 @@ create_project() {
   local repo=""
   local summary=""
   local category=""
-  local status="unknown"
+  local maintenance_status="unknown"
   local include_details="false"
   local tags=()
 
@@ -198,9 +199,9 @@ create_project() {
         tags+=("$2")
         shift 2
         ;;
-      --status)
-        [[ "$#" -ge 2 ]] || die "--status requires a value" 2
-        status="$2"
+      --maintenance-status)
+        [[ "$#" -ge 2 ]] || die "--maintenance-status requires a value" 2
+        maintenance_status="$2"
         shift 2
         ;;
       --details)
@@ -230,7 +231,7 @@ create_project() {
     assert_project_id "$tag"
   done
 
-  assert_project_id "$status"
+  assert_project_id "$maintenance_status"
 
   local project_dir="$PROJECTS_DIR/$id"
   local tmp_dir="$PROJECTS_DIR/.${id}.tmp.$$"
@@ -251,7 +252,7 @@ create_project() {
   trap cleanup_tmp_dir EXIT INT TERM
 
   mkdir -p "$tmp_dir"
-  write_project_yaml "$tmp_dir" "$id" "$name" "$repo" "$summary" "$category" "$status" "$include_details" "${tags[@]}"
+  write_project_yaml "$tmp_dir" "$id" "$name" "$repo" "$summary" "$category" "$maintenance_status" "$include_details" "${tags[@]}"
 
   if [[ "$include_details" == "true" ]]; then
     write_details_markdown "$tmp_dir" "$name"

@@ -1,6 +1,6 @@
 # Collection Config Contract
 
-本文说明 `collection.yaml` 的配置合同。真正执行校验的代码在 `src/lib/catalog/project-schema.ts`、`src/lib/catalog/collections.ts` 和 `src/lib/catalog/details.ts`；本文只解释已经实现的规则。
+本文说明 `collection.yaml` 的配置合同。真正执行校验的代码在 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/collections.ts` 和 `src/lib/catalog/details.ts`；本文只解释已经实现的规则。
 
 ## 心智模型
 
@@ -14,7 +14,7 @@ collections
   只引用已有 project id，决定专题名称、说明、展示顺序和策展备注。
 ```
 
-专题不复制项目的 repo、summary、category、tags 或 status。删除、修改、新增专题不改变项目本体。
+专题不复制项目的 repo、summary、category、tags 或 maintenance_status。删除、修改、新增专题不改变项目本体。
 
 ## 文件布局
 
@@ -34,7 +34,7 @@ catalog/collections/<id>/
 | `id` | 必填，唯一，小写 kebab-case，且必须和专题目录名一致。 |
 | `title` | 必填，专题展示标题。 |
 | `summary` | 必填，专题摘要，最多 180 个字符。 |
-| `status` | 必填，枚举：`published`、`draft`、`archived`。 |
+| `publication_status` | 必填，枚举：`published`、`draft`、`archived`。 |
 | `items` | 必填，至少 1 个项目引用。 |
 
 `published` 和 `archived` 会生成公开专题页面。`draft` 会被 loader 校验，但不会进入 `/collections/` 列表，也不会生成 `/collections/[id]/` 详情页。
@@ -62,7 +62,7 @@ catalog/collections/<id>/
 
 `details.md` 是专题长文说明，不定义可筛选字段。
 
-`details.path` 的字段规则由 `src/lib/catalog/project-schema.ts` 校验；Markdown 文件注册和加载路径由 `src/lib/catalog/details.ts` 执行。
+`details.path` 的字段规则由 `src/lib/catalog/catalog-schema.js` 校验；Markdown 文件注册和加载路径由 `src/lib/catalog/details.ts` 执行。
 
 被 `details.path` 引用的文件不能是 symlink。
 
@@ -73,7 +73,7 @@ schema_version: 1
 id: voice-cloning
 title: 声音克隆项目
 summary: 适合研究声音克隆、参考音频生成和音色转换的开源项目。
-status: published
+publication_status: published
 items:
   - project: gpt-sovits
     note: 适合学习完整音色克隆训练流程。
@@ -95,5 +95,5 @@ blocks:
 - 推荐通过 `./scripts/catalog.sh collection ...` 维护专题。
 - 专题只能引用已有项目，不能在专题里复制项目事实。
 - 跨文件不变量由 `src/lib/catalog/collections.ts` 执行。
-- 新字段必须先更新 `src/lib/catalog/project-schema.ts`。
+- 新字段必须先更新 `src/lib/catalog/catalog-schema.js`。
 - 本文只解释 schema 和 loader 已经实现的规则。

@@ -1,4 +1,4 @@
-import type { ProjectBlock } from "./project-schema";
+import type { ProjectBlock } from "./catalog-types";
 
 export type AdaptedProjectBlock = ProjectBlock & {
   title: string;

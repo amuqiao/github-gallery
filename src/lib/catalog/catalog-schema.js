@@ -8,6 +8,8 @@ const relativePathSchema = z
   .regex(relativePathPattern, "Path must be a relative catalog item-local path such as ./details.md");
 
 const nonEmptyString = z.string().trim().min(1);
+/** @type {["published", "draft", "archived"]} */
+export const collectionPublicationStatuses = ["published", "draft", "archived"];
 export const localeCodeSchema = z.enum(["zh", "en"]);
 
 export const localizedTextSchema = z
@@ -94,7 +96,7 @@ export const projectConfigSchema = z
     summary: nonEmptyString.max(160),
     category: z.string().regex(slugPattern),
     tags: z.array(z.string().regex(slugPattern)).min(1).max(8),
-    status: z.string().regex(slugPattern),
+    maintenance_status: z.string().regex(slugPattern),
     details: detailsSchema.optional(),
     meta: metaSchema.optional(),
     relations: relationsSchema.optional(),
@@ -115,7 +117,7 @@ export const collectionConfigSchema = z
     id: z.string().regex(slugPattern, "id must use lowercase kebab-case"),
     title: nonEmptyString,
     summary: nonEmptyString.max(180),
-    status: z.enum(["published", "draft", "archived"]),
+    publication_status: z.enum(collectionPublicationStatuses),
     items: z.array(collectionItemSchema).min(1),
     details: detailsSchema.optional(),
     blocks: z.array(projectBlockSchema).optional()
@@ -141,7 +143,7 @@ export const taxonomyCatalogSchema = z
       .strict(),
     categories: z.array(taxonomyItemSchema).min(1),
     tags: z.array(taxonomyItemSchema).min(1),
-    statuses: z.array(taxonomyItemSchema).min(1)
+    project_maintenance_statuses: z.array(taxonomyItemSchema).min(1)
   })
   .strict()
   .superRefine((taxonomy, ctx) => {
@@ -163,7 +165,7 @@ export const taxonomyCatalogSchema = z
       });
     }
 
-    for (const requiredLocale of ["zh", "en"] as const) {
+    for (const requiredLocale of ["zh", "en"]) {
       if (!supported.has(requiredLocale)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -190,13 +192,3 @@ export const siteConfigSchema = z
       .min(1)
   })
   .strict();
-
-export type ProjectConfig = z.infer<typeof projectConfigSchema>;
-export type ProjectBlock = z.infer<typeof projectBlockSchema>;
-export type CollectionConfig = z.infer<typeof collectionConfigSchema>;
-export type CollectionItemConfig = z.infer<typeof collectionItemSchema>;
-export type TaxonomyCatalog = z.infer<typeof taxonomyCatalogSchema>;
-export type TaxonomyItem = z.infer<typeof taxonomyItemSchema>;
-export type LocaleCode = z.infer<typeof localeCodeSchema>;
-export type LocalizedText = z.infer<typeof localizedTextSchema>;
-export type SiteConfig = z.infer<typeof siteConfigSchema>;

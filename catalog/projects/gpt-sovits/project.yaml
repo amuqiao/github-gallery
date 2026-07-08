@@ -12,7 +12,7 @@ tags:
   - webui
   - training
   - inference
-status: unknown
+maintenance_status: unknown
 details:
   type: markdown
   path: ./details.md

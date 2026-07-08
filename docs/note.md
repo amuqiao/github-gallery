@@ -53,7 +53,7 @@ GitHub repo
     - text-to-semantic
     - semantic-to-waveform
   license: MIT
-  status: active
+  maintenance_status: active
   summary: 支持零样本与少样本声音克隆的 TTS WebUI。
   strengths:
     - 完整 WebUI

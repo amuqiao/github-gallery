@@ -2,17 +2,15 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { load } from "js-yaml";
 import { adaptProjectBlocks, type AdaptedProjectBlock } from "./block-adapters";
+import { projectConfigSchema, siteConfigSchema, taxonomyCatalogSchema } from "./catalog-schema.js";
 import {
-  projectConfigSchema,
-  siteConfigSchema,
-  taxonomyCatalogSchema,
   type LocaleCode,
   type LocalizedText,
   type ProjectConfig,
   type SiteConfig,
   type TaxonomyCatalog as TaxonomyCatalogConfig,
   type TaxonomyItem as TaxonomyItemConfig
-} from "./project-schema";
+} from "./catalog-types";
 
 const repoRoot = process.cwd();
 const catalogRoot = path.join(repoRoot, "catalog");
@@ -31,15 +29,15 @@ export type LocalizedTaxonomyItem = Omit<TaxonomyItemConfig, "name" | "descripti
   descriptionText: string;
 };
 
-export type LocalizedTaxonomyStatusItem = Omit<TaxonomyItemConfig, "name" | "description"> & {
+export type LocalizedProjectMaintenanceStatusItem = Omit<TaxonomyItemConfig, "name" | "description"> & {
   label: string;
   descriptionText: string;
 };
 
-export type TaxonomyCatalog = Omit<TaxonomyCatalogConfig, "categories" | "tags" | "statuses"> & {
+export type TaxonomyCatalog = Omit<TaxonomyCatalogConfig, "categories" | "tags" | "project_maintenance_statuses"> & {
   categories: LocalizedTaxonomyItem[];
   tags: LocalizedTaxonomyItem[];
-  statuses: LocalizedTaxonomyStatusItem[];
+  project_maintenance_statuses: LocalizedProjectMaintenanceStatusItem[];
 };
 
 export type CatalogSnapshot = {
@@ -51,7 +49,7 @@ export type CatalogSnapshot = {
   projectsByTag: Map<string, Project[]>;
   categoriesById: Map<string, LocalizedTaxonomyItem>;
   tagsById: Map<string, LocalizedTaxonomyItem>;
-  statusesById: Map<string, LocalizedTaxonomyStatusItem>;
+  projectMaintenanceStatusesById: Map<string, LocalizedProjectMaintenanceStatusItem>;
 };
 
 let catalogSnapshot: Promise<CatalogSnapshot> | undefined;
@@ -126,11 +124,14 @@ export function getTag(taxonomy: TaxonomyCatalog, id: string): LocalizedTaxonomy
   return item;
 }
 
-export function getStatus(taxonomy: TaxonomyCatalog, id: string): LocalizedTaxonomyStatusItem {
-  const item = taxonomy.statuses.find((status) => status.id === id);
+export function getProjectMaintenanceStatus(
+  taxonomy: TaxonomyCatalog,
+  id: string
+): LocalizedProjectMaintenanceStatusItem {
+  const item = taxonomy.project_maintenance_statuses.find((maintenanceStatus) => maintenanceStatus.id === id);
 
   if (!item) {
-    throw new Error(`Unknown status id: ${id}`);
+    throw new Error(`Unknown project maintenance status id: ${id}`);
   }
 
   return item;
@@ -162,7 +163,9 @@ async function buildCatalogSnapshot(): Promise<CatalogSnapshot> {
   const projectsById = new Map(sortedProjects.map((project) => [project.id, project]));
   const categoriesById = new Map(taxonomy.categories.map((category) => [category.id, category]));
   const tagsById = new Map(taxonomy.tags.map((tag) => [tag.id, tag]));
-  const statusesById = new Map(taxonomy.statuses.map((status) => [status.id, status]));
+  const projectMaintenanceStatusesById = new Map(
+    taxonomy.project_maintenance_statuses.map((maintenanceStatus) => [maintenanceStatus.id, maintenanceStatus])
+  );
 
   return {
     projects: sortedProjects,
@@ -173,7 +176,7 @@ async function buildCatalogSnapshot(): Promise<CatalogSnapshot> {
     projectsByTag: groupProjectsByTag(sortedProjects, taxonomy.tags),
     categoriesById,
     tagsById,
-    statusesById
+    projectMaintenanceStatusesById
   };
 }
 
@@ -182,7 +185,7 @@ async function readTaxonomyCatalog(): Promise<TaxonomyCatalog> {
   const parsed = taxonomyCatalogSchema.parse(load(raw));
   assertUniqueIds("categories", parsed.categories);
   assertUniqueIds("tags", parsed.tags);
-  assertUniqueIds("statuses", parsed.statuses);
+  assertUniqueIds("project_maintenance_statuses", parsed.project_maintenance_statuses);
   return localizeTaxonomyCatalog(parsed);
 }
 
@@ -193,7 +196,9 @@ function localizeTaxonomyCatalog(taxonomy: TaxonomyCatalogConfig): TaxonomyCatal
     ...taxonomy,
     categories: taxonomy.categories.map((category) => localizeTaxonomyItem(category, locale)),
     tags: taxonomy.tags.map((tag) => localizeTaxonomyItem(tag, locale)),
-    statuses: taxonomy.statuses.map((status) => localizeTaxonomyItem(status, locale))
+    project_maintenance_statuses: taxonomy.project_maintenance_statuses.map((maintenanceStatus) =>
+      localizeTaxonomyItem(maintenanceStatus, locale)
+    )
   };
 }
 
@@ -233,7 +238,9 @@ async function readProject(directoryName: string, taxonomy: TaxonomyCatalog): Pr
 function assertKnownTaxonomy(project: ProjectConfig, taxonomy: TaxonomyCatalog): void {
   const categoryIds = new Set(taxonomy.categories.map((category) => category.id));
   const tagIds = new Set(taxonomy.tags.map((tag) => tag.id));
-  const statusIds = new Set(taxonomy.statuses.map((status) => status.id));
+  const maintenanceStatusIds = new Set(
+    taxonomy.project_maintenance_statuses.map((maintenanceStatus) => maintenanceStatus.id)
+  );
 
   if (!categoryIds.has(project.category)) {
     throw new Error(`${project.id} references unknown category: ${project.category}`);
@@ -245,8 +252,8 @@ function assertKnownTaxonomy(project: ProjectConfig, taxonomy: TaxonomyCatalog):
     }
   }
 
-  if (!statusIds.has(project.status)) {
-    throw new Error(`${project.id} references unknown status: ${project.status}`);
+  if (!maintenanceStatusIds.has(project.maintenance_status)) {
+    throw new Error(`${project.id} references unknown maintenance_status: ${project.maintenance_status}`);
   }
 }
 

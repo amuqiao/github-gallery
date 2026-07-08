@@ -6,12 +6,13 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { dump, load } from "js-yaml";
+import { collectionPublicationStatuses } from "../src/lib/catalog/catalog-schema.js";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const collectionsDir = path.join(rootDir, "catalog", "collections");
 const lockDir = path.join(rootDir, ".data", "catalog-write.lock");
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const validCollectionStatuses = new Set(["published", "draft", "archived"]);
+const validCollectionPublicationStatuses = new Set(collectionPublicationStatuses);
 const writeCommands = new Set([
   "new",
   "delete",
@@ -19,7 +20,7 @@ const writeCommands = new Set([
   "remove-project",
   "set-title",
   "set-summary",
-  "set-status",
+  "set-publication-status",
   "set-note"
 ]);
 let lockHeld = false;
@@ -63,13 +64,13 @@ function usage() {
 命令：
   list
   show <id>
-  new <id> --title <title> --summary <summary> --project <id> [--project <id> ...] [--status <status>] [--details]
+  new <id> --title <title> --summary <summary> --project <id> [--project <id> ...] [--publication-status <publication-status>] [--details]
   delete <id> --force
   add-project <collection-id> <project-id> [--note <note>] [--position <n>]
   remove-project <collection-id> <project-id>
   set-title <id> <title>
   set-summary <id> <summary>
-  set-status <id> <published|draft|archived>
+  set-publication-status <id> <published|draft|archived>
   set-note <id> <project-id> --note <note>
 
 说明：
@@ -255,7 +256,10 @@ async function createCollection(args) {
   }
 
   assertId(id, "collection id");
-  const { options, positionals } = parseOptions(rest, new Set(["title", "summary", "project", "status", "details"]));
+  const { options, positionals } = parseOptions(
+    rest,
+    new Set(["title", "summary", "project", "publication-status", "details"])
+  );
   if (positionals.length > 0) {
     die(`unexpected arguments for collection new: ${positionals.join(" ")}`);
   }
@@ -263,15 +267,15 @@ async function createCollection(args) {
   const title = requiredOption(options, "title");
   const summary = requiredOption(options, "summary");
   const projects = optionValues(options, "project");
-  const status = options.get("status") ?? "draft";
+  const publicationStatus = options.get("publication-status") ?? "draft";
   const includeDetails = options.has("details");
 
   if (projects.length === 0) {
     die("at least one --project is required");
   }
 
-  if (!validCollectionStatuses.has(status)) {
-    die("--status must be published, draft, or archived");
+  if (!validCollectionPublicationStatuses.has(publicationStatus)) {
+    die("--publication-status must be published, draft, or archived");
   }
 
   for (const project of projects) {
@@ -297,7 +301,7 @@ async function createCollection(args) {
       id,
       title,
       summary,
-      status,
+      publication_status: publicationStatus,
       items: projects.map((project) => ({ project }))
     };
 
@@ -437,8 +441,8 @@ async function setScalarField(args, field, label) {
   }
 
   assertId(collectionId, "collection id");
-  if (field === "status" && !validCollectionStatuses.has(value)) {
-    die("status must be published, draft, or archived");
+  if (field === "publication_status" && !validCollectionPublicationStatuses.has(value)) {
+    die("publication_status must be published, draft, or archived");
   }
 
   await withCollectionRollback(collectionId, async (config) => {
@@ -515,8 +519,8 @@ async function main() {
     case "set-summary":
       await setScalarField(args, "summary", "set-summary");
       break;
-    case "set-status":
-      await setScalarField(args, "status", "set-status");
+    case "set-publication-status":
+      await setScalarField(args, "publication_status", "set-publication-status");
       break;
     case "set-note":
       await setNote(args);

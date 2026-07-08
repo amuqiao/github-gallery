@@ -2,7 +2,7 @@ schema_version: 1
 id: video-translation-dubbing
 title: 视频翻译配音工具
 summary: 整理把 ASR、字幕翻译、TTS 配音、对齐合成串成视频本地化流程的开源项目。
-status: draft
+publication_status: draft
 items:
   - project: pyvideotrans
     note: 适合比较后端选择较多的视频翻译配音工作流。

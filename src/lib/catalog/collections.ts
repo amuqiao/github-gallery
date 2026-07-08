@@ -2,8 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { load } from "js-yaml";
 import { adaptProjectBlocks, type AdaptedProjectBlock } from "./block-adapters";
+import { collectionConfigSchema } from "./catalog-schema.js";
+import type { CollectionConfig } from "./catalog-types";
 import { getCatalogSnapshot, type Project } from "./projects";
-import { collectionConfigSchema, type CollectionConfig } from "./project-schema";
 
 const repoRoot = process.cwd();
 const collectionsRoot = path.join(repoRoot, "catalog", "collections");
@@ -37,7 +38,7 @@ export async function getAllCollections(): Promise<Collection[]> {
 }
 
 export async function getPublicCollections(): Promise<Collection[]> {
-  return (await getCollectionSnapshot()).collections.filter((collection) => collection.status !== "draft");
+  return (await getCollectionSnapshot()).collections.filter((collection) => collection.publication_status !== "draft");
 }
 
 export async function getCollectionById(id: string): Promise<Collection> {

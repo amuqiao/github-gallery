@@ -30,7 +30,7 @@
 
 ```text
 catalog/projects/<id>/project.yaml
-  -> src/lib/catalog/project-schema.ts
+  -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/projects.ts
   -> src/presentation/config.ts
   -> src/pages/index.astro
@@ -48,7 +48,7 @@ catalog/projects/<id>/details.md
   -> static HTML output
 
 catalog/collections/<id>/collection.yaml
-  -> src/lib/catalog/project-schema.ts
+  -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/collections.ts
   -> src/presentation/config.ts
   -> src/pages/collections/index.astro
@@ -63,7 +63,7 @@ catalog/collections/<id>/details.md
   -> static HTML output
 
 catalog/projects/<id>/project.yaml blocks
-  -> src/lib/catalog/project-schema.ts
+  -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/projects.ts
   -> src/lib/catalog/block-adapters.ts
   -> src/pages/projects/[id].astro
@@ -91,7 +91,7 @@ scripts/verify.sh
 
 `collection.yaml` 是专题身份、专题路由、公开状态、项目引用顺序和策展备注的机器可读来源。专题只引用已有项目，不复制项目事实。`draft` 专题会被校验，但不会生成公开页面。
 
-`catalog/taxonomies.yaml` 是分类、标签和项目维护状态 id、固定 `zh/en` 双语展示名、双语说明的机器可读来源。项目只引用 taxonomy id；前端从 loader 派生的 `label` 和 `descriptionText` 渲染默认语言。项目状态的轻量视觉 tone 由 `src/presentation/status-tones.ts` 管理。
+`catalog/taxonomies.yaml` 是分类、标签和项目维护状态 id、固定 `zh/en` 双语展示名、双语说明的机器可读来源。项目只引用 taxonomy id；前端从 loader 派生的 `label` 和 `descriptionText` 渲染默认语言。项目维护状态的轻量视觉 tone 由 `src/presentation/maintenance-status-tones.ts` 管理。专题发布状态使用 `collection.yaml.publication_status`，不属于 taxonomy。
 
 `catalog/site.yaml` 是站点导航和站点级展示信息来源。
 

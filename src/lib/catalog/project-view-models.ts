@@ -1,10 +1,10 @@
 import {
   getCategory,
-  getStatus,
+  getProjectMaintenanceStatus,
   getTag,
   type Project,
   type LocalizedTaxonomyItem,
-  type LocalizedTaxonomyStatusItem,
+  type LocalizedProjectMaintenanceStatusItem,
   type TaxonomyCatalog
 } from "./projects";
 import type { Collection } from "./collections";
@@ -13,7 +13,7 @@ export interface ProjectCardViewModel {
   project: Project;
   category: LocalizedTaxonomyItem;
   tags: LocalizedTaxonomyItem[];
-  status: LocalizedTaxonomyStatusItem;
+  maintenanceStatus: LocalizedProjectMaintenanceStatusItem;
   note?: string;
 }
 
@@ -26,7 +26,7 @@ export function toProjectCardViewModel(
     project,
     category: getCategory(taxonomy, project.category),
     tags: project.tags.map((tag) => getTag(taxonomy, tag)),
-    status: getStatus(taxonomy, project.status),
+    maintenanceStatus: getProjectMaintenanceStatus(taxonomy, project.maintenance_status),
     note
   };
 }

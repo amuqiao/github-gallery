@@ -7,6 +7,11 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { load } from "js-yaml";
 import { z } from "zod";
+import {
+  collectionConfigSchema,
+  projectConfigSchema,
+  taxonomyCatalogSchema
+} from "../src/lib/catalog/catalog-schema.js";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogDir = path.join(rootDir, "catalog");
@@ -20,108 +25,7 @@ const allowedTopLevelEntries = new Set(["manifest.yaml", "projects", "collection
 let lockHeld = false;
 
 const nonEmptyString = z.string().trim().min(1);
-const localeCodeSchema = z.enum(["zh", "en"]);
-const localizedTextSchema = z.object({ zh: nonEmptyString, en: nonEmptyString }).strict();
 const slugString = z.string().regex(slugPattern);
-const taxonomyItemSchema = z.object({ id: slugString, name: localizedTextSchema, description: localizedTextSchema }).strict();
-const detailsSchema = z
-  .object({
-    type: z.literal("markdown"),
-    path: z.string().regex(relativePathPattern)
-  })
-  .strict()
-  .superRefine((details, ctx) => {
-    if (details.path !== "./details.md") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "details.path must be ./details.md in schema_version 1",
-        path: ["path"]
-      });
-    }
-  });
-const linksBlockSchema = z
-  .object({
-    type: z.literal("links"),
-    title: nonEmptyString.optional(),
-    items: z.array(z.object({ label: nonEmptyString, url: z.string().url() }).strict()).min(1)
-  })
-  .strict();
-const listBlockSchema = (type) =>
-  z
-    .object({
-      type: z.literal(type),
-      title: nonEmptyString.optional(),
-      items: z.array(nonEmptyString).min(1)
-    })
-    .strict();
-const blockSchema = z.discriminatedUnion("type", [
-  linksBlockSchema,
-  listBlockSchema("highlights"),
-  listBlockSchema("use-cases")
-]);
-const projectSchema = z
-  .object({
-    schema_version: z.literal(1),
-    id: slugString,
-    name: nonEmptyString,
-    repo: z.string().url(),
-    summary: nonEmptyString.max(160),
-    category: slugString,
-    tags: z.array(slugString).min(1).max(8),
-    status: slugString,
-    details: detailsSchema.optional(),
-    meta: z.object({ license: nonEmptyString.optional(), languages: z.array(nonEmptyString).min(1).optional() }).strict().optional(),
-    relations: z.object({ related_projects: z.array(slugString).min(1).optional() }).strict().optional(),
-    blocks: z.array(blockSchema).optional()
-  })
-  .strict();
-const collectionSchema = z
-  .object({
-    schema_version: z.literal(1),
-    id: slugString,
-    title: nonEmptyString,
-    summary: nonEmptyString.max(180),
-    status: z.enum(["published", "draft", "archived"]),
-    items: z.array(z.object({ project: slugString, note: nonEmptyString.max(180).optional() }).strict()).min(1),
-    details: detailsSchema.optional(),
-    blocks: z.array(blockSchema).optional()
-  })
-  .strict();
-const taxonomySchema = z
-  .object({
-    schema_version: z.literal(1),
-    locale: z.object({ default: localeCodeSchema, supported: z.array(localeCodeSchema).min(1) }).strict(),
-    categories: z.array(taxonomyItemSchema).min(1),
-    tags: z.array(taxonomyItemSchema).min(1),
-    statuses: z.array(taxonomyItemSchema).min(1)
-  })
-  .strict()
-  .superRefine((taxonomy, ctx) => {
-    const supported = new Set(taxonomy.locale.supported);
-    if (supported.size !== taxonomy.locale.supported.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "locale.supported must not contain duplicate locales",
-        path: ["locale", "supported"]
-      });
-    }
-    if (!supported.has(taxonomy.locale.default)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "locale.default must be included in locale.supported",
-        path: ["locale", "default"]
-      });
-    }
-    for (const requiredLocale of ["zh", "en"]) {
-      if (!supported.has(requiredLocale)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `locale.supported must include ${requiredLocale}`,
-          path: ["locale", "supported"]
-        });
-      }
-    }
-  });
 const operationSchema = z
   .object({
     target: z.enum(["project", "collection"]),
@@ -308,11 +212,13 @@ async function readCurrentCollectionIds() {
 }
 
 async function readTaxonomyIds() {
-  const taxonomy = await readYaml(path.join(catalogDir, "taxonomies.yaml"), taxonomySchema, "catalog/taxonomies.yaml");
+  const taxonomy = await readYaml(path.join(catalogDir, "taxonomies.yaml"), taxonomyCatalogSchema, "catalog/taxonomies.yaml");
   return {
     categories: new Set(taxonomy.categories.map((category) => category.id)),
     tags: new Set(taxonomy.tags.map((tag) => tag.id)),
-    statuses: new Set(taxonomy.statuses.map((status) => status.id))
+    projectMaintenanceStatuses: new Set(
+      taxonomy.project_maintenance_statuses.map((maintenanceStatus) => maintenanceStatus.id)
+    )
   };
 }
 
@@ -442,7 +348,7 @@ async function assertDeletedProjectsAreUnreferenced(operations, deletedProjectId
       continue;
     }
 
-    const project = await readYaml(path.join(projectsDir, entry.name, "project.yaml"), projectSchema, `catalog/projects/${entry.name}/project.yaml`);
+    const project = await readYaml(path.join(projectsDir, entry.name, "project.yaml"), projectConfigSchema, `catalog/projects/${entry.name}/project.yaml`);
     for (const relatedId of project.relations?.related_projects ?? []) {
       if (deletedProjectIds.has(relatedId)) {
         die(`project:${entry.name} references project scheduled for delete: ${relatedId}`);
@@ -456,7 +362,7 @@ async function assertDeletedProjectsAreUnreferenced(operations, deletedProjectId
       continue;
     }
 
-    const collection = await readYaml(path.join(collectionsDir, entry.name, "collection.yaml"), collectionSchema, `catalog/collections/${entry.name}/collection.yaml`);
+    const collection = await readYaml(path.join(collectionsDir, entry.name, "collection.yaml"), collectionConfigSchema, `catalog/collections/${entry.name}/collection.yaml`);
     for (const item of collection.items) {
       if (deletedProjectIds.has(item.project)) {
         die(`collection:${entry.name} references project scheduled for delete: ${item.project}`);
@@ -489,7 +395,7 @@ async function assertNoUndeclaredDirs(batchPath, operations) {
 
 async function validatePayload(operation, source, taxonomyIds, currentProjectIds, batchProjectIds, deletedProjectIds) {
   const configPath = path.join(source, configFileName(operation.target));
-  const schema = operation.target === "project" ? projectSchema : collectionSchema;
+  const schema = operation.target === "project" ? projectConfigSchema : collectionConfigSchema;
   const payload = await readYaml(configPath, schema, `${operationKey(operation)} ${configFileName(operation.target)}`);
 
   if (payload.id !== operation.id) {
@@ -553,8 +459,8 @@ function validateProjectPayload(operation, payload, taxonomyIds, currentProjectI
     }
   }
 
-  if (!taxonomyIds.statuses.has(payload.status)) {
-    die(`${operationKey(operation)} references unknown status: ${payload.status}`);
+  if (!taxonomyIds.projectMaintenanceStatuses.has(payload.maintenance_status)) {
+    die(`${operationKey(operation)} references unknown maintenance_status: ${payload.maintenance_status}`);
   }
 
   const availableProjectIds = new Set([...currentProjectIds, ...batchProjectIds]);

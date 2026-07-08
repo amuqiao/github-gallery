@@ -478,7 +478,7 @@
     padding: 0;
   }
 
-  .project-status {
+  .project-maintenance-status {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -488,7 +488,7 @@
     line-height: 1.2;
   }
 
-  .project-status__dot {
+  .project-maintenance-status__dot {
     width: 0.5rem;
     height: 0.5rem;
     flex: 0 0 auto;
@@ -496,16 +496,16 @@
     background: currentColor;
   }
 
-  .project-status--success {
+  .project-maintenance-status--success {
     color: var(--primary);
   }
 
-  .project-status--warning {
+  .project-maintenance-status--warning {
     color: var(--accent-strong);
   }
 
-  .project-status--muted,
-  .project-status--neutral {
+  .project-maintenance-status--muted,
+  .project-maintenance-status--neutral {
     color: var(--muted-foreground);
   }
 

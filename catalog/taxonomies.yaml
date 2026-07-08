@@ -184,7 +184,7 @@ tags:
       zh: 主要使用 PyTorch 实现的项目。
       en: Projects implemented primarily with PyTorch.
 
-statuses:
+project_maintenance_statuses:
   - id: active
     name:
       zh: 活跃

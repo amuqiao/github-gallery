@@ -81,7 +81,7 @@ notes / AI output / manual draft
 manifest.yaml 必须符合 docs/contract/catalog-import-batch.md。
 project payload 必须符合 docs/contract/project-config.md。
 collection payload 必须符合 docs/contract/collection-config.md。
-category、tags 和 status 必须从 docs/contract/taxonomy-config.md 对应的 taxonomy id 中选择。
+category、tags 和 maintenance_status 必须从 docs/contract/taxonomy-config.md 对应的 taxonomy id 中选择。
 不确定的信息不要编造成机器字段；可以写入 details.md 的说明或保持字段缺省。
 ```
 
@@ -101,6 +101,8 @@ AI 生成内容时要避免：
    ```sh
    ./scripts/catalog.sh import validate .tmp/import-batches/<batch-id>
    ```
+
+   `validate` 会同时检查当前 `catalog/` 状态：`create` 目标必须不存在，`replace` / `delete` 目标必须存在。已经应用过的 `create` 批次不能重复作为新建批次验证；需要重新生成 batch，或把 manifest 调整为明确的 `replace` 语义后再走差异审查。
 
 3. 查看操作计划。
 
@@ -139,10 +141,10 @@ AI 生成内容时要避免：
 [ ] delete 没有删除仍被项目关系或专题引用的项目。
 [ ] repo URL 是明确的 GitHub 仓库地址。
 [ ] summary 简短、克制，没有排名式或广告式判断。
-[ ] category、tags 和 status 来自 catalog/taxonomies.yaml。
+[ ] category、tags 和 maintenance_status 来自 catalog/taxonomies.yaml。
 [ ] details.md 只承载长文说明，不承载机器可筛选字段。
-[ ] collection 只保存策展顺序和 note，不复制项目事实。
-[ ] draft/published 状态符合当前审核程度。
+[ ] collection 只保存策展顺序、note 和 publication_status，不复制项目事实。
+[ ] publication_status 符合当前审核程度。
 ```
 
 ## Failure Handling

@@ -2,7 +2,7 @@ schema_version: 1
 id: voice-cloning
 title: 声音克隆项目
 summary: 适合研究声音克隆、参考音频生成、多语言 TTS、音色转换和语音架构路线的开源项目。
-status: published
+publication_status: published
 items:
   - project: gpt-sovits
     note: 适合学习完整音色克隆训练流程。

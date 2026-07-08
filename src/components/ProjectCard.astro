@@ -1,23 +1,23 @@
 ---
-import type { LocalizedTaxonomyItem, LocalizedTaxonomyStatusItem, Project } from "@/lib/catalog/projects";
+import type { LocalizedProjectMaintenanceStatusItem, LocalizedTaxonomyItem, Project } from "@/lib/catalog/projects";
 import Badge from "@/components/ui/Badge.astro";
 import Button from "@/components/ui/Button.astro";
 import Card from "@/components/ui/Card.astro";
-import ProjectStatus from "@/components/ProjectStatus.astro";
+import ProjectMaintenanceStatus from "@/components/ProjectMaintenanceStatus.astro";
 import type { ProjectCollectionVariant } from "@/presentation/types";
 
 interface Props {
   project: Project;
   category: LocalizedTaxonomyItem;
   tags: LocalizedTaxonomyItem[];
-  status: LocalizedTaxonomyStatusItem;
+  maintenanceStatus: LocalizedProjectMaintenanceStatusItem;
   note?: string;
   headingLevel?: 2 | 3;
   variant?: ProjectCollectionVariant | "feature";
   order?: number;
 }
 
-const { project, category, tags, status, note, headingLevel = 3, variant = "standard", order } = Astro.props;
+const { project, category, tags, maintenanceStatus, note, headingLevel = 3, variant = "standard", order } = Astro.props;
 const cardClass = ["project-card", `project-card--${variant}`].join(" ");
 ---
 
@@ -38,7 +38,7 @@ const cardClass = ["project-card", `project-card--${variant}`].join(" ");
     </div>
     <div class="project-card__badges">
       <Badge href={`/categories/${category.id}/`} variant="secondary" class="project-card__category">{category.label}</Badge>
-      <ProjectStatus status={status} />
+      <ProjectMaintenanceStatus maintenanceStatus={maintenanceStatus} />
     </div>
   </div>
   <p class="project-card__summary">{project.summary}</p>
