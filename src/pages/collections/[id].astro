@@ -10,6 +10,7 @@ import { loadCollectionDetail } from "@/lib/catalog/details";
 import { getPublicCollections, type Collection } from "@/lib/catalog/collections";
 import { getCatalogSnapshot } from "@/lib/catalog/projects";
 import { toCollectionProjectCardViewModels } from "@/lib/catalog/project-view-models";
+import { getActivePresentation } from "@/presentation";
 
 export async function getStaticPaths() {
   const collections = await getPublicCollections();
@@ -24,6 +25,7 @@ const { site, taxonomy } = await getCatalogSnapshot();
 const projectItems = toCollectionProjectCardViewModels(collection, taxonomy);
 const detail = await loadCollectionDetail(collection);
 const DetailContent = detail?.Content;
+const { layout } = getActivePresentation();
 ---
 
 <BaseLayout title={`${collection.title} - GitHub Gallery`} site={site} description={collection.summary}>
@@ -69,6 +71,7 @@ const DetailContent = detail?.Content;
       title="Projects in this collection"
       description="专题只决定项目出现的顺序和策展说明；项目事实仍来自 project.yaml。"
       items={projectItems}
+      variant={layout.detailPages.projectCollectionVariant}
     />
   </article>
 </BaseLayout>

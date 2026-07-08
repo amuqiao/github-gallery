@@ -1,0 +1,63 @@
+---
+import type { Collection } from "@/lib/catalog/collections";
+import Button from "@/components/ui/Button.astro";
+
+interface Props {
+  featuredCollection: Collection;
+  projectCount: number;
+  collectionCount: number;
+  categoryCount: number;
+  tagCount: number;
+}
+
+const { featuredCollection, projectCount, collectionCount, categoryCount, tagCount } = Astro.props;
+---
+
+<header class="home-bento" aria-labelledby="home-title">
+  <div class="home-bento__kicker">Curated GitHub Projects - Schema v1</div>
+  <div class="home-bento__intro">
+    <h1 id="home-title">开源项目的编目展馆</h1>
+    <p>
+      一个合同驱动的静态展馆。项目按分类和标签进入筛选视图，专题按人工策展顺序重新组织同一批项目。
+    </p>
+  </div>
+  <ul class="home-bento__grid" aria-label="Gallery summary">
+    <li class="home-bento__item home-bento__item--feature">
+      <a class="home-bento__cell home-bento__cell--feature" href={featuredCollection.route}>
+        <span class="home-bento__label">Featured collection</span>
+        <strong>{featuredCollection.title}</strong>
+        <span>{featuredCollection.summary}</span>
+        <span class="home-bento__action">进入专题</span>
+      </a>
+    </li>
+    <li class="home-bento__item">
+      <div class="home-bento__cell">
+        <span class="home-bento__label">Projects</span>
+        <strong>{projectCount}</strong>
+      </div>
+    </li>
+    <li class="home-bento__item">
+      <a class="home-bento__cell home-bento__cell--accent" href="/collections/">
+        <span class="home-bento__label">Collections</span>
+        <strong>{collectionCount}</strong>
+      </a>
+    </li>
+    <li class="home-bento__item">
+      <div class="home-bento__cell">
+        <span class="home-bento__label">Categories</span>
+        <strong>{categoryCount}</strong>
+      </div>
+    </li>
+    <li class="home-bento__item">
+      <div class="home-bento__cell">
+        <span class="home-bento__label">Active tags</span>
+        <strong>{tagCount}</strong>
+      </div>
+    </li>
+  </ul>
+  <div class="home-bento__actions">
+    <Button href="#projects">Browse projects</Button>
+    <Button href="#collections" variant="secondary">Browse collections</Button>
+    <Button href="#categories" variant="outline">Browse filters</Button>
+  </div>
+</header>

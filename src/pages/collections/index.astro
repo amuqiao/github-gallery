@@ -5,11 +5,13 @@ import PageHeader from "@/components/PageHeader.astro";
 import Button from "@/components/ui/Button.astro";
 import { getPublicCollections } from "@/lib/catalog/collections";
 import { getCatalogSnapshot } from "@/lib/catalog/projects";
+import { getActivePresentation } from "@/presentation";
 
 const [{ site }, collections] = await Promise.all([getCatalogSnapshot(), getPublicCollections()]);
 const referencedProjectCount = new Set(
   collections.flatMap((collection) => collection.projectItems.map((item) => item.project.id))
 ).size;
+const { layout } = getActivePresentation();
 ---
 
 <BaseLayout title="Collections - GitHub Gallery" site={site}>
@@ -33,5 +35,6 @@ const referencedProjectCount = new Set(
     title="All collections"
     description="每个专题按手写顺序引用已有 GitHub 项目，删除或新增专题不会改变项目本体。"
     collections={collections}
+    variant={layout.listPages.collectionGridVariant}
   />
 </BaseLayout>

@@ -17,6 +17,7 @@
 - `src/lib/catalog/block-adapters.ts` 在渲染前适配 typed blocks。
 - `src/lib/catalog/project-view-models.ts` 把项目和 taxonomy 解析成前端卡片视图模型。
 - `src/lib/catalog/details.ts` 加载项目和专题的 Markdown 详情正文。
+- `src/presentation/` 提供展示层 registry，当前把 `layoutId` 和 `themeId` 拆开管理。
 - `src/components/PageHeader.astro`、`src/components/ProjectCollection.astro`、`src/components/CollectionGrid.astro` 等共享组件承载前端导航骨架。
 - `src/components/ui/` 提供 shadcn-style UI primitives。
 - `src/styles/global.css` 提供 Tailwind 入口、shadcn-style token 和少量全局 prose 样式。
@@ -29,6 +30,7 @@
 catalog/projects/<id>/project.yaml
   -> src/lib/catalog/project-schema.ts
   -> src/lib/catalog/projects.ts
+  -> src/presentation/config.ts
   -> src/pages/index.astro
   -> src/pages/projects/[id].astro
   -> src/pages/categories/[category].astro
@@ -46,6 +48,7 @@ catalog/projects/<id>/details.md
 catalog/collections/<id>/collection.yaml
   -> src/lib/catalog/project-schema.ts
   -> src/lib/catalog/collections.ts
+  -> src/presentation/config.ts
   -> src/pages/collections/index.astro
   -> src/pages/collections/[id].astro
   -> src/components/CollectionGrid.astro
@@ -81,6 +84,8 @@ scripts/verify.sh
 `collection.yaml` 是专题身份、专题路由、公开状态、项目引用顺序和策展备注的机器可读来源。专题只引用已有项目，不复制项目事实。`draft` 专题会被校验，但不会生成公开页面。
 
 `catalog/site.yaml` 是站点导航和站点级展示信息来源。
+
+`src/presentation/config.ts` 是当前前端展示版本来源。它选择代码级 `layoutId` 和 `themeId`，不改变项目或专题配置合同。
 
 `details.md` 是人类可读长文说明，不定义可筛选字段。
 

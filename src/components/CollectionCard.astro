@@ -3,29 +3,32 @@ import Button from "@/components/ui/Button.astro";
 import Card from "@/components/ui/Card.astro";
 import Badge from "@/components/ui/Badge.astro";
 import type { Collection } from "@/lib/catalog/collections";
+import type { CollectionGridVariant } from "@/presentation/types";
 
 interface Props {
   collection: Collection;
   headingLevel?: 2 | 3;
+  variant?: CollectionGridVariant;
 }
 
-const { collection, headingLevel = 2 } = Astro.props;
+const { collection, headingLevel = 3, variant = "standard" } = Astro.props;
+const cardClass = ["collection-card", `collection-card--${variant}`].join(" ");
 ---
 
-<Card as="article" class="grid gap-3 p-4">
-  <div class="flex flex-wrap items-center gap-2">
+<Card as="article" class={cardClass}>
+  <div class="collection-card__meta">
     <Badge variant="secondary">{collection.status}</Badge>
     <Badge variant="outline">{collection.projectItems.length} projects</Badge>
   </div>
   {
     headingLevel === 3 ? (
-      <h3 class="m-0 text-lg font-semibold leading-tight"><a class="no-underline hover:text-primary" href={collection.route}>{collection.title}</a></h3>
+      <h3 class="collection-card__title"><a href={collection.route}>{collection.title}</a></h3>
     ) : (
-      <h2 class="m-0 text-lg font-semibold leading-tight"><a class="no-underline hover:text-primary" href={collection.route}>{collection.title}</a></h2>
+      <h2 class="collection-card__title"><a href={collection.route}>{collection.title}</a></h2>
     )
   }
-  <p class="m-0 text-sm text-muted-foreground">{collection.summary}</p>
-  <Button class="justify-start px-0" href={collection.route} variant="link" ariaLabel={`Open ${collection.title} collection`}>
-    View collection
+  <p class="collection-card__summary">{collection.summary}</p>
+  <Button class="collection-card__link" href={collection.route} variant="link" ariaLabel={`Open ${collection.title} collection`}>
+    View {collection.title}
   </Button>
 </Card>

@@ -7,12 +7,15 @@
 ```text
 catalog schema/loader
   -> page read model
+  -> presentation layout registry
   -> page composition
   -> reusable business components
   -> UI primitives
 ```
 
 页面负责决定信息怎么组织。组件负责复用稳定展示能力。UI primitives 负责统一视觉语义。
+
+当前页面组合先读取 `src/presentation/config.ts`，再从 `src/presentation/layouts.ts` 取 layout 规则。layout 只决定页面族分发、section 顺序和组件 variant，不定义 catalog 字段。首页精选专题这类内容选择放在 `src/presentation/home.ts`。
 
 不要把 `ProjectCard`、`CollectionCard`、`ProjectCollection` 这类组件清单理解成页面模板。它们是能力边界，不是强制页面布局。
 
@@ -21,6 +24,7 @@ catalog schema/loader
 | Layer | Owns | Does Not Own |
 | --- | --- | --- |
 | `src/pages/*` | 页面路由、信息架构、组件顺序、页面级数据查询。 | 重复实现卡片、按钮、badge、loader 校验。 |
+| `src/presentation/*` | 展示层 layout/theme registry、首页展示选择、页面族 variant 选择。 | catalog 字段、项目本体事实。 |
 | `src/components/*` | 项目卡片、专题卡片、集合网格、详情首屏、筛选入口等业务展示能力。 | 直接读取 YAML、定义 catalog 字段合同。 |
 | `src/components/ui/*` | Button、Badge、Card、SectionHeader 等稳定视觉 primitive。 | 项目、专题、taxonomy 等业务含义。 |
 | `src/lib/catalog/*` | schema parse、loader 校验、view model 适配。 | 页面布局和视觉样式。 |
@@ -33,7 +37,7 @@ catalog schema/loader
 
 | Page Family | Current Routes | Primary Reusable Components |
 | --- | --- | --- |
-| Gallery hub | `/` | `PageHeader`、`CollectionGrid`、`FilterPanel`、`ProjectCollection` |
+| Gallery hub | `/` | `HomeBentoHero`、`CollectionGrid`、`FilterPanel`、`ProjectCollection` |
 | Project detail | `/projects/[id]/` | `Breadcrumbs`、`ProjectHero`、`BlockRenderer`、`RelatedProjects` |
 | Collection index | `/collections/` | `PageHeader`、`CollectionGrid` |
 | Collection detail | `/collections/[id]/` | `Breadcrumbs`、`PageHeader`、`BlockRenderer`、`ProjectCollection` |
@@ -57,6 +61,34 @@ Breadcrumbs        详情页层级路径
 ```
 
 如果新页面也要展示项目列表，优先复用 `ProjectCollection` 和 `ProjectCard`。如果新页面也要展示专题列表，优先复用 `CollectionGrid` 和 `CollectionCard`。
+
+## When Adding A Layout Version
+
+按这个顺序执行：
+
+1. 在 `src/presentation/types.ts` 增加新的 `PresentationLayoutId`。
+2. 在 `src/presentation/layouts.ts` 增加 layout registry 项。
+3. 只在 layout 中描述页面族分发、section 顺序、集合 variant 和密度。
+4. 如需新业务组件，新增到 `src/components/`，不要放进 `src/components/ui/`。
+5. 在 `src/presentation/config.ts` 切换 `layoutId`。
+6. 更新 [`../current/frontend-navigation.md`](../current/frontend-navigation.md) 和 [`../current/ui-architecture.md`](../current/ui-architecture.md)。
+7. 运行 `./scripts/verify.sh check`。
+
+未知 layout 不允许静默降级。构建失败比悄悄套错页面结构更容易维护。
+
+## When Adding A Theme Version
+
+按这个顺序执行：
+
+1. 在 `src/presentation/types.ts` 增加新的 `PresentationThemeId`。
+2. 在 `src/presentation/themes.ts` 增加 theme registry 项。
+3. 在 `src/styles/global.css` 增加 `html[data-theme="<id>"]` token。
+4. 只调整颜色、字体、边框、背景、阴影、radius、focus ring 等视觉 token。
+5. 在 `src/presentation/config.ts` 切换 `themeId`。
+6. 更新 [`../current/ui-architecture.md`](../current/ui-architecture.md)。
+7. 运行 `./scripts/verify.sh check`。
+
+theme 不决定首页 section 顺序，也不决定项目是否出现。
 
 ## When Redesigning The Home Page
 
@@ -132,6 +164,7 @@ catalog/projects/<id>/details.md
 
 ```text
 [ ] 页面结构变化没有要求修改 catalog schema，除非确实新增机器可读事实。
+[ ] layout/theme 变化只进入 `src/presentation/*` 和视觉组件，不进入 project/collection YAML。
 [ ] 新页面没有直接读取 YAML 或 Markdown 文件。
 [ ] 项目列表仍复用 `ProjectCollection` 或明确的新集合组件。
 [ ] 项目卡片样式没有在多个页面重复实现。
@@ -146,6 +179,8 @@ catalog/projects/<id>/details.md
 - 把组件清单当成固定页面模板，导致页面无法根据内容重新设计。
 - 每个页面各写一套项目卡片或专题卡片。
 - 为了视觉布局新增 catalog 顶层字段。
+- 把 `layoutId` 或 `themeId` 写进每个项目或专题配置。
+- theme 同时修改 section 顺序，或 layout 同时硬编码颜色。
 - 在页面中扫描 `catalog/projects` 或 `catalog/collections`。
 - 在 `src/components/ui/` 中引入项目、专题、taxonomy 等业务对象。
 - 未扩展合同就临时实现多个项目详情页。

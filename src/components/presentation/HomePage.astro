@@ -1,0 +1,37 @@
+---
+import BentoEditorialHome from "@/components/presentation/home/BentoEditorialHome.astro";
+import type { Collection } from "@/lib/catalog/collections";
+import type { Project, TaxonomyItem } from "@/lib/catalog/projects";
+import type { ProjectCardViewModel } from "@/lib/catalog/project-view-models";
+import type {
+  PresentationHomeConfig,
+  PresentationLayout,
+  PresentationLayoutId
+} from "@/presentation/types";
+
+interface Props {
+  layout: PresentationLayout;
+  home: PresentationHomeConfig;
+  projects: Project[];
+  collections: Collection[];
+  activeCategories: TaxonomyItem[];
+  activeTags: TaxonomyItem[];
+  projectItems: ProjectCardViewModel[];
+}
+
+const { layout, home, projects, collections, activeCategories, activeTags, projectItems } = Astro.props;
+const homeLayouts = {
+  "bento-editorial": BentoEditorialHome
+} satisfies Record<PresentationLayoutId, typeof BentoEditorialHome>;
+const HomeLayout = homeLayouts[layout.id];
+---
+
+<HomeLayout
+  layout={layout}
+  home={home}
+  projects={projects}
+  collections={collections}
+  activeCategories={activeCategories}
+  activeTags={activeTags}
+  projectItems={projectItems}
+/>

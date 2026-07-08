@@ -7,6 +7,9 @@
 当前 UI 层采用：
 
 ```text
+src/presentation/*
+  管理当前 layoutId/themeId，并提供 layout/theme registry。
+
 Tailwind CSS
   提供 utility、响应式规则和主题 token。
 
@@ -22,6 +25,15 @@ Pages
 
 `BaseLayout` 只负责 document shell、站点导航、footer 和全局 CSS import。它不直接读取 catalog loader，只消费页面传入的 `site` props，不承载项目卡片、筛选面板、详情页等组件样式。
 
+`src/presentation/config.ts` 是当前展示版本入口。当前启用：
+
+```text
+layoutId = bento-editorial
+themeId  = editorial-paper
+```
+
+layout 决定页面族分发、section 顺序、列表密度和卡片变体。theme 决定 CSS token、字体、颜色、边框、背景和基础质感。首页精选专题由 `src/presentation/home.ts` 管理。它们都不进入 `project.yaml` 或 `collection.yaml`。
+
 项目集合卡片通过 `src/lib/catalog/project-view-models.ts` 预先解析 category 和 tags。`ProjectCollection` 不调用 catalog loader 的运行时 helper。
 
 ## Runtime Styling Path
@@ -29,6 +41,9 @@ Pages
 ```text
 astro.config.mjs
   -> @tailwindcss/vite
+  -> src/presentation/config.ts
+  -> src/presentation/layouts.ts
+  -> src/presentation/themes.ts
   -> src/styles/global.css
   -> src/components/ui/*
   -> src/components/*
@@ -36,6 +51,26 @@ astro.config.mjs
 ```
 
 `src/styles/global.css` 保存 Tailwind import、shadcn-style CSS variables、Tailwind theme 映射和少量 base/prose 样式。
+
+`BaseLayout` 会把当前展示选择投射成：
+
+```text
+html[data-layout="bento-editorial"][data-theme="editorial-paper"]
+```
+
+CSS 当前通过 `data-theme` 应用皮肤 token；`data-layout` 用于运行时检查和页面布局分发标识。
+
+## Presentation Registry
+
+| File | Owns | Does Not Own |
+| --- | --- | --- |
+| `src/presentation/config.ts` | 当前启用的 `layoutId` 和 `themeId`。 | catalog 字段、项目级展示选择。 |
+| `src/presentation/home.ts` | 首页展示内容选择，例如 featured collection id。 | layout grid、颜色、catalog schema。 |
+| `src/presentation/layouts.ts` | 页面族布局版本、首页 section 顺序、组件 variant 选择。 | 颜色、字体、项目事实。 |
+| `src/presentation/themes.ts` | 皮肤版本元数据。 | 页面 section 顺序、catalog 字段。 |
+| `src/presentation/types.ts` | layout/theme/variant 类型边界。 | 运行时数据读取。 |
+
+当前 registry 是代码级开发者配置，不是内容编辑合同。未知 layout 或 theme 不应静默降级。
 
 ## UI Primitive Boundary
 
@@ -60,6 +95,7 @@ astro.config.mjs
 | `FilterPanel` | `Card`、`Button`、`ChipLink`、`SectionHeader` | 首页 taxonomy 浏览入口和计数展示。 |
 | `ProjectCollection` | `SectionHeader`、`Badge`、`EmptyState`、`ProjectCard` | 已解析项目卡片集合网格。 |
 | `ProjectCard` | `Card`、`Badge`、`Button` | 单个项目卡片。 |
+| `HomeBentoHero` | `Button`、presentation layout config | 首页 bento hero 和 gallery summary。 |
 | `ProjectHero` | `PageHeader`、`Badge`、`Button` | 项目详情首屏。 |
 | `RelatedProjects` | `ProjectCollection` | 相关项目集合。 |
 

@@ -19,11 +19,13 @@ Nested Doll
 
 这些模式只约束页面和组件结构。项目数据来源是 `src/lib/catalog/projects.ts`，专题数据来源是 `src/lib/catalog/collections.ts`。
 
+当前页面组合由 `src/presentation/config.ts` 选择的 `bento-editorial` layout 驱动。layout 可以调整首页 section 顺序和列表变体，但不改变路由角色或 catalog 数据来源。
+
 ## Page Roles
 
 | Page | Role | Components |
 | --- | --- | --- |
-| `/` | Gallery hub，展示总览、专题入口、taxonomy 入口和全部项目。 | `PageHeader`、`CollectionGrid`、`FilterPanel`、`ProjectCollection` |
+| `/` | Gallery hub，展示总览、专题入口、taxonomy 入口和全部项目。 | `HomeBentoHero`、`CollectionGrid`、`FilterPanel`、`ProjectCollection` |
 | `/collections/` | 公开专题入口，展示 `published` 和 `archived` 专题。 | `PageHeader`、`CollectionGrid` |
 | `/collections/[id]/` | 单个公开专题详情页，按专题顺序展示已引用项目。 | `Breadcrumbs`、`PageHeader`、`BlockRenderer`、`ProjectCollection` |
 | `/categories/[category]/` | 按 category 的 filtered view。 | `PageHeader`、`ProjectCollection` |
@@ -57,6 +59,8 @@ catalog YAML
 ```
 
 页面和组件不直接读取 YAML。当前已有列表型视图均复用 `ProjectCollection`，当前已有页面首屏均复用 `PageHeader` 或基于它封装的 `ProjectHero`。
+
+首页首屏当前由 `HomeBentoHero` 承载，这是 `bento-editorial` layout 的业务组件，不是 catalog 合同。
 
 ## Verification
 

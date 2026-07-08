@@ -3,6 +3,7 @@ import type { Project, TaxonomyItem } from "@/lib/catalog/projects";
 import Badge from "@/components/ui/Badge.astro";
 import Button from "@/components/ui/Button.astro";
 import Card from "@/components/ui/Card.astro";
+import type { ProjectCollectionVariant } from "@/presentation/types";
 
 interface Props {
   project: Project;
@@ -10,29 +11,40 @@ interface Props {
   tags: TaxonomyItem[];
   note?: string;
   headingLevel?: 2 | 3;
+  variant?: ProjectCollectionVariant | "feature";
+  order?: number;
 }
 
-const { project, category, tags, note, headingLevel = 2 } = Astro.props;
+const { project, category, tags, note, headingLevel = 3, variant = "standard", order } = Astro.props;
+const cardClass = ["project-card", `project-card--${variant}`].join(" ");
 ---
 
-<Card as="article" class="flex min-h-72 flex-col gap-3.5 p-4">
-  <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-    <Badge href={`/categories/${category.id}/`} variant="secondary">{category.name}</Badge>
+<Card as="article" class={cardClass}>
+  <div class="project-card__top">
+    <div class="project-card__title-group">
+      {order && <span class="project-card__order">{String(order).padStart(2, "0")}</span>}
+      <div>
+        {
+          headingLevel === 3 ? (
+            <h3 class="project-card__title"><a href={project.route}>{project.name}</a></h3>
+          ) : (
+            <h2 class="project-card__title"><a href={project.route}>{project.name}</a></h2>
+          )
+        }
+        <span class="project-card__id">{project.id}</span>
+      </div>
+    </div>
+    <Badge href={`/categories/${category.id}/`} variant="secondary" class="project-card__category">{category.name}</Badge>
+  </div>
+  <div class="project-card__meta">
     <Badge variant="outline">{project.status}</Badge>
   </div>
-  {
-    headingLevel === 3 ? (
-      <h3 class="m-0 text-lg font-semibold leading-tight"><a class="no-underline hover:text-primary" href={project.route}>{project.name}</a></h3>
-    ) : (
-      <h2 class="m-0 text-lg font-semibold leading-tight"><a class="no-underline hover:text-primary" href={project.route}>{project.name}</a></h2>
-    )
-  }
-  <p class="m-0 text-sm text-muted-foreground">{project.summary}</p>
-  {note && <p class="m-0 border-l-2 border-primary/40 pl-3 text-sm text-foreground">{note}</p>}
-  <div class="flex flex-wrap gap-1.5" aria-label="Tags">
-    {tags.map((tag) => <Badge href={`/tags/${tag.id}/`} variant="secondary">{tag.name}</Badge>)}
-  </div>
-  <Button class="mt-auto justify-start px-0" href={project.repo} variant="link" ariaLabel={`Open ${project.name} repository`}>
-    Repository
+  <p class="project-card__summary">{project.summary}</p>
+  {note && <p class="project-card__note">{note}</p>}
+  <ul class="project-card__tags" aria-label="Tags">
+    {tags.map((tag) => <li><Badge href={`/tags/${tag.id}/`} variant="secondary">{tag.name}</Badge></li>)}
+  </ul>
+  <Button class="project-card__repo" href={project.repo} variant="link" ariaLabel={`Open ${project.name} repository`}>
+    {project.name} repository
   </Button>
 </Card>
