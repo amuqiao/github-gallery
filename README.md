@@ -7,6 +7,7 @@
 ```text
 catalog/projects/<id>/project.yaml  # 项目机器可读事实
 catalog/projects/<id>/details.md    # 可选详情正文
+catalog/projects/<id>/notes/        # 可选项目附加笔记
 catalog/collections/<id>/collection.yaml # 专题机器可读事实
 catalog/collections/<id>/details.md  # 可选专题详情正文
 catalog/taxonomies.yaml             # 共享分类、标签和项目维护状态词表

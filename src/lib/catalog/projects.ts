@@ -7,6 +7,7 @@ import {
   type LocaleCode,
   type LocalizedText,
   type ProjectConfig,
+  type ProjectNoteConfig,
   type SiteConfig,
   type TaxonomyCatalog as TaxonomyCatalogConfig,
   type TaxonomyItem as TaxonomyItemConfig
@@ -18,8 +19,13 @@ const projectsRoot = path.join(catalogRoot, "projects");
 const taxonomiesPath = path.join(catalogRoot, "taxonomies.yaml");
 const siteConfigPath = path.join(catalogRoot, "site.yaml");
 
-export type Project = Omit<ProjectConfig, "blocks"> & {
+export type ProjectNote = ProjectNoteConfig & {
+  route: string;
+};
+
+export type Project = Omit<ProjectConfig, "blocks" | "notes"> & {
   blocks: AdaptedProjectBlock[];
+  notes: ProjectNote[];
   directory: string;
   route: string;
 };
@@ -81,6 +87,16 @@ export async function getProjectById(id: string): Promise<Project> {
   }
 
   return project;
+}
+
+export function getProjectNoteById(project: Project, noteId: string): ProjectNote {
+  const note = project.notes.find((item) => item.id === noteId);
+
+  if (!note) {
+    throw new Error(`${project.id} references unknown note: ${noteId}`);
+  }
+
+  return note;
 }
 
 export async function getProjectsByCategory(category: string): Promise<Project[]> {
@@ -146,6 +162,14 @@ export function resolveProjectPath(project: Project, relativePath: string): stri
   }
 
   return fullPath;
+}
+
+function assertPathInsideProject(project: Project, fullPath: string, relativePath: string): void {
+  const relativeToProject = path.relative(project.directory, fullPath);
+
+  if (relativeToProject.startsWith("..") || path.isAbsolute(relativeToProject)) {
+    throw new Error(`${project.id} references a path outside its project directory: ${relativePath}`);
+  }
 }
 
 async function buildCatalogSnapshot(): Promise<CatalogSnapshot> {
@@ -227,12 +251,23 @@ async function readProject(directoryName: string, taxonomy: TaxonomyCatalog): Pr
   const project = {
     ...config,
     blocks: adaptProjectBlocks(config.blocks),
+    notes: adaptProjectNotes(config),
     directory,
     route: `/projects/${config.id}/`
   };
 
   await assertReferencedFilesExist(project);
   return project;
+}
+
+function adaptProjectNotes(project: ProjectConfig): ProjectNote[] {
+  const notes = project.notes ?? [];
+  assertUniqueIds(`${project.id} notes`, notes);
+
+  return notes.map((note) => ({
+    ...note,
+    route: `/projects/${project.id}/notes/${note.id}/`
+  }));
 }
 
 function assertKnownTaxonomy(project: ProjectConfig, taxonomy: TaxonomyCatalog): void {
@@ -258,15 +293,26 @@ function assertKnownTaxonomy(project: ProjectConfig, taxonomy: TaxonomyCatalog):
 }
 
 async function assertReferencedFilesExist(project: Project): Promise<void> {
-  const references = [project.details?.path].filter((item): item is string => Boolean(item));
+  const references = [
+    ...(project.details ? [{ kind: "details", path: project.details.path }] : []),
+    ...project.notes.map((note) => ({ kind: `note ${note.id}`, path: note.path }))
+  ];
+  const realProjectDirectory = await fs.realpath(project.directory);
 
   for (const reference of references) {
-    const referencePath = resolveProjectPath(project, reference);
+    const referencePath = resolveProjectPath(project, reference.path);
     const stats = await fs.lstat(referencePath);
 
     if (stats.isSymbolicLink()) {
-      throw new Error(`${project.id} references a symlink details file: ${reference}`);
+      throw new Error(`${project.id} references a symlink ${reference.kind} file: ${reference.path}`);
     }
+
+    if (!stats.isFile()) {
+      throw new Error(`${project.id} references a non-file ${reference.kind} path: ${reference.path}`);
+    }
+
+    const realReferencePath = await fs.realpath(referencePath);
+    assertPathInsideProject({ ...project, directory: realProjectDirectory }, realReferencePath, reference.path);
   }
 }
 

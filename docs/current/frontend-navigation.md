@@ -15,6 +15,9 @@ Filtered View
 
 Nested Doll
   项目列表进入项目详情；专题列表进入专题详情，专题详情再展示专题内项目。
+
+Project Notes
+  项目详情页作为项目 hub，附加笔记作为从项目页进入的 spoke 页面。
 ```
 
 这些模式只约束页面和组件结构。项目数据来源是 `src/lib/catalog/projects.ts`，专题数据来源是 `src/lib/catalog/collections.ts`。
@@ -30,7 +33,8 @@ Nested Doll
 | `/collections/[id]/` | 单个公开专题详情页，按专题顺序展示已引用项目。 | `Breadcrumbs`、`PageHeader`、`BlockRenderer`、`ProjectCollection` |
 | `/categories/[category]/` | 按 category 的 filtered view。 | `PageHeader`、`ProjectCollection` |
 | `/tags/[tag]/` | 按 tag 的 filtered view。 | `PageHeader`、`ProjectCollection` |
-| `/projects/[id]/` | 项目详情页，承载 Nested Doll 详情路径。 | `Breadcrumbs`、`ProjectHero`、`BlockRenderer`、`RelatedProjects` |
+| `/projects/[id]/` | 项目详情页，承载 Nested Doll 详情路径和项目笔记入口。 | `Breadcrumbs`、`ProjectHero`、`ProjectNotes`、`BlockRenderer`、`RelatedProjects` |
+| `/projects/[id]/notes/[note]/` | 项目附加笔记页；Markdown 和 HTML fragment 使用站内布局，HTML document 返回独立页面。 | `Breadcrumbs`、`PageHeader`、`Prose` |
 
 ## Component Boundaries
 
@@ -44,6 +48,7 @@ Nested Doll
 | `ProjectCard` | 单个项目卡片。 | 列表排序、筛选状态。 |
 | `Breadcrumbs` | 详情页层级路径。 | 路由生成规则。 |
 | `ProjectHero` | 项目详情首屏信息和仓库入口。 | details.md 或 blocks 渲染。 |
+| `ProjectNotes` | 项目笔记索引卡片。 | note 内容加载、note 文件校验。 |
 | `RelatedProjects` | 详情页相关项目集合。 | related project 校验。 |
 
 ## Runtime Path

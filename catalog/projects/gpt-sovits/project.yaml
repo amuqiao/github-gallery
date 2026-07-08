@@ -37,3 +37,24 @@ relations:
   related_projects:
     - rvc
     - f5-tts
+notes:
+  - id: intro
+    title: GPT-SoVITS 项目介绍
+    type: markdown
+    path: ./notes/intro.md
+    summary: 从用途、能力边界和典型流程理解 GPT-SoVITS。
+    display: site
+  - id: experiment-log
+    title: GPT-SoVITS 私人实验记录
+    type: html
+    path: ./notes/experiment-log/index.html
+    summary: 一份独立排版的本地实验笔记，记录模型试跑、素材准备和输出观察。
+    display: standalone
+    html_mode: document
+  - id: site-html-brief
+    title: GPT-SoVITS 站内 HTML 笔记
+    type: html
+    path: ./notes/site-html-brief.html
+    summary: 一篇使用本站页面壳层承载的受控 HTML 片段笔记。
+    display: site
+    html_mode: fragment

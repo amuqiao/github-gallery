@@ -430,20 +430,91 @@ async function validatePayload(operation, source, taxonomyIds, currentProjectIds
 async function assertAllowedItemFiles(operation, source, payload) {
   const configFile = configFileName(operation.target);
   const allowed = new Set([configFile]);
+  const allowedNotePaths = new Set();
   if (payload.details) {
     allowed.add("details.md");
+  }
+  if (operation.target === "project") {
+    for (const note of payload.notes ?? []) {
+      allowedNotePaths.add(note.path.replace("./", ""));
+    }
   }
 
   const entries = await fs.readdir(source, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.isDirectory()) {
-      die(`${operationKey(operation)} schema_version 1 item directory must not contain subdirectory: ${entry.name}`);
+      if (entry.name === "notes" && allowedNotePaths.size > 0) {
+        await assertAllowedNoteFiles(operation, source, allowedNotePaths);
+        continue;
+      }
+      die(`${operationKey(operation)} unexpected item directory in schema_version 1: ${entry.name}`);
     }
     if (!entry.isFile()) {
       die(`${operationKey(operation)} item entry must be a regular file: ${entry.name}`);
     }
     if (!allowed.has(entry.name)) {
       die(`${operationKey(operation)} unexpected item file in schema_version 1: ${entry.name}`);
+    }
+  }
+
+  for (const notePath of allowedNotePaths) {
+    const fullPath = path.join(source, notePath);
+    const stats = await fs.lstat(fullPath).catch((error) => {
+      if (error.code === "ENOENT") {
+        die(`${operationKey(operation)} note file not found: ./${notePath}`);
+      }
+      throw error;
+    });
+    if (stats.isSymbolicLink()) {
+      die(`${operationKey(operation)} note file must not be a symlink: ./${notePath}`);
+    }
+    if (!stats.isFile()) {
+      die(`${operationKey(operation)} note path must be a regular file: ./${notePath}`);
+    }
+  }
+}
+
+async function assertAllowedNoteFiles(operation, source, allowedNotePaths) {
+  const notesRoot = path.join(source, "notes");
+  const found = new Set();
+
+  async function visit(directory) {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(directory, entry.name);
+      const relativePath = path.relative(source, fullPath).split(path.sep).join("/");
+      const stats = await fs.lstat(fullPath);
+
+      if (stats.isSymbolicLink()) {
+        die(`${operationKey(operation)} note entry must not be a symlink: ./${relativePath}`);
+      }
+
+      if (stats.isDirectory()) {
+        if (![...allowedNotePaths].some((notePath) => notePath.startsWith(`${relativePath}/`))) {
+          die(`${operationKey(operation)} unexpected note directory in schema_version 1: ./${relativePath}`);
+        }
+        await visit(fullPath);
+        continue;
+      }
+
+      if (!stats.isFile()) {
+        die(`${operationKey(operation)} note entry must be a regular file: ./${relativePath}`);
+      }
+
+      if (!allowedNotePaths.has(relativePath)) {
+        die(`${operationKey(operation)} unexpected note file in schema_version 1: ./${relativePath}`);
+      }
+
+      found.add(relativePath);
+    }
+  }
+
+  await visit(notesRoot);
+
+  for (const notePath of allowedNotePaths) {
+    if (!found.has(notePath)) {
+      die(`${operationKey(operation)} note file not found: ./${notePath}`);
     }
   }
 }

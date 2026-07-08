@@ -5,6 +5,7 @@ import {
   localeCodeSchema,
   localizedTextSchema,
   projectBlockSchema,
+  projectNoteSchema,
   projectConfigSchema,
   siteConfigSchema,
   taxonomyCatalogSchema,
@@ -13,6 +14,7 @@ import {
 
 export type ProjectConfig = z.infer<typeof projectConfigSchema>;
 export type ProjectBlock = z.infer<typeof projectBlockSchema>;
+export type ProjectNoteConfig = z.infer<typeof projectNoteSchema>;
 export type CollectionConfig = z.infer<typeof collectionConfigSchema>;
 export type CollectionItemConfig = z.infer<typeof collectionItemSchema>;
 export type TaxonomyCatalog = z.infer<typeof taxonomyCatalogSchema>;

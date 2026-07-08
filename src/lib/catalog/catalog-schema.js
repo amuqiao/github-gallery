@@ -35,6 +35,75 @@ export const detailsSchema = z
     }
   });
 
+export const projectNoteSchema = z
+  .object({
+    id: z.string().regex(slugPattern, "note id must use lowercase kebab-case"),
+    title: nonEmptyString,
+    type: z.enum(["markdown", "html"]),
+    path: relativePathSchema,
+    summary: nonEmptyString.max(180),
+    display: z.enum(["site", "standalone"]),
+    html_mode: z.enum(["fragment", "document"]).optional()
+  })
+  .strict()
+  .superRefine((note, ctx) => {
+    if (!note.path.startsWith("./notes/")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "note.path must be under ./notes/",
+        path: ["path"]
+      });
+    }
+
+    if (note.type === "markdown" && !note.path.endsWith(".md")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "markdown notes must use a .md path",
+        path: ["path"]
+      });
+    }
+
+    if (note.type === "html" && !note.path.endsWith(".html")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "html notes must use a .html path",
+        path: ["path"]
+      });
+    }
+
+    if (note.type === "markdown" && note.display !== "site") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "markdown notes must use display: site",
+        path: ["display"]
+      });
+    }
+
+    if (note.type === "markdown" && note.html_mode) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "markdown notes must not set html_mode",
+        path: ["html_mode"]
+      });
+    }
+
+    if (note.type === "html" && note.display === "site" && note.html_mode !== "fragment") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "site html notes must use html_mode: fragment",
+        path: ["html_mode"]
+      });
+    }
+
+    if (note.type === "html" && note.display === "standalone" && note.html_mode !== "document") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "standalone html notes must use html_mode: document",
+        path: ["html_mode"]
+      });
+    }
+  });
+
 export const metaSchema = z
   .object({
     license: nonEmptyString.optional(),
@@ -100,6 +169,7 @@ export const projectConfigSchema = z
     details: detailsSchema.optional(),
     meta: metaSchema.optional(),
     relations: relationsSchema.optional(),
+    notes: z.array(projectNoteSchema).optional(),
     blocks: z.array(projectBlockSchema).optional()
   })
   .strict();
