@@ -1,0 +1,26 @@
+schema_version: 1
+id: voice-cloning
+title: 声音克隆项目
+summary: 适合研究声音克隆、参考音频生成、多语言 TTS 和音色转换的开源项目。
+status: published
+items:
+  - project: gpt-sovits
+    note: 适合学习完整音色克隆训练流程。
+  - project: xtts
+    note: 适合快速用参考音频做多语言 TTS。
+  - project: cosyvoice
+    note: 适合研究情绪、指令控制和中文语音能力。
+  - project: openvoice
+    note: 适合比较跨语言音色克隆方案。
+  - project: rvc
+    note: 适合保留原音频语气，只替换音色。
+details:
+  type: markdown
+  path: ./details.md
+blocks:
+  - type: highlights
+    title: 适合谁
+    items:
+      - 想系统比较开源声音克隆项目。
+      - 想区分训练型、参考音频型和音色转换型方案。
+      - 想为后续视频配音或多语言内容制作建立项目池。

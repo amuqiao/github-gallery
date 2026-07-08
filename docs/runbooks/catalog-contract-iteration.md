@@ -22,9 +22,10 @@ schema 定规则
 | Layer | Canonical location | Owns |
 | --- | --- | --- |
 | Schema | `src/lib/catalog/project-schema.ts` | 可执行配置合同。 |
-| Loader | `src/lib/catalog/projects.ts` | YAML 读取、schema parse、跨文件校验、catalog read model。 |
+| Project loader | `src/lib/catalog/projects.ts` | project YAML 读取、schema parse、taxonomy 校验、项目关系校验、project read model。 |
+| Collection loader | `src/lib/catalog/collections.ts` | collection YAML 读取、schema parse、专题引用项目校验、collection read model。 |
 | Block adapters | `src/lib/catalog/block-adapters.ts` | typed blocks 的归一化和默认标题。 |
-| Detail loader | `src/lib/catalog/details.ts` | 已实现详情格式的加载。 |
+| Detail loader | `src/lib/catalog/details.ts` | 已实现项目和专题详情格式的加载。 |
 | Build gate | `./scripts/verify.sh check` | 统一验证入口；当前委托 `npm run build`。 |
 | Script entrypoints | `scripts/` | 本地开发、验证和 catalog 维护的人类操作入口。 |
 | Contract docs | `docs/contract/` | 对可执行合同的人类说明。 |
@@ -79,6 +80,34 @@ schema 定规则
 6. 运行 `./scripts/catalog.sh validate` 或 `./scripts/verify.sh check`。
 
 项目目录名必须匹配 `project.yaml` 的 `id`。
+
+## When Adding A Collection
+
+按这个顺序执行：
+
+1. 创建 `catalog/collections/<id>/`。
+2. 添加 `catalog/collections/<id>/collection.yaml`。
+3. `id` 必须和目录名一致。
+4. `items` 至少引用一个已有 project id。
+5. 同一个专题内不要重复引用同一个项目。
+6. 声明 `details` 时，添加 `catalog/collections/<id>/details.md`。
+7. 运行 `./scripts/verify.sh check`。
+
+专题只保存策展顺序和可选备注，不复制项目事实。
+
+## When Adding Or Changing A Collection Field
+
+按这个顺序执行：
+
+1. 判断字段属于专题 stable core、`items` 策展备注，还是 typed block。
+2. 更新 `src/lib/catalog/project-schema.ts`。
+3. 字段需要跨文件校验、公开过滤、索引或 read model 时，更新 `src/lib/catalog/collections.ts`。
+4. 字段影响详情加载格式时，更新 `src/lib/catalog/details.ts`。
+5. 更新 `docs/contract/collection-config.md` 解释字段。
+6. 如果运行路径或页面角色变化，更新 `docs/current/structure.md` 和 `docs/current/frontend-navigation.md`。
+7. 运行 `./scripts/verify.sh check`。
+
+不要把 collection 字段反向写入 `project.yaml`。专题字段只描述专题本身。
 
 ## When Adding A Category Or Tag
 
@@ -155,6 +184,7 @@ scripts/catalog.sh   项目 list、validate、new
 [ ] `meta` 没有混入抓取快照或自动生成事实。
 [ ] 没有新增无类型 `extensions`、`custom`、`extra` 等逃生口字段。
 [ ] 页面仍通过 `src/lib/catalog/projects.ts`，没有直接解析 YAML。
+[ ] 专题页面仍通过 `src/lib/catalog/collections.ts`，没有直接解析 YAML。
 [ ] 跨文件校验放在 loader，不放在页面组件。
 [ ] `docs/contract/` 只解释已实现 schema。
 [ ] `docs/current/` 只描述已发布行为。

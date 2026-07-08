@@ -1,0 +1,48 @@
+---
+import CollectionCard from "@/components/CollectionCard.astro";
+import Badge from "@/components/ui/Badge.astro";
+import EmptyState from "@/components/ui/EmptyState.astro";
+import SectionHeader from "@/components/ui/SectionHeader.astro";
+import type { Collection } from "@/lib/catalog/collections";
+
+interface Props {
+  id?: string;
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  collections: Collection[];
+  emptyMessage?: string;
+  cardHeadingLevel?: 2 | 3;
+}
+
+const {
+  id = "collections",
+  eyebrow,
+  title,
+  description,
+  collections,
+  emptyMessage = "No collections yet.",
+  cardHeadingLevel = 2
+} = Astro.props;
+const headingId = `${id}-heading`;
+---
+
+<section class="grid gap-5 pt-8" id={id} aria-labelledby={headingId}>
+  <div class="flex flex-col items-start justify-between gap-3 md:flex-row md:items-end">
+    <SectionHeader id={headingId} eyebrow={eyebrow} title={title} description={description} />
+    <Badge variant="outline">{collections.length} collections</Badge>
+  </div>
+  {
+    collections.length > 0 ? (
+      <div class="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))]">
+        {
+          collections.map((collection) => (
+            <CollectionCard collection={collection} headingLevel={cardHeadingLevel} />
+          ))
+        }
+      </div>
+    ) : (
+      <EmptyState message={emptyMessage} />
+    )
+  }
+</section>

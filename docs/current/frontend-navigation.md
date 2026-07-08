@@ -8,22 +8,24 @@
 
 ```text
 Hub and Spoke
-  首页作为中心页，进入分类、标签和项目详情。
+  首页作为中心页，进入专题、分类、标签和项目详情。
 
 Filtered View
   分类页和标签页展示同一批项目的不同过滤视图。
 
 Nested Doll
-  项目列表进入项目详情，详情页再展示相关项目。
+  项目列表进入项目详情；专题列表进入专题详情，专题详情再展示专题内项目。
 ```
 
-这些模式只约束页面和组件结构。数据来源仍然是 `src/lib/catalog/projects.ts` 输出的 catalog read model。
+这些模式只约束页面和组件结构。项目数据来源是 `src/lib/catalog/projects.ts`，专题数据来源是 `src/lib/catalog/collections.ts`。
 
 ## Page Roles
 
 | Page | Role | Components |
 | --- | --- | --- |
-| `/` | Gallery hub，展示总览、taxonomy 入口和全部项目。 | `PageHeader`、`FilterPanel`、`ProjectCollection` |
+| `/` | Gallery hub，展示总览、专题入口、taxonomy 入口和全部项目。 | `PageHeader`、`CollectionGrid`、`FilterPanel`、`ProjectCollection` |
+| `/collections/` | 公开专题入口，展示 `published` 和 `archived` 专题。 | `PageHeader`、`CollectionGrid` |
+| `/collections/[id]/` | 单个公开专题详情页，按专题顺序展示已引用项目。 | `Breadcrumbs`、`PageHeader`、`BlockRenderer`、`ProjectCollection` |
 | `/categories/[category]/` | 按 category 的 filtered view。 | `PageHeader`、`ProjectCollection` |
 | `/tags/[tag]/` | 按 tag 的 filtered view。 | `PageHeader`、`ProjectCollection` |
 | `/projects/[id]/` | 项目详情页，承载 Nested Doll 详情路径。 | `Breadcrumbs`、`ProjectHero`、`BlockRenderer`、`RelatedProjects` |
@@ -33,6 +35,8 @@ Nested Doll
 | Component | Owns | Does Not Own |
 | --- | --- | --- |
 | `PageHeader` | 页面首屏标题、摘要、统计和行动入口。 | 读取 catalog、决定项目集合。 |
+| `CollectionGrid` | 专题集合标题、空状态和专题卡片网格。 | 读取 collection YAML、校验项目引用。 |
+| `CollectionCard` | 单个专题卡片。 | 专题内项目解析。 |
 | `FilterPanel` | 首页 taxonomy 浏览入口和项目计数。 | 搜索状态、URL query、taxonomy 合同。 |
 | `ProjectCollection` | 项目集合标题、空状态和卡片网格。 | 解析 YAML、校验 taxonomy。 |
 | `ProjectCard` | 单个项目卡片。 | 列表排序、筛选状态。 |
@@ -46,6 +50,7 @@ Nested Doll
 catalog YAML
   -> src/lib/catalog/project-schema.ts
   -> src/lib/catalog/projects.ts
+  -> src/lib/catalog/collections.ts
   -> Astro pages
   -> shared frontend components
   -> static HTML output

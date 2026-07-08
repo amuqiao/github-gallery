@@ -45,11 +45,12 @@ const headingId = `${id}-heading`;
         ]}
       >
         {
-          items.map(({ project, category, tags }) => (
+          items.map(({ project, category, tags, note }) => (
             <ProjectCard
               project={project}
               category={category}
               tags={tags}
+              note={note}
               headingLevel={cardHeadingLevel}
             />
           ))

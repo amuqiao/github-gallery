@@ -19,8 +19,8 @@ usage() {
 命令：
   check      总验证入口，执行 catalog、content、build。
   build      执行 npm run build。
-  catalog    验证项目 YAML、taxonomy、site config、relations 等 catalog 合同。
-  content    验证已被 project.yaml 引用的内容资产，例如 details.md。
+  catalog    验证项目 YAML、collection YAML、taxonomy、site config、relations 等 catalog 合同。
+  content    验证已被 project.yaml 或 collection.yaml 引用的内容资产，例如 details.md。
   help       显示帮助。
 
 副作用与边界：
@@ -52,7 +52,7 @@ command_usage() {
 
 说明：
   catalog/content 目前共用 npm run build 作为可执行门禁，因为 loader 已在构建期校验 schema、
-  taxonomy、relations 和 details 文件引用。未来需要更快反馈时，再拆出 catalog-only 校验。
+  taxonomy、collection references、relations 和 details 文件引用。未来需要更快反馈时，再拆出 catalog-only 校验。
 EOF
       ;;
     build)
@@ -70,7 +70,7 @@ EOF
   ./scripts/verify.sh catalog
 
 作用域：
-  验证 catalog 配置合同：project.yaml、taxonomies.yaml、site.yaml、relations。
+  验证 catalog 配置合同：project.yaml、collection.yaml、taxonomies.yaml、site.yaml、relations。
   当前实现通过 npm run build 触发 loader 校验。
 EOF
       ;;
@@ -121,8 +121,8 @@ case "$command" in
     fi
     [[ "$#" -eq 0 ]] || die "unexpected arguments for verify check: $*" 2
     section "Build Gate"
-    event "COVERS" "catalog" "project.yaml, taxonomy, site config, relations"
-    event "COVERS" "content" "configured details.md references"
+    event "COVERS" "catalog" "project.yaml, collection.yaml, taxonomy, site config, relations"
+    event "COVERS" "content" "configured project and collection details.md references"
     event "COVERS" "build" "astro check and static build"
     run_build_gate
     ;;

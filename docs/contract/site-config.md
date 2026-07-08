@@ -23,13 +23,14 @@ catalog/site.yaml
 ## Route Rules
 
 - 项目路由：`/projects/<project-id>/`
+- 专题路由：`/collections/<collection-id>/`
 - 分类路由：`/categories/<category-id>/`
 - 标签路由：`/tags/<tag-id>/`
-- `project id`、`category id`、`tag id` 都是对外 URL 标识，重命名属于破坏性路由变更。
+- `project id`、`collection id`、`category id`、`tag id` 都是对外 URL 标识，重命名属于破坏性路由变更。
 - 第一版允许空分类页和空标签页存在，因为 taxonomy id 是稳定入口。
 
 ## Change Rules
 
 - 不要在共享布局里硬编码领域分类。
 - 新增导航项时修改 `catalog/site.yaml`。
-- 导航链接优先保持简单稳定：根页面、锚点、分类页或标签页。
+- 导航链接优先保持简单稳定：根页面、锚点、专题页、分类页或标签页。

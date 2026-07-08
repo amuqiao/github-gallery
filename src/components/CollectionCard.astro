@@ -1,0 +1,31 @@
+---
+import Button from "@/components/ui/Button.astro";
+import Card from "@/components/ui/Card.astro";
+import Badge from "@/components/ui/Badge.astro";
+import type { Collection } from "@/lib/catalog/collections";
+
+interface Props {
+  collection: Collection;
+  headingLevel?: 2 | 3;
+}
+
+const { collection, headingLevel = 2 } = Astro.props;
+---
+
+<Card as="article" class="grid gap-3 p-4">
+  <div class="flex flex-wrap items-center gap-2">
+    <Badge variant="secondary">{collection.status}</Badge>
+    <Badge variant="outline">{collection.projectItems.length} projects</Badge>
+  </div>
+  {
+    headingLevel === 3 ? (
+      <h3 class="m-0 text-lg font-semibold leading-tight"><a class="no-underline hover:text-primary" href={collection.route}>{collection.title}</a></h3>
+    ) : (
+      <h2 class="m-0 text-lg font-semibold leading-tight"><a class="no-underline hover:text-primary" href={collection.route}>{collection.title}</a></h2>
+    )
+  }
+  <p class="m-0 text-sm text-muted-foreground">{collection.summary}</p>
+  <Button class="justify-start px-0" href={collection.route} variant="link" ariaLabel={`Open ${collection.title} collection`}>
+    View collection
+  </Button>
+</Card>

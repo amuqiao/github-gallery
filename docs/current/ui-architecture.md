@@ -55,6 +55,8 @@ astro.config.mjs
 | Component | Uses | Owns |
 | --- | --- | --- |
 | `PageHeader` | `SectionHeader`、`Card` | 页面首屏标题、统计和行动区。 |
+| `CollectionGrid` | `SectionHeader`、`Badge`、`EmptyState`、`CollectionCard` | 专题集合网格。 |
+| `CollectionCard` | `Card`、`Badge`、`Button` | 单个专题卡片。 |
 | `FilterPanel` | `Card`、`Button`、`ChipLink`、`SectionHeader` | 首页 taxonomy 浏览入口和计数展示。 |
 | `ProjectCollection` | `SectionHeader`、`Badge`、`EmptyState`、`ProjectCard` | 已解析项目卡片集合网格。 |
 | `ProjectCard` | `Card`、`Badge`、`Button` | 单个项目卡片。 |

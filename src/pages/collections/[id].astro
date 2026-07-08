@@ -1,0 +1,74 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import BlockRenderer from "@/components/blocks/BlockRenderer.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import ProjectCollection from "@/components/ProjectCollection.astro";
+import Button from "@/components/ui/Button.astro";
+import Prose from "@/components/ui/Prose.astro";
+import { loadCollectionDetail } from "@/lib/catalog/details";
+import { getPublicCollections, type Collection } from "@/lib/catalog/collections";
+import { getCatalogSnapshot } from "@/lib/catalog/projects";
+import { toCollectionProjectCardViewModels } from "@/lib/catalog/project-view-models";
+
+export async function getStaticPaths() {
+  const collections = await getPublicCollections();
+  return collections.map((collection) => ({
+    params: { id: collection.id },
+    props: { collection }
+  }));
+}
+
+const { collection } = Astro.props as { collection: Collection };
+const { site, taxonomy } = await getCatalogSnapshot();
+const projectItems = toCollectionProjectCardViewModels(collection, taxonomy);
+const detail = await loadCollectionDetail(collection);
+const DetailContent = detail?.Content;
+---
+
+<BaseLayout title={`${collection.title} - GitHub Gallery`} site={site} description={collection.summary}>
+  <article class="grid gap-6">
+    <Breadcrumbs
+      items={[
+        { label: "Collections", href: "/collections/" },
+        { label: collection.title }
+      ]}
+    />
+    <PageHeader
+      eyebrow="Collection"
+      title={collection.title}
+      description={collection.summary}
+      variant="project"
+      asideLabel="Collection actions"
+      stats={[
+        { value: projectItems.length, label: "Projects" },
+        { value: collection.status, label: "Status" }
+      ]}
+    >
+      <Fragment slot="actions">
+        <Button href="/collections/" variant="outline">All collections</Button>
+      </Fragment>
+    </PageHeader>
+
+    {
+      detail && (
+        <Prose>
+          {DetailContent && <DetailContent />}
+        </Prose>
+      )
+    }
+    {
+      collection.blocks.length > 0 && (
+        <section class="grid max-w-3xl gap-4" aria-label="Collection details">
+          {collection.blocks.map((block, index) => <BlockRenderer block={block} index={index} />)}
+        </section>
+      )
+    }
+    <ProjectCollection
+      id="collection-projects"
+      title="Projects in this collection"
+      description="专题只决定项目出现的顺序和策展说明；项目事实仍来自 project.yaml。"
+      items={projectItems}
+    />
+  </article>
+</BaseLayout>

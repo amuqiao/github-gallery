@@ -8,10 +8,11 @@ interface Props {
   project: Project;
   category: TaxonomyItem;
   tags: TaxonomyItem[];
+  note?: string;
   headingLevel?: 2 | 3;
 }
 
-const { project, category, tags, headingLevel = 2 } = Astro.props;
+const { project, category, tags, note, headingLevel = 2 } = Astro.props;
 ---
 
 <Card as="article" class="flex min-h-72 flex-col gap-3.5 p-4">
@@ -27,6 +28,7 @@ const { project, category, tags, headingLevel = 2 } = Astro.props;
     )
   }
   <p class="m-0 text-sm text-muted-foreground">{project.summary}</p>
+  {note && <p class="m-0 border-l-2 border-primary/40 pl-3 text-sm text-foreground">{note}</p>}
   <div class="flex flex-wrap gap-1.5" aria-label="Tags">
     {tags.map((tag) => <Badge href={`/tags/${tag.id}/`} variant="secondary">{tag.name}</Badge>)}
   </div>

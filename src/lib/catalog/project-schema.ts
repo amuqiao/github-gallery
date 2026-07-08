@@ -5,7 +5,7 @@ const relativePathPattern = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/;
 
 const relativePathSchema = z
   .string()
-  .regex(relativePathPattern, "Path must be a relative project-local path such as ./details.md");
+  .regex(relativePathPattern, "Path must be a relative catalog item-local path such as ./details.md");
 
 const nonEmptyString = z.string().trim().min(1);
 
@@ -94,6 +94,26 @@ export const projectConfigSchema = z
   })
   .strict();
 
+export const collectionItemSchema = z
+  .object({
+    project: z.string().regex(slugPattern),
+    note: nonEmptyString.max(180).optional()
+  })
+  .strict();
+
+export const collectionConfigSchema = z
+  .object({
+    schema_version: z.literal(1),
+    id: z.string().regex(slugPattern, "id must use lowercase kebab-case"),
+    title: nonEmptyString,
+    summary: nonEmptyString.max(180),
+    status: z.enum(["published", "draft", "archived"]),
+    items: z.array(collectionItemSchema).min(1),
+    details: detailsSchema.optional(),
+    blocks: z.array(projectBlockSchema).optional()
+  })
+  .strict();
+
 export const taxonomyItemSchema = z
   .object({
     id: z.string().regex(slugPattern),
@@ -128,6 +148,8 @@ export const siteConfigSchema = z
 
 export type ProjectConfig = z.infer<typeof projectConfigSchema>;
 export type ProjectBlock = z.infer<typeof projectBlockSchema>;
+export type CollectionConfig = z.infer<typeof collectionConfigSchema>;
+export type CollectionItemConfig = z.infer<typeof collectionItemSchema>;
 export type TaxonomyCatalog = z.infer<typeof taxonomyCatalogSchema>;
 export type TaxonomyItem = z.infer<typeof taxonomyItemSchema>;
 export type SiteConfig = z.infer<typeof siteConfigSchema>;

@@ -3,5 +3,7 @@ description: A contract-driven static gallery for curated GitHub projects.
 navigation:
   - label: Projects
     href: /
+  - label: Collections
+    href: /collections/
   - label: Categories
     href: /#categories

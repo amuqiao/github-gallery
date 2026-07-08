@@ -1,0 +1,20 @@
+schema_version: 1
+id: multilingual-tts
+title: 多语言 TTS 项目
+summary: 适合快速比较多语言文本转语音、参考音频生成和推理体验的开源项目。
+status: published
+items:
+  - project: xtts
+    note: 适合快速验证跨语言参考音频生成效果。
+  - project: f5-tts
+    note: 适合关注简洁推理流程和现代 TTS 架构。
+  - project: cosyvoice
+    note: 适合比较中文、多语言和指令控制能力。
+  - project: fish-speech
+    note: 适合关注更强表达力和语音生成实验。
+blocks:
+  - type: use-cases
+    title: 使用场景
+    items:
+      - 快速挑选可试玩的多语言 TTS 项目。
+      - 为内容配音、语音实验或模型对比建立候选清单。

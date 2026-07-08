@@ -7,6 +7,8 @@
 ```text
 catalog/projects/<id>/project.yaml  # 项目机器可读事实
 catalog/projects/<id>/details.md    # 可选详情正文
+catalog/collections/<id>/collection.yaml # 专题机器可读事实
+catalog/collections/<id>/details.md  # 可选专题详情正文
 catalog/taxonomies.yaml             # 共享分类和标签
 catalog/site.yaml                   # 站点标题、描述和导航
 src/lib/catalog/                    # schema、loader、adapter
@@ -27,8 +29,9 @@ docs/runbooks/                      # 可重复维护流程
 1. [当前结构](docs/current/structure.md)
 2. [前端导航结构](docs/current/frontend-navigation.md)
 3. [项目配置合同](docs/contract/project-config.md)
-4. [站点配置合同](docs/contract/site-config.md)
-5. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
+4. [专题配置合同](docs/contract/collection-config.md)
+5. [站点配置合同](docs/contract/site-config.md)
+6. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
 
 修改前端 UI 时按这个顺序阅读：
 

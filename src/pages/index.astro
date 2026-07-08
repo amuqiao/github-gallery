@@ -1,13 +1,18 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import CollectionGrid from "@/components/CollectionGrid.astro";
 import FilterPanel from "@/components/FilterPanel.astro";
 import PageHeader from "@/components/PageHeader.astro";
 import ProjectCollection from "@/components/ProjectCollection.astro";
 import Button from "@/components/ui/Button.astro";
+import { getPublicCollections } from "@/lib/catalog/collections";
 import { getCatalogSnapshot } from "@/lib/catalog/projects";
 import { toProjectCardViewModels } from "@/lib/catalog/project-view-models";
 
-const { projects, site, taxonomy } = await getCatalogSnapshot();
+const [{ projects, site, taxonomy }, collections] = await Promise.all([
+  getCatalogSnapshot(),
+  getPublicCollections()
+]);
 const activeCategories = taxonomy.categories.filter((category) =>
   projects.some((project) => project.category === category.id)
 );
@@ -25,15 +30,26 @@ const projectItems = toProjectCardViewModels(projects, taxonomy);
     asideLabel="Gallery summary and actions"
     stats={[
       { value: projects.length, label: "Projects" },
+      { value: collections.length, label: "Collections" },
       { value: activeCategories.length, label: "Categories" },
       { value: activeTags.length, label: "Active tags" }
     ]}
   >
     <Fragment slot="actions">
       <Button href="#projects">Browse projects</Button>
+      <Button href="#collections" variant="secondary">Browse collections</Button>
       <Button href="#categories" variant="outline">Browse filters</Button>
     </Fragment>
   </PageHeader>
+
+  <CollectionGrid
+    id="collections"
+    eyebrow="Curated"
+    title="Project collections"
+    description="专题是人工整理的项目集，适合把同一批 GitHub 项目按声音克隆、多语言 TTS 等目标重新组织。"
+    collections={collections}
+    cardHeadingLevel={3}
+  />
 
   <FilterPanel categories={activeCategories} tags={activeTags} projects={projects} />
 
