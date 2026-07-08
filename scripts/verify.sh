@@ -92,7 +92,15 @@ EOF
 }
 
 run_build_gate() {
+  assert_no_catalog_detail_symlinks
   run_npm_script build
+}
+
+assert_no_catalog_detail_symlinks() {
+  local item
+  while IFS= read -r item; do
+    die "catalog details file must not be a symlink: ${item#$ROOT_DIR/}" 2
+  done < <(find "$ROOT_DIR/catalog" -path '*/.*' -prune -o -name details.md -type l -print)
 }
 
 section_name_for() {

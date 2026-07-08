@@ -63,6 +63,8 @@ Catalog 维护入口：
 ```sh
 ./scripts/catalog.sh list
 ./scripts/catalog.sh validate
+./scripts/catalog.sh collection list
+./scripts/catalog.sh collection show voice-cloning
 ```
 
 完整脚本说明见 [scripts/README.md](scripts/README.md)。

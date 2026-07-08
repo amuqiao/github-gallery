@@ -2,19 +2,9 @@
 
 本文只记录尚未实现但值得继续推进的工作。已经实现的事实应移动到 `docs/current/`，配置合同应写在 `docs/contract/`。
 
-## Current Baseline
-
-- Astro static site 骨架已存在。
-- 项目配置通过共享 catalog loader 加载。
-- 项目配置在构建时通过 Zod schema 和 loader 跨文件校验。
-- 项目合同采用 Stable Core + Typed Extension Blocks。
-- 8 个示例项目已迁移到 typed blocks。
-- 专题 collections 已实现，可通过 `collection.yaml` 引用已有项目并生成 `/collections/` 页面。
-
 ## Remaining Gaps
 
 - 本地搜索和客户端筛选尚未实现。
-- collections 的脚本化增删改查尚未实现。
 - GitHub stars、license 刷新、last activity 等生成元数据尚未自动化。
 - `media-gallery` block 尚未实现。
 - MDX 和 HTML 详情格式尚未实现。
@@ -22,7 +12,6 @@
 ## Planned Work
 
 - 增加基于项目名称、摘要、分类、标签的本地搜索。
-- 为 collections 增加安全脚本入口，用于新增、查看、修改项目引用顺序和删除专题。
 - 如果内容编辑变慢，增加更窄的配置验证命令。
 - 增加单独的 generated metadata 数据面，避免覆盖手写项目事实。
 - 资产发布策略稳定后，增加 `media-gallery` block。

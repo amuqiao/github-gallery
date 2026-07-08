@@ -92,6 +92,6 @@ UI 样式架构见 [`ui-architecture.md`](ui-architecture.md)。当前实现采�
 
 - `npm run build` 会运行 `astro check` 和 `astro build`。
 - `./scripts/verify.sh check` 是推荐的一次性验证入口，当前委托 `npm run build`。
-- 配置违反 schema、引用未知 taxonomy、引用缺失文件、路径越出项目或专题目录、related project 不存在、专题引用未知项目、专题重复引用同一项目时，构建应失败。
+- 配置违反 schema、引用未知 taxonomy、引用缺失文件、引用 symlink 详情文件、路径越出项目或专题目录、related project 不存在、专题引用未知项目、专题重复引用同一项目时，构建应失败。
 - `schema_version: 1` 的项目和专题只支持 Markdown 详情。
 - `schema_version: 1` 支持 `links`、`highlights`、`use-cases` blocks。

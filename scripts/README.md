@@ -18,7 +18,7 @@ catalog.sh   catalog 项目维护入口
 | --- | --- | --- |
 | `dev.sh` | `npm run dev`、`npm run preview`、`npm run build` 的稳定入口。 | 后台进程、部署、远程服务。 |
 | `verify.sh` | build/catalog/content 验证，包括 projects、collections、taxonomy、site 和被引用详情文件。 | README 或 `docs/` 漂移检查。 |
-| `catalog.sh` | `catalog/projects/<id>/` 的 list、validate、new。 | collections CRUD、GitHub API 抓取、taxonomy 自动修改、schema 之外的字段生成。 |
+| `catalog.sh` | project list/validate/new，以及 collection list/show/new/delete/update。 | GitHub API 抓取、taxonomy 自动修改、schema 之外的字段生成。 |
 
 ## Commands
 
@@ -43,6 +43,18 @@ Requires Node.js 20 or newer.
   --category ai \
   --tag audio \
   --details
+
+./scripts/catalog.sh collection list
+./scripts/catalog.sh collection show voice-cloning
+./scripts/catalog.sh collection new smoke-collection \
+  --title "Smoke Collection" \
+  --summary "Smoke summary." \
+  --status draft \
+  --project xtts
+./scripts/catalog.sh collection add-project smoke-collection f5-tts --note "Useful comparison project."
+./scripts/catalog.sh collection set-note smoke-collection f5-tts --note "Updated note."
+./scripts/catalog.sh collection remove-project smoke-collection f5-tts
+./scripts/catalog.sh collection delete smoke-collection --force
 ```
 
 ## Verification Boundary
@@ -53,4 +65,8 @@ Requires Node.js 20 or newer.
 
 `catalog.sh new` 创建项目后会立即调用 `./scripts/catalog.sh validate`。如果 category、tag、summary、status 或引用文件不符合合同，最终由 schema/loader 失败退出。
 
-collections 的增删改查脚本尚未实现。当前通过手写 `catalog/collections/<id>/collection.yaml` 并运行 `./scripts/verify.sh check` 维护专题。
+`catalog.sh collection` 使用结构化 YAML 读写专题配置。写操作会调用 `./scripts/verify.sh catalog`；验证失败时脚本会回滚刚才的写入。collection 字段合同仍由 `src/lib/catalog/project-schema.ts` 和 `src/lib/catalog/collections.ts` 执行。
+
+脚本里的 id、status、必填参数检查只是为了更早给出友好错误，不是配置合同来源。脚本和 loader 不一致时，以 schema/loader 为准。
+
+project 和 collection 写操作共用 `.data/catalog-write.lock`。如果进程被强制终止并留下锁目录，确认没有 catalog 写操作运行后可以删除该目录，再重新执行命令。

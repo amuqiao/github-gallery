@@ -64,6 +64,8 @@ catalog/collections/<id>/
 
 `details.path` 的字段规则由 `src/lib/catalog/project-schema.ts` 校验；Markdown 文件注册和加载路径由 `src/lib/catalog/details.ts` 执行。
 
+被 `details.path` 引用的文件不能是 symlink。
+
 ## 示例
 
 ```yaml
@@ -90,6 +92,7 @@ blocks:
 ## 变更规则
 
 - 新增专题时创建 `catalog/collections/<id>/collection.yaml`。
+- 推荐通过 `./scripts/catalog.sh collection ...` 维护专题。
 - 专题只能引用已有项目，不能在专题里复制项目事实。
 - 跨文件不变量由 `src/lib/catalog/collections.ts` 执行。
 - 新字段必须先更新 `src/lib/catalog/project-schema.ts`。

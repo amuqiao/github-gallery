@@ -196,7 +196,12 @@ async function assertReferencedFilesExist(project: Project): Promise<void> {
   const references = [project.details?.path].filter((item): item is string => Boolean(item));
 
   for (const reference of references) {
-    await fs.access(resolveProjectPath(project, reference));
+    const referencePath = resolveProjectPath(project, reference);
+    const stats = await fs.lstat(referencePath);
+
+    if (stats.isSymbolicLink()) {
+      throw new Error(`${project.id} references a symlink details file: ${reference}`);
+    }
   }
 }
 

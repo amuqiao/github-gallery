@@ -85,15 +85,28 @@ schema 定规则
 
 按这个顺序执行：
 
-1. 创建 `catalog/collections/<id>/`。
-2. 添加 `catalog/collections/<id>/collection.yaml`。
-3. `id` 必须和目录名一致。
-4. `items` 至少引用一个已有 project id。
-5. 同一个专题内不要重复引用同一个项目。
-6. 声明 `details` 时，添加 `catalog/collections/<id>/details.md`。
-7. 运行 `./scripts/verify.sh check`。
+1. 优先使用 `./scripts/catalog.sh collection new <id> ...` 创建专题。
+2. 至少传入一个 `--project <id>`。
+3. 需要详情正文时传入 `--details`。
+4. 创建后脚本会自动运行 `./scripts/verify.sh catalog`。
+5. 手写维护时，仍必须保证 `id` 和目录名一致，并运行 `./scripts/verify.sh check`。
 
 专题只保存策展顺序和可选备注，不复制项目事实。
+
+常用命令：
+
+```sh
+./scripts/catalog.sh collection new voice-cloning \
+  --title "声音克隆项目" \
+  --summary "适合研究声音克隆项目。" \
+  --status draft \
+  --project gpt-sovits \
+  --project xtts \
+  --details
+
+./scripts/catalog.sh collection add-project voice-cloning cosyvoice --note "适合研究情绪和指令控制。"
+./scripts/catalog.sh collection set-status voice-cloning published
+```
 
 ## When Adding Or Changing A Collection Field
 
@@ -159,7 +172,7 @@ details:
 ```text
 scripts/dev.sh       本地 Astro 开发、预览和构建
 scripts/verify.sh    build/catalog/content 一次性验证
-scripts/catalog.sh   项目 list、validate、new
+scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、delete、add/remove project、set field
 ```
 
 `./scripts/verify.sh` 不检查 README 或 `docs/`。文档只解释已实现规则，不能成为项目验证依赖。
@@ -167,10 +180,14 @@ scripts/catalog.sh   项目 list、validate、new
 新增或修改脚本时：
 
 1. 顶层入口只做参数分发、help 和调用现有真相源。
-2. 不在 shell 中重写 `project-schema.ts` 或 `projects.ts` 的合同逻辑。
-3. `catalog.sh new` 只能写 `catalog/projects/<id>/project.yaml` 和可选 `details.md`，不得自动修改 taxonomy 或猜测 GitHub 元数据。
-4. `catalog.sh new` 写入后必须调用 schema/loader 门禁验证。
-5. 运行脚本 help 和最小验证。
+2. 脚本可以做参数级 fast-fail，但不能把这类检查当成配置合同来源。
+3. 不在 shell 中重写 `project-schema.ts`、`projects.ts` 或 `collections.ts` 的合同逻辑。
+4. `catalog.sh new` 只能写 `catalog/projects/<id>/project.yaml` 和可选 `details.md`，不得自动修改 taxonomy 或猜测 GitHub 元数据。
+5. `catalog.sh collection` 只能写 `catalog/collections/<id>/collection.yaml` 和可选 `details.md`，不得修改项目事实。
+6. 写入后必须调用 schema/loader 门禁验证。
+7. catalog 写操作必须共用 repo 级写锁。
+8. 删除专题必须限制在 `catalog/collections/<id>/` 并要求显式 `--force`。
+9. 运行脚本 help 和最小验证。
 
 ## Drift Checklist
 

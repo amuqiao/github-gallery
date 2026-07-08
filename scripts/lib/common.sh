@@ -54,3 +54,18 @@ assert_project_id() {
   local id="$1"
   [[ "$id" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "project id must use lowercase kebab-case: $id" 2
 }
+
+with_catalog_write_lock() {
+  local lock_dir="$ROOT_DIR/.data/catalog-write.lock"
+
+  mkdir -p "$(dirname "$lock_dir")"
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    die "another catalog write is already running" 2
+  fi
+
+  cleanup_catalog_write_lock() {
+    rm -rf "$lock_dir"
+  }
+
+  trap cleanup_catalog_write_lock EXIT INT TERM
+}

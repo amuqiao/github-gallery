@@ -51,6 +51,8 @@ catalog/projects/<id>/
 
 `meta` 只保存人工维护、相对稳定的展示事实。GitHub stars、last activity、last checked 等抓取结果属于未来的 generated metadata 数据面，不进入 `project.yaml`。
 
+被 `details.path` 引用的文件不能是 symlink。
+
 ## Blocks
 
 `blocks` 是详情页可扩展内容入口。每个 block 必须有已知 `type`；未知 `type` 会构建失败。

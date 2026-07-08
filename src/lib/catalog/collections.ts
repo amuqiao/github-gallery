@@ -79,6 +79,7 @@ async function readCollections(projectsById: Map<string, Project>): Promise<Coll
   const directories = entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
+    .filter((directory) => !directory.startsWith("."))
     .sort();
 
   return Promise.all(directories.map((directory) => readCollection(directory, projectsById)));
@@ -132,7 +133,12 @@ async function assertReferencedFilesExist(collection: Collection): Promise<void>
   const references = [collection.details?.path].filter((item): item is string => Boolean(item));
 
   for (const reference of references) {
-    await fs.access(resolveCollectionPath(collection, reference));
+    const referencePath = resolveCollectionPath(collection, reference);
+    const stats = await fs.lstat(referencePath);
+
+    if (stats.isSymbolicLink()) {
+      throw new Error(`${collection.id} references a symlink details file: ${reference}`);
+    }
   }
 }
 

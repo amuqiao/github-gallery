@@ -15,18 +15,25 @@ usage() {
   ./scripts/catalog.sh -h|--help
 
 作用域：
-  当前仓库的 catalog 维护入口。只管理 catalog/projects 下的项目骨架和验证入口。
+  当前仓库的 catalog 维护入口。管理 catalog/projects 和 catalog/collections 的本地文件骨架。
   不自动抓取 GitHub 信息，不修改 taxonomy，不绕过 schema/loader。
 
 命令：
   list          列出已有项目 id。
   validate      验证 catalog，等价于 ./scripts/verify.sh catalog。
   new <id>      新增一个项目目录和 project.yaml，可选创建 details.md，并立即验证。
+  collection    管理专题 collections。
   help          显示帮助。
 
 常用示例：
   ./scripts/catalog.sh list
   ./scripts/catalog.sh validate
+  ./scripts/catalog.sh collection list
+  ./scripts/catalog.sh collection new voice-cloning \\
+    --title "声音克隆项目" \\
+    --summary "适合研究声音克隆项目。" \\
+    --project gpt-sovits \\
+    --project xtts
   ./scripts/catalog.sh new example-project \\
     --name "Example Project" \\
     --repo "https://github.com/example/example-project" \\
@@ -41,6 +48,11 @@ Exit Codes:
   3  目标项目目录已存在
   其他非 0 由验证命令返回
 EOF
+}
+
+collection_usage() {
+  require_command node "install Node.js 20 or newer"
+  node "$ROOT_DIR/scripts/catalog-cli.mjs" collection help
 }
 
 new_usage() {
@@ -221,8 +233,15 @@ create_project() {
   [[ ! -e "$project_dir" ]] || die "$project_dir already exists" 3
   [[ ! -e "$tmp_dir" ]] || die "$tmp_dir already exists" 3
 
+  with_catalog_write_lock
+  local created_project="false"
+
   cleanup_tmp_dir() {
     [[ -n "${tmp_dir:-}" && -d "$tmp_dir" ]] && rm -rf "$tmp_dir"
+    if [[ "${created_project:-false}" == "true" && -d "$project_dir" ]]; then
+      rm -rf "$project_dir"
+    fi
+    rm -rf "$ROOT_DIR/.data/catalog-write.lock"
   }
 
   trap cleanup_tmp_dir EXIT INT TERM
@@ -235,11 +254,14 @@ create_project() {
   fi
 
   mv "$tmp_dir" "$project_dir"
+  created_project="true"
+
+  validate_catalog
+  created_project="false"
   trap - EXIT INT TERM
+  rm -rf "$ROOT_DIR/.data/catalog-write.lock"
 
   event "CREATED" "$id" "catalog/projects/$id"
-  event "VERIFY" "$id" "./scripts/catalog.sh validate"
-  validate_catalog
 }
 
 command="${1:-}"
@@ -276,6 +298,15 @@ case "$command" in
       exit 0
     fi
     create_project "$@"
+    ;;
+  collection)
+    shift
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
+      collection_usage
+      exit 0
+    fi
+    require_command node "install Node.js 20 or newer"
+    node "$ROOT_DIR/scripts/catalog-cli.mjs" collection "$@"
     ;;
   *)
     usage >&2
