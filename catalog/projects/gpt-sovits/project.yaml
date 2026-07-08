@@ -51,6 +51,13 @@ notes:
     summary: 一份独立排版的本地实验笔记，记录模型试跑、素材准备和输出观察。
     display: standalone
     html_mode: document
+  - id: gpt-sovits-explainer
+    title: GPT-SoVITS 讲解
+    type: html
+    path: ./notes/experiment-log/gpt-sovits-explainer.html
+    summary: 介绍 GPT-SoVITS 的少样本语音克隆、语音合成流程和核心模块。
+    display: standalone
+    html_mode: document
   - id: site-html-brief
     title: GPT-SoVITS 站内 HTML 笔记
     type: html
