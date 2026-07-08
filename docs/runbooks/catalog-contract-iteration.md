@@ -25,7 +25,8 @@ schema 定规则
 | Loader | `src/lib/catalog/projects.ts` | YAML 读取、schema parse、跨文件校验、catalog read model。 |
 | Block adapters | `src/lib/catalog/block-adapters.ts` | typed blocks 的归一化和默认标题。 |
 | Detail loader | `src/lib/catalog/details.ts` | 已实现详情格式的加载。 |
-| Build gate | `npm run build` | `astro check` 和 static build 验证。 |
+| Build gate | `./scripts/verify.sh check` | 统一验证入口；当前委托 `npm run build`。 |
+| Script entrypoints | `scripts/` | 本地开发、验证和 catalog 维护的人类操作入口。 |
 | Contract docs | `docs/contract/` | 对可执行合同的人类说明。 |
 | Current docs | `docs/current/` | 当前已实现结构和运行路径。 |
 | Plans | `docs/plans/` | 未来缺口和验收条件。 |
@@ -42,7 +43,7 @@ schema 定规则
 5. 更新 `docs/contract/project-config.md` 解释字段。
 6. 如果运行路径或模块边界变化，更新 `docs/current/structure.md`。
 7. 如果打开或关闭未来缺口，更新 `docs/plans/roadmap.md`。
-8. 运行 `npm run build`。
+8. 运行 `./scripts/verify.sh check`。
 
 不要把 `docs/contract/project-config.md` 当成真相源。文档和 schema/loader 不一致时，以可执行代码为准，修文档。
 
@@ -60,7 +61,7 @@ schema 定规则
 4. 在至少一个 `catalog/projects/<id>/project.yaml` 中加入样例 block。
 5. 更新 `docs/contract/project-config.md`。
 6. 如果运行路径变化，更新 `docs/current/structure.md`。
-7. 运行 `npm run build`。
+7. 运行 `./scripts/verify.sh check`。
 
 不要添加 `custom` 或自由结构 block。未知 block type 必须构建失败。
 
@@ -70,12 +71,12 @@ schema 定规则
 
 按这个顺序执行：
 
-1. 创建 `catalog/projects/<id>/`。
-2. 添加 `catalog/projects/<id>/project.yaml`。
+1. 创建 `catalog/projects/<id>/`，或使用 `./scripts/catalog.sh new <id> ...` 生成骨架。
+2. 添加或补全 `catalog/projects/<id>/project.yaml`。
 3. 声明 `details` 时，添加 `catalog/projects/<id>/details.md`。
 4. 只使用 `catalog/taxonomies.yaml` 中存在的 category 和 tag id。
 5. `relations.related_projects` 只能引用已经存在的项目 id。
-6. 运行 `npm run build`。
+6. 运行 `./scripts/catalog.sh validate` 或 `./scripts/verify.sh check`。
 
 项目目录名必须匹配 `project.yaml` 的 `id`。
 
@@ -87,7 +88,7 @@ schema 定规则
 2. 再从项目配置中引用它。
 3. category 保持宽泛稳定。
 4. tag 用于更窄或领域相关的含义。
-5. 运行 `npm run build`。
+5. 运行 `./scripts/verify.sh check`。
 
 category id 和 tag id 是对外 URL 标识。重命名属于路由变更。
 
@@ -98,7 +99,7 @@ category id 和 tag id 是对外 URL 标识。重命名属于路由变更。
 1. 更新 `catalog/site.yaml`。
 2. 保持共享 layout 与具体领域解耦。
 3. 不要在 `src/layouts/` 里硬编码 `ai` 这类分类 id。
-4. 运行 `npm run build`。
+4. 运行 `./scripts/verify.sh check`。
 
 ## When Adding A New Detail Format
 
@@ -118,9 +119,29 @@ details:
 4. 添加至少一个样例项目覆盖新路径。
 5. 更新 `docs/contract/project-config.md`。
 6. 从 `docs/plans/roadmap.md` 移出对应计划项。
-7. 运行 `npm run build`。
+7. 运行 `./scripts/verify.sh check`。
 
 代码没有验证和构建通过前，不要在 `docs/contract/` 中宣称 MDX 或 HTML 已支持。
+
+## When Using Scripts
+
+`scripts/` 是稳定操作入口，不是配置合同来源。完整脚本说明维护在 [`../../scripts/README.md`](../../scripts/README.md)。
+
+```text
+scripts/dev.sh       本地 Astro 开发、预览和构建
+scripts/verify.sh    build/catalog/content 一次性验证
+scripts/catalog.sh   项目 list、validate、new
+```
+
+`./scripts/verify.sh` 不检查 README 或 `docs/`。文档只解释已实现规则，不能成为项目验证依赖。
+
+新增或修改脚本时：
+
+1. 顶层入口只做参数分发、help 和调用现有真相源。
+2. 不在 shell 中重写 `project-schema.ts` 或 `projects.ts` 的合同逻辑。
+3. `catalog.sh new` 只能写 `catalog/projects/<id>/project.yaml` 和可选 `details.md`，不得自动修改 taxonomy 或猜测 GitHub 元数据。
+4. `catalog.sh new` 写入后必须调用 schema/loader 门禁验证。
+5. 运行脚本 help 和最小验证。
 
 ## Drift Checklist
 
@@ -139,7 +160,7 @@ details:
 [ ] `docs/current/` 只描述已发布行为。
 [ ] `docs/plans/` 只包含未来工作。
 [ ] `docs/note.md` 仍是历史笔记，不作为权威来源。
-[ ] `npm run build` 通过。
+[ ] `./scripts/verify.sh check` 通过。
 ```
 
 ## Anti-Patterns
@@ -149,5 +170,6 @@ details:
 - 添加绕开 schema 的自由结构 `custom` block。
 - 在 loader 中添加 fallback 默认值来隐藏错误配置。
 - 让页面为了某个展示需求直接读取 YAML。
+- 在 shell 脚本里重新实现一套 catalog schema。
 - 重复表达 category 或 tag 已经表达的含义。
 - 把未来的 MDX、HTML、generated metadata、search 行为写成当前事实。

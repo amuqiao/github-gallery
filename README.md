@@ -11,6 +11,7 @@ catalog/taxonomies.yaml             # 共享分类和标签
 catalog/site.yaml                   # 站点标题、描述和导航
 src/lib/catalog/                    # schema、loader、adapter
 src/components/blocks/              # typed block renderers
+scripts/                            # 本地开发、验证、catalog 维护入口
 docs/contract/                      # 维护者可读合同说明
 docs/current/                       # 当前已实现结构
 docs/plans/                         # 未来计划
@@ -31,6 +32,23 @@ docs/runbooks/                      # 可重复维护流程
 
 ```sh
 npm install
+./scripts/dev.sh start
+./scripts/verify.sh check
+```
+
+原始 npm 命令仍可直接使用：
+
+```sh
 npm run dev
 npm run build
+npm run preview
 ```
+
+Catalog 维护入口：
+
+```sh
+./scripts/catalog.sh list
+./scripts/catalog.sh validate
+```
+
+完整脚本说明见 [scripts/README.md](scripts/README.md)。

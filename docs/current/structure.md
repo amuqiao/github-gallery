@@ -14,6 +14,7 @@
 - `src/lib/catalog/block-adapters.ts` 在渲染前适配 typed blocks。
 - `src/lib/catalog/details.ts` 加载 Markdown 详情正文。
 - `src/components/blocks/BlockRenderer.astro` 负责渲染 blocks。
+- `scripts/` 提供本地开发、验证和 catalog 维护入口；脚本不定义配置合同。
 
 ## Runtime Path
 
@@ -39,6 +40,12 @@ catalog/projects/<id>/project.yaml blocks
   -> src/pages/projects/[id].astro
   -> src/components/blocks/BlockRenderer.astro
   -> static HTML output
+
+scripts/verify.sh
+  -> npm run build
+  -> Astro check
+  -> Astro static build
+  -> catalog schema/loader validation during page generation
 ```
 
 ## State Authority
@@ -54,6 +61,7 @@ catalog/projects/<id>/project.yaml blocks
 ## Verification
 
 - `npm run build` 会运行 `astro check` 和 `astro build`。
+- `./scripts/verify.sh check` 是推荐的一次性验证入口，当前委托 `npm run build`。
 - 配置违反 schema、引用未知 taxonomy、引用缺失文件、路径越出项目目录、related project 不存在时，构建应失败。
 - `schema_version: 1` 只支持 Markdown 详情。
 - `schema_version: 1` 支持 `links`、`highlights`、`use-cases` blocks。

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# common.sh - shared helpers for repository scripts.
+
+COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="${ROOT_DIR:-$(cd "$COMMON_DIR/../.." && pwd)}"
+
+section() {
+  printf "\n== %s ==\n" "$1"
+}
+
+event() {
+  printf "%-9s %-12s %s\n" "$1" "$2" "${3:-}"
+}
+
+die() {
+  printf "ERROR: %s\n" "$1" >&2
+  exit "${2:-1}"
+}
+
+args_include_help() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      -h|--help)
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
+require_command() {
+  local name="$1"
+  local hint="$2"
+  command -v "$name" >/dev/null 2>&1 || die "$name is not available; $hint" 2
+}
+
+require_npm() {
+  require_command npm "install Node.js and npm, then run npm install"
+}
+
+run_npm_script() {
+  local script="$1"
+  shift
+  require_npm
+  if [[ "$#" -gt 0 ]]; then
+    (cd "$ROOT_DIR" && npm run "$script" -- "$@")
+  else
+    (cd "$ROOT_DIR" && npm run "$script")
+  fi
+}
+
+assert_project_id() {
+  local id="$1"
+  [[ "$id" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "project id must use lowercase kebab-case: $id" 2
+}
