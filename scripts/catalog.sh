@@ -23,11 +23,13 @@ usage() {
   validate      验证 catalog，等价于 ./scripts/verify.sh catalog。
   new <id>      新增一个项目目录和 project.yaml，可选创建 details.md，并立即验证。
   collection    管理专题 collections。
+  import        从 .tmp/import-batches/<batch-id>/ 安全导入 catalog item。
   help          显示帮助。
 
 常用示例：
   ./scripts/catalog.sh list
   ./scripts/catalog.sh validate
+  ./scripts/catalog.sh import plan .tmp/import-batches/example-batch
   ./scripts/catalog.sh collection list
   ./scripts/catalog.sh collection new voice-cloning \\
     --title "声音克隆项目" \\
@@ -53,6 +55,11 @@ EOF
 collection_usage() {
   require_command node "install Node.js 20 or newer"
   node "$ROOT_DIR/scripts/catalog-cli.mjs" collection help
+}
+
+import_usage() {
+  require_command node "install Node.js 20 or newer"
+  node "$ROOT_DIR/scripts/catalog-import-cli.mjs" help
 }
 
 new_usage() {
@@ -307,6 +314,15 @@ case "$command" in
     fi
     require_command node "install Node.js 20 or newer"
     node "$ROOT_DIR/scripts/catalog-cli.mjs" collection "$@"
+    ;;
+  import)
+    shift
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
+      import_usage
+      exit 0
+    fi
+    require_command node "install Node.js 20 or newer"
+    node "$ROOT_DIR/scripts/catalog-import-cli.mjs" "$@"
     ;;
   *)
     usage >&2

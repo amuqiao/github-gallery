@@ -1,0 +1,27 @@
+schema_version: 1
+id: krillinai
+name: KrillinAI
+repo: https://github.com/krillinai/KrillinAI
+summary: Lightweight video translation and dubbing tool distributed as a Go single-binary workflow.
+category: ai
+tags:
+  - audio
+  - multilingual
+  - toolkit
+  - inference
+status: unknown
+details:
+  type: markdown
+  path: ./details.md
+meta:
+  languages:
+    - Go
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/krillinai/KrillinAI
+  - type: use-cases
+    items:
+      - Lightweight video dubbing workflow trials.
+      - Short-video translation and publishing experiments.

@@ -1,0 +1,28 @@
+schema_version: 1
+id: pyvideotrans
+name: pyVideoTrans
+repo: https://github.com/jianchang512/pyvideotrans
+summary: Desktop video translation and dubbing tool with pluggable ASR, translation, TTS, subtitle, and audio workflows.
+category: ai
+tags:
+  - audio
+  - multilingual
+  - webui
+  - toolkit
+  - text-to-speech
+status: unknown
+details:
+  type: markdown
+  path: ./details.md
+meta:
+  languages:
+    - Python
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/jianchang512/pyvideotrans
+  - type: use-cases
+    items:
+      - Video translation and dubbing workflow orchestration.
+      - Comparing pluggable ASR, translation, subtitle, and TTS backends.

@@ -1,0 +1,28 @@
+schema_version: 1
+id: linly-dubbing
+name: Linly-Dubbing
+repo: https://github.com/Kedreamix/Linly-Dubbing
+summary: Research-oriented video dubbing workflow integrating speech separation, speaker recognition, and lip sync components.
+category: ai
+tags:
+  - audio
+  - multilingual
+  - machine-learning
+  - research
+  - webui
+status: unknown
+details:
+  type: markdown
+  path: ./details.md
+meta:
+  languages:
+    - Python
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/Kedreamix/Linly-Dubbing
+  - type: use-cases
+    items:
+      - Researching end-to-end video dubbing pipelines.
+      - Comparing speaker recognition, separation, and lip-sync components.

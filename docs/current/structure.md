@@ -23,6 +23,8 @@
 - `src/styles/global.css` 提供 Tailwind 入口、shadcn-style token 和少量全局 prose 样式。
 - `src/components/blocks/BlockRenderer.astro` 负责渲染 blocks。
 - `scripts/` 提供本地开发、验证和 catalog 维护入口；脚本不定义配置合同。
+- `.tmp/import-batches/<batch-id>/` 是 AI 或人工整理结果进入正式 catalog 前的临时交换目录。
+- `scripts/catalog-import-cli.mjs` 负责 import batch 的预检、计划、差异、加锁应用和失败回滚。
 
 ## Runtime Path
 
@@ -73,6 +75,12 @@ scripts/verify.sh
   -> Astro check
   -> Astro static build
   -> catalog schema/loader validation during page generation
+
+.tmp/import-batches/<batch-id>/manifest.yaml
+  -> scripts/catalog-import-cli.mjs
+  -> catalog/projects/<id>/ or catalog/collections/<id>/
+  -> scripts/verify.sh catalog
+  -> rollback on failure
 ```
 
 ## State Authority
@@ -89,6 +97,8 @@ scripts/verify.sh
 
 `details.md` 是人类可读长文说明，不定义可筛选字段。
 
+`.tmp/import-batches/` 是中间交换区，不是长期数据源。导入成功后，正式来源仍是 `catalog/`；导入失败时脚本会回滚已写入的 item 目录。日常操作见 [`../runbooks/catalog-import-workflow.md`](../runbooks/catalog-import-workflow.md)。
+
 前端导航骨架见 [`frontend-navigation.md`](frontend-navigation.md)。当前实现采用 Hub and Spoke + Filtered View + Nested Doll 的组合模式。
 
 UI 样式架构见 [`ui-architecture.md`](ui-architecture.md)。当前实现采用 Tailwind CSS + shadcn-style primitives。
@@ -100,3 +110,4 @@ UI 样式架构见 [`ui-architecture.md`](ui-architecture.md)。当前实现采�
 - 配置违反 schema、引用未知 taxonomy、引用缺失文件、引用 symlink 详情文件、路径越出项目或专题目录、related project 不存在、专题引用未知项目、专题重复引用同一项目时，构建应失败。
 - `schema_version: 1` 的项目和专题只支持 Markdown 详情。
 - `schema_version: 1` 支持 `links`、`highlights`、`use-cases` blocks。
+- `./scripts/catalog.sh import validate|plan|diff|apply` 是当前 import batch 工作流入口。合同说明见 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md)，操作手册见 [`../runbooks/catalog-import-workflow.md`](../runbooks/catalog-import-workflow.md)。

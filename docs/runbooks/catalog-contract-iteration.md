@@ -28,6 +28,7 @@ schema 定规则
 | Detail loader | `src/lib/catalog/details.ts` | 已实现项目和专题详情格式的加载。 |
 | Build gate | `./scripts/verify.sh check` | 统一验证入口；当前委托 `npm run build`。 |
 | Script entrypoints | `scripts/` | 本地开发、验证和 catalog 维护的人类操作入口。 |
+| Import batch | `.tmp/import-batches/<batch-id>/` | AI 或人工整理结果进入正式 catalog 前的中间交换合同。 |
 | Contract docs | `docs/contract/` | 对可执行合同的人类说明。 |
 | Current docs | `docs/current/` | 当前已实现结构和运行路径。 |
 | Plans | `docs/plans/` | 未来缺口和验收条件。 |
@@ -81,6 +82,8 @@ schema 定规则
 
 项目目录名必须匹配 `project.yaml` 的 `id`。
 
+批量新增或由 AI 生成项目数据时，不要直接写入 `catalog/`。先生成 `.tmp/import-batches/<batch-id>/`，再按 [`catalog-import-workflow.md`](./catalog-import-workflow.md) 操作。
+
 ## When Adding A Collection
 
 按这个顺序执行：
@@ -108,6 +111,8 @@ schema 定规则
 ./scripts/catalog.sh collection set-status voice-cloning published
 ```
 
+批量新增或替换专题时，同样优先使用 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。`replace` 是整 item 目录替换，适合一个专题自己的 `collection.yaml` 和 `details.md` 一起更新。
+
 ## When Adding Or Changing A Collection Field
 
 按这个顺序执行：
@@ -133,6 +138,33 @@ schema 定规则
 5. 运行 `./scripts/verify.sh check`。
 
 category id 和 tag id 是对外 URL 标识。重命名属于路由变更。
+
+## When Importing AI-Generated Catalog Data
+
+适用场景：模型把 `docs/notes/` 或其他输入资料整理成项目需要的数据格式，但还不能直接信任输出内容。
+
+日常操作流程见 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。本节只保留合同迭代边界。
+
+Import batch 的合同心智模型：
+
+```text
+AI/manual output
+  -> .tmp/import-batches/<batch-id> exchange contract
+  -> import validate preflight
+  -> explicit plan
+  -> locked apply
+  -> schema/loader build gate
+  -> catalog/ source of truth
+```
+
+当前规则只以 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md) 为准，日常操作见 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。
+
+变更 import batch 能力时：
+
+1. 先更新 `scripts/catalog-import-cli.mjs` 和必要的 schema/loader。
+2. 再更新 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md)。
+3. 如果操作步骤变化，再更新 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。
+4. 运行 `./scripts/verify.sh check` 和最小脚本验证。
 
 ## When Changing Site Navigation
 
@@ -172,7 +204,7 @@ details:
 ```text
 scripts/dev.sh       本地 Astro 开发、预览和构建
 scripts/verify.sh    build/catalog/content 一次性验证
-scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、delete、add/remove project、set field
+scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、delete、add/remove project、set field；import batch validate/plan/diff/apply
 ```
 
 `./scripts/verify.sh` 不检查 README 或 `docs/`。文档只解释已实现规则，不能成为项目验证依赖。
@@ -184,10 +216,12 @@ scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、d
 3. 不在 shell 中重写 `project-schema.ts`、`projects.ts` 或 `collections.ts` 的合同逻辑。
 4. `catalog.sh new` 只能写 `catalog/projects/<id>/project.yaml` 和可选 `details.md`，不得自动修改 taxonomy 或猜测 GitHub 元数据。
 5. `catalog.sh collection` 只能写 `catalog/collections/<id>/collection.yaml` 和可选 `details.md`，不得修改项目事实。
-6. 写入后必须调用 schema/loader 门禁验证。
-7. catalog 写操作必须共用 repo 级写锁。
-8. 删除专题必须限制在 `catalog/collections/<id>/` 并要求显式 `--force`。
-9. 运行脚本 help 和最小验证。
+6. `catalog.sh import` 只能从 `.tmp/import-batches/<batch-id>/` 写入正式 catalog，且只能执行 manifest 显式声明的 item 级操作。
+7. `catalog.sh import` 可以做 import 前置快失败校验，但最终必须调用 schema/loader 门禁验证。
+8. 写入后必须调用 schema/loader 门禁验证。
+9. catalog 写操作必须共用 repo 级写锁。
+10. 删除专题必须限制在 `catalog/collections/<id>/` 并要求显式 `--force`。
+11. 运行脚本 help 和最小验证。
 
 ## Drift Checklist
 
@@ -199,6 +233,8 @@ scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、d
 [ ] 新 block type 有 schema、adapter、renderer、样例数据和文档。
 [ ] 新 block type 不是仅用于替代 Markdown 小标题或普通列表标题。
 [ ] `meta` 没有混入抓取快照或自动生成事实。
+[ ] AI 或外部整理结果先进入 `.tmp/import-batches/`，没有直接写入 `catalog/`。
+[ ] import batch 只做 scoped item 级 create/replace/delete，没有全量替换 catalog。
 [ ] 没有新增无类型 `extensions`、`custom`、`extra` 等逃生口字段。
 [ ] 页面仍通过 `src/lib/catalog/projects.ts`，没有直接解析 YAML。
 [ ] 专题页面仍通过 `src/lib/catalog/collections.ts`，没有直接解析 YAML。
@@ -218,5 +254,7 @@ scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、d
 - 在 loader 中添加 fallback 默认值来隐藏错误配置。
 - 让页面为了某个展示需求直接读取 YAML。
 - 在 shell 脚本里重新实现一套 catalog schema。
+- 让 AI 输出直接覆盖 `catalog/`，跳过 import batch 预检。
+- 用全量目录替换绕过 item 级 plan 和显式授权。
 - 重复表达 category 或 tag 已经表达的含义。
 - 把未来的 MDX、HTML、generated metadata、search 行为写成当前事实。
