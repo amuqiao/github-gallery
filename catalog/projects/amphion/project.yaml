@@ -2,7 +2,7 @@ schema_version: 1
 id: amphion
 name: Amphion
 repo: https://github.com/open-mmlab/Amphion
-summary: Toolkit for audio, music, and speech generation research and development.
+summary: 面向音频、音乐和语音生成研究开发的开源工具集。
 category: ai
 tags:
   - audio

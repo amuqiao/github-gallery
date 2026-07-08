@@ -2,7 +2,7 @@ schema_version: 1
 id: krillinai
 name: KrillinAI
 repo: https://github.com/krillinai/KrillinAI
-summary: Lightweight video translation and dubbing tool distributed as a Go single-binary workflow.
+summary: 以 Go 单可执行文件分发的轻量级视频翻译和配音工具。
 category: ai
 tags:
   - audio

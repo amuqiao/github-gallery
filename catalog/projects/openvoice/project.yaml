@@ -2,7 +2,7 @@ schema_version: 1
 id: openvoice
 name: OpenVoice
 repo: https://github.com/myshell-ai/OpenVoice
-summary: Instant voice cloning project focused on tone color cloning and style control.
+summary: 面向即时声音克隆的开源项目，关注音色克隆和风格控制。
 category: ai
 tags:
   - audio

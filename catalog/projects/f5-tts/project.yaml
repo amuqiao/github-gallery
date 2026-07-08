@@ -2,7 +2,7 @@ schema_version: 1
 id: f5-tts
 name: F5-TTS
 repo: https://github.com/SWivid/F5-TTS
-summary: Flow-matching text-to-speech project for natural and expressive zero-shot voice synthesis experiments.
+summary: 基于 flow matching 的文本转语音项目，适合零样本音色合成实验。
 category: ai
 tags:
   - audio

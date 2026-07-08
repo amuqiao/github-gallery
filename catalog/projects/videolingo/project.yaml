@@ -2,7 +2,7 @@ schema_version: 1
 id: videolingo
 name: VideoLingo
 repo: https://github.com/Huanshere/VideoLingo
-summary: Web UI for video subtitle translation and dubbing workflows focused on multi-step LLM translation.
+summary: 面向视频字幕翻译和配音流程的 Web UI，侧重多步骤 LLM 翻译。
 category: ai
 tags:
   - multilingual

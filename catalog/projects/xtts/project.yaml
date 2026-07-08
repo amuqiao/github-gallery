@@ -2,7 +2,7 @@ schema_version: 1
 id: xtts
 name: XTTS
 repo: https://github.com/coqui-ai/TTS
-summary: Voice cloning and text-to-speech model family represented through the Coqui TTS toolkit.
+summary: 通过 Coqui TTS 工具集使用的声音克隆和文本转语音模型系列。
 category: ai
 tags:
   - audio

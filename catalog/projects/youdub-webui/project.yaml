@@ -2,7 +2,7 @@ schema_version: 1
 id: youdub-webui
 name: YouDub-webui
 repo: https://github.com/liuzhao1225/YouDub-webui
-summary: Web UI focused on YouTube video localization workflows for translation, dubbing, and subtitle processing.
+summary: 面向 YouTube 视频本地化的 Web UI，覆盖翻译、配音和字幕处理流程。
 category: ai
 tags:
   - audio

@@ -2,7 +2,7 @@ schema_version: 1
 id: rvc
 name: RVC
 repo: https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI
-summary: Retrieval-based voice conversion WebUI for training and applying voice conversion models.
+summary: 基于检索的语音转换 WebUI，用于训练和应用音色转换模型。
 category: ai
 tags:
   - audio

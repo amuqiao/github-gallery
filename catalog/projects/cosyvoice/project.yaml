@@ -2,7 +2,7 @@ schema_version: 1
 id: cosyvoice
 name: CosyVoice
 repo: https://github.com/FunAudioLLM/CosyVoice
-summary: Multilingual large voice generation project with inference, training, and deployment workflows.
+summary: 支持多语言语音生成、推理、训练和部署流程的开源项目。
 category: ai
 tags:
   - audio

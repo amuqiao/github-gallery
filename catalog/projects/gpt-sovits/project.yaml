@@ -2,7 +2,7 @@ schema_version: 1
 id: gpt-sovits
 name: GPT-SoVITS
 repo: https://github.com/RVC-Boss/GPT-SoVITS
-summary: Few-shot voice conversion and text-to-speech WebUI for experimenting with cloned voices.
+summary: 支持少样本音色克隆、语音转换和文本转语音实验的 WebUI。
 category: ai
 tags:
   - audio
