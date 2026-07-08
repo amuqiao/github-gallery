@@ -9,15 +9,15 @@ type BlockAdapter<T extends ProjectBlock> = (block: T) => AdaptedProjectBlock;
 const blockAdapters = {
   links: (block) => ({
     ...block,
-    title: block.title ?? "Links"
+    title: block.title ?? "链接"
   }),
   highlights: (block) => ({
     ...block,
-    title: block.title ?? "Highlights"
+    title: block.title ?? "亮点"
   }),
   "use-cases": (block) => ({
     ...block,
-    title: block.title ?? "Use Cases"
+    title: block.title ?? "使用场景"
   })
 } satisfies {
   [Type in ProjectBlock["type"]]: BlockAdapter<Extract<ProjectBlock, { type: Type }>>;

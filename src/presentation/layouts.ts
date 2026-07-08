@@ -18,7 +18,8 @@ export const presentationLayouts: Record<PresentationLayoutId, PresentationLayou
     },
     detailPages: {
       projectCollectionVariant: "ordered",
-      relatedProjectCollectionVariant: "standard"
+      relatedProjectCollectionVariant: "standard",
+      collectionGridVariant: "shelf"
     }
   }
 };

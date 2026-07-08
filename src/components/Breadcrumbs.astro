@@ -11,7 +11,7 @@ interface Props {
 const { items } = Astro.props;
 ---
 
-<nav class="text-sm text-muted-foreground" aria-label="Breadcrumb">
+<nav class="breadcrumbs" aria-label="面包屑">
   <ol class="m-0 flex list-none flex-wrap gap-2 p-0">
     {
       items.map((item, index) => (

@@ -15,8 +15,8 @@ const { layout } = getActivePresentation();
   items.length > 0 && (
     <ProjectCollection
       id="related-projects"
-      eyebrow="Related"
-      title="Related projects"
+      title="相关项目"
+      hint={`${items.length} 个项目`}
       items={items}
       compact
       cardHeadingLevel={3}

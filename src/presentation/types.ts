@@ -30,6 +30,7 @@ export interface PresentationLayout {
   detailPages: {
     projectCollectionVariant: ProjectCollectionVariant;
     relatedProjectCollectionVariant: ProjectCollectionVariant;
+    collectionGridVariant: CollectionGridVariant;
   };
 }
 

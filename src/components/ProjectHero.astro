@@ -1,8 +1,8 @@
 ---
-import PageHeader from "@/components/PageHeader.astro";
 import ProjectMaintenanceStatus from "@/components/ProjectMaintenanceStatus.astro";
 import Badge from "@/components/ui/Badge.astro";
 import Button from "@/components/ui/Button.astro";
+import Card from "@/components/ui/Card.astro";
 import type { LocalizedProjectMaintenanceStatusItem, LocalizedTaxonomyItem, Project } from "@/lib/catalog/projects";
 
 interface Props {
@@ -13,21 +13,54 @@ interface Props {
 }
 
 const { project, category, tags, maintenanceStatus } = Astro.props;
+const primaryLanguage = project.meta?.languages?.[0];
 ---
 
-<PageHeader eyebrow={category.label} title={project.name} description={project.summary} variant="project" asideLabel="Project actions">
-  <Fragment slot="meta">
-    <ProjectMaintenanceStatus maintenanceStatus={maintenanceStatus} prefix="维护状态：" />
-    {project.meta?.license && <span>License: {project.meta.license}</span>}
-    {project.meta?.languages && <span>Languages: {project.meta.languages.join(", ")}</span>}
-  </Fragment>
-  <Fragment slot="footer">
-    <div class="flex flex-wrap gap-1.5">
-      {tags.map((tag) => <Badge href={`/tags/${tag.id}/`} variant="secondary">{tag.label}</Badge>)}
-    </div>
-  </Fragment>
-  <Fragment slot="actions">
-    <Button href={project.repo}>Open repository</Button>
-    <Button href={`/categories/${category.id}/`} variant="outline">View category</Button>
-  </Fragment>
-</PageHeader>
+<header class="phero">
+  <div class="phero__main">
+    <span class="phero__eyebrow">项目</span>
+    <h1 class="phero__name">{project.name}</h1>
+    <p class="phero__repo">{project.repo}</p>
+    <p class="phero__summary">{project.summary}</p>
+    <ul class="phero__tags">
+      {tags.map((tag) => (
+        <li>
+          <Badge href={`/tags/${tag.id}/`} variant="secondary">{tag.label}</Badge>
+        </li>
+      ))}
+    </ul>
+    <Button href={project.repo}>打开仓库</Button>
+  </div>
+  <Card as="aside" class="phero__facts">
+    <dl class="phero__facts-list">
+      <div class="phero__fact">
+        <dt class="phero__fact-label">分类</dt>
+        <dd class="phero__fact-value"><a href={`/categories/${category.id}/`}>{category.label}</a></dd>
+      </div>
+      {
+        primaryLanguage && (
+          <div class="phero__fact">
+            <dt class="phero__fact-label">主要语言</dt>
+            <dd class="phero__fact-value">{primaryLanguage}</dd>
+          </div>
+        )
+      }
+      {
+        project.meta?.license && (
+          <div class="phero__fact">
+            <dt class="phero__fact-label">许可证</dt>
+            <dd class="phero__fact-value">{project.meta.license}</dd>
+          </div>
+        )
+      }
+      <div class="phero__fact">
+        <dt class="phero__fact-label">维护状态</dt>
+        <dd class="phero__fact-value"><ProjectMaintenanceStatus maintenanceStatus={maintenanceStatus} /></dd>
+      </div>
+      <div class="phero__fact">
+        <dt class="phero__fact-label">ID</dt>
+        <dd class="phero__fact-value">{project.id}</dd>
+      </div>
+    </dl>
+  </Card>
+</header>

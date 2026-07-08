@@ -24,6 +24,7 @@ export type CollectionProjectItem = {
 export type CollectionSnapshot = {
   collections: Collection[];
   collectionsById: Map<string, Collection>;
+  collectionsByProjectId: Map<string, Collection[]>;
 };
 
 let collectionSnapshot: Promise<CollectionSnapshot> | undefined;
@@ -39,6 +40,11 @@ export async function getAllCollections(): Promise<Collection[]> {
 
 export async function getPublicCollections(): Promise<Collection[]> {
   return (await getCollectionSnapshot()).collections.filter((collection) => collection.publication_status !== "draft");
+}
+
+export async function getCollectionsForProject(projectId: string): Promise<Collection[]> {
+  const snapshot = await getCollectionSnapshot();
+  return snapshot.collectionsByProjectId.get(projectId) ?? [];
 }
 
 export async function getCollectionById(id: string): Promise<Collection> {
@@ -68,11 +74,35 @@ async function buildCollectionSnapshot(): Promise<CollectionSnapshot> {
   const collections = await readCollections(projectsById);
   assertUniqueIds("collections", collections);
   const sortedCollections = collections.sort((a, b) => a.title.localeCompare(b.title));
+  const collectionsByProjectId = buildCollectionsByProjectIdIndex(sortedCollections);
 
   return {
     collections: sortedCollections,
-    collectionsById: new Map(sortedCollections.map((collection) => [collection.id, collection]))
+    collectionsById: new Map(sortedCollections.map((collection) => [collection.id, collection])),
+    collectionsByProjectId
   };
+}
+
+function buildCollectionsByProjectIdIndex(collections: Collection[]): Map<string, Collection[]> {
+  const index = new Map<string, Collection[]>();
+
+  for (const collection of collections) {
+    if (collection.publication_status === "draft") {
+      continue;
+    }
+
+    for (const item of collection.projectItems) {
+      const existing = index.get(item.project.id);
+
+      if (existing) {
+        existing.push(collection);
+      } else {
+        index.set(item.project.id, [collection]);
+      }
+    }
+  }
+
+  return index;
 }
 
 async function readCollections(projectsById: Map<string, Project>): Promise<Collection[]> {

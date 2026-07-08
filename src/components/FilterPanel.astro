@@ -1,19 +1,18 @@
 ---
+import EditorialSectionHeader from "@/components/EditorialSectionHeader.astro";
 import type { LocalizedTaxonomyItem, Project } from "@/lib/catalog/projects";
-import Button from "@/components/ui/Button.astro";
-import Card from "@/components/ui/Card.astro";
 import ChipLink from "@/components/ui/ChipLink.astro";
-import SectionHeader from "@/components/ui/SectionHeader.astro";
 import type { FilterPanelVariant } from "@/presentation/types";
 
 interface Props {
   categories: LocalizedTaxonomyItem[];
   tags: LocalizedTaxonomyItem[];
   projects: Project[];
+  index?: string;
   variant?: FilterPanelVariant;
 }
 
-const { categories, tags, projects, variant = "standard" } = Astro.props;
+const { categories, tags, projects, index, variant = "standard" } = Astro.props;
 
 const countByCategory = (categoryId: string) =>
   projects.filter((project) => project.category === categoryId).length;
@@ -21,14 +20,11 @@ const countByTag = (tagId: string) => projects.filter((project) => project.tags.
 ---
 
 <section class:list={["gallery-section filter-panel", `filter-panel--${variant}`]} id="categories" aria-labelledby="browse-heading">
-  <div class="gallery-section__head">
-    <SectionHeader id="browse-heading" eyebrow="Browse" title="Browse by taxonomy" />
-    <Button href="#projects" variant="ghost">All projects</Button>
-  </div>
+  <EditorialSectionHeader id="browse-heading" index={index} title="浏览筛选" hint="进入过滤视图 →" />
   <div class="filter-panel__grid">
-    <Card as="section" class="filter-panel__card" ariaLabelledby="category-filter-heading">
-      <h3 id="category-filter-heading" class="mb-3 text-lg font-semibold leading-tight">Categories</h3>
-      <ul class="m-0 flex list-none flex-wrap gap-2 p-0">
+    <div class="filter-panel__label" id="category-filter-heading">分类</div>
+    <div class="filter-panel__row" aria-labelledby="category-filter-heading">
+      <ul class="filter-panel__chips">
         {
           categories.map((category) => (
             <li>
@@ -37,10 +33,10 @@ const countByTag = (tagId: string) => projects.filter((project) => project.tags.
           ))
         }
       </ul>
-    </Card>
-    <Card as="section" class="filter-panel__card" ariaLabelledby="tag-filter-heading">
-      <h3 id="tag-filter-heading" class="mb-3 text-lg font-semibold leading-tight">Tags</h3>
-      <ul class="m-0 flex list-none flex-wrap gap-2 p-0">
+    </div>
+    <div class="filter-panel__label" id="tag-filter-heading">标签</div>
+    <div class="filter-panel__row" aria-labelledby="tag-filter-heading">
+      <ul class="filter-panel__chips">
         {
           tags.map((tag) => (
             <li>
@@ -49,6 +45,6 @@ const countByTag = (tagId: string) => projects.filter((project) => project.tags.
           ))
         }
       </ul>
-    </Card>
+    </div>
   </div>
 </section>

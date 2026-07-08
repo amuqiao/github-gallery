@@ -1,9 +1,5 @@
 ---
 import type { LocalizedProjectMaintenanceStatusItem, LocalizedTaxonomyItem, Project } from "@/lib/catalog/projects";
-import Badge from "@/components/ui/Badge.astro";
-import Button from "@/components/ui/Button.astro";
-import Card from "@/components/ui/Card.astro";
-import ProjectMaintenanceStatus from "@/components/ProjectMaintenanceStatus.astro";
 import type { ProjectCollectionVariant } from "@/presentation/types";
 
 interface Props {
@@ -17,36 +13,36 @@ interface Props {
   order?: number;
 }
 
-const { project, category, tags, maintenanceStatus, note, headingLevel = 3, variant = "standard", order } = Astro.props;
+const { project, category, tags, note, headingLevel = 3, variant = "standard", order } = Astro.props;
 const cardClass = ["project-card", `project-card--${variant}`].join(" ");
+const primaryLanguage = project.meta?.languages?.[0];
+const projectMeta = [primaryLanguage, project.meta?.license].filter(Boolean).join(" · ");
 ---
 
-<Card as="article" class={cardClass}>
+<a class={cardClass} href={project.route} aria-label={`查看 ${project.name} 详情`}>
   <div class="project-card__top">
     <div class="project-card__title-group">
       {order && <span class="project-card__order">{String(order).padStart(2, "0")}</span>}
       <div>
         {
           headingLevel === 3 ? (
-            <h3 class="project-card__title"><a href={project.route}>{project.name}</a></h3>
+            <h3 class="project-card__title">{project.name}</h3>
           ) : (
-            <h2 class="project-card__title"><a href={project.route}>{project.name}</a></h2>
+            <h2 class="project-card__title">{project.name}</h2>
           )
         }
         <span class="project-card__id">{project.id}</span>
       </div>
     </div>
-    <div class="project-card__badges">
-      <Badge href={`/categories/${category.id}/`} variant="secondary" class="project-card__category">{category.label}</Badge>
-      <ProjectMaintenanceStatus maintenanceStatus={maintenanceStatus} />
-    </div>
+    <span class="project-card__category">{category.label}</span>
   </div>
-  <p class="project-card__summary">{project.summary}</p>
   {note && <p class="project-card__note">{note}</p>}
-  <ul class="project-card__tags" aria-label="Tags">
-    {tags.map((tag) => <li><Badge href={`/tags/${tag.id}/`} variant="secondary">{tag.label}</Badge></li>)}
+  <p class="project-card__summary">{project.summary}</p>
+  <ul class="project-card__tags" aria-label="标签">
+    {tags.slice(0, variant === "feature" ? 5 : 4).map((tag) => <li><span class="project-card__tag">{tag.label}</span></li>)}
   </ul>
-  <Button class="project-card__repo" href={project.repo} variant="link" ariaLabel={`Open ${project.name} repository`}>
-    {project.name} repository
-  </Button>
-</Card>
+  <div class="project-card__footer">
+    {projectMeta && <span class="project-card__language"><span aria-hidden="true"></span>{projectMeta}</span>}
+    <span class="project-card__read">查看详情 →</span>
+  </div>
+</a>

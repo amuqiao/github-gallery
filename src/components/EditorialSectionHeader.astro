@@ -1,0 +1,24 @@
+---
+interface Props {
+  id?: string;
+  index?: string;
+  title: string;
+  hint?: string;
+  titleLevel?: 2 | 3;
+  class?: string;
+}
+
+const { id, index, title, hint, titleLevel = 2, class: className } = Astro.props;
+---
+
+<div class:list={["editorial-section-head", className]}>
+  {index && <span class="editorial-section-head__index">{index} /</span>}
+  {
+    titleLevel === 3 ? (
+      <h3 id={id} class="editorial-section-head__title">{title}</h3>
+    ) : (
+      <h2 id={id} class="editorial-section-head__title">{title}</h2>
+    )
+  }
+  {hint && <span class="editorial-section-head__hint">{hint}</span>}
+</div>

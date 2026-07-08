@@ -1,16 +1,16 @@
 ---
 import ProjectCard from "@/components/ProjectCard.astro";
-import Badge from "@/components/ui/Badge.astro";
+import EditorialSectionHeader from "@/components/EditorialSectionHeader.astro";
 import EmptyState from "@/components/ui/EmptyState.astro";
-import SectionHeader from "@/components/ui/SectionHeader.astro";
 import type { ProjectCardViewModel } from "@/lib/catalog/project-view-models";
 import type { ProjectCollectionVariant } from "@/presentation/types";
 
 interface Props {
   id?: string;
-  eyebrow?: string;
+  index?: string;
   title: string;
   description?: string;
+  hint?: string;
   items: ProjectCardViewModel[];
   emptyMessage?: string;
   compact?: boolean;
@@ -21,11 +21,12 @@ interface Props {
 
 const {
   id = "projects",
-  eyebrow,
+  index,
   title,
   description,
+  hint,
   items,
-  emptyMessage = "No projects match this view.",
+  emptyMessage = "当前视图暂无项目。",
   compact = false,
   cardHeadingLevel = 3,
   variant = "standard",
@@ -39,10 +40,8 @@ const gridClass = [
 ---
 
 <section class="gallery-section project-collection" id={id} aria-labelledby={headingId}>
-  <div class="gallery-section__head">
-    <SectionHeader id={headingId} eyebrow={eyebrow} title={title} description={description} />
-    <Badge variant="outline">{items.length} projects</Badge>
-  </div>
+  <EditorialSectionHeader id={headingId} index={index} title={title} hint={hint ?? `${items.length} 个项目`} />
+  {description && <p class="gallery-section__description">{description}</p>}
   {
     items.length > 0 ? (
       <div class={gridClass}>

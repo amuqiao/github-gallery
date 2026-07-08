@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import PageHeader from "@/components/PageHeader.astro";
 import ProjectCollection from "@/components/ProjectCollection.astro";
 import Button from "@/components/ui/Button.astro";
@@ -23,23 +24,31 @@ const { layout } = getActivePresentation();
 ---
 
 <BaseLayout title={`${category.label} - GitHub Gallery`} site={site} description={category.descriptionText}>
+  <Breadcrumbs
+    items={[
+      { label: "展馆", href: "/" },
+      { label: "分类", href: "/#categories" },
+      { label: category.label }
+    ]}
+  />
   <PageHeader
-    eyebrow="Category"
+    eyebrow="分类"
     title={category.label}
     description={category.descriptionText}
     variant="filter"
-    asideLabel="Category summary and actions"
-    stats={[{ value: projects.length, label: "Projects" }]}
+    asideLabel="分类统计和操作"
+    stats={[{ value: projects.length, label: "项目" }]}
   >
     <Fragment slot="actions">
-      <Button href="/" variant="outline">All projects</Button>
+      <Button href="/" variant="outline">全部项目</Button>
     </Fragment>
   </PageHeader>
   <ProjectCollection
     id={`category-${category.id}`}
-    title={`${category.label} projects`}
+    title="项目"
+    hint={`${projects.length} 个项目`}
     items={projectItems}
-    emptyMessage="No projects in this category yet."
+    emptyMessage="这个分类下暂无项目。"
     variant={layout.listPages.projectCollectionVariant}
   />
 </BaseLayout>

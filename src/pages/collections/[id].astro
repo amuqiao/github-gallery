@@ -34,23 +34,24 @@ const publicationStatusLabel = getPublicationStatusLabel(collection.publication_
   <article class="grid gap-6">
     <Breadcrumbs
       items={[
-        { label: "Collections", href: "/collections/" },
+        { label: "展馆", href: "/" },
+        { label: "专题", href: "/collections/" },
         { label: collection.title }
       ]}
     />
     <PageHeader
-      eyebrow="Collection"
+      eyebrow="专题"
       title={collection.title}
       description={collection.summary}
       variant="project"
-      asideLabel="Collection actions"
+      asideLabel="专题操作"
       stats={[
-        { value: projectItems.length, label: "Projects" },
-        { value: publicationStatusLabel, label: "Publication" }
+        { value: projectItems.length, label: "项目" },
+        { value: publicationStatusLabel, label: "发布状态" }
       ]}
     >
       <Fragment slot="actions">
-        <Button href="/collections/" variant="outline">All collections</Button>
+        <Button href="/collections/" variant="outline">全部专题</Button>
       </Fragment>
     </PageHeader>
 
@@ -63,14 +64,15 @@ const publicationStatusLabel = getPublicationStatusLabel(collection.publication_
     }
     {
       collection.blocks.length > 0 && (
-        <section class="grid max-w-3xl gap-4" aria-label="Collection details">
+        <section class="content-blocks" aria-label="专题详情">
           {collection.blocks.map((block, index) => <BlockRenderer block={block} index={index} />)}
         </section>
       )
     }
     <ProjectCollection
       id="collection-projects"
-      title="Projects in this collection"
+      title="专题内项目"
+      hint={`${projectItems.length} 个项目 · 人工策展顺序`}
       description="专题只决定项目出现的顺序和策展说明；项目事实仍来自 project.yaml。"
       items={projectItems}
       variant={layout.detailPages.projectCollectionVariant}

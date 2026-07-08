@@ -19,6 +19,19 @@ const { title, site, description = site.description } = Astro.props;
 const { layout, theme } = getActivePresentation();
 const normalizePath = (href: string) => (href === "/" ? "/" : href.endsWith("/") ? href : `${href}/`);
 const currentPath = normalizePath(Astro.url.pathname);
+const currentSection = currentPath.startsWith("/collections/")
+  ? "collections"
+  : currentPath.startsWith("/categories/") || currentPath.startsWith("/tags/")
+    ? "categories"
+    : "projects";
+const navigationSection = (href: string) =>
+  href.startsWith("/collections") ? "collections" : href.includes("#categories") ? "categories" : "projects";
+const navigationLabel = (label: string) =>
+  ({
+    Projects: "项目",
+    Collections: "专题",
+    Categories: "分类"
+  })[label] ?? label;
 ---
 
 <!doctype html>
@@ -33,16 +46,17 @@ const currentPath = normalizePath(Astro.url.pathname);
     <a class="skip-link" href="#main-content">跳到主内容</a>
     <div class="site-shell">
       <header class="site-topbar">
-        <nav class="site-nav" aria-label="Primary">
+        <nav class="site-nav" aria-label="主导航">
           <a class="site-brand" href="/">
             <span class="site-brand__mark" aria-hidden="true"></span>
             {site.title}
           </a>
+          <span class="site-path" aria-hidden="true">~/ $</span>
           <div class="site-nav__links">
             {
               site.navigation.map((item) => {
-                const isActive = currentPath === normalizePath(item.href);
-                return <a href={item.href} aria-current={isActive ? "page" : undefined}>{item.label}</a>;
+                const isActive = navigationSection(item.href) === currentSection;
+                return <a href={item.href} aria-current={isActive ? "page" : undefined}>{navigationLabel(item.label)}</a>;
               })
             }
           </div>
@@ -52,8 +66,8 @@ const currentPath = normalizePath(Astro.url.pathname);
         <slot />
       </main>
       <footer class="site-footer">
-        <span>Contract-driven GitHub project gallery.</span>
-        <span>{layout.label} / {theme.label}</span>
+        <span>GitHub Gallery — 合同驱动的开源项目静态展馆</span>
+        <span>方案 B · Bento 杂志编辑 · 纸面主题</span>
       </footer>
     </div>
   </body>

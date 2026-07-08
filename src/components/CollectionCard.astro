@@ -1,7 +1,4 @@
 ---
-import Button from "@/components/ui/Button.astro";
-import Card from "@/components/ui/Card.astro";
-import Badge from "@/components/ui/Badge.astro";
 import type { Collection } from "@/lib/catalog/collections";
 import { getPublicationStatusLabel } from "@/presentation/publication-status-labels";
 import type { CollectionGridVariant } from "@/presentation/types";
@@ -15,22 +12,25 @@ interface Props {
 const { collection, headingLevel = 3, variant = "standard" } = Astro.props;
 const cardClass = ["collection-card", `collection-card--${variant}`].join(" ");
 const publicationStatusLabel = getPublicationStatusLabel(collection.publication_status);
+const names = collection.projectItems.map((item) => item.project.name);
+const preview = names.slice(0, 4).join(" · ") + (names.length > 4 ? ` · +${names.length - 4}` : "");
 ---
 
-<Card as="article" class={cardClass}>
+<a class={cardClass} href={collection.route} aria-label={`查看 ${collection.title} 专题`}>
   <div class="collection-card__meta">
-    <Badge variant="secondary">{publicationStatusLabel}</Badge>
-    <Badge variant="outline">{collection.projectItems.length} projects</Badge>
+    <span class="collection-card__kind"><span aria-hidden="true">✦</span> 专题</span>
+    <span class="collection-card__count">{collection.projectItems.length} 个项目 · {publicationStatusLabel}</span>
   </div>
   {
     headingLevel === 3 ? (
-      <h3 class="collection-card__title"><a href={collection.route}>{collection.title}</a></h3>
+      <h3 class="collection-card__title">{collection.title}</h3>
     ) : (
-      <h2 class="collection-card__title"><a href={collection.route}>{collection.title}</a></h2>
+      <h2 class="collection-card__title">{collection.title}</h2>
     )
   }
   <p class="collection-card__summary">{collection.summary}</p>
-  <Button class="collection-card__link" href={collection.route} variant="link" ariaLabel={`Open ${collection.title} collection`}>
-    View {collection.title}
-  </Button>
-</Card>
+  <p class="collection-card__members">{preview}</p>
+  <span class="collection-card__link">
+    查看专题 →
+  </span>
+</a>

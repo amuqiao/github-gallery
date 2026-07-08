@@ -1,30 +1,30 @@
 ---
 import type { Collection } from "@/lib/catalog/collections";
-import Button from "@/components/ui/Button.astro";
 
 interface Props {
   featuredCollection: Collection;
   projectCount: number;
   collectionCount: number;
-  categoryCount: number;
   tagCount: number;
 }
 
-const { featuredCollection, projectCount, collectionCount, categoryCount, tagCount } = Astro.props;
+const { featuredCollection, projectCount, collectionCount, tagCount } = Astro.props;
 ---
 
 <header class="home-bento" aria-labelledby="home-title">
-  <div class="home-bento__kicker">Curated GitHub Projects - Schema v1</div>
+  <div class="home-bento__kicker">精选 GitHub 项目 — 第 01 期</div>
   <div class="home-bento__intro">
-    <h1 id="home-title">开源项目的编目展馆</h1>
-    <p>
-      一个合同驱动的静态展馆。项目按分类和标签进入筛选视图，专题按人工策展顺序重新组织同一批项目。
-    </p>
+    <h1 id="home-title">开源声音技术的<br /><em>编年展馆</em></h1>
+    <div class="home-bento__dek">
+      <p>一个合同驱动的静态展馆。项目轴可按分类与标签过滤，专题轴由人工策展。同一套 read model 贯穿全站。</p>
+      <p class="home-bento__issue">第 01 期<br />2026 · 静态构建<br />合同 v1</p>
+    </div>
   </div>
-  <ul class="home-bento__grid" aria-label="Gallery summary">
+  <ul class="home-bento__grid" aria-label="展馆概览">
     <li class="home-bento__item home-bento__item--feature">
       <a class="home-bento__cell home-bento__cell--feature" href={featuredCollection.route}>
-        <span class="home-bento__label">Featured collection</span>
+        <span class="home-bento__bg" aria-hidden="true">✦</span>
+        <span class="home-bento__label">精选专题</span>
         <strong>{featuredCollection.title}</strong>
         <span>{featuredCollection.summary}</span>
         <span class="home-bento__action">进入专题</span>
@@ -32,32 +32,32 @@ const { featuredCollection, projectCount, collectionCount, categoryCount, tagCou
     </li>
     <li class="home-bento__item">
       <div class="home-bento__cell">
-        <span class="home-bento__label">Projects</span>
+        <span class="home-bento__label">项目</span>
         <strong>{projectCount}</strong>
       </div>
     </li>
     <li class="home-bento__item">
       <a class="home-bento__cell home-bento__cell--accent" href="/collections/">
-        <span class="home-bento__label">Collections</span>
+        <span class="home-bento__label">专题</span>
         <strong>{collectionCount}</strong>
       </a>
     </li>
     <li class="home-bento__item">
       <div class="home-bento__cell">
-        <span class="home-bento__label">Categories</span>
-        <strong>{categoryCount}</strong>
+        <span class="home-bento__label">活跃标签</span>
+        <strong>{tagCount}</strong>
       </div>
     </li>
     <li class="home-bento__item">
       <div class="home-bento__cell">
-        <span class="home-bento__label">Active tags</span>
-        <strong>{tagCount}</strong>
+        <span class="home-bento__label">合同</span>
+        <strong class="home-bento__schema">v1</strong>
       </div>
     </li>
   </ul>
   <div class="home-bento__actions">
-    <Button href="#projects">Browse projects</Button>
-    <Button href="#collections" variant="secondary">Browse collections</Button>
-    <Button href="#categories" variant="outline">Browse filters</Button>
+    <a class="editorial-button editorial-button--dark" href="#projects">浏览项目</a>
+    <a class="editorial-button" href="#collections">浏览专题</a>
+    <a class="editorial-button editorial-button--outline" href="#categories">浏览筛选</a>
   </div>
 </header>

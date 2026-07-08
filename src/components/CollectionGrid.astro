@@ -1,16 +1,16 @@
 ---
 import CollectionCard from "@/components/CollectionCard.astro";
-import Badge from "@/components/ui/Badge.astro";
+import EditorialSectionHeader from "@/components/EditorialSectionHeader.astro";
 import EmptyState from "@/components/ui/EmptyState.astro";
-import SectionHeader from "@/components/ui/SectionHeader.astro";
 import type { Collection } from "@/lib/catalog/collections";
 import type { CollectionGridVariant } from "@/presentation/types";
 
 interface Props {
   id?: string;
-  eyebrow?: string;
+  index?: string;
   title: string;
   description?: string;
+  hint?: string;
   collections: Collection[];
   emptyMessage?: string;
   cardHeadingLevel?: 2 | 3;
@@ -19,11 +19,12 @@ interface Props {
 
 const {
   id = "collections",
-  eyebrow,
+  index,
   title,
   description,
+  hint,
   collections,
-  emptyMessage = "No collections yet.",
+  emptyMessage = "暂无专题。",
   cardHeadingLevel = 3,
   variant = "standard"
 } = Astro.props;
@@ -32,10 +33,8 @@ const gridClass = ["collection-grid__grid", `collection-grid__grid--${variant}`]
 ---
 
 <section class="gallery-section collection-grid" id={id} aria-labelledby={headingId}>
-  <div class="gallery-section__head">
-    <SectionHeader id={headingId} eyebrow={eyebrow} title={title} description={description} />
-    <Badge variant="outline">{collections.length} collections</Badge>
-  </div>
+  <EditorialSectionHeader id={headingId} index={index} title={title} hint={hint ?? `${collections.length} 个专题`} />
+  {description && <p class="gallery-section__description">{description}</p>}
   {
     collections.length > 0 ? (
       <div class={gridClass}>
