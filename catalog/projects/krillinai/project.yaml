@@ -10,9 +10,9 @@ tags:
   - video-translation
   - dubbing
   - subtitles
+  - speech-to-text
   - translation
   - workflow
-  - inference
 status: unknown
 details:
   type: markdown

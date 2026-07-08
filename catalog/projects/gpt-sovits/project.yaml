@@ -8,8 +8,10 @@ tags:
   - audio
   - text-to-speech
   - voice-cloning
+  - voice-conversion
   - webui
   - training
+  - inference
 status: unknown
 details:
   type: markdown

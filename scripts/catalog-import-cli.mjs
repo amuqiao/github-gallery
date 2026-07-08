@@ -23,6 +23,7 @@ const nonEmptyString = z.string().trim().min(1);
 const localeCodeSchema = z.enum(["zh", "en"]);
 const localizedTextSchema = z.object({ zh: nonEmptyString, en: nonEmptyString }).strict();
 const slugString = z.string().regex(slugPattern);
+const taxonomyItemSchema = z.object({ id: slugString, name: localizedTextSchema, description: localizedTextSchema }).strict();
 const detailsSchema = z
   .object({
     type: z.literal("markdown"),
@@ -67,7 +68,7 @@ const projectSchema = z
     summary: nonEmptyString.max(160),
     category: slugString,
     tags: z.array(slugString).min(1).max(8),
-    status: z.enum(["active", "inactive", "archived", "unknown"]),
+    status: slugString,
     details: detailsSchema.optional(),
     meta: z.object({ license: nonEmptyString.optional(), languages: z.array(nonEmptyString).min(1).optional() }).strict().optional(),
     relations: z.object({ related_projects: z.array(slugString).min(1).optional() }).strict().optional(),
@@ -90,8 +91,9 @@ const taxonomySchema = z
   .object({
     schema_version: z.literal(1),
     locale: z.object({ default: localeCodeSchema, supported: z.array(localeCodeSchema).min(1) }).strict(),
-    categories: z.array(z.object({ id: slugString, name: localizedTextSchema, description: localizedTextSchema }).strict()).min(1),
-    tags: z.array(z.object({ id: slugString, name: localizedTextSchema, description: localizedTextSchema }).strict()).min(1)
+    categories: z.array(taxonomyItemSchema).min(1),
+    tags: z.array(taxonomyItemSchema).min(1),
+    statuses: z.array(taxonomyItemSchema).min(1)
   })
   .strict()
   .superRefine((taxonomy, ctx) => {
@@ -309,7 +311,8 @@ async function readTaxonomyIds() {
   const taxonomy = await readYaml(path.join(catalogDir, "taxonomies.yaml"), taxonomySchema, "catalog/taxonomies.yaml");
   return {
     categories: new Set(taxonomy.categories.map((category) => category.id)),
-    tags: new Set(taxonomy.tags.map((tag) => tag.id))
+    tags: new Set(taxonomy.tags.map((tag) => tag.id)),
+    statuses: new Set(taxonomy.statuses.map((status) => status.id))
   };
 }
 
@@ -548,6 +551,10 @@ function validateProjectPayload(operation, payload, taxonomyIds, currentProjectI
     if (!taxonomyIds.tags.has(tag)) {
       die(`${operationKey(operation)} references unknown tag: ${tag}`);
     }
+  }
+
+  if (!taxonomyIds.statuses.has(payload.status)) {
+    die(`${operationKey(operation)} references unknown status: ${payload.status}`);
   }
 
   const availableProjectIds = new Set([...currentProjectIds, ...batchProjectIds]);

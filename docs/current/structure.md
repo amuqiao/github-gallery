@@ -9,7 +9,7 @@
 - 可选详情正文位于同一项目目录的 `details.md`。
 - 专题数据位于 `catalog/collections/<id>/collection.yaml`。
 - 可选专题详情正文位于同一专题目录的 `details.md`。
-- 分类和标签词表位于 `catalog/taxonomies.yaml`，当前使用中英文双语展示字段。
+- 分类、标签和项目状态词表位于 `catalog/taxonomies.yaml`，当前使用中英文双语展示字段。
 - 站点标题、描述、导航位于 `catalog/site.yaml`。
 - 页面不直接解析 YAML，而是调用 `src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts`。
 - `src/lib/catalog/projects.ts` 构建共享 catalog snapshot，包括项目索引、taxonomy 索引、关系校验和相关项目查询。
@@ -91,7 +91,7 @@ scripts/verify.sh
 
 `collection.yaml` 是专题身份、专题路由、公开状态、项目引用顺序和策展备注的机器可读来源。专题只引用已有项目，不复制项目事实。`draft` 专题会被校验，但不会生成公开页面。
 
-`catalog/taxonomies.yaml` 是分类和标签 id、固定 `zh/en` 双语展示名、双语说明的机器可读来源。项目只引用 taxonomy id；前端从 loader 派生的 `label` 和 `descriptionText` 渲染默认语言。
+`catalog/taxonomies.yaml` 是分类、标签和项目维护状态 id、固定 `zh/en` 双语展示名、双语说明的机器可读来源。项目只引用 taxonomy id；前端从 loader 派生的 `label` 和 `descriptionText` 渲染默认语言。项目状态的轻量视觉 tone 由 `src/presentation/status-tones.ts` 管理。
 
 `catalog/site.yaml` 是站点导航和站点级展示信息来源。
 

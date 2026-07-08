@@ -11,6 +11,7 @@ import {
   getCatalogSnapshot,
   getCategory,
   getRelatedProjects,
+  getStatus,
   getTag,
   type Project
 } from "@/lib/catalog/projects";
@@ -28,6 +29,7 @@ const { project } = Astro.props as { project: Project };
 const { site, taxonomy } = await getCatalogSnapshot();
 const category = getCategory(taxonomy, project.category);
 const tags = project.tags.map((tag) => getTag(taxonomy, tag));
+const status = getStatus(taxonomy, project.status);
 const relatedProjects = await getRelatedProjects(project);
 const relatedProjectItems = toProjectCardViewModels(relatedProjects, taxonomy);
 const detail = await loadProjectDetail(project);
@@ -43,7 +45,7 @@ const DetailContent = detail?.Content;
         { label: project.name }
       ]}
     />
-    <ProjectHero project={project} category={category} tags={tags} />
+    <ProjectHero project={project} category={category} tags={tags} status={status} />
 
     {
       detail && (

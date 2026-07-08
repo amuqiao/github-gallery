@@ -36,7 +36,7 @@ catalog/projects/<id>/
 | `summary` | 必填，卡片摘要，最多 160 个字符。 |
 | `category` | 必填，必须引用 `catalog/taxonomies.yaml` 中存在的分类 id。taxonomy 合同见 [`taxonomy-config.md`](./taxonomy-config.md)。 |
 | `tags` | 必填，1 到 8 个标签 id，必须来自 `catalog/taxonomies.yaml`。taxonomy 合同见 [`taxonomy-config.md`](./taxonomy-config.md)。 |
-| `status` | 必填，枚举：`active`、`inactive`、`archived`、`unknown`。 |
+| `status` | 必填，必须引用 `catalog/taxonomies.yaml` 中存在的项目状态 id。taxonomy 合同见 [`taxonomy-config.md`](./taxonomy-config.md)。 |
 
 ## 可选 Core 字段
 

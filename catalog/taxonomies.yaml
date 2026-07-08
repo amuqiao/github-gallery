@@ -183,3 +183,33 @@ tags:
     description:
       zh: 主要使用 PyTorch 实现的项目。
       en: Projects implemented primarily with PyTorch.
+
+statuses:
+  - id: active
+    name:
+      zh: 活跃
+      en: Active
+    description:
+      zh: 项目近期仍有维护迹象。
+      en: The project shows recent maintenance activity.
+  - id: inactive
+    name:
+      zh: 不活跃
+      en: Inactive
+    description:
+      zh: 项目长期缺少维护迹象。
+      en: The project appears inactive.
+  - id: archived
+    name:
+      zh: 已归档
+      en: Archived
+    description:
+      zh: 项目仓库已归档。
+      en: The repository is archived.
+  - id: unknown
+    name:
+      zh: 未确认
+      en: Unknown
+    description:
+      zh: 尚未确认项目维护状态。
+      en: Maintenance status has not been verified.

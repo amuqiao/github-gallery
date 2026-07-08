@@ -424,6 +424,12 @@
     align-items: flex-start;
   }
 
+  .project-card__badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
   .project-card__order {
     color: var(--accent-strong);
     font-family: var(--font-display);
@@ -456,6 +462,12 @@
     font-size: 0.72rem;
   }
 
+  .project-card__category {
+    border-color: var(--strong-border);
+    background: var(--accent-subtle);
+    color: var(--foreground);
+  }
+
   .project-card__meta,
   .project-card__tags {
     display: flex;
@@ -464,6 +476,37 @@
     list-style: none;
     margin: 0;
     padding: 0;
+  }
+
+  .project-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    line-height: 1.2;
+  }
+
+  .project-status__dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .project-status--success {
+    color: var(--primary);
+  }
+
+  .project-status--warning {
+    color: var(--accent-strong);
+  }
+
+  .project-status--muted,
+  .project-status--neutral {
+    color: var(--muted-foreground);
   }
 
   .project-card__summary,

@@ -9,7 +9,7 @@ catalog/projects/<id>/project.yaml  # 项目机器可读事实
 catalog/projects/<id>/details.md    # 可选详情正文
 catalog/collections/<id>/collection.yaml # 专题机器可读事实
 catalog/collections/<id>/details.md  # 可选专题详情正文
-catalog/taxonomies.yaml             # 共享分类和标签
+catalog/taxonomies.yaml             # 共享分类、标签和项目状态词表
 catalog/site.yaml                   # 站点标题、描述和导航
 src/lib/catalog/                    # schema、loader、adapter
 src/styles/global.css               # Tailwind 入口和 shadcn-style token
@@ -30,8 +30,9 @@ docs/runbooks/                      # 可重复维护流程
 2. [前端导航结构](docs/current/frontend-navigation.md)
 3. [项目配置合同](docs/contract/project-config.md)
 4. [专题配置合同](docs/contract/collection-config.md)
-5. [站点配置合同](docs/contract/site-config.md)
-6. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
+5. [Taxonomy 配置合同](docs/contract/taxonomy-config.md)
+6. [站点配置合同](docs/contract/site-config.md)
+7. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
 
 修改前端 UI 时按这个顺序阅读：
 

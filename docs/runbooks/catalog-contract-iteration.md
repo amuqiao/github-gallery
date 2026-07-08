@@ -76,7 +76,7 @@ schema 定规则
 1. 创建 `catalog/projects/<id>/`，或使用 `./scripts/catalog.sh new <id> ...` 生成骨架。
 2. 添加或补全 `catalog/projects/<id>/project.yaml`。
 3. 声明 `details` 时，添加 `catalog/projects/<id>/details.md`。
-4. 只使用 `catalog/taxonomies.yaml` 中存在的 category 和 tag id。
+4. 只使用 `catalog/taxonomies.yaml` 中存在的 category、tag 和 status id。
 5. `relations.related_projects` 只能引用已经存在的项目 id。
 6. 运行 `./scripts/catalog.sh validate` 或 `./scripts/verify.sh check`。
 
@@ -142,6 +142,18 @@ schema 定规则
 category id 和 tag id 是对外 URL 标识。重命名属于路由变更。
 
 当前 taxonomy 是固定 `zh/en` 双语 registry。新增第三语言不是纯数据变更，必须先更新 schema、loader 和 import CLI。
+
+## When Adding A Project Status
+
+按这个顺序执行：
+
+1. 先把 status 加到 `catalog/taxonomies.yaml` 的 `statuses`。
+2. 同时提供 `name.zh`、`name.en`、`description.zh` 和 `description.en`。
+3. 如果前端会渲染它，在 `src/presentation/status-tones.ts` 增加对应 tone。
+4. 再从项目配置的 `status` 中引用它。
+5. 运行 `./scripts/verify.sh check`。
+
+status id 是项目维护状态合同，不是筛选分类。具体视觉 tone 属于 presentation 层，不进入 taxonomy 数据合同。
 
 ## When Importing AI-Generated Catalog Data
 

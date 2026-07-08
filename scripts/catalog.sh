@@ -80,11 +80,11 @@ new_usage() {
   --tag         至少一个已存在 taxonomy tag id，可重复传入。
 
 可选：
-  --status      active、inactive、archived、unknown；默认 unknown。
+  --status      已存在 taxonomy status id；默认 unknown。
   --details     创建 Markdown 详情文件。
 
 副作用与边界：
-  不自动校验 category/tag 是否存在；运行 ./scripts/catalog.sh validate 由 loader 统一校验。
+  不自动校验 category/tag/status 是否存在；运行 ./scripts/catalog.sh validate 由 loader 统一校验。
   目标目录已存在时直接失败，不覆盖已有项目。
   文件先写入临时目录，全部成功后再移动到最终目录。
 EOF
@@ -230,10 +230,7 @@ create_project() {
     assert_project_id "$tag"
   done
 
-  case "$status" in
-    active|inactive|archived|unknown) ;;
-    *) die "--status must be active, inactive, archived, or unknown" 2 ;;
-  esac
+  assert_project_id "$status"
 
   local project_dir="$PROJECTS_DIR/$id"
   local tmp_dir="$PROJECTS_DIR/.${id}.tmp.$$"

@@ -81,7 +81,7 @@ notes / AI output / manual draft
 manifest.yaml 必须符合 docs/contract/catalog-import-batch.md。
 project payload 必须符合 docs/contract/project-config.md。
 collection payload 必须符合 docs/contract/collection-config.md。
-category 和 tags 必须从 docs/contract/taxonomy-config.md 对应的 taxonomy id 中选择。
+category、tags 和 status 必须从 docs/contract/taxonomy-config.md 对应的 taxonomy id 中选择。
 不确定的信息不要编造成机器字段；可以写入 details.md 的说明或保持字段缺省。
 ```
 
@@ -139,7 +139,7 @@ AI 生成内容时要避免：
 [ ] delete 没有删除仍被项目关系或专题引用的项目。
 [ ] repo URL 是明确的 GitHub 仓库地址。
 [ ] summary 简短、克制，没有排名式或广告式判断。
-[ ] category 和 tags 来自 catalog/taxonomies.yaml。
+[ ] category、tags 和 status 来自 catalog/taxonomies.yaml。
 [ ] details.md 只承载长文说明，不承载机器可筛选字段。
 [ ] collection 只保存策展顺序和 note，不复制项目事实。
 [ ] draft/published 状态符合当前审核程度。

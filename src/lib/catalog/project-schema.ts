@@ -94,7 +94,7 @@ export const projectConfigSchema = z
     summary: nonEmptyString.max(160),
     category: z.string().regex(slugPattern),
     tags: z.array(z.string().regex(slugPattern)).min(1).max(8),
-    status: z.enum(["active", "inactive", "archived", "unknown"]),
+    status: z.string().regex(slugPattern),
     details: detailsSchema.optional(),
     meta: metaSchema.optional(),
     relations: relationsSchema.optional(),
@@ -140,7 +140,8 @@ export const taxonomyCatalogSchema = z
       })
       .strict(),
     categories: z.array(taxonomyItemSchema).min(1),
-    tags: z.array(taxonomyItemSchema).min(1)
+    tags: z.array(taxonomyItemSchema).min(1),
+    statuses: z.array(taxonomyItemSchema).min(1)
   })
   .strict()
   .superRefine((taxonomy, ctx) => {

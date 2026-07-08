@@ -4,11 +4,11 @@
 
 ## Purpose
 
-`catalog/taxonomies.yaml` 是分类和标签的受控词表。项目配置只引用 `category id` 和 `tag id`，不直接写展示名。
+`catalog/taxonomies.yaml` 是分类、标签和项目维护状态的受控词表。项目配置只引用 `category id`、`tag id` 和 `status id`，不直接写展示名或视觉颜色。
 
 ```text
 catalog/taxonomies.yaml
-  -> category/tag id registry
+  -> category/tag/status id registry
   -> catalog/projects/<id>/project.yaml references ids
   -> loader validates references
   -> frontend renders localized labels
@@ -29,6 +29,7 @@ catalog/taxonomies.yaml
 | `locale.supported` | 已支持语言列表，当前必须包含且只实际支持 `zh` 和 `en`。 |
 | `categories` | 非空分类数组。 |
 | `tags` | 非空标签数组。 |
+| `statuses` | 非空项目状态数组。 |
 
 ## Taxonomy Item Fields
 
@@ -57,12 +58,38 @@ tags:
       en: Projects that clone or adapt a voice from reference audio.
 ```
 
+## Status Item Fields
+
+项目状态 item 复用分类/标签的本地化字段：
+
+| Field | Rule |
+| --- | --- |
+| `id` | 必填，唯一，小写 kebab-case。作为 `project.yaml.status` 的引用。 |
+| `name.zh` | 必填，中文展示名。 |
+| `name.en` | 必填，英文展示名。 |
+| `description.zh` | 必填，中文说明。 |
+| `description.en` | 必填，英文说明。 |
+
+示例：
+
+```yaml
+statuses:
+  - id: unknown
+    name:
+      zh: 未确认
+      en: Unknown
+    description:
+      zh: 尚未确认项目维护状态。
+      en: Maintenance status has not been verified.
+```
+
 ## ID Rules
 
 `id` 是稳定机器合同：
 
 - `project.yaml` 的 `category` 必须引用 `categories[].id`。
 - `project.yaml` 的 `tags` 必须引用 `tags[].id`。
+- `project.yaml` 的 `status` 必须引用 `statuses[].id`。
 - 分类路由使用 `/categories/<category-id>/`。
 - 标签路由使用 `/tags/<tag-id>/`。
 
@@ -75,6 +102,7 @@ tags:
 ```text
 category = 这个项目属于哪个大领域
 tag      = 这个项目有什么能力、主题、技术路线或使用场景
+status   = 这个项目的维护状态，用低权重视觉展示
 ```
 
 不要为了一个很窄的主题新增 category。声音克隆、视频翻译、配音、字幕等应优先作为 tag。
@@ -86,14 +114,16 @@ tag      = 这个项目有什么能力、主题、技术路线或使用场景
 ```text
 category 必须从 categories[].id 中选择一个。
 tags 必须从 tags[].id 中选择 1 到 8 个。
-禁止直接新增未列出的 category/tag。
-如果缺少合适 tag，只提出新增建议，不要写入项目 payload。
+status 必须从 statuses[].id 中选择一个；不确定时使用 unknown。
+禁止直接新增未列出的 category/tag/status。
+如果缺少合适 tag 或 status，只提出新增建议，不要写入项目 payload。
 ```
 
 ## Change Rules
 
-- 新增 category 或 tag 前，先确认它不是已有词表的同义重复。
+- 新增 category、tag 或 status 前，先确认它不是已有词表的同义重复。
 - 新增 item 必须同时提供 `zh` 和 `en` 的 `name`、`description`。
+- 新增 status 后，如果前端会渲染它，还必须在 `src/presentation/status-tones.ts` 增加展示 tone 映射。
 - 修改 `locale.default` 可以切换默认展示语言；新增第三语言必须先改代码合同。
 - 删除或重命名 id 前，先检查所有项目引用和公开 URL 影响。
 - 更新后运行 `./scripts/verify.sh check`。
