@@ -21,7 +21,7 @@ deploy.sh    Docker 静态站点部署入口
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、catalog 内容生成。 |
 | `verify.sh` | build/catalog/content 验证，包括 projects、collections、taxonomy、site 和被引用详情文件。 | README 或 `docs/` 漂移检查。 |
 | `catalog.sh` | project list/validate/new、collection list/show/new/delete/update、import batch validate/plan/diff/apply。 | GitHub API 抓取、taxonomy 自动修改、schema 之外的字段生成、全量替换 catalog。 |
-| `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`（可简写 `pre`）、`standalone`、`proxy` 三种模式的 build/up/down/status。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
+| `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`（可简写 `pre`）、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status；`up/down` 仅作兼容别名。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
 ## Commands
 
@@ -74,19 +74,22 @@ cp .env.example .env
 ./scripts/deploy.sh modes
 
 # preview / pre：本机临时验收
-./scripts/deploy.sh up pre
+./scripts/deploy.sh start pre
 ./scripts/deploy.sh status pre
-./scripts/deploy.sh down pre
+./scripts/deploy.sh restart pre
+./scripts/deploy.sh stop pre
 
 # standalone：单机长期运行
-./scripts/deploy.sh up standalone
+./scripts/deploy.sh start standalone
 ./scripts/deploy.sh status standalone
-./scripts/deploy.sh down standalone
+./scripts/deploy.sh restart standalone
+./scripts/deploy.sh stop standalone
 
 # proxy：接入已有反向代理网络
-./scripts/deploy.sh up proxy
+./scripts/deploy.sh start proxy
 ./scripts/deploy.sh status proxy
-./scripts/deploy.sh down proxy
+./scripts/deploy.sh restart proxy
+./scripts/deploy.sh stop proxy
 ```
 
 ## Verification Boundary

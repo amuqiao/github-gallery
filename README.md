@@ -77,19 +77,22 @@ cp .env.example .env
 ./scripts/deploy.sh modes
 
 # preview / pre：本机临时验收
-./scripts/deploy.sh up pre
+./scripts/deploy.sh start pre
 ./scripts/deploy.sh status pre
-./scripts/deploy.sh down pre
+./scripts/deploy.sh restart pre
+./scripts/deploy.sh stop pre
 
 # standalone：单机长期运行
-./scripts/deploy.sh up standalone
+./scripts/deploy.sh start standalone
 ./scripts/deploy.sh status standalone
-./scripts/deploy.sh down standalone
+./scripts/deploy.sh restart standalone
+./scripts/deploy.sh stop standalone
 
 # proxy：接入已有反向代理网络
-./scripts/deploy.sh up proxy
+./scripts/deploy.sh start proxy
 ./scripts/deploy.sh status proxy
-./scripts/deploy.sh down proxy
+./scripts/deploy.sh restart proxy
+./scripts/deploy.sh stop proxy
 ```
 
 完整脚本说明见 [scripts/README.md](scripts/README.md)。

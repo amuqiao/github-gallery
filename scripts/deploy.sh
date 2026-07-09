@@ -24,8 +24,9 @@ usage() {
   modes                  展示支持的 3 种 Docker 部署模式。
   check                  校验 Docker 部署文件、compose 配置和脚本语法。
   build <mode>           构建指定模式需要的静态站点镜像或产物。
-  up <mode>              启动指定模式。
-  down <mode>            停止指定模式。
+  start <mode>           启动指定模式；兼容别名：up。
+  stop <mode>            停止指定模式；兼容别名：down。
+  restart <mode>         先 stop 再 start 指定模式。
   status <mode>          查看指定模式状态。
 
 模式：
@@ -34,12 +35,24 @@ usage() {
   proxy                  Compose 管理容器，加入 PROXY_NETWORK，不直接绑定宿主机端口。
 
 配置与环境变量：
-  ENV_FILE               默认 .env；up/build/status/down 会读取该文件。
+  ENV_FILE               默认 .env；start/stop/restart/status/build 会读取该文件。
   COMPOSE_PROJECT_NAME   Compose project 名，必须在 ENV_FILE 或运行时环境中提供。
   APP_IMAGE              静态站点镜像名。
   PREVIEW_CONTAINER_NAME / PREVIEW_HOST_PORT
   STANDALONE_CONTAINER_NAME / STANDALONE_HOST_PORT
   PROXY_NETWORK / PROXY_HOST
+
+输出：
+  stdout: check 结果、部署阶段、容器状态、启动/停止结果和 URL。
+  stderr: 缺少文件、非法 mode、Docker / Compose 错误或 project 名冲突。
+
+副作用与保护边界：
+  check 不启动容器，不执行 Docker build。
+  build 会构建 APP_IMAGE，并在 Dockerfile 构建阶段运行 npm run build。
+  start pre / start standalone 会构建镜像并 docker run 静态站点容器。
+  stop pre / stop standalone 会删除对应容器，不删除镜像。
+  restart 会先 stop 再 start；因此会重新构建镜像并创建新容器，但不删除镜像。
+  proxy 模式只管理 compose app 服务，不创建或删除外部反向代理网络。
 
 常用示例：
   cp .env.example .env
@@ -47,23 +60,27 @@ usage() {
   ./scripts/deploy.sh modes
 
   # preview / pre：本机临时验收
-  ./scripts/deploy.sh up pre
+  ./scripts/deploy.sh start pre
   ./scripts/deploy.sh status pre
-  ./scripts/deploy.sh down pre
+  ./scripts/deploy.sh restart pre
+  ./scripts/deploy.sh stop pre
 
   # standalone：单机长期运行
-  ./scripts/deploy.sh up standalone
+  ./scripts/deploy.sh start standalone
   ./scripts/deploy.sh status standalone
-  ./scripts/deploy.sh down standalone
+  ./scripts/deploy.sh restart standalone
+  ./scripts/deploy.sh stop standalone
 
   # proxy：接入已有反向代理网络
-  ./scripts/deploy.sh up proxy
+  ./scripts/deploy.sh start proxy
   ./scripts/deploy.sh status proxy
-  ./scripts/deploy.sh down proxy
+  ./scripts/deploy.sh restart proxy
+  ./scripts/deploy.sh stop proxy
 
 Exit Codes:
   0  成功
   2  缺少 command、非法 mode、缺少必要文件或 Docker/Compose 不可用
+  3  status：目标容器未运行或不存在
   4  Compose project 名冲突、容器名冲突或运行态冲突
 EOF
 }
@@ -90,13 +107,29 @@ EOF
   不启动容器，不执行 Docker build。
 EOF
       ;;
-    build|up|down|status)
+    build|start|up|stop|down|restart|status)
+      local effect
+      case "$name" in
+        build) effect="构建指定模式使用的静态站点镜像。" ;;
+        up|start) effect="启动指定 Docker 部署模式。" ;;
+        down|stop) effect="停止指定 Docker 部署模式。" ;;
+        restart) effect="先停止再启动指定 Docker 部署模式。" ;;
+        status) effect="查看指定 Docker 部署模式状态。" ;;
+      esac
       cat <<EOF
 用法：
   ./scripts/deploy.sh ${name} <preview|pre|standalone|proxy>
 
 作用域：
-  对指定 Docker 部署模式执行 ${name}。
+  ${effect}
+
+输出：
+  先打印稳定部署阶段，再透传 Docker 或 Compose 输出。
+
+常用示例：
+  ./scripts/deploy.sh ${name} pre
+  ./scripts/deploy.sh ${name} standalone
+  ./scripts/deploy.sh ${name} proxy
 EOF
       ;;
     *)
@@ -121,8 +154,9 @@ require_docker_daemon() {
   docker info >/dev/null 2>&1 || die "Docker daemon is not reachable; start Docker Desktop or Docker Engine" 2
 }
 
-deploy_env() {
+set_deploy_env_var() {
   local key="$1"
+  local dest="$2"
   local env_file
   local value
 
@@ -132,7 +166,7 @@ deploy_env() {
     value="$(env_value_from "$key" "$env_file")"
   fi
   [[ -n "$value" ]] || die "$key is required in ${ENV_FILE:-.env}" 2
-  printf "%s" "$value"
+  printf -v "$dest" "%s" "$value"
 }
 
 show_modes() {
@@ -177,11 +211,15 @@ check_deploy() {
 }
 
 build_image() {
+  local image
+  section "Build Image"
   require_env_file
   require_command docker "install Docker Desktop or Docker Engine"
+  event "STEP" "docker" "checking daemon"
   require_docker_daemon
-  section "Build Image"
-  docker build -t "$(deploy_env APP_IMAGE)" .
+  set_deploy_env_var APP_IMAGE image
+  event "STEP" "image" "building ${image}"
+  docker build -t "$image" . || die "docker build failed for image ${image}" "$?"
 }
 
 build_mode() {
@@ -194,17 +232,26 @@ build_mode() {
 
 container_exists() {
   local name="$1"
-  [[ -n "$(docker ps -a --filter "name=^/${name}$" --format '{{.Names}}')" ]]
+  local names
+  names="$(docker ps -a --filter "name=^/${name}$" --format '{{.Names}}')" \
+    || die "docker ps failed while checking container ${name}" 2
+  [[ -n "$names" ]]
 }
 
 container_running() {
   local name="$1"
-  [[ -n "$(docker ps --filter "name=^/${name}$" --format '{{.Names}}')" ]]
+  local names
+  names="$(docker ps --filter "name=^/${name}$" --format '{{.Names}}')" \
+    || die "docker ps failed while checking running container ${name}" 2
+  [[ -n "$names" ]]
 }
 
 assert_container_absent() {
   local name="$1"
-  container_exists "$name" && die "container '$name' already exists; run ./scripts/deploy.sh down for its mode first" 4
+  if container_exists "$name"; then
+    die "container '$name' already exists; run ./scripts/deploy.sh stop for its mode first" 4
+  fi
+  return 0
 }
 
 run_static_container() {
@@ -214,75 +261,106 @@ run_static_container() {
   local restart_policy="$4"
   local image
 
-  image="$(deploy_env APP_IMAGE)"
+  require_command docker "install Docker Desktop or Docker Engine"
+  event "STEP" "docker" "checking daemon"
+  require_docker_daemon
+  set_deploy_env_var APP_IMAGE image
+  event "STEP" "$mode" "checking existing container ${name}"
   assert_container_absent "$name"
   build_image
-  section "Docker ${mode}"
+  event "STEP" "$mode" "starting container ${name}"
   docker run -d \
     --name "$name" \
     --restart "$restart_policy" \
     -p "${port}:80" \
-    "$image"
+    "$image" || die "docker run failed for container ${name}" "$?"
   event "URL" "$mode" "http://127.0.0.1:${port}/"
 }
 
 up_preview() {
+  local name
+  local port
+  section "Docker preview"
   require_env_file
-  run_static_container preview "$(deploy_env PREVIEW_CONTAINER_NAME)" "$(deploy_env PREVIEW_HOST_PORT)" "no"
+  set_deploy_env_var PREVIEW_CONTAINER_NAME name
+  set_deploy_env_var PREVIEW_HOST_PORT port
+  run_static_container preview "$name" "$port" "no"
 }
 
 up_standalone() {
+  local name
+  local port
+  section "Docker standalone"
   require_env_file
-  run_static_container standalone "$(deploy_env STANDALONE_CONTAINER_NAME)" "$(deploy_env STANDALONE_HOST_PORT)" "unless-stopped"
+  set_deploy_env_var STANDALONE_CONTAINER_NAME name
+  set_deploy_env_var STANDALONE_HOST_PORT port
+  run_static_container standalone "$name" "$port" "unless-stopped"
 }
 
 up_proxy() {
+  section "Compose Proxy"
   require_env_file
   require_command docker "install Docker Desktop or Docker Engine"
+  event "STEP" "docker" "checking daemon"
   require_docker_daemon
   assert_no_compose_project_name_conflict
   build_image
-  section "Compose Proxy"
-  compose --profile proxy up -d app
+  event "STEP" "proxy" "starting compose service app"
+  compose --profile proxy up -d app || die "docker compose up failed for proxy app" "$?"
 }
 
 down_container() {
   local mode="$1"
   local name="$2"
+  local section_state="${3:-}"
+  [[ "$section_state" == "section-printed" ]] || section "Docker ${mode}"
   require_command docker "install Docker Desktop or Docker Engine"
+  event "STEP" "docker" "checking daemon"
   require_docker_daemon
-  section "Docker ${mode}"
   if ! container_exists "$name"; then
     event "STATUS" "$mode" "stopped"
     return 0
   fi
-  docker rm -f "$name"
+  event "STEP" "$mode" "removing container ${name}"
+  docker rm -f "$name" || die "docker rm failed for container ${name}" "$?"
 }
 
 down_preview() {
+  local name
+  section "Docker preview"
   require_env_file
-  down_container preview "$(deploy_env PREVIEW_CONTAINER_NAME)"
+  set_deploy_env_var PREVIEW_CONTAINER_NAME name
+  down_container preview "$name" "section-printed"
 }
 
 down_standalone() {
+  local name
+  section "Docker standalone"
   require_env_file
-  down_container standalone "$(deploy_env STANDALONE_CONTAINER_NAME)"
+  set_deploy_env_var STANDALONE_CONTAINER_NAME name
+  down_container standalone "$name" "section-printed"
 }
 
 down_proxy() {
-  require_env_file
-  assert_no_compose_project_name_conflict
   section "Compose Proxy"
-  compose --profile proxy stop app
+  require_env_file
+  require_command docker "install Docker Desktop or Docker Engine"
+  event "STEP" "docker" "checking daemon"
+  require_docker_daemon
+  assert_no_compose_project_name_conflict
+  event "STEP" "proxy" "stopping compose service app"
+  compose --profile proxy stop app || die "docker compose stop failed for proxy app" "$?"
 }
 
 status_container() {
   local mode="$1"
   local name="$2"
   local port="$3"
+  local section_state="${4:-}"
+  [[ "$section_state" == "section-printed" ]] || section "Docker ${mode}"
   require_command docker "install Docker Desktop or Docker Engine"
+  event "STEP" "docker" "checking daemon"
   require_docker_daemon
-  section "Docker ${mode}"
   if container_running "$name"; then
     docker ps --filter "name=^/${name}$" --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
     event "URL" "$mode" "http://127.0.0.1:${port}/"
@@ -297,20 +375,34 @@ status_container() {
 }
 
 status_preview() {
+  local name
+  local port
+  section "Docker preview"
   require_env_file
-  status_container preview "$(deploy_env PREVIEW_CONTAINER_NAME)" "$(deploy_env PREVIEW_HOST_PORT)"
+  set_deploy_env_var PREVIEW_CONTAINER_NAME name
+  set_deploy_env_var PREVIEW_HOST_PORT port
+  status_container preview "$name" "$port" "section-printed"
 }
 
 status_standalone() {
+  local name
+  local port
+  section "Docker standalone"
   require_env_file
-  status_container standalone "$(deploy_env STANDALONE_CONTAINER_NAME)" "$(deploy_env STANDALONE_HOST_PORT)"
+  set_deploy_env_var STANDALONE_CONTAINER_NAME name
+  set_deploy_env_var STANDALONE_HOST_PORT port
+  status_container standalone "$name" "$port" "section-printed"
 }
 
 status_proxy() {
-  require_env_file
-  assert_no_compose_project_name_conflict
   section "Compose Proxy"
-  compose --profile proxy ps app
+  require_env_file
+  require_command docker "install Docker Desktop or Docker Engine"
+  event "STEP" "docker" "checking daemon"
+  require_docker_daemon
+  assert_no_compose_project_name_conflict
+  event "STEP" "proxy" "reading compose service app"
+  compose --profile proxy ps app || die "docker compose ps failed for proxy app" "$?"
 }
 
 normalize_mode() {
@@ -348,7 +440,17 @@ status_mode() {
   esac
 }
 
-command="${1:-}"
+restart_mode() {
+  down_mode "$1"
+  up_mode "$1"
+}
+
+raw_command="${1:-}"
+command="$raw_command"
+case "$command" in
+  start) command="up" ;;
+  stop) command="down" ;;
+esac
 case "$command" in
   -h|--help|help)
     usage
@@ -359,19 +461,19 @@ case "$command" in
     ;;
   modes)
     shift
-    if args_include_help "$@"; then command_usage "$command"; exit $?; fi
+    if args_include_help "$@"; then command_usage "$raw_command"; exit $?; fi
     [[ "$#" -eq 0 ]] || die "unexpected arguments for deploy modes: $*" 2
     show_modes
     ;;
   check)
     shift
-    if args_include_help "$@"; then command_usage "$command"; exit $?; fi
+    if args_include_help "$@"; then command_usage "$raw_command"; exit $?; fi
     [[ "$#" -eq 0 ]] || die "unexpected arguments for deploy check: $*" 2
     check_deploy
     ;;
-  build|up|down|status)
+  build|up|down|restart|status)
     shift
-    if args_include_help "$@"; then command_usage "$command"; exit $?; fi
+    if args_include_help "$@"; then command_usage "$raw_command"; exit $?; fi
     mode="${1:-}"
     [[ -n "$mode" ]] || die "$command requires mode: preview, pre, standalone or proxy" 2
     mode="$(normalize_mode "$mode")" || die "$command requires mode: preview, pre, standalone or proxy" 2
@@ -381,6 +483,7 @@ case "$command" in
       build) build_mode "$mode" ;;
       up) up_mode "$mode" ;;
       down) down_mode "$mode" ;;
+      restart) restart_mode "$mode" ;;
       status) status_mode "$mode" ;;
     esac
     ;;
