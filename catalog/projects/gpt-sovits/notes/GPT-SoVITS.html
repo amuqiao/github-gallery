@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 GPT-SoVITS · 数据链视角的项目解剖</title>
+<style>
+:root{
+  --ink:#161b2e;--ink2:#4b5370;--paper:#f6f7fb;--card:#fff;--line:#e0e4f0;
+  --dark:#0e1230;--darktext:#c6cdee;
+  --c-text:#b8860b;--c-text-bg:#fdf3d8;   /* 文本:琥珀 */
+  --c-audio:#0d8f8f;--c-audio-bg:#e2f6f6; /* 音频:青 */
+  --c-token:#6d4fe0;--c-token-bg:#efeafd; /* token/特征:紫 */
+  --c-model:#d85a30;--c-model-bg:#fdeee7; /* 模型权重:珊瑚 */
+  --spec:linear-gradient(90deg,#2b1d67,#6d4fe0 40%,#0d8f8f 75%,#7ee081);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);line-height:1.9;
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif}
+::selection{background:#6d4fe033}
+a{color:#4756c9;text-decoration:none}a:hover{text-decoration:underline}
+code{background:#eceef8;border-radius:5px;padding:2px 7px;font-size:.88em;
+  font-family:"SF Mono",Consolas,monospace;color:#5a3fc0}
+pre{background:#12162b;color:#d9def5;border-radius:12px;padding:18px 20px;
+  overflow-x:auto;font-size:13px;line-height:1.75;margin:14px 0}
+pre code{background:none;padding:0;color:inherit}
+pre .c{color:#6b7396}pre .k{color:#8f7bff}pre .s{color:#5fd0b0}pre .n{color:#f0c674}
+
+/* ===== Hero ===== */
+header{background:var(--dark);color:#e9ecfb;padding:60px 24px 56px}
+.wrap{max-width:960px;margin:0 auto}
+.eyebrow{letter-spacing:.35em;font-size:12px;color:#8890c4;margin-bottom:14px}
+h1{font-family:"Noto Serif SC","Songti SC",serif;font-weight:800;line-height:1.3;
+  font-size:clamp(30px,5.5vw,50px)}
+h1 .g{background:var(--spec);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-sub{margin-top:16px;max-width:640px;color:#aab1d8;font-size:16px}
+.hero-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.tag{border:1px solid #383f6e;border-radius:999px;padding:3px 14px;font-size:13px;color:#9aa2cf}
+
+/* ===== 缩放条导航 ===== */
+nav#zoom{position:sticky;top:0;z-index:50;background:#12162bee;backdrop-filter:blur(8px);
+  border-bottom:1px solid #262c52}
+.zoom-in{max-width:960px;margin:0 auto;display:flex;overflow-x:auto;padding:0 16px}
+.zoom-in a{flex:none;padding:11px 14px;font-size:13px;color:#7d85b5;border-bottom:3px solid transparent;white-space:nowrap}
+.zoom-in a b{font-family:"SF Mono",Consolas,monospace;font-weight:700;margin-right:5px}
+.zoom-in a.on{color:#fff;border-bottom-color:#6d4fe0}
+.zoom-in a:hover{text-decoration:none;color:#cdd3f2}
+
+/* ===== 主体 ===== */
+main{max-width:960px;margin:0 auto;padding:52px 24px 80px}
+section.layer{margin-bottom:80px;scroll-margin-top:64px}
+.lhead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.lno{font-family:"SF Mono",Consolas,monospace;font-size:13px;font-weight:700;color:#fff;
+  background:var(--ink);border-radius:8px;padding:3px 10px}
+h2{font-family:"Noto Serif SC","Songti SC",serif;font-size:27px}
+.lq{color:var(--ink2);font-size:14px;margin:6px 0 26px}
+h3{font-size:17.5px;margin:30px 0 10px;padding-left:12px;border-left:4px solid #6d4fe0}
+p{margin-bottom:13px}
+strong{color:#0d1126}
+
+/* 卡片/表格/提示 */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:18px 20px}
+.card h4{font-size:15px;margin-bottom:5px}
+.card p{font-size:13.5px;color:var(--ink2);margin:0}
+table{width:100%;border-collapse:collapse;margin-top:14px;background:var(--card);
+  border-radius:12px;overflow:hidden;font-size:13.5px}
+th,td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:var(--dark);color:#dfe3ff;font-weight:600;font-size:12.5px}
+tr:last-child td{border-bottom:none}
+td:first-child{font-weight:600;white-space:nowrap}
+.note{border-left:5px solid #e8b30c;background:#fdf6e0;border-radius:0 12px 12px 0;
+  padding:14px 20px;font-size:14px;color:#5d4c12;margin-top:16px}
+.note strong{color:#7a5c00}
+
+/* 检查点 */
+.checkpoint{margin-top:28px;background:#eef1fb;border:1.5px dashed #a9b3e0;border-radius:12px;
+  padding:14px 20px;font-size:14px;color:#3a4380}
+.checkpoint::before{content:"✅ 检查点 · 读完本层你应能回答:";display:block;
+  font-weight:700;margin-bottom:4px;color:#2c3570}
+
+/* 数据形态图例 */
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
+.lg{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2)}
+.dot{width:13px;height:13px;border-radius:4px;flex:none}
+.d-text{background:var(--c-text)}.d-audio{background:var(--c-audio)}
+.d-token{background:var(--c-token)}.d-model{background:var(--c-model)}
+
+/* 边界图/主链图 */
+.bio{display:flex;align-items:stretch;gap:0;margin:18px 0;flex-wrap:wrap}
+.bio .io{flex:1;min-width:180px;border:1.5px dashed #b6bede;border-radius:12px;
+  padding:14px 16px;font-size:13.5px;color:#3c4470;background:#f0f2fa}
+.bio .bx{flex:1.2;min-width:200px;background:var(--dark);color:#e6eaff;border-radius:12px;
+  padding:14px 16px;font-size:13.5px;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.bio .ar{display:flex;align-items:center;padding:0 10px;color:#98a0c8;font-size:20px}
+.bio b{display:block;margin-bottom:4px}
+@media(max-width:700px){.bio{flex-direction:column}.bio .ar{justify-content:center;transform:rotate(90deg);padding:4px 0}}
+
+/* L2 主链条(可点击) */
+.chain{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:18px 0 6px;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.chip{border:none;cursor:pointer;border-radius:10px;padding:9px 13px;font-size:13.5px;
+  font-weight:600;color:#fff;font-family:inherit;transition:transform .15s}
+.chip:hover{transform:translateY(-2px)}
+.chip small{display:block;font-weight:400;font-size:11px;opacity:.85}
+.ca{color:#98a0c8;font-size:15px}
+.hint{font-size:12.5px;color:var(--ink2)}
+
+/* 五要素卡片 */
+.step{background:var(--card);border:1px solid var(--line);border-radius:15px;
+  margin-top:22px;overflow:hidden;transition:box-shadow .3s,border-color .3s}
+.step.flash{border-color:#6d4fe0;box-shadow:0 0 0 4px #6d4fe030}
+.step-h{padding:14px 20px;color:#fff;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.step-h .sn{font-family:"SF Mono",Consolas,monospace;font-weight:800}
+.step-h h4{font-size:16px}
+.step-h code{background:#ffffff2b;color:#fff;font-size:12px}
+.f5{display:grid;grid-template-columns:86px 1fr;border-top:1px solid var(--line)}
+.f5>dt{padding:11px 14px;font-size:12.5px;font-weight:700;color:var(--ink2);
+  background:#f4f5fa;border-bottom:1px solid var(--line)}
+.f5>dd{padding:11px 16px;font-size:13.5px;border-bottom:1px solid var(--line)}
+.f5>dt:last-of-type,.f5>dd:last-of-type{border-bottom:none}
+.sample{background:#12162b;color:#cdd4f0;border-radius:8px;padding:8px 12px;margin-top:6px;
+  font-family:"SF Mono",Consolas,monospace;font-size:12px;line-height:1.7;overflow-x:auto;white-space:pre}
+.sample .lab{color:#7d85b5}
+.pill{display:inline-block;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600;margin-right:4px}
+.p-text{background:var(--c-text-bg);color:var(--c-text)}
+.p-audio{background:var(--c-audio-bg);color:var(--c-audio)}
+.p-token{background:var(--c-token-bg);color:var(--c-token)}
+.p-model{background:var(--c-model-bg);color:var(--c-model)}
+@media(max-width:560px){.f5{grid-template-columns:1fr}.f5>dt{border-bottom:none;padding-bottom:2px}}
+
+/* L3 Tabs */
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 0}
+.tab{border:1.5px solid var(--line);background:var(--card);border-radius:10px 10px 0 0;
+  padding:9px 18px;font-size:14px;cursor:pointer;font-family:inherit;color:var(--ink2);font-weight:600}
+.tab.on{background:var(--dark);color:#fff;border-color:var(--dark)}
+.tabpanes{border:1.5px solid var(--line);border-radius:0 14px 14px 14px;background:var(--card);padding:20px 22px}
+.pane{display:none}.pane.on{display:block}
+.pane p{font-size:14px}
+
+/* 折叠 */
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:0;margin-top:10px;overflow:hidden}
+summary{cursor:pointer;padding:13px 18px;font-weight:600;font-size:14.5px;list-style:none}
+summary::before{content:"▸ ";color:#6d4fe0}
+details[open] summary::before{content:"▾ "}
+details .din{padding:0 18px 14px;font-size:14px;color:#2a3050}
+
+/* 术语提示 */
+.term{border-bottom:1.5px dotted #6d4fe0;cursor:help;position:relative}
+.term:hover::after{content:attr(data-tip);position:absolute;left:0;bottom:135%;z-index:20;
+  background:var(--dark);color:#e6eaff;font-size:12.5px;line-height:1.6;border-radius:8px;
+  padding:8px 12px;width:min(300px,72vw);font-weight:400}
+
+footer{background:var(--dark);color:#8890c4;text-align:center;padding:28px 24px;font-size:13px;line-height:2}
+ol.steps{list-style:none;counter-reset:s;margin-top:10px}
+ol.steps li{position:relative;padding:0 0 16px 46px}
+ol.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:2px;
+  width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-weight:700;
+  display:flex;align-items:center;justify-content:center;font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">ONE ARTICLE · DATA-CHAIN VIEW</div>
+    <h1>一文读懂 <span class="g">GPT-SoVITS</span><br>把"声音克隆"拆成一条看得见的数据链</h1>
+    <p class="hero-sub">
+      本文不按模块讲工程,而是沿着<strong style="color:#fff">数据被加工的路径</strong>逐层放大:
+      先看清边界(L0),再用一段伪代码看骨架(L1),然后单步走完主链的每次数据变换(L2),
+      再看多条链路如何拼装(L3),最后才看工程外壳(L4)。
+    </p>
+    <div class="hero-meta">
+      <span class="tag">RVC-Boss / GPT-SoVITS</span>
+      <span class="tag">MIT License</span>
+      <span class="tag">Python 3.10–3.12 · PyTorch</span>
+      <span class="tag">Zero-shot / Few-shot 语音克隆 TTS</span>
+    </div>
+  </div>
+</header>
+
+<nav id="zoom"><div class="zoom-in">
+  <a href="#l0" data-l="l0"><b>L0</b>项目概览</a>
+  <a href="#l1" data-l="l1"><b>L1</b>核心流程抽象</a>
+  <a href="#l2" data-l="l2"><b>L2</b>主链路详解</a>
+  <a href="#l3" data-l="l3"><b>L3</b>功能模式组合</a>
+  <a href="#l4" data-l="l4"><b>L4</b>工程化设计</a>
+  <a href="#end" data-l="end"><b>尾</b>快速上手</a>
+</div></nav>
+
+<main>
+
+<!-- ============ L0 ============ -->
+<section class="layer" id="l0">
+  <div class="lhead"><span class="lno">L0</span><h2>项目概览</h2></div>
+  <p class="lq">本层只回答:它是个什么东西?边界在哪?——只看轮廓,不看内部。</p>
+
+  <p>
+    <strong>一句话定位:</strong>GPT-SoVITS 是一个开源的少样本语音克隆与文本转语音(TTS)系统——
+    给它一段 <strong>5 秒参考音频</strong>,它就能用这个音色朗读任意文本(零样本);
+    给它 <strong>1 分钟素材微调</strong>,相似度还能大幅提升(少样本)。
+  </p>
+  <p>
+    <strong>痛点场景:</strong>传统 TTS 想合成"某个特定人"的声音,需要数小时录音棚级素材训练专属模型,
+    普通人根本玩不起。GPT-SoVITS 把这个门槛压到了"手机随手录一分钟",
+    这就是它 2024 年初开源后迅速斩获数万 Star 的原因。
+  </p>
+
+  <h3>项目档案卡</h3>
+  <table>
+    <tr><th style="width:130px">条目</th><th>内容</th></tr>
+    <tr><td>作者 / 协议</td><td>RVC-Boss(花儿不哭) / MIT License</td></tr>
+    <tr><td>语言 / 技术栈</td><td>Python 3.10–3.12 · PyTorch · Gradio(WebUI) · FFmpeg</td></tr>
+    <tr><td>运行形态</td><td>WebUI(主要)· HTTP API(api_v2.py)· Windows 整合包 · Docker · Colab</td></tr>
+    <tr><td>核心依赖模型</td><td><span class="term" data-tip="HuBERT:自监督语音表征模型,把波形编码为帧级特征向量,是本项目'语义 token'的来源">HuBERT</span>(语音特征)、中文 BERT(文本特征)、官方预训练底模(v1→v2→v3→v4 迭代)</td></tr>
+    <tr><td>硬件门槛</td><td>约 6GB 显存可推理与微调;有 CPU 优化分支;Mac 可用</td></tr>
+    <tr><td>支持语言</td><td>中 / 英 / 日 / 韩 / 粤,支持跨语言合成(中文素材克隆的音色可说英语)</td></tr>
+  </table>
+
+  <h3>系统边界图</h3>
+  <p>先把它当黑盒——只看进什么、出什么:</p>
+  <div class="bio">
+    <div class="io"><b>输入</b>
+      ① 目标文本(想让它说的话,UTF-8 字符串)<br>
+      ② 参考音频(3~10 秒 wav/mp3,决定音色与语气)<br>
+      ③ <em>可选:</em>1~5 分钟微调素材(提升相似度)
+    </div>
+    <div class="ar">→</div>
+    <div class="bx"><b>GPT-SoVITS</b>(暂时不看内部)</div>
+    <div class="ar">→</div>
+    <div class="io"><b>输出</b>
+      目标音色朗读目标文本的语音文件<br>(wav,32kHz;v3/v4 可 48kHz)<br>
+      <em>微调路径额外产出:</em>两个专属权重文件
+    </div>
+  </div>
+
+  <h3>仓库目录导读</h3>
+  <table>
+    <tr><th style="width:170px">顶层条目</th><th>扮演的角色</th></tr>
+    <tr><td>GPT_SoVITS/</td><td><strong>核心逻辑所在</strong>:两大模型的实现、文本前端、特征提取、训练与推理代码</td></tr>
+    <tr><td>tools/</td><td>素材加工车间:人声分离(UVR5)、切片、降噪、ASR、标注校对工具</td></tr>
+    <tr><td>webui.py</td><td><strong>图形界面入口</strong>:把所有环节编排成网页上的一排按钮</td></tr>
+    <tr><td>api.py / api_v2.py</td><td>推理服务入口:把合成能力暴露为 HTTP 接口</td></tr>
+    <tr><td>config.py</td><td>全局配置:模型路径、设备、端口等</td></tr>
+    <tr><td>install.sh / .ps1 / go-webui.bat</td><td>安装与一键启动脚本(Linux·macOS / Windows)</td></tr>
+    <tr><td>Dockerfile / Docker/</td><td>容器化部署</td></tr>
+    <tr><td>docs/</td><td>多语言文档与更新日志</td></tr>
+  </table>
+
+  <div class="note">
+    <strong>心智模型:</strong>把 GPT-SoVITS 想象成<strong>一位配音演员</strong>——
+    「GPT」是他读稿的<em>语感</em>(在哪停顿、什么语速、什么情绪),
+    「SoVITS」是他的<em>嗓子</em>(音色本身);
+    你给的参考音频,就是让他"听一段示范再开口"。全项目所有代码,都在为这两件事服务。
+  </div>
+
+  <h3>阅读地图</h3>
+  <p style="font-size:14px">
+    <strong>L1</strong> 用 ≤50 行伪代码看它怎么跑 → <strong>L2</strong> 单步走完主链,看每步数据长什么样(全文重心)→
+    <strong>L3</strong> 看微调链、API 链怎么与主链拼接 → <strong>L4</strong> 工程外壳(可跳过)→ <strong>尾声</strong> 上手。
+    只想快速会用:读 L0、L1 和尾声即可。
+  </p>
+
+  <div class="checkpoint">GPT-SoVITS 输入什么、输出什么?"零样本"和"少样本"各指什么?"GPT"和"SoVITS"两个词分别对应配音演员的什么?</div>
+</section>
+
+<!-- ============ L1 ============ -->
+<section class="layer" id="l1">
+  <div class="lhead"><span class="lno">L1</span><h2>核心流程抽象</h2></div>
+  <p class="lq">本层回答:用一个脚本概括,它怎么跑?——剥掉全部工程,只剩主干道。</p>
+
+  <p>
+    整个项目的<strong>推理主链</strong>(即最初的 PoC 链路)本质上就是下面这个函数。
+    五个编号 ①–⑤ 与 L2 的五张详解卡片一一对应——这段伪代码就是 L2 的目录:
+  </p>
+
+<pre><code><span class="c"># GPT-SoVITS 推理主链 · 伪代码骨架(编号对应 L2 各步)</span>
+<span class="k">def</span> <span class="n">tts</span>(text, ref_wav, ref_text):
+
+    <span class="c"># ① 文本前端:文字 → 音素序列(+中文 BERT 特征)</span>
+    phones, bert         = <span class="n">text_frontend</span>(text)      <span class="c"># "你好" → [n,i2,h,ao3]</span>
+    ref_phones, ref_bert = <span class="n">text_frontend</span>(ref_text)
+
+    <span class="c"># ② 参考音频编码:波形 → 语义 token + 音色参考</span>
+    ssl           = hubert(resample(ref_wav, <span class="s">16000</span>)) <span class="c"># 自监督语音特征</span>
+    prompt_tokens = <span class="n">quantize</span>(ssl)                     <span class="c"># 离散"语音的字"</span>
+    timbre_ref    = mel(ref_wav)                      <span class="c"># 音色参考,留给 ④</span>
+
+    <span class="c"># ③ GPT 自回归生成:像续写文章一样"续写语音"</span>
+    target_tokens = <span class="n">gpt_generate</span>(
+        prompt = ref_phones + phones,   <span class="c"># 说什么(内容)</span>
+        prefix = prompt_tokens,         <span class="c"># 怎么说(风格示例)</span>
+        top_k=<span class="s">15</span>, temperature=<span class="s">1.0</span>)
+
+    <span class="c"># ④ SoVITS 声学解码:语义 token + 音色 → 波形</span>
+    wav = <span class="n">sovits_decode</span>(target_tokens, phones, timbre_ref)
+
+    <span class="c"># ⑤ 后处理:分句拼接、句间静音、导出文件</span>
+    <span class="k">return</span> <span class="n">postprocess</span>(wav)</code></pre>
+
+  <p>
+    看懂这 20 行,你已经理解了项目的一半:数据只经历了两次关键"变身"——
+    <span class="pill p-text">文本</span>和<span class="pill p-audio">音频</span>先各自变成中间表示
+    <span class="pill p-token">语义 token</span>,再由它变回<span class="pill p-audio">音频</span>。
+    <strong>语义 token 是全项目的枢纽</strong>:它记录"说了什么、什么节奏",却几乎不带音色——
+    这个"解耦"正是 5 秒就能换嗓子的原理。
+  </p>
+
+  <div class="checkpoint">主链有哪五步?哪个中间产物是全项目的枢纽,它记录什么、不记录什么?</div>
+</section>
+
+<!-- ============ L2 ============ -->
+<section class="layer" id="l2">
+  <div class="lhead"><span class="lno">L2</span><h2>主链路详解</h2></div>
+  <p class="lq">本层回答:每一步,数据到底怎么被加工?——单步执行,盯住每一跳的入参与出参。(全文重心)</p>
+
+  <p>数据形态用颜色标记,贯穿本层所有卡片:</p>
+  <div class="legend">
+    <span class="lg"><span class="dot d-text"></span>文本 / 音素</span>
+    <span class="lg"><span class="dot d-audio"></span>音频 / 波形</span>
+    <span class="lg"><span class="dot d-token"></span>语义 token / 特征</span>
+    <span class="lg"><span class="dot d-model"></span>模型权重</span>
+  </div>
+
+  <div class="chain" id="chainbar">
+    <button class="chip" style="background:var(--c-text)" data-t="s1">① 文本前端<small>文本→音素</small></button><span class="ca">→</span>
+    <button class="chip" style="background:var(--c-audio)" data-t="s2">② 参考音频编码<small>波形→token</small></button><span class="ca">→</span>
+    <button class="chip" style="background:var(--c-token)" data-t="s3">③ GPT 生成<small>续写 token</small></button><span class="ca">→</span>
+    <button class="chip" style="background:var(--c-token)" data-t="s4">④ SoVITS 解码<small>token→波形</small></button><span class="ca">→</span>
+    <button class="chip" style="background:var(--c-audio)" data-t="s5">⑤ 后处理<small>拼接导出</small></button>
+  </div>
+  <p class="hint">👆 这是 L0 边界图里那个黑盒的展开态。点击任一步骤,跳转到对应五要素卡片。</p>
+
+  <!-- ① -->
+  <div class="step" id="s1">
+    <div class="step-h" style="background:var(--c-text)"><span class="sn">①</span><h4>文本前端</h4><code>text_frontend()</code></div>
+    <dl class="f5">
+      <dt>入参</dt><dd><span class="pill p-text">文本</span>UTF-8 字符串,任意语言混排
+        <div class="sample"><span class="lab"># 示意</span>
+text = "今天天气真不错。"</div></dd>
+      <dt>处理</dt><dd>清洗与<span class="term" data-tip="Text Normalization:把'2024年'读成'二零二四年'、'3.5'读成'三点五'这类书面→口语的规整">文本归一化</span> → 分句 →
+        <span class="term" data-tip="Grapheme-to-Phoneme:文字转发音单元。中文转拼音声韵母+声调,英文用音标音素">G2P 音素化</span>;
+        中文额外经过 BERT 提取字级语义特征,用于消歧多音字("行长" háng/xíng)并辅助韵律。<strong>为什么必须做</strong>:模型不认识汉字,只认识"发音单元"的 ID。</dd>
+      <dt>出参</dt><dd><span class="pill p-text">音素 ID 序列</span> + <span class="pill p-token">BERT 特征矩阵</span>
+        <div class="sample"><span class="lab"># 示意</span>
+phones = [j, in1, t, ian1, t, ian1, q, i4, ...]   → ID [57, 102, 88, ...]
+bert   = 矩阵 [1024 维 × 文本长度]</div></dd>
+      <dt>验收</dt><dd>👁 音素序列非空、长度与字数同量级、无未知符号(OOV 会直接报错);<br>
+        ⌨ 在 Python 里调用 <code>clean_text("今天…")</code> 打印结果,检查多音字是否读对。</dd>
+      <dt>流向</dt><dd>音素给 ③ 当"内容提示",也给 ④ 做发音条件;BERT 特征随行。</dd>
+    </dl>
+  </div>
+
+  <!-- ② -->
+  <div class="step" id="s2">
+    <div class="step-h" style="background:var(--c-audio)"><span class="sn">②</span><h4>参考音频编码</h4><code>encode_reference()</code></div>
+    <dl class="f5">
+      <dt>入参</dt><dd><span class="pill p-audio">参考音频</span>3~10 秒干净人声 + 其对应文本
+        <div class="sample"><span class="lab"># 示意 · 音频参数</span>
+格式 wav/mp3 · 时长 5.2s · 任意采样率(内部会重采样)</div></dd>
+      <dt>处理</dt><dd>重采样至 16kHz 单声道 → <strong>HuBERT</strong> 提取<span class="term" data-tip="Self-Supervised Learning 特征:HuBERT 每 20ms 输出一个 1024 维向量,编码'这一瞬间发的是什么音'">SSL 特征</span>(每 20ms 一帧)→
+        量化器把连续特征映射到码本,得到离散<strong>语义 token</strong>;同时对原始波形提 mel 频谱作音色参考。
+        <strong>为什么必须做</strong>:③ 是"语言模型",只能吃离散序列,必须先把声音翻译成"语音的字"。</dd>
+      <dt>出参</dt><dd><span class="pill p-token">prompt_tokens</span>(约 50 个/秒)+ <span class="pill p-audio">音色参考谱</span>
+        <div class="sample"><span class="lab"># 示意</span>
+prompt_tokens = [312, 87, 87, 954, 13, ...]   # 长度 ≈ 5.2s × 50 ≈ 260
+timbre_ref    = mel 频谱矩阵 [100 × T]</div></dd>
+      <dt>验收</dt><dd>👁 token 数 ≈ 时长 × 50;全部值 < 码本大小;<br>
+        ⌨ <code>ffprobe ref.wav</code> 确认时长在 3~10s 区间(超限 WebUI 会拒绝——这本身就是官方内置的验收)。</dd>
+      <dt>流向</dt><dd>prompt_tokens 给 ③ 当风格前缀;音色参考谱越过 ③ 直达 ④。<strong>注意这条"越线":语义与音色在此分流,到 ④ 才汇合。</strong></dd>
+    </dl>
+  </div>
+
+  <!-- ③ -->
+  <div class="step" id="s3">
+    <div class="step-h" style="background:var(--c-token)"><span class="sn">③</span><h4>GPT 自回归生成</h4><code>gpt_generate()</code></div>
+    <dl class="f5">
+      <dt>入参</dt><dd><span class="pill p-text">参考+目标音素</span> + <span class="pill p-token">prompt_tokens</span></dd>
+      <dt>处理</dt><dd>一个<span class="term" data-tip="Autoregressive Transformer:与 ChatGPT 同族的结构,逐个预测下一个 token,直到输出终止符">自回归 Transformer</span>把任务当成"续写":
+        它见过「参考音素 ↔ 参考 token」的对应示范,现在给定目标音素,逐个采样出目标语义 token。
+        <code>top_k / temperature</code> 控制随机性。<strong>这一步决定韵律</strong>——停顿、语速、语气全在这里产生,所以叫"GPT"。</dd>
+      <dt>出参</dt><dd><span class="pill p-token">target_tokens</span>
+        <div class="sample"><span class="lab"># 示意</span>
+target_tokens = [77, 502, 502, 13, 891, ...]   # 长度 ≈ 目标语音秒数 × 50</div></dd>
+      <dt>验收</dt><dd>👁 <strong>token 数 ÷ 50 ≈ 预期语音秒数</strong>:明显过长 = 复读/发疯,过短 = 吞字漏句;<br>
+        ⌨ 推理日志会打印生成长度;异常时调低 temperature、检查参考文本与参考音频是否真实对应。</dd>
+      <dt>流向</dt><dd>交给 ④ "配上嗓子"。</dd>
+    </dl>
+  </div>
+
+  <!-- ④ -->
+  <div class="step" id="s4">
+    <div class="step-h" style="background:var(--c-token)"><span class="sn">④</span><h4>SoVITS 声学解码</h4><code>sovits_decode()</code></div>
+    <dl class="f5">
+      <dt>入参</dt><dd><span class="pill p-token">target_tokens</span> + <span class="pill p-text">目标音素</span> + <span class="pill p-audio">音色参考谱</span>(来自 ②)</dd>
+      <dt>处理</dt><dd>基于 <span class="term" data-tip="VITS:变分推断+对抗训练的端到端声学模型,能从中间表示直接生成波形,不需独立声码器">VITS</span> 结构:
+        token 上采样为帧级特征并与音素对齐;音色参考经说话人编码器注入解码器;对抗训练的解码器直接吐出波形。
+        <strong>语义与音色在此汇合</strong>——同一串 token 配不同参考音频,就是不同的人在说同一句话。</dd>
+      <dt>出参</dt><dd><span class="pill p-audio">波形张量</span>
+        <div class="sample"><span class="lab"># 示意</span>
+wav = float32 数组, shape [1, 166400]   # 32kHz × 5.2s(v3/v4 可 48kHz)</div></dd>
+      <dt>验收</dt><dd>👁(耳)清晰、无金属音/电流声,音色与参考一致;<br>
+        ⌨ <code>ffprobe out.wav</code>:采样率 32000(或 48000),时长 ≈ token 数 ÷ 50。</dd>
+      <dt>流向</dt><dd>单句波形交给 ⑤。</dd>
+    </dl>
+  </div>
+
+  <!-- ⑤ -->
+  <div class="step" id="s5">
+    <div class="step-h" style="background:var(--c-audio)"><span class="sn">⑤</span><h4>后处理</h4><code>postprocess()</code></div>
+    <dl class="f5">
+      <dt>入参</dt><dd><span class="pill p-audio">各分句波形</span>(长文本在 ① 已被切成多句,③④ 逐句执行)</dd>
+      <dt>处理</dt><dd>按原文顺序拼接、句间插入可调静音、响度归一,编码导出。<strong>为什么分句</strong>:自回归生成越长越不稳,短句是质量保险。</dd>
+      <dt>出参</dt><dd><span class="pill p-audio">最终音频文件</span>(.wav)——即 L0 边界图的输出,<strong>闭环完成</strong>。</dd>
+      <dt>验收</dt><dd>👁(耳)整段试听,句间停顿自然;⌨ <code>ffprobe</code> 总时长 = 各句之和 + 静音。</dd>
+      <dt>流向</dt><dd>返回给 WebUI 播放器 / API 响应体。</dd>
+    </dl>
+  </div>
+
+  <div class="note" style="margin-top:24px">
+    <strong>知其所以然 · 一句话总结本层:</strong>整条链只做一件事——
+    把"说什么"(文本→音素→token)与"谁在说"(参考音频→音色谱)<strong>分开加工、最后汇合</strong>。
+    理解了 ② 的分流与 ④ 的汇合,就理解了这个项目为什么能"五秒换嗓"。
+  </div>
+
+  <div class="checkpoint">语义 token 在哪一步产生、哪一步消费?音色信息走的是哪条"越线"路径?③ 输出 token 过长意味着什么故障?</div>
+</section>
+
+<!-- ============ L3 ============ -->
+<section class="layer" id="l3">
+  <div class="lhead"><span class="lno">L3</span><h2>功能模式组合</h2></div>
+  <p class="lq">本层回答:多个功能怎么由同一批步骤拼出来?——换乘图视角。</p>
+
+  <p>
+    项目对外有三种玩法:零样本推理、少样本微调、API 服务。
+    它们不是三套独立代码,而是<strong>同一批处理步骤的三种拼法</strong>:
+  </p>
+
+  <div class="tabs" id="tabs3">
+    <button class="tab on" data-p="pa">链路 A · 零样本推理</button>
+    <button class="tab" data-p="pb">链路 B · 少样本微调</button>
+    <button class="tab" data-p="pc">链路 C · API 服务</button>
+  </div>
+  <div class="tabpanes">
+    <div class="pane on" id="pa">
+      <p><strong>就是 L2 主链本身</strong>:①→②→③→④→⑤,权重全部使用官方预训练底模。
+      不训练任何东西,参考音频即时生效。质量下限取决于参考音频与底模的"缘分",这正是链路 B 存在的理由。</p>
+    </div>
+    <div class="pane" id="pb">
+      <p>微调链不合成语音,它的产物是<span class="pill p-model">两个权重文件</span>,用来<strong>替换主链 ③ 和 ④ 的大脑</strong>。步骤(对应 WebUI 的一排按钮):</p>
+      <ol class="steps">
+        <li><strong>素材加工</strong>(tools/):原始录音 → 人声分离(UVR5,可选)→ 切片成 5~10s 小段 → 降噪(可选)。产物:一堆干净的 <span class="pill p-audio">wav 段</span>。</li>
+        <li><strong>ASR 自动标注</strong>:每段 wav → 文本,生成 .list 标注文件,可人工校对。
+          <div class="sample"><span class="lab"># .list 示意(路径|说话人|语言|文本)</span>
+slicer/vocal_01.wav|speaker1|ZH|今天我们来聊聊开源。</div></li>
+        <li><strong>数据集格式化</strong>:对每条素材执行<strong>与主链①②完全同款</strong>的加工——文本→音素+BERT(=①)、wav→HuBERT SSL 特征、SSL→语义 token(=②)。</li>
+        <li><strong>微调 SoVITS</strong>:用「token+音素 → 该说话人真实波形」的配对,训练 ④ 的权重(.pth)——教会"嗓子"。</li>
+        <li><strong>微调 GPT</strong>:用「音素 → token」的配对,训练 ③ 的权重(.ckpt)——教会"语感"。</li>
+      </ol>
+      <p><strong>关键洞察:</strong>训练与推理共享同一套数据表示。第 3 步不是新发明,就是把主链的①②批量跑在素材上——所以读懂了 L2,链路 B 自动读懂了一大半。</p>
+    </div>
+    <div class="pane" id="pc">
+      <p><code>api_v2.py</code> 把主链包装成 HTTP 服务:请求体 JSON(文本、参考音频路径、参数)→ 服务端执行 ①–⑤ → 返回音频流。
+      链路结构与 A 完全相同,只是换了进出口的"皮"。可动态切换已微调的权重,是接入 pyVideoTrans 等下游工具的方式。</p>
+      <div class="sample"><span class="lab"># 请求示意</span>
+POST /tts  {"text":"你好世界","text_lang":"zh",
+            "ref_audio_path":"ref.wav","prompt_text":"示范文本","prompt_lang":"zh"}</div>
+    </div>
+  </div>
+
+  <h3>链路组合图(文字版)</h3>
+  <div class="bio">
+    <div class="io"><b>链路 B · 微调</b>素材加工 → 标注 → <strong>复用①②</strong> → 训练<br>产出 <span class="pill p-model">GPT 权重</span><span class="pill p-model">SoVITS 权重</span></div>
+    <div class="ar">⇣ 替换③④的大脑</div>
+    <div class="bx"><b>主链 ①→②→③→④→⑤</b>链路 A 直接走底模<br>链路 C 套上 HTTP 外壳</div>
+    <div class="ar">→</div>
+    <div class="io"><b>语音成品</b><span class="pill p-audio">wav</span></div>
+  </div>
+
+  <div class="checkpoint">微调链路的最终产物是什么?它与主链在哪两个环节交接?为什么说"数据集格式化"是主链①②的复用?</div>
+</section>
+
+<!-- ============ L4 ============ -->
+<section class="layer" id="l4">
+  <div class="lhead"><span class="lno">L4</span><h2>工程化设计(附录)</h2></div>
+  <p class="lq">本层回答:脚本怎么变成产品?——⚠️ 跳过本层完全不影响理解原理。</p>
+
+  <p>L1 的伪代码是一个函数;真实项目为了让"普通人也能用",在它外面包了几层壳。每层壳对应裸脚本的一个痛点:</p>
+  <table>
+    <tr><th style="width:190px">工程设施</th><th>解决裸脚本的什么痛点</th></tr>
+    <tr><td>webui.py(Gradio 界面)</td><td>不会写代码的人无法调用函数 → 把每个环节做成网页按钮,可视化编排全流程</td></tr>
+    <tr><td>子进程隔离执行</td><td>训练/推理共存会挤爆显存,一处崩溃全盘皆输 → 每个按钮启动独立子进程跑对应脚本,跑完释放显存、崩溃互不影响</td></tr>
+    <tr><td>tools/ 工具链集成</td><td>素材加工要装五六个独立软件 → UVR5、切片、降噪、ASR、标注器全部内置</td></tr>
+    <tr><td>config.py + 版本管理</td><td>v1–v4 底模路径、设备选择散落各处 → 集中配置,支持多版本底模共存切换</td></tr>
+    <tr><td>api.py / api_v2.py</td><td>函数只能本机调用 → 服务化,供下游程序远程使用</td></tr>
+    <tr><td>整合包 / Docker / Colab / install 脚本</td><td>Python 环境配置劝退小白 → 解压即用 / 一条命令 / 免费云端三条路</td></tr>
+  </table>
+  <p style="margin-top:14px">
+    <strong>与 L1 对照:</strong>伪代码里的每个函数调用,在工程里都是"一个可独立运行的脚本 + 一个界面按钮 + 一次子进程调度"。
+    结构没变,只是每一环都穿上了铠甲。
+  </p>
+  <div class="checkpoint">webui.py 为什么用子进程而不是直接函数调用来执行各环节?(提示:显存与崩溃隔离)</div>
+</section>
+
+<!-- ============ 尾声 ============ -->
+<section class="layer" id="end">
+  <div class="lhead"><span class="lno">尾声</span><h2>快速上手</h2></div>
+  <p class="lq">跑通第一个例子的最短路径。</p>
+
+  <h3>最短路径(Windows,零代码)</h3>
+  <ol class="steps">
+    <li>从 GitHub Releases / 官方文档下载 <strong>Windows 整合包</strong>,解压到纯英文路径。</li>
+    <li>双击 <code>go-webui.bat</code>,浏览器自动打开 WebUI。</li>
+    <li>切到推理页:上传一段 3~10 秒干净人声 + 填入它对应的文本,再输入想合成的目标文本,点合成——这就是链路 A(L2 主链)。</li>
+    <li>想更像?按 L3 链路 B 的五步走一遍微调(约 1~5 分钟素材,消费级 GPU 十几分钟出权重)。</li>
+  </ol>
+  <p>Linux/macOS 源码部署:<code>conda create -n GPTSoVits python=3.10</code> 后运行仓库内 <code>install.sh</code>(可选参数指定 CUDA/ROCm/CPU 与模型下载源),再 <code>python webui.py</code>。</p>
+
+  <h3>常见坑</h3>
+  <div class="cards">
+    <div class="card"><h4>参考音频质量 = 上限</h4><p>带混响/底噪的参考会整体拖垮 ③④ 的表现;先用 tools 里的 UVR5 和降噪处理。</p></div>
+    <div class="card"><h4>参考文本必须真实对应</h4><p>② 依赖「参考音素 ↔ 参考 token」的真实对照,填错文本 ③ 会学到错误映射,输出混乱。</p></div>
+    <div class="card"><h4>长文本发疯</h4><p>③ 是自回归模型,超长单句易复读;依赖 ① 的切句,或手动加标点断句。</p></div>
+    <div class="card"><h4>路径与显存</h4><p>Windows 用纯英文路径;显存 6GB 是舒适线,不足可选 CPU 优化分支(速度会慢)。</p></div>
+  </div>
+
+  <h3>关键概念速查</h3>
+  <details><summary>语义 token</summary><div class="din">由 HuBERT 特征量化而来的离散序列,约 50 个/秒。类比:语音的"拼音"——记录说了什么和节奏,几乎不带音色。全项目的数据枢纽。</div></details>
+  <details><summary>零样本 / 少样本</summary><div class="din">零样本 = 不训练,给 5 秒参考即合成(链路 A);少样本 = 用 1 分钟素材微调③④权重再合成(链路 B),相似度更高。</div></details>
+  <details><summary>HuBERT / BERT / VITS</summary><div class="din">HuBERT:语音自监督模型,声音→特征(②的核心);BERT:文本模型,帮中文消多音字(①);VITS:端到端声学模型,token→波形(④的骨架)。</div></details>
+  <details><summary>底模与微调权重</summary><div class="din">底模 = 官方在大规模多说话人数据上预训练的通用权重(v1→v4 迭代);微调权重 = 链路 B 在底模基础上为特定音色训练的 .ckpt(GPT)+ .pth(SoVITS)。</div></details>
+
+  <div class="note">
+    <strong>合规提醒:</strong>克隆真人声音必须取得本人明确授权;未经许可用于冒充、诈骗在多数司法辖区违法(中国《民法典》明确保护声音权益,深度合成内容需显著标识)。
+  </div>
+
+  <p style="margin-top:20px">
+    <strong>一段话总结:</strong>GPT-SoVITS = 一条"文本与音色分开加工、经语义 token 汇合"的语音生成链。
+    ①② 造原料,③ 定语感,④ 给嗓子,⑤ 出成品;微调链只是给③④换大脑;WebUI/API 只是这条链的两身衣服。
+    读懂了那串 token 的来龙去脉,你就读懂了整个项目。
+  </p>
+  <p style="font-size:13.5px;color:var(--ink2)">
+    官方仓库:github.com/RVC-Boss/GPT-SoVITS · 中文文档:语雀《GPT-SoVITS 指南》· 更新日志见 docs/。
+    本文基于 2025 年内的仓库公开资料整理,数字与版本可能随迭代变化,以仓库最新说明为准。
+  </p>
+</section>
+
+</main>
+
+<footer>《一文读懂 GPT-SoVITS》 · 按 L0–L4 数据链模板生成 · 样例数据均为示意,格式与真实产物一致</footer>
+
+<script>
+// 缩放条高亮
+const links=[...document.querySelectorAll('#zoom a')];
+const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+const io=new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){
+    links.forEach(l=>l.classList.toggle('on',l.getAttribute('href')==='#'+e.target.id));
+  }});
+},{rootMargin:'-20% 0px -70% 0px'});
+secs.forEach(s=>io.observe(s));
+// 主链点击 → 卡片高亮
+document.querySelectorAll('#chainbar .chip').forEach(c=>{
+  c.addEventListener('click',()=>{
+    const t=document.getElementById(c.dataset.t);
+    t.scrollIntoView({behavior:'smooth',block:'center'});
+    t.classList.add('flash');setTimeout(()=>t.classList.remove('flash'),1800);
+  });
+});
+// L3 tabs
+document.querySelectorAll('#tabs3 .tab').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('#tabs3 .tab').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.pane').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');document.getElementById(b.dataset.p).classList.add('on');
+  });
+});
+</script>
+</body>
+</html>
