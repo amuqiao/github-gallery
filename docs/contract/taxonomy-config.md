@@ -43,7 +43,7 @@ catalog/taxonomies.yaml
 | `description.zh` | 必填，中文说明。 |
 | `description.en` | 必填，英文说明。 |
 
-当前 taxonomy 是固定双语 registry，不是任意多语言系统。新增第三种语言需要先修改 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/projects.ts` 和 `scripts/catalog-import-cli.mjs`，不能只改 `catalog/taxonomies.yaml`。
+当前 taxonomy 是固定双语 registry，不是任意多语言系统。新增第三种语言需要先修改 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/projects.ts` 和 `scripts/catalog/catalog-import-cli.mjs`，不能只改 `catalog/taxonomies.yaml`。
 
 示例：
 

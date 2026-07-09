@@ -9,9 +9,10 @@ dev.sh       本地 Astro 开发和 dev server 管理入口
 verify.sh    一次性验证入口
 catalog.sh   catalog 项目维护入口
   import     .tmp/import-batches 安全导入入口
+deploy.sh    Docker 静态站点部署入口
 ```
 
-不要把后端服务项目的部署、队列、数据库、压测或远程运维语义放进这里。当前项目是 Astro static site + YAML catalog。
+不要把后端服务项目的队列、数据库、迁移、压测或远程运维语义放进这里。当前项目是 Astro static site + YAML catalog，部署入口只管理静态站点容器形态。
 
 ## Entrypoints
 
@@ -20,6 +21,7 @@ catalog.sh   catalog 项目维护入口
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、catalog 内容生成。 |
 | `verify.sh` | build/catalog/content 验证，包括 projects、collections、taxonomy、site 和被引用详情文件。 | README 或 `docs/` 漂移检查。 |
 | `catalog.sh` | project list/validate/new、collection list/show/new/delete/update、import batch validate/plan/diff/apply。 | GitHub API 抓取、taxonomy 自动修改、schema 之外的字段生成、全量替换 catalog。 |
+| `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`（可简写 `pre`）、`standalone`、`proxy` 三种模式的 build/up/down/status。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
 ## Commands
 
@@ -66,11 +68,42 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
 ./scripts/catalog.sh import plan .tmp/import-batches/example-batch
 ./scripts/catalog.sh import diff .tmp/import-batches/example-batch
 ./scripts/catalog.sh import apply .tmp/import-batches/example-batch --allow-replace
+
+cp .env.example .env
+./scripts/deploy.sh check
+./scripts/deploy.sh modes
+
+# preview / pre：本机临时验收
+./scripts/deploy.sh up pre
+./scripts/deploy.sh status pre
+./scripts/deploy.sh down pre
+
+# standalone：单机长期运行
+./scripts/deploy.sh up standalone
+./scripts/deploy.sh status standalone
+./scripts/deploy.sh down standalone
+
+# proxy：接入已有反向代理网络
+./scripts/deploy.sh up proxy
+./scripts/deploy.sh status proxy
+./scripts/deploy.sh down proxy
 ```
 
 ## Verification Boundary
 
 `verify.sh` 不检查维护文档。文档只解释已实现规则，代码和 loader 才是真相源。
+
+## Deployment Boundary
+
+`deploy.sh` 管理 Docker 静态站点部署。三种模式共用同一份 Nginx 静态镜像：
+
+| Mode | Scope |
+| --- | --- |
+| `preview` | 本机临时验收容器，绑定 `PREVIEW_HOST_PORT`，停止时删除容器；`pre` 是兼容短写。 |
+| `standalone` | 单机长期运行容器，绑定 `STANDALONE_HOST_PORT`，使用 `unless-stopped` restart policy。 |
+| `proxy` | Compose 管理的反向代理后端容器，加入 `PROXY_NETWORK`，不直接暴露宿主机端口。 |
+
+`deploy.sh check` 校验部署文件、Docker CLI、Docker daemon、Compose CLI、Compose 配置和脚本语法；不会启动容器，也不会执行 Docker build。容器镜像构建阶段会运行 `npm run build`，由 Astro check 和 loader 校验 catalog 合同。
 
 ## Dev Server Management
 

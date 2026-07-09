@@ -24,9 +24,9 @@
 - `src/components/ui/` 提供 shadcn-style UI primitives。
 - `src/styles/global.css` 提供 Tailwind 入口、shadcn-style token 和少量全局 prose 样式。
 - `src/components/blocks/BlockRenderer.astro` 负责渲染 blocks。
-- `scripts/` 提供本地开发、验证和 catalog 维护入口；脚本不定义配置合同。
+- `scripts/` 提供本地开发、验证、catalog 维护和 Docker 静态站点部署入口；脚本不定义配置合同。
 - `.tmp/import-batches/<batch-id>/` 是 AI 或人工整理结果进入正式 catalog 前的临时交换目录。
-- `scripts/catalog-import-cli.mjs` 负责 import batch 的预检、计划、差异、加锁应用和失败回滚。
+- `scripts/catalog/catalog-import-cli.mjs` 负责 import batch 的预检、计划、差异、加锁应用和失败回滚。
 
 ## Runtime Path
 
@@ -87,7 +87,7 @@ scripts/verify.sh
   -> catalog schema/loader validation during page generation
 
 .tmp/import-batches/<batch-id>/manifest.yaml
-  -> scripts/catalog-import-cli.mjs
+  -> scripts/catalog/catalog-import-cli.mjs
   -> catalog/projects/<id>/ or catalog/collections/<id>/
   -> scripts/verify.sh catalog
   -> rollback on failure

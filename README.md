@@ -16,7 +16,7 @@ src/lib/catalog/                    # schema、loader、adapter
 src/styles/global.css               # Tailwind 入口和 shadcn-style token
 src/components/ui/                  # 通用 UI primitives
 src/components/blocks/              # typed block renderers
-scripts/                            # 本地开发、验证、catalog 维护入口
+scripts/                            # 本地开发、验证、catalog 维护和 Docker 部署入口
 docs/contract/                      # 维护者可读合同说明
 docs/current/                       # 当前已实现结构
 docs/plans/                         # 未来计划
@@ -67,6 +67,29 @@ Catalog 维护入口：
 ./scripts/catalog.sh validate
 ./scripts/catalog.sh collection list
 ./scripts/catalog.sh collection show voice-cloning
+```
+
+Docker 部署入口：
+
+```sh
+cp .env.example .env
+./scripts/deploy.sh check
+./scripts/deploy.sh modes
+
+# preview / pre：本机临时验收
+./scripts/deploy.sh up pre
+./scripts/deploy.sh status pre
+./scripts/deploy.sh down pre
+
+# standalone：单机长期运行
+./scripts/deploy.sh up standalone
+./scripts/deploy.sh status standalone
+./scripts/deploy.sh down standalone
+
+# proxy：接入已有反向代理网络
+./scripts/deploy.sh up proxy
+./scripts/deploy.sh status proxy
+./scripts/deploy.sh down proxy
 ```
 
 完整脚本说明见 [scripts/README.md](scripts/README.md)。

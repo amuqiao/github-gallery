@@ -6,9 +6,9 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { dump, load } from "js-yaml";
-import { collectionPublicationStatuses } from "../src/lib/catalog/catalog-schema.js";
+import { collectionPublicationStatuses } from "../../src/lib/catalog/catalog-schema.js";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const collectionsDir = path.join(rootDir, "catalog", "collections");
 const lockDir = path.join(rootDir, ".data", "catalog-write.lock");
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

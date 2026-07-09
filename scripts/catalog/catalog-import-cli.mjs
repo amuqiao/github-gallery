@@ -11,9 +11,9 @@ import {
   collectionConfigSchema,
   projectConfigSchema,
   taxonomyCatalogSchema
-} from "../src/lib/catalog/catalog-schema.js";
+} from "../../src/lib/catalog/catalog-schema.js";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const catalogDir = path.join(rootDir, "catalog");
 const projectsDir = path.join(catalogDir, "projects");
 const collectionsDir = path.join(catalogDir, "collections");

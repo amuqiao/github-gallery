@@ -177,7 +177,7 @@ AI/manual output
 
 变更 import batch 能力时：
 
-1. 先更新 `scripts/catalog-import-cli.mjs` 和必要的 schema/loader。
+1. 先更新 `scripts/catalog/catalog-import-cli.mjs` 和必要的 schema/loader。
 2. 再更新 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md)。
 3. 如果操作步骤变化，再更新 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。
 4. 运行 `./scripts/verify.sh check` 和最小脚本验证。

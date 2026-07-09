@@ -54,12 +54,12 @@ EOF
 
 collection_usage() {
   require_command node "install Node.js 20 or newer"
-  node "$ROOT_DIR/scripts/catalog-cli.mjs" collection help
+  node "$ROOT_DIR/scripts/catalog/catalog-cli.mjs" collection help
 }
 
 import_usage() {
   require_command node "install Node.js 20 or newer"
-  node "$ROOT_DIR/scripts/catalog-import-cli.mjs" help
+  node "$ROOT_DIR/scripts/catalog/catalog-import-cli.mjs" help
 }
 
 new_usage() {
@@ -311,7 +311,7 @@ case "$command" in
       exit 0
     fi
     require_command node "install Node.js 20 or newer"
-    node "$ROOT_DIR/scripts/catalog-cli.mjs" collection "$@"
+    node "$ROOT_DIR/scripts/catalog/catalog-cli.mjs" collection "$@"
     ;;
   import)
     shift
@@ -320,7 +320,7 @@ case "$command" in
       exit 0
     fi
     require_command node "install Node.js 20 or newer"
-    node "$ROOT_DIR/scripts/catalog-import-cli.mjs" "$@"
+    node "$ROOT_DIR/scripts/catalog/catalog-import-cli.mjs" "$@"
     ;;
   *)
     usage >&2
