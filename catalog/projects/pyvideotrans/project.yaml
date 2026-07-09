@@ -30,14 +30,14 @@ blocks:
       - Video translation and dubbing workflow orchestration.
       - Comparing pluggable ASR, translation, subtitle, and TTS backends.
 notes:
-  - id: pyvideotrans-datachain
+  - id: pyvideotrans-explainer
     title: 一文读懂 pyVideoTrans · 数据链视角的项目解剖
     type: html
     path: ./notes/pyVideoTrans1.html
     summary: 沿着数据链视角，从 L0-L4 分层解析 pyVideoTrans 的视频翻译配音九阶段流程、核心模块设计与适用场景。
     display: standalone
     html_mode: document
-  - id: pyvideotrans-overview
+  - id: pyvideotrans-one-page
     title: 一文读懂 pyVideoTrans · 开源视频翻译配音工具全解析
     type: html
     path: ./notes/pyVideoTrans2.html
