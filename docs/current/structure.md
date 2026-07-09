@@ -48,8 +48,6 @@ catalog/projects/<id>/project.yaml
   -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/projects.ts
   -> src/presentation/config.ts
-  -> src/pages/index.astro
-  -> src/pages/halls/github/index.astro
   -> src/pages/projects/[id].astro
   -> src/pages/categories/[category].astro
   -> src/pages/tags/[tag].astro
@@ -73,6 +71,9 @@ catalog/content/{drafts,published,archived}/<hall>/items/<id>/item.yaml
   -> src/lib/catalog/content-validator.js
   -> src/lib/catalog/content.ts
   -> src/lib/catalog/details.ts
+  -> src/pages/index.astro
+  -> src/pages/halls/github/index.astro
+  -> src/pages/halls/models/index.astro
   -> src/pages/halls/[hall]/items/[id].astro
   -> src/pages/halls/[hall]/items/[id]/notes/[note].astro
   -> static HTML output for published only
@@ -82,6 +83,8 @@ catalog/content/{drafts,published,archived}/<hall>/collections/<id>/collection.y
   -> src/lib/catalog/content-validator.js
   -> src/lib/catalog/content.ts
   -> src/lib/catalog/details.ts
+  -> src/pages/index.astro
+  -> src/pages/halls/github/index.astro
   -> src/pages/halls/[hall]/collections/index.astro
   -> src/pages/halls/[hall]/collections/[id].astro
   -> static HTML output for published only
@@ -178,17 +181,17 @@ scripts/content.sh
 
 `hall.yaml` 是平台首页展馆入口、开放状态和排序的机器可读来源。Hall 路由由 loader 根据 id 推导为 `/halls/<id>/`。`planned` hall 只表示入口预留，不定义领域 item 合同。
 
-`catalog/content/` 是新的 content bundle 合同面。`published` content 当前驱动 canonical routes：`/halls/<hall>/items/<id>/`、`/halls/<hall>/items/<id>/notes/<note>/`、`/halls/<hall>/collections/` 和 `/halls/<hall>/collections/<id>/`。`drafts`、`published`、`archived` 由目录表达发布状态；content bundle 只能位于 `availability: active` 的 hall 下；`published` collection 只能引用同一 hall 的 `published` item。
+`catalog/content/` 是新的 content bundle 合同面。`published` content 当前驱动平台首页、GitHub 展馆首页、模型展馆首页，以及 canonical routes：`/halls/<hall>/items/<id>/`、`/halls/<hall>/items/<id>/notes/<note>/`、`/halls/<hall>/collections/` 和 `/halls/<hall>/collections/<id>/`。`drafts`、`published`、`archived` 由目录表达发布状态；content bundle 只能位于 `availability: active` 的 hall 下；`published` collection 只能引用同一 hall 的 `published` item。
 
-`/halls/models/` 当前已经从 `catalog/content/published/models/items/` 读取已发布 `ai_model` item。旧 `catalog/models/` 路由仍暂时存在，作为后续破坏性切换前的 legacy 页面。
+`/` 当前用 published content 计算 hall item 数、模型样例和精选专题。`/halls/github/` 当前读取 `catalog/content/published/github/items/` 中的 `github_project` item 和 `catalog/content/published/github/collections/` 中的 collection。`/halls/models/` 当前读取 `catalog/content/published/models/items/` 中的 `ai_model` item。旧 `catalog/models/` 路由仍暂时存在，作为后续破坏性切换前的 legacy 页面。
 
 `model.yaml` 的 stable core 字段是模型馆卡片、模型详情首屏和模型笔记入口的机器可读来源。模型性能数据、benchmark、部署硬件和一次性实验观察优先进入 `details.md`、`notes` 或 typed blocks。
 
-`project.yaml` 的 stable core 字段是 GitHub 展馆项目卡片、筛选、路由和跨项目关系的机器可读来源。
+`project.yaml` 的 stable core 字段仍是 legacy 项目详情、category 和 tag 页面以及跨项目关系的机器可读来源；不再驱动平台首页或 GitHub 展馆首页。
 
 `blocks` 是详情页可扩展展示内容来源。
 
-`collection.yaml` 是专题身份、专题路由、公开状态、项目引用顺序和策展备注的机器可读来源。专题只引用已有项目，不复制项目事实。`draft` 专题会被校验，但不会生成公开页面。
+旧 root `collection.yaml` 是 legacy 专题入口和详情页的机器可读来源。新馆内专题使用 `catalog/content/<state>/<hall>/collections/<id>/collection.yaml`。
 
 `catalog/taxonomies.yaml` 是分类、标签和项目维护状态 id、固定 `zh/en` 双语展示名、双语说明的机器可读来源。项目只引用 taxonomy id；前端从 loader 派生的 `label` 和 `descriptionText` 渲染默认语言。项目维护状态的轻量视觉 tone 由 `src/presentation/maintenance-status-tones.ts` 管理。专题发布状态使用 `collection.yaml.publication_status`，不属于 taxonomy。
 

@@ -1,28 +1,27 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import CollectionGrid from "@/components/CollectionGrid.astro";
+import ContentCollectionCard from "@/components/ContentCollectionCard.astro";
+import ContentItemCard from "@/components/ContentItemCard.astro";
 import HallCard from "@/components/HallCard.astro";
-import ModelCard from "@/components/ModelCard.astro";
-import { getPublicCollections } from "@/lib/catalog/collections";
-import { getContentCatalogSnapshot } from "@/lib/catalog/content";
+import {
+  getPublishedContentCollections,
+  getPublishedContentItems,
+  getPublishedContentItemsByHallAndKind
+} from "@/lib/catalog/content";
 import { getAllHalls } from "@/lib/catalog/halls";
-import { getAllModels } from "@/lib/catalog/models";
-import { getCatalogSnapshot } from "@/lib/catalog/projects";
-import { getActivePresentation } from "@/presentation";
+import { getSiteConfig } from "@/lib/catalog/projects";
 
-await getContentCatalogSnapshot();
-
-const [{ projects, site }, collections, halls, models] = await Promise.all([
-  getCatalogSnapshot(),
-  getPublicCollections(),
+const [site, collections, halls, publishedItems, models] = await Promise.all([
+  getSiteConfig(),
+  getPublishedContentCollections(),
   getAllHalls(),
-  getAllModels()
+  getPublishedContentItems(),
+  getPublishedContentItemsByHallAndKind("models", "ai_model")
 ]);
-const { layout } = getActivePresentation();
-const itemCountByHall: Record<string, number> = {
-  github: projects.length,
-  models: models.length
-};
+const itemCountByHall = publishedItems.reduce<Record<string, number>>((counts, item) => {
+  counts[item.hall] = (counts[item.hall] ?? 0) + 1;
+  return counts;
+}, {});
 ---
 
 <BaseLayout title="Gallery Platform" site={site}>
@@ -35,7 +34,7 @@ const itemCountByHall: Record<string, number> = {
     <div class="platform-home__actions">
       <a class="editorial-button editorial-button--dark" href="/halls/github/">进入 GitHub 展馆</a>
       <a class="editorial-button" href="/halls/models/">浏览模型展馆</a>
-      <a class="editorial-button editorial-button--outline" href="/collections/">查看专题</a>
+      <a class="editorial-button editorial-button--outline" href="/halls/github/collections/">查看专题</a>
     </div>
   </header>
 
@@ -56,18 +55,19 @@ const itemCountByHall: Record<string, number> = {
       <h2 class="editorial-section-head__title" id="model-feature-title">模型样例</h2>
       <span class="editorial-section-head__hint">{models.length} 个模型</span>
     </div>
-    <div class="model-grid">
-      {models.slice(0, 3).map((model) => <ModelCard model={model} />)}
+    <div class="project-collection__grid project-collection__grid--standard">
+      {models.slice(0, 3).map((item) => <ContentItemCard item={item} />)}
     </div>
   </section>
 
-  <CollectionGrid
-    id="collections"
-    index="03"
-    title="精选专题"
-    hint={`${collections.length} 个专题`}
-    collections={collections}
-    cardHeadingLevel={3}
-    variant={layout.home.collectionGridVariant}
-  />
+  <section class="gallery-section" id="collections" aria-labelledby="collections-heading">
+    <div class="editorial-section-head">
+      <span class="editorial-section-head__index">03</span>
+      <h2 class="editorial-section-head__title" id="collections-heading">精选专题</h2>
+      <span class="editorial-section-head__hint">{collections.length} 个专题</span>
+    </div>
+    <div class="collection-grid__grid collection-grid__grid--standard">
+      {collections.map((collection) => <ContentCollectionCard collection={collection} />)}
+    </div>
+  </section>
 </BaseLayout>

@@ -11,13 +11,13 @@ Hub and Spoke
   平台首页作为展馆入口，进入 GitHub 展馆、模型展馆、专题和 planned 展馆。
 
 Hall Home
-  GitHub 展馆页承接原项目 hub；模型展馆页展示模型条目。
+  GitHub 展馆页展示 published GitHub content item 和馆内专题；模型展馆页展示 published 模型 content item。
 
 Filtered View
-  分类页和标签页展示 GitHub 展馆项目的不同过滤视图。
+  分类页和标签页仍是 legacy GitHub 项目的过滤视图，后续会切换或删除。
 
 Nested Doll
-  GitHub 项目列表进入项目详情；模型列表进入 content item 详情；专题列表进入专题详情，专题详情再展示专题内条目。
+  GitHub content item 和模型 content item 进入 canonical item 详情；馆内专题进入 canonical collection 详情，专题详情再展示专题内条目。
 
 Project Notes
   项目详情页作为项目 hub，附加笔记作为从项目页进入的 spoke 页面。
@@ -26,7 +26,7 @@ Model Notes
   模型详情页作为模型 hub，附加笔记作为从模型页进入的 spoke 页面。
 ```
 
-这些模式只约束页面和组件结构。展馆数据来源是 `src/lib/catalog/halls.ts`，canonical content 路由数据来源是 `src/lib/catalog/content.ts`，模型馆列表当前读取 published content item。旧模型、项目和 root collection 页面仍分别读取 `src/lib/catalog/models.ts`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts`。
+这些模式只约束页面和组件结构。展馆数据来源是 `src/lib/catalog/halls.ts`，平台首页、GitHub 展馆、模型馆和 canonical content 路由数据来源是 `src/lib/catalog/content.ts`。旧模型、项目、category/tag 和 root collection 页面仍分别读取 `src/lib/catalog/models.ts`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts`。
 
 当前页面组合由 `src/presentation/config.ts` 选择的 `bento-editorial` layout 驱动。layout 可以调整首页 section 顺序和列表变体，但不改变路由角色或 catalog 数据来源。
 
@@ -34,8 +34,8 @@ Model Notes
 
 | Page | Role | Components |
 | --- | --- | --- |
-| `/` | Platform hub，展示展馆入口、模型样例和精选专题。 | `HallCard`、`ModelCard`、`CollectionGrid` |
-| `/halls/github/` | GitHub 展馆 hub，展示总览、专题入口、taxonomy 入口和全部项目。 | `HomeBentoHero`、`CollectionGrid`、`FilterPanel`、`ProjectCollection` |
+| `/` | Platform hub，展示展馆入口、published 模型样例和 published content collection。 | `HallCard`、`ContentItemCard`、`ContentCollectionCard` |
+| `/halls/github/` | GitHub 展馆 hub，展示 published GitHub content item 和馆内 published collection。 | `Breadcrumbs`、`PageHeader`、`ContentItemCard`、`ContentCollectionCard` |
 | `/halls/models/` | 模型展馆入口，展示 `catalog/content/published/models/items/` 中的已发布 `ai_model` 条目。 | `Breadcrumbs`、`PageHeader`、`ContentItemCard` |
 | `/halls/<hall>/items/<id>/` | canonical content item 详情页，只为 published item 生成。 | `Breadcrumbs`、`PageHeader`、`BlockRenderer`、`Prose` |
 | `/halls/<hall>/items/<id>/notes/<note>/` | canonical content item 附加笔记页；Markdown 和 HTML fragment 使用站内布局，HTML document 返回独立页面。 | `Breadcrumbs`、`PageHeader`、`Prose` |
@@ -76,7 +76,7 @@ Model Notes
 catalog YAML
   -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/halls.ts
-  -> src/lib/catalog/content.ts for canonical published content routes
+  -> src/lib/catalog/content.ts for platform home, hall homes, and canonical published content routes
   -> src/lib/catalog/models.ts for legacy model routes
   -> src/lib/catalog/projects.ts
   -> src/lib/catalog/collections.ts
@@ -85,9 +85,9 @@ catalog YAML
   -> static HTML output
 ```
 
-页面和组件不直接读取 YAML。当前已有列表型视图均复用 `ProjectCollection`，当前已有页面首屏均复用 `PageHeader` 或基于它封装的 `ProjectHero`。
+页面和组件不直接读取 YAML。当前 canonical content 列表视图使用 `ContentItemCard` 和 `ContentCollectionCard`；legacy 项目列表视图仍使用 `ProjectCollection`。
 
-平台首页首屏由 `src/pages/index.astro` 编排。GitHub 展馆首屏当前由 `HomeBentoHero` 承载，这是 `bento-editorial` layout 的业务组件，不是 catalog 合同。
+平台首页和 GitHub 展馆页当前由对应 page 直接编排，保持入口页职责，不再通过旧 GitHub `HomePage`/`HomeBentoHero` 读取 project catalog。
 
 ## Verification
 

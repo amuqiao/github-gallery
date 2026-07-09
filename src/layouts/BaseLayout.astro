@@ -19,9 +19,11 @@ const { title, site, description = site.description } = Astro.props;
 const { layout, theme } = getActivePresentation();
 const normalizePath = (href: string) => (href === "/" ? "/" : href.endsWith("/") ? href : `${href}/`);
 const currentPath = normalizePath(Astro.url.pathname);
-const isNavigationActive = (href: string) => {
-  const normalizedHref = normalizePath(href);
-
+const navigationItems = site.navigation.map((item) => ({
+  ...item,
+  normalizedHref: normalizePath(item.href)
+}));
+const matchesNavigationPath = (normalizedHref: string) => {
   if (normalizedHref === "/") {
     return currentPath === "/";
   }
@@ -35,6 +37,9 @@ const isNavigationActive = (href: string) => {
 
   return currentPath.startsWith(normalizedHref);
 };
+const activeNavigationHref = navigationItems
+  .filter((item) => matchesNavigationPath(item.normalizedHref))
+  .sort((a, b) => b.normalizedHref.length - a.normalizedHref.length)[0]?.href;
 ---
 
 <!doctype html>
@@ -57,8 +62,8 @@ const isNavigationActive = (href: string) => {
           <span class="site-path" aria-hidden="true">~/ $</span>
           <div class="site-nav__links">
             {
-              site.navigation.map((item) => {
-                const isActive = isNavigationActive(item.href);
+              navigationItems.map((item) => {
+                const isActive = item.href === activeNavigationHref;
                 return <a href={item.href} aria-current={isActive ? "page" : undefined}>{item.label}</a>;
               })
             }

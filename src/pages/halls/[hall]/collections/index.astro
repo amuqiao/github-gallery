@@ -4,17 +4,16 @@ import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import ContentCollectionCard from "@/components/ContentCollectionCard.astro";
 import PageHeader from "@/components/PageHeader.astro";
 import Button from "@/components/ui/Button.astro";
-import { getPublishedContentCollections, getPublishedContentCollectionsByHall } from "@/lib/catalog/content";
-import { getHallById } from "@/lib/catalog/halls";
+import EmptyState from "@/components/ui/EmptyState.astro";
+import { getPublishedContentCollectionsByHall } from "@/lib/catalog/content";
+import { getAllHalls, getHallById } from "@/lib/catalog/halls";
 import { getSiteConfig } from "@/lib/catalog/projects";
 
 export async function getStaticPaths() {
-  const hallIds = new Set((await getPublishedContentCollections()).map((collection) => collection.hall));
-  return Array.from(hallIds)
-    .sort()
-    .map((hall) => ({
-      params: { hall }
-    }));
+  const halls = await getAllHalls();
+  return halls.map((hall) => ({
+    params: { hall: hall.id }
+  }));
 }
 
 const { hall: hallId } = Astro.params;
@@ -58,9 +57,15 @@ const [site, hall, collections] = await Promise.all([
         <h2 class="editorial-section-head__title" id="hall-collections-title">馆内专题</h2>
         <span class="editorial-section-head__hint">{collections.length} 个专题</span>
       </div>
-      <div class="collection-grid collection-grid--standard">
-        {collections.map((collection) => <ContentCollectionCard collection={collection} />)}
-      </div>
+      {
+        collections.length > 0 ? (
+          <div class="collection-grid__grid collection-grid__grid--standard">
+            {collections.map((collection) => <ContentCollectionCard collection={collection} />)}
+          </div>
+        ) : (
+          <EmptyState message="当前没有已发布专题。" />
+        )
+      }
     </section>
   </article>
 </BaseLayout>

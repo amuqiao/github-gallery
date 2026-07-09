@@ -116,7 +116,11 @@ Rules:
 /halls/<hall>/collections/<id>/
 ```
 
-`/halls/models/` 当前展示已发布的 `models` hall `ai_model` content item。
+发布后的 content 还会进入聚合入口：
+
+- `/` 使用 published content 计算展馆条目数、模型样例和精选专题。
+- `/halls/github/` 展示已发布的 `github` hall `github_project` content item 和馆内 collection。
+- `/halls/models/` 展示已发布的 `models` hall `ai_model` content item。
 
 ## Import Drafts
 

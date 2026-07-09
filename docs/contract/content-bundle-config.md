@@ -2,7 +2,7 @@
 
 本文解释当前已经实现的 `catalog/content/{drafts,published,archived}/` 内容包合同。可执行真相源是 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/content-validator.js` 和 `src/lib/catalog/content.ts`。
 
-当前 content bundle 已参与构建期验证，但还没有替代旧 `catalog/projects/`、`catalog/models/` 和 root `catalog/collections/` 页面数据源。
+当前 published content bundle 已驱动平台首页、GitHub 展馆首页、模型展馆首页和 canonical content 路由。旧 `catalog/projects/`、legacy `catalog/models/` 和 root `catalog/collections/` 仍暂时驱动 legacy 详情、筛选和 root 专题页面，等待后续切除。
 
 ## Directory
 
@@ -162,3 +162,5 @@ Content import batch 合同见 [`content-import-batch.md`](./content-import-batc
 | `published/<hall>/collections/<id>/collection.yaml` | `/halls/<hall>/collections/<id>/` |
 
 `drafts` 和 `archived` content bundle 不生成公开 canonical 页面，也不会进入 `/halls/models/` 的已发布模型列表或馆内专题列表。
+
+平台首页和 GitHub 展馆页同样只读取 published content：`/` 使用 published content 计算 hall item 数、模型样例和精选专题；`/halls/github/` 只展示 published `github_project` item 和 GitHub hall 的 published collection。

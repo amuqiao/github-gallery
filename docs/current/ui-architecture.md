@@ -32,9 +32,9 @@ layoutId = bento-editorial
 themeId  = editorial-paper
 ```
 
-layout 决定页面族分发、section 顺序、列表密度和卡片变体。theme 决定 CSS token、字体、颜色、边框、背景和基础质感。首页精选专题由 `src/presentation/home.ts` 管理。它们都不进入 `project.yaml` 或 `collection.yaml`。
+layout 决定页面族分发、section 顺序、列表密度和卡片变体。theme 决定 CSS token、字体、颜色、边框、背景和基础质感。内容入口页的展示选择由页面读取 `catalog/content/published/` 后编排，不进入 `project.yaml`、`collection.yaml` 或 content bundle 配置。
 
-平台首页通过 hall/model read model 展示 `HallCard` 和 legacy `ModelCard`。模型展馆列表和 canonical collection 详情通过 content read model 展示 `ContentItemCard`。GitHub 展馆项目集合卡片通过 `src/lib/catalog/project-view-models.ts` 预先解析 category、tags 和 maintenance_status。`ProjectCollection` 不调用 catalog loader 的运行时 helper。
+平台首页通过 hall read model 和 content read model 展示 `HallCard`、`ContentItemCard` 和 `ContentCollectionCard`。GitHub 展馆、模型展馆和 canonical collection 详情通过 content read model 展示 `ContentItemCard` / `ContentCollectionCard`。Legacy 项目集合卡片仍通过 `src/lib/catalog/project-view-models.ts` 预先解析 category、tags 和 maintenance_status。`ProjectCollection` 不调用 catalog loader 的运行时 helper。
 
 ## Runtime Styling Path
 
@@ -65,7 +65,7 @@ CSS 当前通过 `data-theme` 应用皮肤 token；`data-layout` 用于运行时
 | File | Owns | Does Not Own |
 | --- | --- | --- |
 | `src/presentation/config.ts` | 当前启用的 `layoutId` 和 `themeId`。 | catalog 字段、项目级展示选择。 |
-| `src/presentation/home.ts` | GitHub 展馆首页展示内容选择，例如 featured collection id。 | layout grid、颜色、catalog schema。 |
+| `src/presentation/home.ts` | legacy GitHub 首页展示内容选择。当前平台首页和 GitHub 展馆页不再消费它。 | layout grid、颜色、catalog schema。 |
 | `src/presentation/layouts.ts` | 页面族布局版本、首页 section 顺序、组件 variant 选择。 | 颜色、字体、项目事实。 |
 | `src/presentation/maintenance-status-tones.ts` | 项目维护状态 id 到轻量视觉 tone 的映射。 | 状态文案、状态说明、taxonomy 校验。 |
 | `src/presentation/publication-status-labels.ts` | 专题发布状态枚举到显示文案的映射。 | collection schema、发布流程规则。 |
@@ -99,15 +99,15 @@ CSS 当前通过 `data-theme` 应用皮肤 token；`data-layout` 用于运行时
 | `ProjectCollection` | `SectionHeader`、`Badge`、`EmptyState`、`ProjectCard` | 已解析项目卡片集合网格。 |
 | `ProjectCard` | `Card`、`Badge`、`Button`、`ProjectMaintenanceStatus` | 单个项目卡片。 |
 | `ContentItemCard` | content item read model | canonical content item 卡片。 |
-| `HomeBentoHero` | `Button`、presentation layout config | 首页 bento hero 和 gallery summary。 |
+| `HomeBentoHero` | `Button`、presentation layout config | legacy bento hero 组件，当前不驱动 content 首页。 |
 | `ProjectMaintenanceStatus` | taxonomy maintenance status label、presentation maintenance status tone | 项目维护状态的轻量视觉标记。 |
 | `ProjectHero` | `PageHeader`、`Badge`、`Button`、`ProjectMaintenanceStatus` | 项目详情首屏。 |
 | `RelatedProjects` | `ProjectCollection` | 相关项目集合。 |
 | `HallCard` | hall read model | 平台首页单个展馆入口和状态展示。 |
-| `ModelCard` | model read model | 模型馆列表和平台首页模型样例卡片。 |
+| `ModelCard` | model read model | legacy 模型卡片。 |
 | `PlannedHallPage` | `PageHeader`、`Button` | planned 展馆占位页。 |
 
-`HomeBentoHero` 现在服务 GitHub 展馆页 `/halls/github/`，不是平台首页。平台首页由 `src/pages/index.astro` 编排，保持入口页职责，不承载 GitHub taxonomy filter。
+平台首页和 GitHub 展馆页由 `src/pages/index.astro`、`src/pages/halls/github/index.astro` 编排，保持入口页职责，不承载旧 GitHub taxonomy filter。
 
 ## Verification
 

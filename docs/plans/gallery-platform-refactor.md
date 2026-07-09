@@ -55,7 +55,7 @@ Release Gate
 
 - 站点是 Astro static site，构建期通过 loader 读取 `catalog/` 并生成静态页面。
 - 已有多展馆入口：`catalog/halls/<id>/hall.yaml`、`/` 平台首页、`/halls/github/`、`/halls/models/`、`/halls/music/`、`/halls/movies/`。
-- GitHub 内容仍使用 `catalog/projects/<id>/project.yaml`，字段和脚本都绑定 `project` 语义。
+- GitHub 公开入口已切到 `catalog/content/published/github/`；legacy project detail、root collection、category/tag 页面仍暂留 `catalog/projects/<id>/project.yaml` 链路。
 - 模型内容当前使用 `catalog/models/<id>/model.yaml`，是为了验证模型馆样例的过渡设计。
 - 专题当前使用 `catalog/collections/<id>/collection.yaml`，并通过 `items[].project` 引用 GitHub 项目。
 - 已实现 content bundle 验证面：`catalog/content/{drafts,published,archived}/<hall>/items/<id>/item.yaml` 和 `collections/<id>/collection.yaml`。
@@ -72,7 +72,7 @@ Release Gate
 ## Remaining Gaps
 
 - 用户新增当前公开页面内容时仍需要理解 `project.yaml`、`model.yaml`、`collection.yaml`、`details.md`、`notes[]` 等底层配置关系。
-- `catalog/content/published/` 已驱动 canonical item、note 和 hall-owned collection 页面，且 `/halls/models/` 已读取 published content；`catalog/projects/`、legacy `catalog/models/`、root `catalog/collections/`、category/tag 页面仍是旧公开页面数据源。
+- `catalog/content/published/` 已驱动平台首页、GitHub 展馆页、模型展馆页、canonical item/note 页面和 hall-owned collection 页面；legacy model detail、project detail、root collection、category/tag 页面仍是旧公开页面数据源。
 - 已实现 `scripts/content.sh` 和 `scripts/content/content-cli.mjs`，支持 content bundle item/collection draft 创建、item note 添加、publish、archive、restore。
 - `publish` 当前委托 `./scripts/verify.sh release`；`archive` 和 `restore` 当前委托 `./scripts/verify.sh catalog`。
 - 旧 root collection 仍未完全切换；新 content collection 已从属于 hall。
@@ -442,6 +442,8 @@ docs/runbooks/
 - 已新增 canonical hall collection list route：`/halls/<hall>/collections/`。
 - 已新增 canonical hall collection detail route：`/halls/<hall>/collections/<id>/`。
 - 已让 `/halls/models/` 读取 `catalog/content/published/models/items/` 中的 `ai_model` content item。
+- 已让平台首页 `/` 读取 published content 的 hall item count、模型样例和精选专题。
+- 已让 `/halls/github/` 读取 published GitHub content item 和 GitHub hall collection。
 - 旧 `/projects/*`、`/collections/*`、`/categories/*`、`/tags/*` 和 legacy `/halls/models/[id]/*` 仍暂留，等待后续破坏性切换。
 
 ### Slice 8: Documentation And Cleanup
@@ -468,6 +470,7 @@ docs/runbooks/
 - import batch 支持 content bundle，并默认写入 drafts。
 - `content.sh import` 是正式 import 用户入口。
 - published content 会生成 canonical item、note 和 hall-owned collection 页面。
+- 平台首页和 GitHub 展馆页读取 published content。
 - `/halls/models/` 读取 published `models` hall `ai_model` content item。
 - 破坏性切换完成后，旧 `target: project`、旧 `target: collection`、旧 `catalog.sh new`、旧 `catalog.sh collection`、旧 `catalog.sh import` 不再作为兼容入口存在。
 - `/projects/<id>`、`/collections/<id>`、`/categories/<id>`、`/tags/<id>` 不生成公开详情页。
