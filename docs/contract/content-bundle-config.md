@@ -1,6 +1,6 @@
 # Content Bundle Config Contract
 
-本文解释当前已经实现的 `catalog/content/{drafts,published,archived}/` 内容包合同。可执行真相源是 `src/lib/catalog/catalog-schema.js` 和 `src/lib/catalog/content.ts`。
+本文解释当前已经实现的 `catalog/content/{drafts,published,archived}/` 内容包合同。可执行真相源是 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/content-validator.js` 和 `src/lib/catalog/content.ts`。
 
 当前 content bundle 已参与构建期验证，但还没有替代旧 `catalog/projects/`、`catalog/models/` 和 root `catalog/collections/` 页面数据源。
 
@@ -117,12 +117,18 @@ catalog/content/published/github/collections/voice-cloning/
 ./scripts/content.sh item new <hall> <github_project|ai_model> <id> ...
 ./scripts/content.sh item note add <hall> <id> <note-id> ...
 ./scripts/content.sh collection new <hall> <id> ...
+./scripts/content.sh import validate .tmp/import-batches/<batch-id>
+./scripts/content.sh import plan .tmp/import-batches/<batch-id>
+./scripts/content.sh import diff .tmp/import-batches/<batch-id>
+./scripts/content.sh import apply .tmp/import-batches/<batch-id>
 ./scripts/content.sh publish <hall> <item|collection> <id>
 ./scripts/content.sh archive <hall> <item|collection> <id>
 ./scripts/content.sh restore <hall> <item|collection> <id>
 ```
 
-`item new` 和 `collection new` 写入 `drafts`。`publish` 从 `drafts` 移到 `published` 并运行 `./scripts/verify.sh release`。`archive` 从 `published` 移到 `archived`。`restore` 从 `archived` 移回 `drafts`，不会直接发布。
+`item new`、`collection new` 和 `import apply` 写入 `drafts`。`publish` 从 `drafts` 移到 `published` 并运行 `./scripts/verify.sh release`。`archive` 从 `published` 移到 `archived`。`restore` 从 `archived` 移回 `drafts`，不会直接发布。
+
+Content import batch 合同见 [`content-import-batch.md`](./content-import-batch.md)。
 
 ## Verification
 

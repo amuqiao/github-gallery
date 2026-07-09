@@ -20,6 +20,7 @@ usage() {
   item new <hall> <github_project|ai_model> <id> [options]
   item note add <hall> <id> <note-id> [options]
   collection new <hall> <id> [options]
+  import <validate|plan|diff|apply> <batch> [options]
   publish <hall> <item|collection> <id>
   archive <hall> <item|collection> <id>
   restore <hall> <item|collection> <id>
@@ -57,6 +58,11 @@ usage() {
     --summary "GitHub 展馆内的声音克隆项目策展。" \\
     --item gpt-sovits
 
+  ./scripts/content.sh import validate .tmp/import-batches/example-content-batch
+  ./scripts/content.sh import plan .tmp/import-batches/example-content-batch
+  ./scripts/content.sh import diff .tmp/import-batches/example-content-batch
+  ./scripts/content.sh import apply .tmp/import-batches/example-content-batch
+
   ./scripts/content.sh publish models item htdemucs-ft-onnx
   ./scripts/content.sh archive models item htdemucs-ft-onnx
   ./scripts/content.sh restore models item htdemucs-ft-onnx
@@ -71,6 +77,10 @@ case "$command" in
   "")
     usage >&2
     exit 2
+    ;;
+  import)
+    require_command node "install Node.js 20 or newer"
+    node "$ROOT_DIR/scripts/content/content-import-cli.mjs" "${@:2}"
     ;;
   *)
     require_command node "install Node.js 20 or newer"

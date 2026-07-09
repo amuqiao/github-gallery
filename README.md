@@ -34,12 +34,13 @@ docs/runbooks/                      # 可重复维护流程
 2. [前端导航结构](docs/current/frontend-navigation.md)
 3. [Hall 配置合同](docs/contract/hall-config.md)
 4. [Content Bundle 配置合同](docs/contract/content-bundle-config.md)
-5. [Model 配置合同](docs/contract/model-config.md)
-6. [项目配置合同](docs/contract/project-config.md)
-7. [专题配置合同](docs/contract/collection-config.md)
-8. [Taxonomy 配置合同](docs/contract/taxonomy-config.md)
-9. [站点配置合同](docs/contract/site-config.md)
-10. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
+5. [Content Import Batch 合同](docs/contract/content-import-batch.md)
+6. [Model 配置合同](docs/contract/model-config.md)
+7. [项目配置合同](docs/contract/project-config.md)
+8. [专题配置合同](docs/contract/collection-config.md)
+9. [Taxonomy 配置合同](docs/contract/taxonomy-config.md)
+10. [站点配置合同](docs/contract/site-config.md)
+11. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
 
 修改前端 UI 时按这个顺序阅读：
 
@@ -91,6 +92,8 @@ Content bundle 发布入口：
   --access download \
   --format onnx \
   --runtime onnxruntime
+./scripts/content.sh import validate .tmp/import-batches/example-content-batch
+./scripts/content.sh import apply .tmp/import-batches/example-content-batch
 ./scripts/content.sh publish models item example-model
 ```
 

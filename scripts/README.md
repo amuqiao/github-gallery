@@ -1,15 +1,15 @@
 # Scripts
 
-`scripts/` 提供本仓库稳定的人类操作入口。它们是薄 wrapper，真正的配置合同仍由 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/content.ts`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 执行。
+`scripts/` 提供本仓库稳定的人类操作入口。它们是薄 wrapper，真正的配置合同仍由 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/content-validator.js`、`src/lib/catalog/content.ts`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 执行。
 
 ## Mental Model
 
 ```text
 dev.sh       本地 Astro 开发和 dev server 管理入口
 verify.sh    一次性验证和正式发布门禁入口
-content.sh   content bundle 创建、发布、归档、恢复入口
+content.sh   content bundle 创建、导入、发布、归档、恢复入口
 catalog.sh   catalog 项目维护入口
-  import     .tmp/import-batches 安全导入入口
+  import     旧 project/root collection import batch 入口
 deploy.sh    Docker 静态站点部署入口
 ```
 
@@ -21,8 +21,8 @@ deploy.sh    Docker 静态站点部署入口
 | --- | --- | --- |
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、catalog 内容生成。 |
 | `verify.sh` | build/catalog/content 验证和 release gate，包括 content bundles、halls、models、projects、collections、taxonomy、site 和被引用详情/notes 文件。 | README 或 `docs/` 漂移检查。 |
-| `content.sh` | content bundle item/collection 草稿创建、item note 添加、publish/archive/restore 状态移动。 | import batch、旧 project/root collection 维护、公开页面路由替换。 |
-| `catalog.sh` | project list/validate/new、collection list/show/new/delete/update、import batch validate/plan/diff/apply。 | GitHub API 抓取、taxonomy 自动修改、schema 之外的字段生成、全量替换 catalog。 |
+| `content.sh` | content bundle item/collection 草稿创建、item note 添加、content import batch、publish/archive/restore 状态移动。 | 旧 project/root collection 维护、公开页面路由替换。 |
+| `catalog.sh` | project list/validate/new、collection list/show/new/delete/update、旧 project/root collection import batch validate/plan/diff/apply。 | content bundle import、GitHub API 抓取、taxonomy 自动修改、schema 之外的字段生成、全量替换 catalog。 |
 | `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`（可简写 `pre`）、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status；`up/down` 仅作兼容别名。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
 ## Commands
@@ -64,6 +64,10 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
   --title "Example Models" \
   --summary "Example model collection." \
   --item example-model
+./scripts/content.sh import validate .tmp/import-batches/example-content-batch
+./scripts/content.sh import plan .tmp/import-batches/example-content-batch
+./scripts/content.sh import diff .tmp/import-batches/example-content-batch
+./scripts/content.sh import apply .tmp/import-batches/example-content-batch
 ./scripts/content.sh publish models item example-model
 ./scripts/content.sh archive models item example-model
 ./scripts/content.sh restore models item example-model
@@ -147,7 +151,7 @@ cp .env.example .env
 
 `verify.sh release` 会先通过 `scripts/verify/release-gate.mjs` 调用 `src/lib/catalog/content-validator.js` 检查 content bundle 发布语义，再运行 Astro 静态构建。release gate 覆盖 publication state 目录、active hall 归属、item/collection schema、body/notes 文件引用、重复 bundle key，以及 published collection 只能引用同 hall published item。
 
-`content.sh` 写入 `catalog/content/drafts/`，并在 `drafts`、`published`、`archived` 之间移动 content bundle。`publish` 会运行 `./scripts/verify.sh release`；`archive` 和 `restore` 会运行 `./scripts/verify.sh catalog`。验证失败时脚本会回滚目录移动或文件写入。
+`content.sh` 写入 `catalog/content/drafts/`，并在 `drafts`、`published`、`archived` 之间移动 content bundle。`import apply` 只写入 `drafts` 并运行 `./scripts/verify.sh catalog`；`publish` 会运行 `./scripts/verify.sh release`；`archive` 和 `restore` 会运行 `./scripts/verify.sh catalog`。验证失败时脚本会回滚目录移动或文件写入。
 
 `catalog.sh new` 创建项目后会立即调用 `./scripts/catalog.sh validate`。如果 category、tag、maintenance_status、summary 或引用文件不符合合同，最终由 schema/loader 失败退出。项目 maintenance_status 和 category/tag 一样引用 `catalog/taxonomies.yaml` 中的受控 id。
 
@@ -159,11 +163,16 @@ project 和 collection 写操作共用 `.data/catalog-write.lock`。如果进程
 
 ## Import Batch
 
-`catalog.sh import` 是 AI 或人工整理结果进入正式 catalog 前的安全入口。批次必须位于 `.tmp/import-batches/<batch-id>/`，并由 `manifest.yaml` 显式声明 `create`、`replace`、`delete` 操作。
+`content.sh import` 是 AI 或人工整理结果进入 `catalog/content/drafts/` 的安全入口。批次必须位于 `.tmp/import-batches/<batch-id>/`，并由 `manifest.yaml` 显式声明 `target: item|collection`、`hall`、`state: drafts` 和 `create`、`replace`、`delete` 操作。
 
-`replace` 和 `delete` 都需要显式授权参数。应用时脚本会加写锁、备份被影响的 item 目录、写入正式 `catalog/`，然后运行 `./scripts/verify.sh catalog`。验证失败时会回滚已经写入的目录。
+`catalog.sh import` 是旧 project/root collection 整理结果进入旧 catalog 前的安全入口。批次必须位于 `.tmp/import-batches/<batch-id>/`，并由 `manifest.yaml` 显式声明 `target: project|collection` 操作。
 
-Import batch 不是长期数据源。应用成功后，正式来源仍是 `catalog/projects/` 和 `catalog/collections/`。
+`content.sh import` 的 `replace` 和 `delete` 都需要显式授权参数。应用时脚本会加写锁、备份被影响的 item 或 collection 目录、写入 `catalog/content/drafts/`，然后运行 `./scripts/verify.sh catalog`。验证失败时会回滚已经写入的目录。
 
-合同说明见 [`../docs/contract/catalog-import-batch.md`](../docs/contract/catalog-import-batch.md)。
-日常操作手册见 [`../docs/runbooks/catalog-import-workflow.md`](../docs/runbooks/catalog-import-workflow.md)。
+`catalog.sh import` 的 `replace` 和 `delete` 同样需要显式授权参数。应用时脚本会加写锁、备份被影响的旧 project 或 root collection 目录、写入旧 `catalog/` 数据面，然后运行 `./scripts/verify.sh catalog`。
+
+Import batch 不是长期数据源。`content.sh import` 应用成功后，正式草稿来源是 `catalog/content/drafts/`；旧 `catalog.sh import` 应用成功后，正式来源仍是 `catalog/projects/` 和 `catalog/collections/`。
+
+Content import 合同说明见 [`../docs/contract/content-import-batch.md`](../docs/contract/content-import-batch.md)，日常操作手册见 [`../docs/runbooks/content-import-workflow.md`](../docs/runbooks/content-import-workflow.md)。
+
+旧 catalog import 合同说明见 [`../docs/contract/catalog-import-batch.md`](../docs/contract/catalog-import-batch.md)，日常操作手册见 [`../docs/runbooks/catalog-import-workflow.md`](../docs/runbooks/catalog-import-workflow.md)。

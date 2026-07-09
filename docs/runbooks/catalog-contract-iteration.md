@@ -23,7 +23,8 @@ schema 定规则
 | --- | --- | --- |
 | Schema | `src/lib/catalog/catalog-schema.js` | 可执行配置合同。 |
 | Hall loader | `src/lib/catalog/halls.ts` | hall YAML 读取、schema parse、展馆入口 read model。 |
-| Content loader | `src/lib/catalog/content.ts` | content bundle YAML 读取、schema parse、publication state、body/notes 文件和 collection item 引用校验。 |
+| Content validator | `src/lib/catalog/content-validator.js` | content bundle YAML 读取、schema parse、publication state、body/notes 文件和 collection item 引用校验。 |
+| Content loader | `src/lib/catalog/content.ts` | content bundle read model 适配、公开内容过滤和 route 派生。 |
 | Model loader | `src/lib/catalog/models.ts` | model YAML 读取、schema parse、模型详情和 notes 引用校验、model read model。 |
 | Project loader | `src/lib/catalog/projects.ts` | project YAML 读取、schema parse、taxonomy 校验、项目关系校验、project read model。 |
 | Collection loader | `src/lib/catalog/collections.ts` | collection YAML 读取、schema parse、专题引用项目校验、collection read model。 |
@@ -31,7 +32,8 @@ schema 定规则
 | Detail loader | `src/lib/catalog/details.ts` | 已实现项目、模型、专题详情和项目/模型 notes 内容的加载。 |
 | Build gate | `./scripts/verify.sh check` | 统一验证入口；当前委托 `npm run build`。 |
 | Script entrypoints | `scripts/` | 本地开发、验证和 catalog 维护的人类操作入口。 |
-| Import batch | `.tmp/import-batches/<batch-id>/` | AI 或人工整理结果进入正式 catalog 前的中间交换合同。 |
+| Content import batch | `.tmp/import-batches/<batch-id>/` + `kind: content-import-batch` | AI 或人工整理结果进入 `catalog/content/drafts/` 前的中间交换合同。 |
+| Legacy catalog import batch | `.tmp/import-batches/<batch-id>/` + `kind: catalog-import-batch` | 旧 project/root collection 整理结果进入旧 catalog 前的中间交换合同。 |
 | Contract docs | `docs/contract/` | 对可执行合同的人类说明。 |
 | Current docs | `docs/current/` | 当前已实现结构和运行路径。 |
 | Plans | `docs/plans/` | 未来缺口和验收条件。 |
@@ -43,11 +45,12 @@ schema 定规则
 
 1. 判断字段属于通用 item/collection core、`github_project` profile、`ai_model` profile、body、notes，还是 typed block。
 2. 更新 `src/lib/catalog/catalog-schema.js`。
-3. 需要目录、publication state、hall、taxonomy、引用文件或 collection item 引用校验时，更新 `src/lib/catalog/content.ts`。
-4. 更新至少一个 `catalog/content/{drafts,published,archived}/...` 样例。
-5. 更新 [`../contract/content-bundle-config.md`](../contract/content-bundle-config.md)。
-6. 如果运行路径变化，更新 [`../current/structure.md`](../current/structure.md)。
-7. 运行 `./scripts/verify.sh check`。
+3. 需要目录、publication state、hall、taxonomy、引用文件或 collection item 引用校验时，更新 `src/lib/catalog/content-validator.js`。
+4. 需要 read model、公开内容过滤或 route 派生时，更新 `src/lib/catalog/content.ts`。
+5. 更新至少一个 `catalog/content/{drafts,published,archived}/...` 样例。
+6. 更新 [`../contract/content-bundle-config.md`](../contract/content-bundle-config.md)。
+7. 如果运行路径变化，更新 [`../current/structure.md`](../current/structure.md)。
+8. 运行 `./scripts/verify.sh check`。
 
 不要把 `docs/contract/content-bundle-config.md` 当成真相源。schema 和 loader 不支持的字段不能写入 content bundle 合同。
 
@@ -176,28 +179,29 @@ maintenance_status id 是项目维护状态合同，不是筛选分类，也不�
 
 适用场景：模型把 `docs/notes/` 或其他输入资料整理成项目需要的数据格式，但还不能直接信任输出内容。
 
-日常操作流程见 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。本节只保留合同迭代边界。
+content bundle 日常操作流程见 [`content-import-workflow.md`](./content-import-workflow.md)。旧 project/root collection 日常操作流程见 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。本节只保留合同迭代边界。
 
 Import batch 的合同心智模型：
 
 ```text
 AI/manual output
   -> .tmp/import-batches/<batch-id> exchange contract
-  -> import validate preflight
+  -> content.sh import validate preflight
   -> explicit plan
-  -> locked apply
-  -> schema/loader build gate
-  -> catalog/ source of truth
+  -> locked apply into catalog/content/drafts/
+  -> schema/validator/loader build gate
+  -> content.sh publish when ready
 ```
 
-当前规则只以 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md) 为准，日常操作见 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。
+content import 规则以 [`../contract/content-import-batch.md`](../contract/content-import-batch.md) 为准，日常操作见 [`content-import-workflow.md`](./content-import-workflow.md)。旧 catalog import 规则以 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md) 为准，日常操作见 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。
 
 变更 import batch 能力时：
 
-1. 先更新 `scripts/catalog/catalog-import-cli.mjs` 和必要的 schema/loader。
-2. 再更新 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md)。
-3. 如果操作步骤变化，再更新 [`catalog-import-workflow.md`](./catalog-import-workflow.md)。
-4. 运行 `./scripts/verify.sh check` 和最小脚本验证。
+1. content import 先更新 `scripts/content/content-import-cli.mjs` 和必要的 schema/validator/loader。
+2. 旧 catalog import 先更新 `scripts/catalog/catalog-import-cli.mjs` 和必要的 schema/loader。
+3. 再更新对应 contract 文档。
+4. 如果操作步骤变化，再更新对应 workflow runbook。
+5. 运行 `./scripts/verify.sh check` 和最小脚本验证。
 
 ## When Changing Site Navigation
 
@@ -237,7 +241,8 @@ details:
 ```text
 scripts/dev.sh       本地 Astro 开发、预览和构建
 scripts/verify.sh    build/catalog/content 一次性验证
-scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、delete、add/remove project、set field；import batch validate/plan/diff/apply
+scripts/content.sh   content bundle item/collection 草稿创建、content import batch validate/plan/diff/apply、publish/archive/restore
+scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、delete、add/remove project、set field；旧 project/root collection import batch validate/plan/diff/apply
 ```
 
 `./scripts/verify.sh` 不检查 README 或 `docs/`。文档只解释已实现规则，不能成为项目验证依赖。
@@ -249,12 +254,13 @@ scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、d
 3. 不在 shell 中重写 `catalog-schema.js`、`projects.ts` 或 `collections.ts` 的合同逻辑。
 4. `catalog.sh new` 只能写 `catalog/projects/<id>/project.yaml` 和可选 `details.md`，不得自动修改 taxonomy 或猜测 GitHub 元数据。
 5. `catalog.sh collection` 只能写 `catalog/collections/<id>/collection.yaml` 和可选 `details.md`，不得修改项目事实。
-6. `catalog.sh import` 只能从 `.tmp/import-batches/<batch-id>/` 写入正式 catalog，且只能执行 manifest 显式声明的 item 级操作。
-7. `catalog.sh import` 可以做 import 前置快失败校验，但最终必须调用 schema/loader 门禁验证。
-8. 写入后必须调用 schema/loader 门禁验证。
-9. catalog 写操作必须共用 repo 级写锁。
-10. 删除专题必须限制在 `catalog/collections/<id>/` 并要求显式 `--force`。
-11. 运行脚本 help 和最小验证。
+6. `content.sh import` 只能从 `.tmp/import-batches/<batch-id>/` 写入 `catalog/content/drafts/`，且只能执行 manifest 显式声明的 bundle 级操作。
+7. `catalog.sh import` 只能从 `.tmp/import-batches/<batch-id>/` 写入旧 project/root collection catalog，且只能执行 manifest 显式声明的 item 级操作。
+8. import 可以做前置快失败校验，但最终必须调用 schema/validator/loader 门禁验证。
+9. 写入后必须调用 schema/validator/loader 门禁验证。
+10. catalog 写操作必须共用 repo 级写锁。
+11. 删除专题必须限制在 `catalog/collections/<id>/` 并要求显式 `--force`。
+12. 运行脚本 help 和最小验证。
 
 ## Drift Checklist
 

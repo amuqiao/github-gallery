@@ -1,6 +1,8 @@
 # Catalog Import Workflow
 
-本文是日常更新项目和专题数据的操作手册。它说明如何把人工或 AI 整理结果先放进 `.tmp/import-batches/`，再通过脚本安全进入正式 `catalog/`。
+本文是日常更新旧项目和 root 专题数据的操作手册。它说明如何把人工或 AI 整理结果先放进 `.tmp/import-batches/`，再通过脚本安全进入正式 `catalog/projects/` 和 `catalog/collections/`。
+
+Content bundle import 使用 [`content-import-workflow.md`](./content-import-workflow.md)，不使用本文流程。
 
 ## Mental Model
 

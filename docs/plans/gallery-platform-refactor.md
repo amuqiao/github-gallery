@@ -60,12 +60,14 @@ Release Gate
 - 专题当前使用 `catalog/collections/<id>/collection.yaml`，并通过 `items[].project` 引用 GitHub 项目。
 - 已实现 content bundle 验证面：`catalog/content/{drafts,published,archived}/<hall>/items/<id>/item.yaml` 和 `collections/<id>/collection.yaml`。
 - 已实现 `github_project` 和 `ai_model` profile schema。
-- 已实现 `src/lib/catalog/content.ts`，用于校验 publication state、hall、body/notes 文件、GitHub taxonomy 引用、collection item 引用和 published collection 规则。
+- 已实现 `src/lib/catalog/content-validator.js`，用于校验 publication state、hall、body/notes 文件、GitHub taxonomy 引用、collection item 引用和 published collection 规则。
+- 已实现 `src/lib/catalog/content.ts`，用于 content bundle read model 适配、公开内容过滤和 route 派生。
 - 当前 content bundle 只参与 build-time validation，尚未驱动公开页面。
 - `scripts/catalog.sh` 当前支持 project list/new/validate、collection 子命令和 project/collection import batch。
 - `docs/contract/catalog-import-batch.md` 当前只允许 `target: project` 和 `target: collection`。
 - `./scripts/verify.sh check` 当前通过 `npm run build` 间接覆盖 hall、model、project、collection、taxonomy、site 和内容引用。
 - 已实现 `./scripts/verify.sh release`，当前通过 `scripts/verify/release-gate.mjs` 调用 `src/lib/catalog/content-validator.js`，再运行 Astro 静态构建。
+- 已实现 `./scripts/content.sh import validate|plan|diff|apply`，当前只写入 `catalog/content/drafts/`。
 
 ## Remaining Gaps
 
@@ -74,9 +76,8 @@ Release Gate
 - 已实现 `scripts/content.sh` 和 `scripts/content/content-cli.mjs`，支持 content bundle item/collection draft 创建、item note 添加、publish、archive、restore。
 - `publish` 当前委托 `./scripts/verify.sh release`；`archive` 和 `restore` 当前委托 `./scripts/verify.sh catalog`。
 - 专题的归属不清晰。未来应默认属于某个 hall，平台首页只做聚合展示。
-- import batch 是外部整理结果的安全入口，但不是日常创建内容的主入口。
+- content import batch 是外部整理结果进入 drafts 的安全入口，但不是发布入口。
 - `catalog.sh new` 只能创建 GitHub project，不能统一创建当前公开页面使用的 model、Markdown note、HTML note 或馆内专题。
-- 当前还没有 content import batch。
 
 ## Planned Work
 
@@ -268,7 +269,7 @@ items:
 - 写操作加 `.data/catalog-write.lock`。
 - 写后运行最小验证；发布前运行完整 release gate。
 
-旧 `catalog.sh` 在破坏性版本中不再提供写入能力。可以删除，也可以只保留为提示用户迁移到 `content.sh` 的错误入口；不得继续支持旧 project、旧 collection 或旧 import 写入。
+旧 `catalog.sh` 当前仍保留为 legacy project/root collection 入口。破坏性切换完成后，它不再提供写入能力；可以删除，也可以只保留为提示用户迁移到 `content.sh` 的错误入口；不得继续支持旧 project、旧 collection 或旧 import 写入。
 
 ### 5. Replace Import Batch Contract
 
@@ -281,10 +282,10 @@ target: project
 target: collection
 ```
 
-新 manifest target 草案：
+当前已实现的 content import manifest 形态：
 
 ```yaml
-schema_version: 2
+schema_version: 1
 kind: content-import-batch
 batch_id: models-audio-2026-07-09
 source:
@@ -293,13 +294,13 @@ mode: scoped
 operations:
   - target: item
     hall: models
-    kind: ai_model
     id: htdemucs-ft-onnx
-    action: create-draft
-    path: ./content/drafts/models/items/htdemucs-ft-onnx
+    state: drafts
+    action: create
+    path: ./items/models/htdemucs-ft-onnx
 ```
 
-`apply` 默认只能写入 drafts。把 draft 发布到 published 必须走 `content.sh publish` 或显式 `import apply --publish`，并经过完整 release gate。
+`apply` 只能写入 drafts。把 draft 发布到 published 必须走 `content.sh publish`，并经过完整 release gate。`content.sh import` 不提供发布开关。
 
 用户入口统一迁移为：
 
@@ -310,7 +311,7 @@ operations:
 ./scripts/content.sh import apply .tmp/import-batches/<batch-id>
 ```
 
-旧 `./scripts/catalog.sh import ...` 不保留为兼容入口。
+当前 `./scripts/catalog.sh import ...` 仍是 legacy project/root collection import 入口。破坏性切换完成后，它不保留为兼容入口。
 
 ### 6. Replace Loaders And Routes
 
@@ -427,10 +428,12 @@ docs/runbooks/
 
 ### Slice 6: Content Import Batch
 
-- 升级 import batch 到 `content-import-batch`。
-- 默认导入到 drafts。
-- 用户入口迁移为 `content.sh import`。
-- 给 content CLI 和 import CLI 增加最小脚本验证。
+- 已新增 `scripts/content/content-import-cli.mjs`。
+- 已新增 `docs/contract/content-import-batch.md`。
+- 已新增 `docs/runbooks/content-import-workflow.md`。
+- 已支持 `content.sh import validate|plan|diff|apply`。
+- 已限制 import 只写入 `catalog/content/drafts/`。
+- 已支持 apply 加锁、备份、验证失败回滚。
 
 ### Slice 7: Documentation And Cleanup
 
@@ -455,7 +458,7 @@ docs/runbooks/
 - `content.sh publish` 在发布前运行 release gate，失败时不移动到 published。
 - import batch 支持 content bundle，并默认写入 drafts。
 - `content.sh import` 是正式 import 用户入口。
-- 旧 `target: project`、旧 `target: collection`、旧 `catalog.sh new`、旧 `catalog.sh collection`、旧 `catalog.sh import` 不再作为兼容入口存在。
+- 破坏性切换完成后，旧 `target: project`、旧 `target: collection`、旧 `catalog.sh new`、旧 `catalog.sh collection`、旧 `catalog.sh import` 不再作为兼容入口存在。
 - `/projects/<id>`、`/collections/<id>`、`/categories/<id>`、`/tags/<id>` 不生成公开详情页。
 - `/halls/<hall>/items/<id>/` 和 `/halls/<hall>/collections/<id>/` 是 canonical detail 路由。
 - `./scripts/verify.sh release` 通过。

@@ -1,6 +1,8 @@
 # Catalog Import Batch Contract
 
-本文解释当前已经实现的 `.tmp/import-batches/<batch-id>/` 交换合同。批次编排规则的可执行真相源是 `scripts/catalog/catalog-import-cli.mjs`；项目和专题 payload 的最终合同仍由 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 验证。
+本文解释当前已经实现的旧 catalog `.tmp/import-batches/<batch-id>/` 交换合同。批次编排规则的可执行真相源是 `scripts/catalog/catalog-import-cli.mjs`；项目和专题 payload 的最终合同仍由 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 验证。
+
+Content bundle import 使用 [`content-import-batch.md`](./content-import-batch.md)，不使用本文合同。
 
 ## Purpose
 

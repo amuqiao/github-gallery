@@ -1,11 +1,11 @@
 # Content Publishing Workflow
 
-本文说明当前已实现的 content bundle 创建和发布流程。它只覆盖 `catalog/content/`，不替代旧 `catalog.sh` 的 project、root collection 和 import batch 工作流。
+本文说明当前已实现的 content bundle 创建和发布流程。它只覆盖 `catalog/content/`，不替代旧 `catalog.sh` 的 project 和 root collection 工作流。
 
 ## Flow
 
 ```text
-content.sh item new / collection new
+content.sh item new / collection new / import apply
   -> catalog/content/drafts/
   -> edit Markdown or HTML note files
   -> content.sh publish
@@ -107,7 +107,19 @@ Rules:
 - `restore` never publishes directly. Publish again after editing.
 - Published collections can only reference published items in the same hall.
 
+## Import Drafts
+
+批量或 AI 生成内容先使用 content import batch 进入 drafts：
+
+```sh
+./scripts/content.sh import validate .tmp/import-batches/example-content-batch
+./scripts/content.sh import plan .tmp/import-batches/example-content-batch
+./scripts/content.sh import diff .tmp/import-batches/example-content-batch
+./scripts/content.sh import apply .tmp/import-batches/example-content-batch
+```
+
+导入流程见 [`content-import-workflow.md`](./content-import-workflow.md)。导入不会发布内容。
+
 ## Boundaries
 
-- This workflow does not implement `content.sh import`.
 - Current public pages still use the old project/model/root collection loaders until the route replacement slice.

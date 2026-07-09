@@ -35,9 +35,10 @@
 - `src/styles/global.css` 提供 Tailwind 入口、shadcn-style token 和少量全局 prose 样式。
 - `src/components/blocks/BlockRenderer.astro` 负责渲染 blocks。
 - `scripts/` 提供本地开发、验证、catalog 维护和 Docker 静态站点部署入口；脚本不定义配置合同。
-- `scripts/content.sh` 创建和移动 `catalog/content/` content bundle，并在写操作后运行验证。
+- `scripts/content.sh` 创建、导入和移动 `catalog/content/` content bundle，并在写操作后运行验证。
 - `.tmp/import-batches/<batch-id>/` 是 AI 或人工整理结果进入正式 catalog 前的临时交换目录。
-- `scripts/catalog/catalog-import-cli.mjs` 负责 import batch 的预检、计划、差异、加锁应用和失败回滚。
+- `scripts/content/content-import-cli.mjs` 负责 content import batch 的预检、计划、差异、加锁应用和失败回滚，只写入 `catalog/content/drafts/`。
+- `scripts/catalog/catalog-import-cli.mjs` 负责旧 project/root collection import batch 的预检、计划、差异、加锁应用和失败回滚。
 
 ## Runtime Path
 
@@ -146,13 +147,22 @@ scripts/verify.sh
 
 scripts/content.sh
   -> scripts/content/content-cli.mjs
+  -> scripts/content/content-import-cli.mjs for import
   -> catalog/content/drafts/ for new item and collection bundles
+  -> catalog/content/drafts/ for content import apply
   -> catalog/content/{drafts,published,archived}/ for publish/archive/restore
+  -> scripts/verify.sh catalog for import apply
   -> scripts/verify.sh release for publish
   -> scripts/verify.sh catalog for archive/restore
   -> rollback on failure
 
-.tmp/import-batches/<batch-id>/manifest.yaml
+.tmp/import-batches/<batch-id>/manifest.yaml kind: content-import-batch
+  -> scripts/content/content-import-cli.mjs
+  -> catalog/content/drafts/<hall>/items/<id>/ or collections/<id>/
+  -> scripts/verify.sh catalog
+  -> rollback on failure
+
+.tmp/import-batches/<batch-id>/manifest.yaml kind: catalog-import-batch
   -> scripts/catalog/catalog-import-cli.mjs
   -> catalog/projects/<id>/ or catalog/collections/<id>/
   -> scripts/verify.sh catalog
@@ -183,7 +193,7 @@ scripts/content.sh
 
 `notes` 是项目或模型附加内容索引。详情页只显示 notes 卡片入口；每篇 note 生成独立路由。`type: markdown` + `display: site` 使用本站页面壳层，`type: html` + `display: site` + `html_mode: fragment` 渲染受控 HTML 正文片段，`type: html` + `display: standalone` + `html_mode: document` 返回独立 HTML。
 
-`.tmp/import-batches/` 是中间交换区，不是长期数据源。导入成功后，正式来源仍是 `catalog/`；导入失败时脚本会回滚已写入的 item 目录。日常操作见 [`../runbooks/catalog-import-workflow.md`](../runbooks/catalog-import-workflow.md)。
+`.tmp/import-batches/` 是中间交换区，不是长期数据源。`content.sh import` 导入成功后，正式草稿来源是 `catalog/content/drafts/`；旧 `catalog.sh import` 导入成功后，正式来源仍是 `catalog/projects/` 和 `catalog/collections/`。导入失败时脚本会回滚已写入的 bundle 目录。日常操作见 [`../runbooks/content-import-workflow.md`](../runbooks/content-import-workflow.md) 和 [`../runbooks/catalog-import-workflow.md`](../runbooks/catalog-import-workflow.md)。
 
 前端导航骨架见 [`frontend-navigation.md`](frontend-navigation.md)。当前实现采用 Hub and Spoke + Filtered View + Nested Doll 的组合模式。
 
@@ -198,4 +208,5 @@ UI 样式架构见 [`ui-architecture.md`](ui-architecture.md)。当前实现采�
 - `schema_version: 1` 的项目和专题主详情只支持 Markdown；项目 notes 支持 Markdown 和 HTML。
 - `schema_version: 1` 支持 `links`、`highlights`、`use-cases` blocks。
 - `schema_version: 2` 的 content bundle 使用 `item.yaml` 或 `collection.yaml`，正文入口是 `body.path`，当前公开页面仍由旧 loader 生成。
-- `./scripts/catalog.sh import validate|plan|diff|apply` 是当前 import batch 工作流入口。合同说明见 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md)，操作手册见 [`../runbooks/catalog-import-workflow.md`](../runbooks/catalog-import-workflow.md)。
+- `./scripts/content.sh import validate|plan|diff|apply` 是当前 content import batch 工作流入口。合同说明见 [`../contract/content-import-batch.md`](../contract/content-import-batch.md)，操作手册见 [`../runbooks/content-import-workflow.md`](../runbooks/content-import-workflow.md)。
+- `./scripts/catalog.sh import validate|plan|diff|apply` 是旧 project/root collection import batch 工作流入口。合同说明见 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md)，操作手册见 [`../runbooks/catalog-import-workflow.md`](../runbooks/catalog-import-workflow.md)。
