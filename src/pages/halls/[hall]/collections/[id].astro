@@ -1,0 +1,80 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import BlockRenderer from "@/components/blocks/BlockRenderer.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import ContentItemCard from "@/components/ContentItemCard.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import Button from "@/components/ui/Button.astro";
+import Prose from "@/components/ui/Prose.astro";
+import { getPublishedContentCollections, type ContentCollection } from "@/lib/catalog/content";
+import { loadContentCollectionBody } from "@/lib/catalog/details";
+import { getHallById } from "@/lib/catalog/halls";
+import { getSiteConfig } from "@/lib/catalog/projects";
+
+export async function getStaticPaths() {
+  const collections = await getPublishedContentCollections();
+  return collections.map((collection) => ({
+    params: { hall: collection.hall, id: collection.id },
+    props: { collection }
+  }));
+}
+
+const { collection } = Astro.props as { collection: ContentCollection };
+const [site, hall, body] = await Promise.all([
+  getSiteConfig(),
+  getHallById(collection.hall),
+  loadContentCollectionBody(collection)
+]);
+const BodyContent = body.type === "markdown" ? body.Content : undefined;
+const htmlFragment = body.type === "html" ? body.html : undefined;
+---
+
+<BaseLayout title={`${collection.title} - ${hall.title}`} site={site} description={collection.summary}>
+  <article class="grid gap-6">
+    <Breadcrumbs
+      items={[
+        { label: "展馆入口", href: "/" },
+        { label: hall.title, href: `/halls/${collection.hall}/` },
+        { label: "专题" },
+        { label: collection.title }
+      ]}
+    />
+    <PageHeader
+      eyebrow={`${hall.title} / 专题`}
+      title={collection.title}
+      description={collection.summary}
+      stats={[
+        { label: "条目", value: collection.items.length },
+        { label: "状态", value: "已发布" }
+      ]}
+    >
+      <Fragment slot="actions">
+        <Button href={`/halls/${collection.hall}/`} variant="outline">返回展馆</Button>
+      </Fragment>
+    </PageHeader>
+
+    <Prose>
+      {BodyContent && <BodyContent />}
+      {htmlFragment && <Fragment set:html={htmlFragment} />}
+    </Prose>
+
+    {
+      collection.blocks.length > 0 && (
+        <section class="content-blocks" aria-label="专题详情">
+          {collection.blocks.map((block, index) => <BlockRenderer block={block} index={index} />)}
+        </section>
+      )
+    }
+
+    <section class="gallery-section" aria-labelledby="content-collection-items-title">
+      <div class="editorial-section-head">
+        <span class="editorial-section-head__index">01</span>
+        <h2 class="editorial-section-head__title" id="content-collection-items-title">专题内条目</h2>
+        <span class="editorial-section-head__hint">{collection.items.length} 个条目</span>
+      </div>
+      <div class="project-collection__grid project-collection__grid--standard">
+        {collection.items.map(({ item, note }, index) => <ContentItemCard item={item} note={note} order={index + 1} />)}
+      </div>
+    </section>
+  </article>
+</BaseLayout>

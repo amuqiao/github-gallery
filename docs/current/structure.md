@@ -7,7 +7,7 @@
 - 站点是 Astro static site。
 - 展馆入口数据位于 `catalog/halls/<id>/hall.yaml`。
 - Content bundle 验证数据位于 `catalog/content/{drafts,published,archived}/<hall>/`。
-- Content bundle 当前支持 `items/<id>/item.yaml` 和 `collections/<id>/collection.yaml`，并在构建期校验，但尚未替代旧页面数据源。
+- Content bundle 当前支持 `items/<id>/item.yaml` 和 `collections/<id>/collection.yaml`。`published` content 会生成 canonical item、note 和 hall-owned collection 页面；`drafts` 和 `archived` 只参与验证，不生成公开 content 页面。
 - 模型数据位于 `catalog/models/<id>/model.yaml`。
 - 可选模型详情正文位于同一模型目录的 `details.md`。
 - 可选模型附加笔记位于同一模型目录的 `notes/`。
@@ -20,15 +20,16 @@
 - 站点标题、描述、导航位于 `catalog/site.yaml`。
 - 页面不直接解析 YAML，而是调用 `src/lib/catalog/halls.ts`、`src/lib/catalog/content.ts`、`src/lib/catalog/models.ts`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts`。
 - `src/lib/catalog/halls.ts` 构建展馆入口 read model，并校验 hall 目录名和 id 一致。
-- `src/lib/catalog/content.ts` 构建 content bundle read model，并校验 publication state、hall、item、collection、body、notes 和跨状态引用规则。
+- `src/lib/catalog/content-validator.js` 校验 content bundle publication state、hall、item、collection、body、notes 和跨状态引用规则。
+- `src/lib/catalog/content.ts` 构建 content bundle read model、公开内容过滤和 canonical route 派生。
 - `src/lib/catalog/models.ts` 构建模型展馆 read model，并校验模型目录名、详情文件、notes 文件和路径边界。
 - `src/lib/catalog/projects.ts` 构建共享 catalog snapshot，包括项目索引、taxonomy 索引、关系校验和相关项目查询。
 - `src/lib/catalog/collections.ts` 构建专题 snapshot，并校验专题引用的项目是否存在、是否重复。
 - `src/lib/catalog/block-adapters.ts` 在渲染前适配 typed blocks。
 - `src/lib/catalog/project-view-models.ts` 把项目和 taxonomy 解析成前端卡片视图模型。
-- `src/lib/catalog/details.ts` 加载项目、模型和专题的 Markdown 详情正文。
+- `src/lib/catalog/details.ts` 加载项目、模型、专题和 content bundle 的 Markdown/HTML 正文。
 - `src/lib/catalog/details.ts` 加载项目 notes 的 Markdown 或 HTML 内容。
-- `src/lib/catalog/details.ts` 加载模型 notes 的 Markdown 或 HTML 内容。
+- `src/lib/catalog/details.ts` 加载模型 notes 和 content item notes 的 Markdown 或 HTML 内容。
 - `src/presentation/` 提供展示层 registry，当前把 `layoutId` 和 `themeId` 拆开管理。
 - `src/components/PageHeader.astro`、`src/components/ProjectCollection.astro`、`src/components/CollectionGrid.astro` 等共享组件承载前端导航骨架。
 - `src/components/ui/` 提供 shadcn-style UI primitives。
@@ -71,15 +72,19 @@ catalog/content/{drafts,published,archived}/<hall>/items/<id>/item.yaml
   -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/content-validator.js
   -> src/lib/catalog/content.ts
-  -> src/pages/index.astro
-  -> build-time validation only
+  -> src/lib/catalog/details.ts
+  -> src/pages/halls/[hall]/items/[id].astro
+  -> src/pages/halls/[hall]/items/[id]/notes/[note].astro
+  -> static HTML output for published only
 
 catalog/content/{drafts,published,archived}/<hall>/collections/<id>/collection.yaml
   -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/content-validator.js
   -> src/lib/catalog/content.ts
-  -> src/pages/index.astro
-  -> build-time validation only
+  -> src/lib/catalog/details.ts
+  -> src/pages/halls/[hall]/collections/index.astro
+  -> src/pages/halls/[hall]/collections/[id].astro
+  -> static HTML output for published only
 
 catalog/models/<id>/model.yaml
   -> src/lib/catalog/catalog-schema.js
@@ -173,7 +178,9 @@ scripts/content.sh
 
 `hall.yaml` 是平台首页展馆入口、开放状态和排序的机器可读来源。Hall 路由由 loader 根据 id 推导为 `/halls/<id>/`。`planned` hall 只表示入口预留，不定义领域 item 合同。
 
-`catalog/content/` 是新的 content bundle 合同验证面。当前它只参与 build-time validation，不驱动公开页面。`drafts`、`published`、`archived` 由目录表达发布状态；content bundle 只能位于 `availability: active` 的 hall 下；`published` collection 只能引用同一 hall 的 `published` item。
+`catalog/content/` 是新的 content bundle 合同面。`published` content 当前驱动 canonical routes：`/halls/<hall>/items/<id>/`、`/halls/<hall>/items/<id>/notes/<note>/`、`/halls/<hall>/collections/` 和 `/halls/<hall>/collections/<id>/`。`drafts`、`published`、`archived` 由目录表达发布状态；content bundle 只能位于 `availability: active` 的 hall 下；`published` collection 只能引用同一 hall 的 `published` item。
+
+`/halls/models/` 当前已经从 `catalog/content/published/models/items/` 读取已发布 `ai_model` item。旧 `catalog/models/` 路由仍暂时存在，作为后续破坏性切换前的 legacy 页面。
 
 `model.yaml` 的 stable core 字段是模型馆卡片、模型详情首屏和模型笔记入口的机器可读来源。模型性能数据、benchmark、部署硬件和一次性实验观察优先进入 `details.md`、`notes` 或 typed blocks。
 
@@ -207,6 +214,6 @@ UI 样式架构见 [`ui-architecture.md`](ui-architecture.md)。当前实现采�
 - 配置违反 schema、引用未知 taxonomy、taxonomy 缺少双语字段、引用缺失文件、引用 symlink 详情或 note 文件、路径越出项目、模型、专题或 content bundle 目录、related project 不存在、专题引用未知项目、专题重复引用同一项目、content collection 引用非法 publication state item 时，构建应失败。
 - `schema_version: 1` 的项目和专题主详情只支持 Markdown；项目 notes 支持 Markdown 和 HTML。
 - `schema_version: 1` 支持 `links`、`highlights`、`use-cases` blocks。
-- `schema_version: 2` 的 content bundle 使用 `item.yaml` 或 `collection.yaml`，正文入口是 `body.path`，当前公开页面仍由旧 loader 生成。
+- `schema_version: 2` 的 content bundle 使用 `item.yaml` 或 `collection.yaml`，正文入口是 `body.path`；published content 会生成 canonical item、note 和 hall-owned collection 页面。
 - `./scripts/content.sh import validate|plan|diff|apply` 是当前 content import batch 工作流入口。合同说明见 [`../contract/content-import-batch.md`](../contract/content-import-batch.md)，操作手册见 [`../runbooks/content-import-workflow.md`](../runbooks/content-import-workflow.md)。
 - `./scripts/catalog.sh import validate|plan|diff|apply` 是旧 project/root collection import batch 工作流入口。合同说明见 [`../contract/catalog-import-batch.md`](../contract/catalog-import-batch.md)，操作手册见 [`../runbooks/catalog-import-workflow.md`](../runbooks/catalog-import-workflow.md)。

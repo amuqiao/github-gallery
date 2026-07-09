@@ -17,7 +17,7 @@ Filtered View
   分类页和标签页展示 GitHub 展馆项目的不同过滤视图。
 
 Nested Doll
-  GitHub 项目列表进入项目详情；模型列表进入模型详情；专题列表进入专题详情，专题详情再展示专题内项目。
+  GitHub 项目列表进入项目详情；模型列表进入 content item 详情；专题列表进入专题详情，专题详情再展示专题内条目。
 
 Project Notes
   项目详情页作为项目 hub，附加笔记作为从项目页进入的 spoke 页面。
@@ -26,7 +26,7 @@ Model Notes
   模型详情页作为模型 hub，附加笔记作为从模型页进入的 spoke 页面。
 ```
 
-这些模式只约束页面和组件结构。展馆数据来源是 `src/lib/catalog/halls.ts`，模型数据来源是 `src/lib/catalog/models.ts`，项目数据来源是 `src/lib/catalog/projects.ts`，专题数据来源是 `src/lib/catalog/collections.ts`。
+这些模式只约束页面和组件结构。展馆数据来源是 `src/lib/catalog/halls.ts`，canonical content 路由数据来源是 `src/lib/catalog/content.ts`，模型馆列表当前读取 published content item。旧模型、项目和 root collection 页面仍分别读取 `src/lib/catalog/models.ts`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts`。
 
 当前页面组合由 `src/presentation/config.ts` 选择的 `bento-editorial` layout 驱动。layout 可以调整首页 section 顺序和列表变体，但不改变路由角色或 catalog 数据来源。
 
@@ -36,9 +36,13 @@ Model Notes
 | --- | --- | --- |
 | `/` | Platform hub，展示展馆入口、模型样例和精选专题。 | `HallCard`、`ModelCard`、`CollectionGrid` |
 | `/halls/github/` | GitHub 展馆 hub，展示总览、专题入口、taxonomy 入口和全部项目。 | `HomeBentoHero`、`CollectionGrid`、`FilterPanel`、`ProjectCollection` |
-| `/halls/models/` | 模型展馆入口，展示模型条目列表。 | `Breadcrumbs`、`PageHeader`、`ModelCard` |
-| `/halls/models/[id]/` | 单个模型详情页，展示模型事实、详情、blocks 和笔记入口。 | `Breadcrumbs`、`PageHeader`、`BlockRenderer`、`Prose` |
-| `/halls/models/[id]/notes/[note]/` | 模型附加笔记页；Markdown 和 HTML fragment 使用站内布局，HTML document 返回独立页面。 | `Breadcrumbs`、`PageHeader`、`Prose` |
+| `/halls/models/` | 模型展馆入口，展示 `catalog/content/published/models/items/` 中的已发布 `ai_model` 条目。 | `Breadcrumbs`、`PageHeader`、`ContentItemCard` |
+| `/halls/<hall>/items/<id>/` | canonical content item 详情页，只为 published item 生成。 | `Breadcrumbs`、`PageHeader`、`BlockRenderer`、`Prose` |
+| `/halls/<hall>/items/<id>/notes/<note>/` | canonical content item 附加笔记页；Markdown 和 HTML fragment 使用站内布局，HTML document 返回独立页面。 | `Breadcrumbs`、`PageHeader`、`Prose` |
+| `/halls/<hall>/collections/` | 馆内 published collection 列表。 | `Breadcrumbs`、`PageHeader`、`ContentCollectionCard` |
+| `/halls/<hall>/collections/<id>/` | canonical hall-owned collection 详情页，只为 published collection 生成。 | `Breadcrumbs`、`PageHeader`、`BlockRenderer`、`ContentItemCard` |
+| `/halls/models/[id]/` | legacy 模型详情页，暂时读取 `catalog/models/`。 | `Breadcrumbs`、`PageHeader`、`BlockRenderer`、`Prose` |
+| `/halls/models/[id]/notes/[note]/` | legacy 模型附加笔记页。 | `Breadcrumbs`、`PageHeader`、`Prose` |
 | `/halls/music/` | planned 音乐展馆占位页。 | `PlannedHallPage` |
 | `/halls/movies/` | planned 电影展馆占位页。 | `PlannedHallPage` |
 | `/collections/` | 公开专题入口，展示 `published` 和 `archived` 专题。 | `PageHeader`、`CollectionGrid` |
@@ -72,7 +76,8 @@ Model Notes
 catalog YAML
   -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/halls.ts
-  -> src/lib/catalog/models.ts
+  -> src/lib/catalog/content.ts for canonical published content routes
+  -> src/lib/catalog/models.ts for legacy model routes
   -> src/lib/catalog/projects.ts
   -> src/lib/catalog/collections.ts
   -> Astro pages

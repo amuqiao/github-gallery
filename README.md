@@ -6,8 +6,8 @@
 
 ```text
 catalog/halls/<id>/hall.yaml       # 展馆入口机器可读事实
-catalog/content/{drafts,published,archived}/ # 新 content bundle 合同，当前参与验证
-catalog/models/<id>/model.yaml     # 模型展馆条目机器可读事实
+catalog/content/{drafts,published,archived}/ # content bundle 合同；published 生成 canonical 页面
+catalog/models/<id>/model.yaml     # legacy 模型展馆条目机器可读事实
 catalog/projects/<id>/project.yaml  # 项目机器可读事实
 catalog/projects/<id>/details.md    # 可选详情正文
 catalog/projects/<id>/notes/        # 可选项目附加笔记

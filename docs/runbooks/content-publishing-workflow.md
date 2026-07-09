@@ -107,6 +107,17 @@ Rules:
 - `restore` never publishes directly. Publish again after editing.
 - Published collections can only reference published items in the same hall.
 
+发布成功后，published content 会生成 canonical routes：
+
+```text
+/halls/<hall>/items/<id>/
+/halls/<hall>/items/<id>/notes/<note>/
+/halls/<hall>/collections/
+/halls/<hall>/collections/<id>/
+```
+
+`/halls/models/` 当前展示已发布的 `models` hall `ai_model` content item。
+
 ## Import Drafts
 
 批量或 AI 生成内容先使用 content import batch 进入 drafts：
@@ -122,4 +133,5 @@ Rules:
 
 ## Boundaries
 
-- Current public pages still use the old project/model/root collection loaders until the route replacement slice.
+- Canonical content routes 只读取 `catalog/content/published/`。
+- 旧 `/projects/*`、`/collections/*`、`/categories/*`、`/tags/*` 和 legacy `/halls/models/[id]/*` 页面仍暂时存在，后续切换阶段再移除。

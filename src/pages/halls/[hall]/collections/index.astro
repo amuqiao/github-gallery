@@ -1,0 +1,66 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import ContentCollectionCard from "@/components/ContentCollectionCard.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import Button from "@/components/ui/Button.astro";
+import { getPublishedContentCollections, getPublishedContentCollectionsByHall } from "@/lib/catalog/content";
+import { getHallById } from "@/lib/catalog/halls";
+import { getSiteConfig } from "@/lib/catalog/projects";
+
+export async function getStaticPaths() {
+  const hallIds = new Set((await getPublishedContentCollections()).map((collection) => collection.hall));
+  return Array.from(hallIds)
+    .sort()
+    .map((hall) => ({
+      params: { hall }
+    }));
+}
+
+const { hall: hallId } = Astro.params;
+if (!hallId) {
+  throw new Error("hall collection index route requires hall param");
+}
+
+const [site, hall, collections] = await Promise.all([
+  getSiteConfig(),
+  getHallById(hallId),
+  getPublishedContentCollectionsByHall(hallId)
+]);
+---
+
+<BaseLayout title={`${hall.title}专题 - Gallery Platform`} site={site} description={hall.summary}>
+  <article class="grid gap-6">
+    <Breadcrumbs
+      items={[
+        { label: "展馆入口", href: "/" },
+        { label: hall.title, href: `/halls/${hall.id}/` },
+        { label: "专题" }
+      ]}
+    />
+    <PageHeader
+      eyebrow={`${hall.title} / Collections`}
+      title={`${hall.title}专题`}
+      description={hall.summary}
+      stats={[
+        { label: "专题", value: collections.length },
+        { label: "状态", value: "已发布" }
+      ]}
+    >
+      <Fragment slot="actions">
+        <Button href={`/halls/${hall.id}/`} variant="outline">返回展馆</Button>
+      </Fragment>
+    </PageHeader>
+
+    <section class="gallery-section" aria-labelledby="hall-collections-title">
+      <div class="editorial-section-head">
+        <span class="editorial-section-head__index">01</span>
+        <h2 class="editorial-section-head__title" id="hall-collections-title">馆内专题</h2>
+        <span class="editorial-section-head__hint">{collections.length} 个专题</span>
+      </div>
+      <div class="collection-grid collection-grid--standard">
+        {collections.map((collection) => <ContentCollectionCard collection={collection} />)}
+      </div>
+    </section>
+  </article>
+</BaseLayout>

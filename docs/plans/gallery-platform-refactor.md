@@ -62,7 +62,7 @@ Release Gate
 - 已实现 `github_project` 和 `ai_model` profile schema。
 - 已实现 `src/lib/catalog/content-validator.js`，用于校验 publication state、hall、body/notes 文件、GitHub taxonomy 引用、collection item 引用和 published collection 规则。
 - 已实现 `src/lib/catalog/content.ts`，用于 content bundle read model 适配、公开内容过滤和 route 派生。
-- 当前 content bundle 只参与 build-time validation，尚未驱动公开页面。
+- 当前 published content bundle 已生成 canonical item、note 和 hall-owned collection 页面；旧 project/model/root collection 页面仍暂留。
 - `scripts/catalog.sh` 当前支持 project list/new/validate、collection 子命令和 project/collection import batch。
 - `docs/contract/catalog-import-batch.md` 当前只允许 `target: project` 和 `target: collection`。
 - `./scripts/verify.sh check` 当前通过 `npm run build` 间接覆盖 hall、model、project、collection、taxonomy、site 和内容引用。
@@ -72,12 +72,12 @@ Release Gate
 ## Remaining Gaps
 
 - 用户新增当前公开页面内容时仍需要理解 `project.yaml`、`model.yaml`、`collection.yaml`、`details.md`、`notes[]` 等底层配置关系。
-- `catalog/projects/`、`catalog/models/`、`catalog/collections/` 仍是当前公开页面的数据源；新 `catalog/content/` 尚未替代页面路由。
+- `catalog/content/published/` 已驱动 canonical item、note 和 hall-owned collection 页面，且 `/halls/models/` 已读取 published content；`catalog/projects/`、legacy `catalog/models/`、root `catalog/collections/`、category/tag 页面仍是旧公开页面数据源。
 - 已实现 `scripts/content.sh` 和 `scripts/content/content-cli.mjs`，支持 content bundle item/collection draft 创建、item note 添加、publish、archive、restore。
 - `publish` 当前委托 `./scripts/verify.sh release`；`archive` 和 `restore` 当前委托 `./scripts/verify.sh catalog`。
-- 专题的归属不清晰。未来应默认属于某个 hall，平台首页只做聚合展示。
+- 旧 root collection 仍未完全切换；新 content collection 已从属于 hall。
 - content import batch 是外部整理结果进入 drafts 的安全入口，但不是发布入口。
-- `catalog.sh new` 只能创建 GitHub project，不能统一创建当前公开页面使用的 model、Markdown note、HTML note 或馆内专题。
+- `catalog.sh new` 仍只能创建旧 GitHub project；content 写入应使用 `content.sh`，旧入口切除还未完成。
 
 ## Planned Work
 
@@ -435,7 +435,16 @@ docs/runbooks/
 - 已限制 import 只写入 `catalog/content/drafts/`。
 - 已支持 apply 加锁、备份、验证失败回滚。
 
-### Slice 7: Documentation And Cleanup
+### Slice 7: Published Content Public Routes
+
+- 已新增 canonical content item route：`/halls/<hall>/items/<id>/`。
+- 已新增 canonical content note route：`/halls/<hall>/items/<id>/notes/<note>/`。
+- 已新增 canonical hall collection list route：`/halls/<hall>/collections/`。
+- 已新增 canonical hall collection detail route：`/halls/<hall>/collections/<id>/`。
+- 已让 `/halls/models/` 读取 `catalog/content/published/models/items/` 中的 `ai_model` content item。
+- 旧 `/projects/*`、`/collections/*`、`/categories/*`、`/tags/*` 和 legacy `/halls/models/[id]/*` 仍暂留，等待后续破坏性切换。
+
+### Slice 8: Documentation And Cleanup
 
 - 更新 `docs/current/` 为新运行事实。
 - 替换 `docs/contract/project-config.md`、`model-config.md`、`collection-config.md`、`catalog-import-batch.md`。
@@ -458,6 +467,8 @@ docs/runbooks/
 - `content.sh publish` 在发布前运行 release gate，失败时不移动到 published。
 - import batch 支持 content bundle，并默认写入 drafts。
 - `content.sh import` 是正式 import 用户入口。
+- published content 会生成 canonical item、note 和 hall-owned collection 页面。
+- `/halls/models/` 读取 published `models` hall `ai_model` content item。
 - 破坏性切换完成后，旧 `target: project`、旧 `target: collection`、旧 `catalog.sh new`、旧 `catalog.sh collection`、旧 `catalog.sh import` 不再作为兼容入口存在。
 - `/projects/<id>`、`/collections/<id>`、`/categories/<id>`、`/tags/<id>` 不生成公开详情页。
 - `/halls/<hall>/items/<id>/` 和 `/halls/<hall>/collections/<id>/` 是 canonical detail 路由。

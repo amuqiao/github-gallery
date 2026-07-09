@@ -1,0 +1,105 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import BlockRenderer from "@/components/blocks/BlockRenderer.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import Badge from "@/components/ui/Badge.astro";
+import Button from "@/components/ui/Button.astro";
+import Prose from "@/components/ui/Prose.astro";
+import { getPublishedContentItems, type ContentItem } from "@/lib/catalog/content";
+import { loadContentItemBody } from "@/lib/catalog/details";
+import { getHallById } from "@/lib/catalog/halls";
+import { getSiteConfig } from "@/lib/catalog/projects";
+
+export async function getStaticPaths() {
+  const items = await getPublishedContentItems();
+  return items.map((item) => ({
+    params: { hall: item.hall, id: item.id },
+    props: { item }
+  }));
+}
+
+const { item } = Astro.props as { item: ContentItem };
+const [site, hall, body] = await Promise.all([
+  getSiteConfig(),
+  getHallById(item.hall),
+  loadContentItemBody(item)
+]);
+const BodyContent = body.type === "markdown" ? body.Content : undefined;
+const htmlFragment = body.type === "html" ? body.html : undefined;
+const profile = item.profile;
+const isAiModel = "provider" in profile;
+const stats =
+  isAiModel
+    ? [
+        { label: "提供方", value: profile.provider },
+        { label: "模态", value: `${profile.modalities.input.join("+")} -> ${profile.modalities.output.join("+")}` },
+        { label: "格式", value: profile.formats.join(" · ") }
+      ]
+    : [
+        { label: "类型", value: "GitHub 项目" },
+        { label: "维护", value: profile.maintenance_status },
+        { label: "License", value: profile.license ?? "Unknown" }
+      ];
+const badges = isAiModel ? profile.tasks : profile.tags;
+---
+
+<BaseLayout title={`${item.title} - ${hall.title}`} site={site} description={item.summary}>
+  <article class="grid gap-6">
+    <Breadcrumbs
+      items={[
+        { label: "展馆入口", href: "/" },
+        { label: hall.title, href: `/halls/${item.hall}/` },
+        { label: item.title }
+      ]}
+    />
+    <PageHeader
+      eyebrow={`${hall.title} / ${item.kind === "ai_model" ? "模型" : "项目"}`}
+      title={item.title}
+      description={item.summary}
+      stats={stats}
+    >
+      <Fragment slot="meta">
+        {badges.map((badge) => <Badge>{badge}</Badge>)}
+      </Fragment>
+      <Fragment slot="actions">
+        <Button href={item.source.url}>打开来源</Button>
+        <Button href={`/halls/${item.hall}/`} variant="outline">返回展馆</Button>
+      </Fragment>
+    </PageHeader>
+
+    {
+      item.notes.length > 0 && (
+        <section class="gallery-section" aria-labelledby="content-notes-title">
+          <div class="editorial-section-head">
+            <span class="editorial-section-head__index">01</span>
+            <h2 class="editorial-section-head__title" id="content-notes-title">附加笔记</h2>
+            <span class="editorial-section-head__hint">{item.notes.length} 篇</span>
+          </div>
+          <div class="model-note-grid">
+            {item.notes.map((note) => (
+              <a class="model-note-card" href={note.route}>
+                <span>{note.type === "markdown" ? "Markdown" : "HTML"}</span>
+                <strong>{note.title}</strong>
+                <p>{note.summary}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    <Prose>
+      {BodyContent && <BodyContent />}
+      {htmlFragment && <Fragment set:html={htmlFragment} />}
+    </Prose>
+
+    {
+      item.blocks.length > 0 && (
+        <section class="content-blocks" aria-label="条目详情">
+          {item.blocks.map((block, index) => <BlockRenderer block={block} index={index} />)}
+        </section>
+      )
+    }
+  </article>
+</BaseLayout>

@@ -149,3 +149,16 @@ Content import batch 合同见 [`content-import-batch.md`](./content-import-batc
 - published collection 只能引用同一 hall 下的 published item。
 
 `release` 的特有行为是先运行上述 content bundle gate，再运行 Astro check 和 static build。
+
+## Public Routes
+
+只有 `catalog/content/published/` 下的 content bundle 会生成公开 canonical 页面：
+
+| Bundle | Public route |
+| --- | --- |
+| `published/<hall>/items/<id>/item.yaml` | `/halls/<hall>/items/<id>/` |
+| `published/<hall>/items/<id>/notes/<note>` | `/halls/<hall>/items/<id>/notes/<note>/` |
+| `published/<hall>/collections/` | `/halls/<hall>/collections/` |
+| `published/<hall>/collections/<id>/collection.yaml` | `/halls/<hall>/collections/<id>/` |
+
+`drafts` 和 `archived` content bundle 不生成公开 canonical 页面，也不会进入 `/halls/models/` 的已发布模型列表或馆内专题列表。

@@ -1,17 +1,18 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
-import ModelCard from "@/components/ModelCard.astro";
+import ContentItemCard from "@/components/ContentItemCard.astro";
 import PageHeader from "@/components/PageHeader.astro";
 import Button from "@/components/ui/Button.astro";
+import EmptyState from "@/components/ui/EmptyState.astro";
+import { getPublishedContentItemsByHallAndKind } from "@/lib/catalog/content";
 import { getHallById } from "@/lib/catalog/halls";
-import { getAllModels } from "@/lib/catalog/models";
 import { getSiteConfig } from "@/lib/catalog/projects";
 
-const [site, hall, models] = await Promise.all([
+const [site, hall, items] = await Promise.all([
   getSiteConfig(),
   getHallById("models"),
-  getAllModels()
+  getPublishedContentItemsByHallAndKind("models", "ai_model")
 ]);
 ---
 
@@ -28,7 +29,7 @@ const [site, hall, models] = await Promise.all([
       title={hall.title}
       description={hall.summary}
       stats={[
-        { label: "模型", value: models.length },
+        { label: "模型", value: items.length },
         { label: "状态", value: "已开放" }
       ]}
     >
@@ -41,11 +42,17 @@ const [site, hall, models] = await Promise.all([
       <div class="editorial-section-head">
         <span class="editorial-section-head__index">01</span>
         <h2 class="editorial-section-head__title" id="models-title">模型目录</h2>
-        <span class="editorial-section-head__hint">{models.length} 个模型</span>
+        <span class="editorial-section-head__hint">{items.length} 个模型</span>
       </div>
-      <div class="model-grid">
-        {models.map((model) => <ModelCard model={model} />)}
-      </div>
+      {
+        items.length > 0 ? (
+          <div class="project-collection__grid project-collection__grid--standard">
+            {items.map((item) => <ContentItemCard item={item} />)}
+          </div>
+        ) : (
+          <EmptyState message="当前没有已发布模型。" />
+        )
+      }
     </section>
   </article>
 </BaseLayout>

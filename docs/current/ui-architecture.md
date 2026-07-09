@@ -34,7 +34,7 @@ themeId  = editorial-paper
 
 layout 决定页面族分发、section 顺序、列表密度和卡片变体。theme 决定 CSS token、字体、颜色、边框、背景和基础质感。首页精选专题由 `src/presentation/home.ts` 管理。它们都不进入 `project.yaml` 或 `collection.yaml`。
 
-平台首页通过 hall/model read model 展示 `HallCard` 和 `ModelCard`。GitHub 展馆项目集合卡片通过 `src/lib/catalog/project-view-models.ts` 预先解析 category、tags 和 maintenance_status。`ProjectCollection` 不调用 catalog loader 的运行时 helper。
+平台首页通过 hall/model read model 展示 `HallCard` 和 legacy `ModelCard`。模型展馆列表和 canonical collection 详情通过 content read model 展示 `ContentItemCard`。GitHub 展馆项目集合卡片通过 `src/lib/catalog/project-view-models.ts` 预先解析 category、tags 和 maintenance_status。`ProjectCollection` 不调用 catalog loader 的运行时 helper。
 
 ## Runtime Styling Path
 
@@ -94,9 +94,11 @@ CSS 当前通过 `data-theme` 应用皮肤 token；`data-layout` 用于运行时
 | `PageHeader` | `SectionHeader`、`Card` | 页面首屏标题、统计和行动区。 |
 | `CollectionGrid` | `SectionHeader`、`Badge`、`EmptyState`、`CollectionCard` | 专题集合网格。 |
 | `CollectionCard` | `Card`、`Badge`、`Button` | 单个专题卡片。 |
+| `ContentCollectionCard` | content collection read model | canonical 馆内专题卡片。 |
 | `FilterPanel` | `Card`、`Button`、`ChipLink`、`SectionHeader` | 首页 taxonomy 浏览入口和计数展示。 |
 | `ProjectCollection` | `SectionHeader`、`Badge`、`EmptyState`、`ProjectCard` | 已解析项目卡片集合网格。 |
 | `ProjectCard` | `Card`、`Badge`、`Button`、`ProjectMaintenanceStatus` | 单个项目卡片。 |
+| `ContentItemCard` | content item read model | canonical content item 卡片。 |
 | `HomeBentoHero` | `Button`、presentation layout config | 首页 bento hero 和 gallery summary。 |
 | `ProjectMaintenanceStatus` | taxonomy maintenance status label、presentation maintenance status tone | 项目维护状态的轻量视觉标记。 |
 | `ProjectHero` | `PageHeader`、`Badge`、`Button`、`ProjectMaintenanceStatus` | 项目详情首屏。 |

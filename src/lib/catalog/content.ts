@@ -54,6 +54,37 @@ export async function getPublishedContentCollections(): Promise<ContentCollectio
   return (await getContentCatalogSnapshot()).publicCollections;
 }
 
+export async function getPublishedContentItemsByHall(hall: string): Promise<ContentItem[]> {
+  return (await getPublishedContentItems()).filter((item) => item.hall === hall);
+}
+
+export async function getPublishedContentItemsByHallAndKind(
+  hall: string,
+  kind: ContentItem["kind"]
+): Promise<ContentItem[]> {
+  return (await getPublishedContentItemsByHall(hall)).filter((item) => item.kind === kind);
+}
+
+export async function getPublishedContentCollectionsByHall(hall: string): Promise<ContentCollection[]> {
+  return (await getPublishedContentCollections()).filter((collection) => collection.hall === hall);
+}
+
+export async function getPublishedContentCollectionsForItem(hall: string, itemId: string): Promise<ContentCollection[]> {
+  return (await getPublishedContentCollectionsByHall(hall)).filter((collection) =>
+    collection.items.some((entry) => entry.item.id === itemId)
+  );
+}
+
+export function getContentItemNoteById(item: ContentItem, noteId: string): ContentNote {
+  const note = item.notes.find((entry) => entry.id === noteId);
+
+  if (!note) {
+    throw new Error(`${item.hall}/${item.id} references unknown content note: ${noteId}`);
+  }
+
+  return note;
+}
+
 async function buildContentCatalogSnapshot(): Promise<ContentCatalogSnapshot> {
   const { itemConfigs, collectionConfigs } = (await readValidatedContentCatalog()) as {
     itemConfigs: ContentItemConfigEntry[];

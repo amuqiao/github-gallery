@@ -1,0 +1,31 @@
+---
+import type { ContentCollection } from "@/lib/catalog/content";
+
+interface Props {
+  collection: ContentCollection;
+  headingLevel?: 2 | 3;
+}
+
+const { collection, headingLevel = 3 } = Astro.props;
+const preview = collection.items
+  .map(({ item }) => item.title)
+  .slice(0, 4)
+  .join(" · ");
+---
+
+<a class="collection-card collection-card--standard" href={collection.route} aria-label={`查看 ${collection.title} 专题`}>
+  <div class="collection-card__meta">
+    <span class="collection-card__kind"><span aria-hidden="true">✦</span> 专题</span>
+    <span class="collection-card__count">{collection.items.length} 个条目 · 已发布</span>
+  </div>
+  {
+    headingLevel === 3 ? (
+      <h3 class="collection-card__title">{collection.title}</h3>
+    ) : (
+      <h2 class="collection-card__title">{collection.title}</h2>
+    )
+  }
+  <p class="collection-card__summary">{collection.summary}</p>
+  <p class="collection-card__members">{preview}</p>
+  <span class="collection-card__link">查看专题 →</span>
+</a>

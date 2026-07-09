@@ -29,7 +29,7 @@ schema 定规则
 | Project loader | `src/lib/catalog/projects.ts` | project YAML 读取、schema parse、taxonomy 校验、项目关系校验、project read model。 |
 | Collection loader | `src/lib/catalog/collections.ts` | collection YAML 读取、schema parse、专题引用项目校验、collection read model。 |
 | Block adapters | `src/lib/catalog/block-adapters.ts` | typed blocks 的归一化和默认标题。 |
-| Detail loader | `src/lib/catalog/details.ts` | 已实现项目、模型、专题详情和项目/模型 notes 内容的加载。 |
+| Detail loader | `src/lib/catalog/details.ts` | 已实现项目、模型、专题和 content bundle 正文，以及项目/模型/content item notes 内容的加载。 |
 | Build gate | `./scripts/verify.sh check` | 统一验证入口；当前委托 `npm run build`。 |
 | Script entrypoints | `scripts/` | 本地开发、验证和 catalog 维护的人类操作入口。 |
 | Content import batch | `.tmp/import-batches/<batch-id>/` + `kind: content-import-batch` | AI 或人工整理结果进入 `catalog/content/drafts/` 前的中间交换合同。 |
@@ -41,16 +41,17 @@ schema 定规则
 
 ## When Adding Or Changing A Content Bundle Field
 
-`catalog/content/` 当前是新发布模型的验证面，尚未替代旧页面数据源。修改它时按这个顺序执行：
+`catalog/content/` 当前是 content bundle 合同面，published content 已驱动 canonical item、note 和 hall-owned collection 路由。修改它时按这个顺序执行：
 
 1. 判断字段属于通用 item/collection core、`github_project` profile、`ai_model` profile、body、notes，还是 typed block。
 2. 更新 `src/lib/catalog/catalog-schema.js`。
 3. 需要目录、publication state、hall、taxonomy、引用文件或 collection item 引用校验时，更新 `src/lib/catalog/content-validator.js`。
-4. 需要 read model、公开内容过滤或 route 派生时，更新 `src/lib/catalog/content.ts`。
+4. 需要 read model、公开内容过滤、kind/hall 查询或 route 派生时，更新 `src/lib/catalog/content.ts`。
 5. 更新至少一个 `catalog/content/{drafts,published,archived}/...` 样例。
 6. 更新 [`../contract/content-bundle-config.md`](../contract/content-bundle-config.md)。
-7. 如果运行路径变化，更新 [`../current/structure.md`](../current/structure.md)。
-8. 运行 `./scripts/verify.sh check`。
+7. 如果正文或 note 加载路径变化，更新 `src/lib/catalog/details.ts`。
+8. 如果运行路径变化，更新 [`../current/structure.md`](../current/structure.md) 和 [`../current/frontend-navigation.md`](../current/frontend-navigation.md)。
+9. 运行 `./scripts/verify.sh check`。
 
 不要把 `docs/contract/content-bundle-config.md` 当成真相源。schema 和 loader 不支持的字段不能写入 content bundle 合同。
 
@@ -275,8 +276,9 @@ scripts/catalog.sh   项目 list、validate、new；专题 list、show、new、d
 [ ] AI 或外部整理结果先进入 `.tmp/import-batches/`，没有直接写入 `catalog/`。
 [ ] import batch 只做 scoped item 级 create/replace/delete，没有全量替换 catalog。
 [ ] 没有新增无类型 `extensions`、`custom`、`extra` 等逃生口字段。
-[ ] 页面仍通过 `src/lib/catalog/projects.ts`，没有直接解析 YAML。
-[ ] 专题页面仍通过 `src/lib/catalog/collections.ts`，没有直接解析 YAML。
+[ ] 旧项目页面仍通过 `src/lib/catalog/projects.ts`，没有直接解析 YAML。
+[ ] 旧专题页面仍通过 `src/lib/catalog/collections.ts`，没有直接解析 YAML。
+[ ] canonical content 页面通过 `src/lib/catalog/content.ts` 和 `src/lib/catalog/details.ts`，没有直接解析 YAML。
 [ ] 跨文件校验放在 loader，不放在页面组件。
 [ ] `docs/contract/` 只解释已实现 schema。
 [ ] `docs/current/` 只描述已发布行为。

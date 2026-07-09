@@ -1,0 +1,52 @@
+---
+import type { ContentItem } from "@/lib/catalog/content";
+
+interface Props {
+  item: ContentItem;
+  note?: string;
+  headingLevel?: 2 | 3;
+  order?: number;
+}
+
+const { item, note, headingLevel = 3, order } = Astro.props;
+const profile = item.profile;
+const isAiModel = "provider" in profile;
+const kindLabel = item.kind === "ai_model" ? "模型" : "项目";
+const sourceLabel = item.source.type;
+const primaryFacts =
+  isAiModel
+    ? [profile.provider, profile.formats.join(" · "), profile.runtimes.join(" · ")]
+    : [profile.license, profile.languages?.[0]].filter(Boolean);
+const tagPreview =
+  isAiModel
+    ? profile.tasks.slice(0, 4)
+    : profile.tags.slice(0, 4);
+---
+
+<a class="project-card" href={item.route} aria-label={`查看 ${item.title} 详情`}>
+  <div class="project-card__top">
+    <div class="project-card__title-group">
+      {order && <span class="project-card__order">{String(order).padStart(2, "0")}</span>}
+      <div>
+        {
+          headingLevel === 3 ? (
+            <h3 class="project-card__title">{item.title}</h3>
+          ) : (
+            <h2 class="project-card__title">{item.title}</h2>
+          )
+        }
+        <span class="project-card__id">{item.id}</span>
+      </div>
+    </div>
+    <span class="project-card__category">{kindLabel}</span>
+  </div>
+  {note && <p class="project-card__note">{note}</p>}
+  <p class="project-card__summary">{item.summary}</p>
+  <ul class="project-card__tags" aria-label="标签">
+    {tagPreview.map((tag) => <li><span class="project-card__tag">{tag}</span></li>)}
+  </ul>
+  <div class="project-card__footer">
+    <span class="project-card__language"><span aria-hidden="true"></span>{primaryFacts.filter(Boolean).join(" · ") || sourceLabel}</span>
+    <span class="project-card__read">查看详情 →</span>
+  </div>
+</a>
