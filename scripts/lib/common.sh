@@ -35,6 +35,25 @@ require_command() {
   command -v "$name" >/dev/null 2>&1 || die "$name is not available; $hint" 2
 }
 
+resolve_repo_path() {
+  local path="$1"
+  case "$path" in
+    /*) printf "%s" "$path" ;;
+    *) printf "%s/%s" "$ROOT_DIR" "$path" ;;
+  esac
+}
+
+env_value_from() {
+  local key="$1"
+  local path="$2"
+  [[ -f "$path" ]] || return 0
+  grep -E "^${key}=" "$path" 2>/dev/null | tail -n 1 | cut -d= -f2- || true
+}
+
+env_file_path() {
+  resolve_repo_path "${ENV_FILE:-.env}"
+}
+
 require_npm() {
   require_command npm "install Node.js and npm, then run npm install"
 }
