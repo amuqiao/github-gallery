@@ -47,15 +47,29 @@ notes:
   - id: experiment-log
     title: GPT-SoVITS 私人实验记录
     type: html
-    path: ./notes/experiment-log/index.html
+    path: ./notes/index.html
     summary: 一份独立排版的本地实验笔记，记录模型试跑、素材准备和输出观察。
     display: standalone
     html_mode: document
   - id: gpt-sovits-explainer
-    title: GPT-SoVITS 讲解
+    title: GPT-SoVITS 讲解 · 少样本语音克隆与合成
     type: html
-    path: ./notes/experiment-log/gpt-sovits-explainer.html
+    path: ./notes/gpt-sovits-explainer.html
     summary: 介绍 GPT-SoVITS 的少样本语音克隆、语音合成流程和核心模块。
+    display: standalone
+    html_mode: document
+  - id: gpt-sovits-datachain
+    title: 一文读懂 GPT-SoVITS · 数据链视角的项目解剖
+    type: html
+    path: ./notes/GPT-SoVITS.html
+    summary: 从数据链视角分层解析 GPT-SoVITS 的少样本语音克隆、训练与推理流程及核心模块设计。
+    display: standalone
+    html_mode: document
+  - id: gpt-sovits-brief-v2
+    title: GPT-SoVITS 讲解 · 少样本语音克隆与合成（第二版）
+    type: html
+    path: ./notes/gpt-sovits2.html
+    summary: GPT-SoVITS 少样本语音克隆与合成的另一版讲解文档。
     display: standalone
     html_mode: document
   - id: site-html-brief
@@ -65,10 +79,3 @@ notes:
     summary: 一篇使用本站页面壳层承载的受控 HTML 片段笔记。
     display: site
     html_mode: fragment
-  - id: gpt-sovits-one-page
-    title: GPT-SoVITS 一文读懂
-    type: html
-    path: ./notes/gpt-sovits-one-page.html
-    summary: 从数据链视角介绍 GPT-SoVITS 的少样本语音克隆、语音合成流程和核心模块。
-    display: standalone
-    html_mode: document
