@@ -23,11 +23,11 @@ const projectItems = toProjectCardViewModels(projects, taxonomy);
 const { layout } = getActivePresentation();
 ---
 
-<BaseLayout title={`${tag.label} - GitHub Gallery`} site={site} description={tag.descriptionText}>
+<BaseLayout title={`${tag.label} - GitHub 展馆`} site={site} description={tag.descriptionText}>
   <Breadcrumbs
     items={[
-      { label: "展馆", href: "/" },
-      { label: "标签", href: "/#categories" },
+      { label: "GitHub 展馆", href: "/halls/github/" },
+      { label: "标签", href: "/halls/github/#categories" },
       { label: tag.label }
     ]}
   />
@@ -40,7 +40,7 @@ const { layout } = getActivePresentation();
     stats={[{ value: projects.length, label: "项目" }]}
   >
     <Fragment slot="actions">
-      <Button href="/" variant="outline">全部项目</Button>
+      <Button href="/halls/github/#projects" variant="outline">全部项目</Button>
     </Fragment>
   </PageHeader>
   <ProjectCollection

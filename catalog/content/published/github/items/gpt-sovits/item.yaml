@@ -1,0 +1,43 @@
+schema_version: 2
+id: gpt-sovits
+hall: github
+kind: github_project
+title: GPT-SoVITS
+summary: 支持少样本音色克隆、语音转换和文本转语音实验的 WebUI。
+source:
+  type: github
+  url: https://github.com/RVC-Boss/GPT-SoVITS
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/RVC-Boss/GPT-SoVITS
+  category: ai
+  tags:
+    - audio
+    - text-to-speech
+    - voice-cloning
+    - voice-conversion
+    - webui
+    - training
+    - inference
+  maintenance_status: unknown
+  license: MIT
+  languages:
+    - Python
+notes:
+  - id: intro
+    title: GPT-SoVITS 项目介绍
+    type: markdown
+    path: ./notes/intro.md
+    summary: 从用途、能力边界和典型流程理解 GPT-SoVITS。
+    display: site
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/RVC-Boss/GPT-SoVITS
+  - type: highlights
+    items:
+      - Includes WebUI and data preparation tools.
+      - Useful for learning a full voice cloning workflow.

@@ -1,0 +1,51 @@
+schema_version: 2
+id: htdemucs-ft-onnx
+hall: models
+kind: ai_model
+title: HT-Demucs FT ONNX
+summary: 面向音乐四轨分离的 HT-Demucs FT ONNX 模型包。
+source:
+  type: huggingface
+  url: https://huggingface.co/StemSplitio/htdemucs-ft-onnx
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  provider: StemSplitio
+  modalities:
+    input:
+      - audio
+    output:
+      - audio
+  tasks:
+    - stem-separation
+    - source-separation
+    - vocal-isolation
+  access:
+    - download
+    - local-inference
+  formats:
+    - onnx
+  runtimes:
+    - onnxruntime
+  license: MIT
+notes:
+  - id: quick-start
+    title: HT-Demucs FT ONNX 快速试用笔记
+    type: markdown
+    path: ./notes/quick-start.md
+    summary: 记录模型定位、运行入口、输入输出和适用边界。
+    display: site
+blocks:
+  - type: links
+    items:
+      - label: Hugging Face
+        url: https://huggingface.co/StemSplitio/htdemucs-ft-onnx
+      - label: StemSplit API
+        url: https://stemsplit.io/
+  - type: highlights
+    title: 模型要点
+    items:
+      - Full 4-stem bag，输出 drums、bass、other、vocals。
+      - 使用 ONNX 和 onnxruntime，不需要 PyTorch 推理环境。
+      - 页面标注可面向 CPU、Core ML、CUDA 和 DirectML 运行。

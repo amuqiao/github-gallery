@@ -15,10 +15,10 @@ const referencedProjectCount = new Set(
 const { layout } = getActivePresentation();
 ---
 
-<BaseLayout title="专题 - GitHub Gallery" site={site}>
+<BaseLayout title="专题 - GitHub 展馆" site={site}>
   <Breadcrumbs
     items={[
-      { label: "展馆", href: "/" },
+      { label: "GitHub 展馆", href: "/halls/github/" },
       { label: "专题" }
     ]}
   />
@@ -34,7 +34,7 @@ const { layout } = getActivePresentation();
     ]}
   >
     <Fragment slot="actions">
-      <Button href="/" variant="outline">全部项目</Button>
+      <Button href="/halls/github/#projects" variant="outline">全部项目</Button>
     </Fragment>
   </PageHeader>
 

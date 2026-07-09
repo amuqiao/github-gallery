@@ -1,0 +1,17 @@
+schema_version: 2
+id: voice-cloning
+hall: github
+title: 声音克隆项目
+summary: GitHub 展馆内的声音克隆项目策展样例。
+body:
+  type: markdown
+  path: ./index.md
+items:
+  - item: gpt-sovits
+    note: 适合学习完整音色克隆训练流程。
+blocks:
+  - type: highlights
+    title: 对比维度
+    items:
+      - 声音克隆 TTS 使用文本和参考音频生成目标音色语音。
+      - 当前 content bundle 样例只引用已发布的同馆 item。

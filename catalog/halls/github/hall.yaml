@@ -1,0 +1,6 @@
+schema_version: 1
+id: github
+title: GitHub 展馆
+summary: 开源项目、工具链和工程实践的策展入口。
+availability: active
+order: 1

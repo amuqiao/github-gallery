@@ -35,6 +35,19 @@ export const detailsSchema = z
     }
   });
 
+export const hallAvailabilities = ["active", "planned"];
+
+export const hallConfigSchema = z
+  .object({
+    schema_version: z.literal(1),
+    id: z.string().regex(slugPattern, "id must use lowercase kebab-case"),
+    title: nonEmptyString,
+    summary: nonEmptyString.max(220),
+    availability: z.enum(hallAvailabilities),
+    order: z.number().int().nonnegative()
+  })
+  .strict();
+
 export const projectNoteSchema = z
   .object({
     id: z.string().regex(slugPattern, "note id must use lowercase kebab-case"),
@@ -156,6 +169,130 @@ export const projectBlockSchema = z.discriminatedUnion("type", [
   useCasesBlockSchema
 ]);
 
+/** @type {["drafts", "published", "archived"]} */
+export const contentPublicationStates = ["drafts", "published", "archived"];
+
+export const contentBodySchema = z
+  .object({
+    type: z.enum(["markdown", "html"]),
+    path: relativePathSchema,
+    html_mode: z.literal("fragment").optional()
+  })
+  .strict()
+  .superRefine((body, ctx) => {
+    if (body.type === "markdown" && body.path !== "./index.md") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "markdown body must use path: ./index.md",
+        path: ["path"]
+      });
+    }
+
+    if (body.type === "markdown" && body.html_mode) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "markdown body must not set html_mode",
+        path: ["html_mode"]
+      });
+    }
+
+    if (body.type === "html" && body.path !== "./index.html") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "html body must use path: ./index.html",
+        path: ["path"]
+      });
+    }
+
+    if (body.type === "html" && body.html_mode !== "fragment") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "html body must use html_mode: fragment",
+        path: ["html_mode"]
+      });
+    }
+  });
+
+export const contentSourceSchema = z
+  .object({
+    type: nonEmptyString,
+    url: z.string().url()
+  })
+  .strict();
+
+export const githubProjectProfileSchema = z
+  .object({
+    repo: z.string().url(),
+    category: z.string().regex(slugPattern),
+    tags: z.array(z.string().regex(slugPattern)).min(1).max(8),
+    maintenance_status: z.string().regex(slugPattern),
+    license: nonEmptyString.optional(),
+    languages: z.array(nonEmptyString).min(1).optional()
+  })
+  .strict();
+
+export const aiModelProfileSchema = z
+  .object({
+    provider: nonEmptyString,
+    modalities: z
+      .object({
+        input: z.array(nonEmptyString).min(1).max(8),
+        output: z.array(nonEmptyString).min(1).max(8)
+      })
+      .strict(),
+    tasks: z.array(nonEmptyString).min(1).max(12),
+    access: z.array(nonEmptyString).min(1).max(8),
+    formats: z.array(nonEmptyString).min(1).max(8),
+    runtimes: z.array(nonEmptyString).min(1).max(8),
+    license: nonEmptyString.optional()
+  })
+  .strict();
+
+const contentItemBaseSchema = z
+  .object({
+    schema_version: z.literal(2),
+    id: z.string().regex(slugPattern, "id must use lowercase kebab-case"),
+    hall: z.string().regex(slugPattern),
+    title: nonEmptyString,
+    summary: nonEmptyString.max(180),
+    source: contentSourceSchema,
+    body: contentBodySchema,
+    notes: z.array(projectNoteSchema).optional(),
+    blocks: z.array(projectBlockSchema).optional()
+  })
+  .strict();
+
+export const contentItemConfigSchema = z.discriminatedUnion("kind", [
+  contentItemBaseSchema.extend({
+    kind: z.literal("github_project"),
+    profile: githubProjectProfileSchema
+  }),
+  contentItemBaseSchema.extend({
+    kind: z.literal("ai_model"),
+    profile: aiModelProfileSchema
+  })
+]);
+
+export const contentCollectionItemSchema = z
+  .object({
+    item: z.string().regex(slugPattern),
+    note: nonEmptyString.max(180).optional()
+  })
+  .strict();
+
+export const contentCollectionConfigSchema = z
+  .object({
+    schema_version: z.literal(2),
+    id: z.string().regex(slugPattern, "id must use lowercase kebab-case"),
+    hall: z.string().regex(slugPattern),
+    title: nonEmptyString,
+    summary: nonEmptyString.max(180),
+    body: contentBodySchema,
+    items: z.array(contentCollectionItemSchema).min(1),
+    blocks: z.array(projectBlockSchema).optional()
+  })
+  .strict();
+
 export const projectConfigSchema = z
   .object({
     schema_version: z.literal(1),
@@ -169,6 +306,32 @@ export const projectConfigSchema = z
     details: detailsSchema.optional(),
     meta: metaSchema.optional(),
     relations: relationsSchema.optional(),
+    notes: z.array(projectNoteSchema).optional(),
+    blocks: z.array(projectBlockSchema).optional()
+  })
+  .strict();
+
+export const modelConfigSchema = z
+  .object({
+    schema_version: z.literal(1),
+    id: z.string().regex(slugPattern, "id must use lowercase kebab-case"),
+    name: nonEmptyString,
+    provider: nonEmptyString,
+    source_url: z.string().url(),
+    summary: nonEmptyString.max(180),
+    modalities: z
+      .object({
+        input: z.array(nonEmptyString).min(1).max(8),
+        output: z.array(nonEmptyString).min(1).max(8)
+      })
+      .strict(),
+    tasks: z.array(nonEmptyString).min(1).max(12),
+    access: z.array(nonEmptyString).min(1).max(8),
+    formats: z.array(nonEmptyString).min(1).max(8),
+    runtimes: z.array(nonEmptyString).min(1).max(8),
+    license: nonEmptyString.optional(),
+    use_cases: z.array(nonEmptyString).min(1).max(8),
+    details: detailsSchema.optional(),
     notes: z.array(projectNoteSchema).optional(),
     blocks: z.array(projectBlockSchema).optional()
   })

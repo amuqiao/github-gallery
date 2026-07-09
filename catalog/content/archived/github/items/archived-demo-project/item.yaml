@@ -1,0 +1,21 @@
+schema_version: 2
+id: archived-demo-project
+hall: github
+kind: github_project
+title: Archived Demo Project
+summary: 用于验证 archived 状态不会进入公开内容的 GitHub 项目样例。
+source:
+  type: github
+  url: https://github.com/example/archived-demo-project
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/example/archived-demo-project
+  category: ai
+  tags:
+    - audio
+  maintenance_status: unknown
+  license: MIT
+  languages:
+    - TypeScript

@@ -6,6 +6,8 @@
 
 `catalog/taxonomies.yaml` 是分类、标签和项目维护状态的受控词表。项目配置只引用 `category id`、`tag id` 和 `maintenance_status id`，不直接写展示名或视觉颜色。
 
+Hall availability 不属于 taxonomy。展馆入口的 `availability` 由 `catalog/halls/<id>/hall.yaml` 直接使用 `active` / `planned` 枚举。模型馆当前的 `tasks`、`modalities`、`formats`、`runtimes` 和 `access` 也不属于本 taxonomy 合同。
+
 ```text
 catalog/taxonomies.yaml
   -> category/tag/project_maintenance_status id registry

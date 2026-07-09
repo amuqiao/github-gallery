@@ -19,19 +19,22 @@ const { title, site, description = site.description } = Astro.props;
 const { layout, theme } = getActivePresentation();
 const normalizePath = (href: string) => (href === "/" ? "/" : href.endsWith("/") ? href : `${href}/`);
 const currentPath = normalizePath(Astro.url.pathname);
-const currentSection = currentPath.startsWith("/collections/")
-  ? "collections"
-  : currentPath.startsWith("/categories/") || currentPath.startsWith("/tags/")
-    ? "categories"
-    : "projects";
-const navigationSection = (href: string) =>
-  href.startsWith("/collections") ? "collections" : href.includes("#categories") ? "categories" : "projects";
-const navigationLabel = (label: string) =>
-  ({
-    Projects: "项目",
-    Collections: "专题",
-    Categories: "分类"
-  })[label] ?? label;
+const isNavigationActive = (href: string) => {
+  const normalizedHref = normalizePath(href);
+
+  if (normalizedHref === "/") {
+    return currentPath === "/";
+  }
+
+  if (
+    normalizedHref === "/halls/github/" &&
+    (currentPath.startsWith("/projects/") || currentPath.startsWith("/categories/") || currentPath.startsWith("/tags/"))
+  ) {
+    return true;
+  }
+
+  return currentPath.startsWith(normalizedHref);
+};
 ---
 
 <!doctype html>
@@ -55,8 +58,8 @@ const navigationLabel = (label: string) =>
           <div class="site-nav__links">
             {
               site.navigation.map((item) => {
-                const isActive = navigationSection(item.href) === currentSection;
-                return <a href={item.href} aria-current={isActive ? "page" : undefined}>{navigationLabel(item.label)}</a>;
+                const isActive = isNavigationActive(item.href);
+                return <a href={item.href} aria-current={isActive ? "page" : undefined}>{item.label}</a>;
               })
             }
           </div>
@@ -66,8 +69,8 @@ const navigationLabel = (label: string) =>
         <slot />
       </main>
       <footer class="site-footer">
-        <span>GitHub Gallery — 合同驱动的开源项目静态展馆</span>
-        <span>方案 B · Bento 杂志编辑 · 纸面主题</span>
+        <span>Gallery Platform — 合同驱动的静态展馆平台</span>
+        <span>Hall Shell · Bento 杂志编辑 · 纸面主题</span>
       </footer>
     </div>
   </body>

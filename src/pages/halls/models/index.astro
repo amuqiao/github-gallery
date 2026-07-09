@@ -1,0 +1,51 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import ModelCard from "@/components/ModelCard.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import Button from "@/components/ui/Button.astro";
+import { getHallById } from "@/lib/catalog/halls";
+import { getAllModels } from "@/lib/catalog/models";
+import { getSiteConfig } from "@/lib/catalog/projects";
+
+const [site, hall, models] = await Promise.all([
+  getSiteConfig(),
+  getHallById("models"),
+  getAllModels()
+]);
+---
+
+<BaseLayout title={`${hall.title} - Gallery Platform`} site={site} description={hall.summary}>
+  <article class="grid gap-6">
+    <Breadcrumbs
+      items={[
+        { label: "展馆入口", href: "/" },
+        { label: hall.title }
+      ]}
+    />
+    <PageHeader
+      eyebrow="Hall / Models"
+      title={hall.title}
+      description={hall.summary}
+      stats={[
+        { label: "模型", value: models.length },
+        { label: "状态", value: "已开放" }
+      ]}
+    >
+      <Fragment slot="actions">
+        <Button href="/" variant="outline">返回入口</Button>
+      </Fragment>
+    </PageHeader>
+
+    <section class="gallery-section" aria-labelledby="models-title">
+      <div class="editorial-section-head">
+        <span class="editorial-section-head__index">01</span>
+        <h2 class="editorial-section-head__title" id="models-title">模型目录</h2>
+        <span class="editorial-section-head__hint">{models.length} 个模型</span>
+      </div>
+      <div class="model-grid">
+        {models.map((model) => <ModelCard model={model} />)}
+      </div>
+    </section>
+  </article>
+</BaseLayout>

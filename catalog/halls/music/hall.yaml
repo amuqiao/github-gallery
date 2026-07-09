@@ -1,0 +1,6 @@
+schema_version: 1
+id: music
+title: 音乐展馆
+summary: 音乐项目、专辑、声音资料与创作工具的未来展馆。
+availability: planned
+order: 3

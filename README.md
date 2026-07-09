@@ -1,10 +1,13 @@
-# GitHub Gallery
+# Gallery Platform
 
-一个基于合同驱动的 GitHub 项目静态展馆。
+一个基于合同驱动的静态展馆平台。当前包含 GitHub 展馆、模型展馆，以及预留的音乐和电影展馆入口。
 
 ## Structure
 
 ```text
+catalog/halls/<id>/hall.yaml       # 展馆入口机器可读事实
+catalog/content/{drafts,published,archived}/ # 新 content bundle 合同，当前参与验证
+catalog/models/<id>/model.yaml     # 模型展馆条目机器可读事实
 catalog/projects/<id>/project.yaml  # 项目机器可读事实
 catalog/projects/<id>/details.md    # 可选详情正文
 catalog/projects/<id>/notes/        # 可选项目附加笔记
@@ -29,11 +32,14 @@ docs/runbooks/                      # 可重复维护流程
 
 1. [当前结构](docs/current/structure.md)
 2. [前端导航结构](docs/current/frontend-navigation.md)
-3. [项目配置合同](docs/contract/project-config.md)
-4. [专题配置合同](docs/contract/collection-config.md)
-5. [Taxonomy 配置合同](docs/contract/taxonomy-config.md)
-6. [站点配置合同](docs/contract/site-config.md)
-7. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
+3. [Hall 配置合同](docs/contract/hall-config.md)
+4. [Content Bundle 配置合同](docs/contract/content-bundle-config.md)
+5. [Model 配置合同](docs/contract/model-config.md)
+6. [项目配置合同](docs/contract/project-config.md)
+7. [专题配置合同](docs/contract/collection-config.md)
+8. [Taxonomy 配置合同](docs/contract/taxonomy-config.md)
+9. [站点配置合同](docs/contract/site-config.md)
+10. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
 
 修改前端 UI 时按这个顺序阅读：
 
@@ -67,6 +73,24 @@ Catalog 维护入口：
 ./scripts/catalog.sh validate
 ./scripts/catalog.sh collection list
 ./scripts/catalog.sh collection show voice-cloning
+```
+
+Content bundle 发布入口：
+
+```sh
+./scripts/content.sh item new models ai_model example-model \
+  --title "Example Model" \
+  --summary "Example model summary." \
+  --source-type manual \
+  --source-url "https://example.com/model" \
+  --provider Example \
+  --input audio \
+  --output audio \
+  --task source-separation \
+  --access download \
+  --format onnx \
+  --runtime onnxruntime
+./scripts/content.sh publish models item example-model
 ```
 
 Docker 部署入口：

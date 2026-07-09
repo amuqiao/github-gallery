@@ -19,8 +19,8 @@ usage() {
 命令：
   check      总验证入口，执行 catalog、content、build。
   build      执行 npm run build。
-  catalog    验证项目 YAML、collection YAML、taxonomy、site config、relations 等 catalog 合同。
-  content    验证已被 project.yaml 或 collection.yaml 引用的内容资产，例如 details.md。
+  catalog    验证 content bundle、hall、model、project、collection、taxonomy、site config、relations 等 catalog 合同。
+  content    验证已被 content/model/project/collection 配置引用的内容资产，例如 body、details.md 和 notes。
   help       显示帮助。
 
 副作用与边界：
@@ -51,7 +51,7 @@ command_usage() {
   执行 catalog、content 和 build 验证。
 
 说明：
-  catalog/content 目前共用 npm run build 作为可执行门禁，因为 loader 已在构建期校验 schema、
+  catalog/content 目前共用 npm run build 作为可执行门禁，因为 loader 已在构建期校验 content bundle、schema、
   taxonomy、collection references、relations 和 details 文件引用。未来需要更快反馈时，再拆出 catalog-only 校验。
 EOF
       ;;
@@ -70,7 +70,7 @@ EOF
   ./scripts/verify.sh catalog
 
 作用域：
-  验证 catalog 配置合同：project.yaml、collection.yaml、taxonomies.yaml、site.yaml、relations。
+  验证 catalog 配置合同：content item.yaml、content collection.yaml、hall.yaml、model.yaml、project.yaml、collection.yaml、taxonomies.yaml、site.yaml、relations。
   当前实现通过 npm run build 触发 loader 校验。
 EOF
       ;;
@@ -80,7 +80,7 @@ EOF
   ./scripts/verify.sh content
 
 作用域：
-  验证已被配置引用的内容资产，例如 details.md。
+  验证已被配置引用的内容资产，例如 content body、details.md 和 notes。
   当前实现通过 npm run build 触发 loader 的引用文件校验。
 EOF
       ;;
@@ -129,8 +129,8 @@ case "$command" in
     fi
     [[ "$#" -eq 0 ]] || die "unexpected arguments for verify check: $*" 2
     section "Build Gate"
-    event "COVERS" "catalog" "project.yaml, collection.yaml, taxonomy, site config, relations"
-    event "COVERS" "content" "configured project and collection details.md references"
+    event "COVERS" "catalog" "content item.yaml/collection.yaml, hall.yaml, model.yaml, project.yaml, collection.yaml, taxonomy, site config, relations"
+    event "COVERS" "content" "configured content body, model, project, and collection details.md/notes references"
     event "COVERS" "build" "astro check and static build"
     run_build_gate
     ;;

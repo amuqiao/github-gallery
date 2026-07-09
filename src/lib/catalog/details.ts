@@ -1,4 +1,5 @@
 import type { Collection } from "./collections";
+import type { ModelItem, ModelNote } from "./models";
 import type { Project, ProjectNote } from "./projects";
 
 type MarkdownModule = {
@@ -22,6 +23,21 @@ const projectNoteHtmlModules = {
 
 const collectionMarkdownModules = {
   ...import.meta.glob<MarkdownModule>("../../../catalog/collections/*/details.md")
+};
+
+const modelMarkdownModules = {
+  ...import.meta.glob<MarkdownModule>("../../../catalog/models/*/details.md")
+};
+
+const modelNoteMarkdownModules = {
+  ...import.meta.glob<MarkdownModule>("../../../catalog/models/*/notes/**/*.md")
+};
+
+const modelNoteHtmlModules = {
+  ...import.meta.glob<string>("../../../catalog/models/*/notes/**/*.html", {
+    import: "default",
+    query: "?raw"
+  })
 };
 
 export type ProjectDetail = {
@@ -92,7 +108,75 @@ export async function loadProjectNote(project: Project, note: ProjectNote): Prom
   };
 }
 
-function assertSafeHtmlFragment(project: Project, note: ProjectNote, html: string): void {
+export type ModelDetail = {
+  type: "markdown";
+  Content: (_props: Record<string, unknown>) => unknown;
+};
+
+export async function loadModelDetail(model: ModelItem): Promise<ModelDetail | undefined> {
+  if (!model.details) {
+    return undefined;
+  }
+
+  const key = `../../../catalog/models/${model.id}/${model.details.path.replace("./", "")}`;
+  const loader = modelMarkdownModules[key];
+
+  if (!loader) {
+    throw new Error(`${model.id} details module is not registered: ${model.details.path}`);
+  }
+
+  const module = await loader();
+  return {
+    type: model.details.type,
+    Content: module.Content
+  };
+}
+
+export type ModelNoteDetail =
+  | {
+      type: "markdown";
+      Content: (_props: Record<string, unknown>) => unknown;
+    }
+  | {
+      type: "html";
+      html: string;
+    };
+
+export async function loadModelNote(model: ModelItem, note: ModelNote): Promise<ModelNoteDetail> {
+  const key = `../../../catalog/models/${model.id}/${note.path.replace("./", "")}`;
+
+  if (note.type === "markdown") {
+    const loader = modelNoteMarkdownModules[key];
+
+    if (!loader) {
+      throw new Error(`${model.id} note ${note.id} markdown module is not registered: ${note.path}`);
+    }
+
+    const module = await loader();
+    return {
+      type: "markdown",
+      Content: module.Content
+    };
+  }
+
+  const loader = modelNoteHtmlModules[key];
+
+  if (!loader) {
+    throw new Error(`${model.id} note ${note.id} html module is not registered: ${note.path}`);
+  }
+
+  const html = await loader();
+  if (note.html_mode === "fragment") {
+    assertSafeHtmlFragment(model, note, html);
+  }
+
+  return {
+    type: "html",
+    html
+  };
+}
+
+function assertSafeHtmlFragment(item: Project | ModelItem, note: ProjectNote | ModelNote, html: string): void {
   const blockedPatterns = [
     { pattern: /<\s*!doctype\b/i, label: "doctype" },
     { pattern: /<\s*html\b/i, label: "html" },
@@ -107,7 +191,7 @@ function assertSafeHtmlFragment(project: Project, note: ProjectNote, html: strin
 
   for (const { pattern, label } of blockedPatterns) {
     if (pattern.test(html)) {
-      throw new Error(`${project.id} note ${note.id} html fragment contains blocked ${label}: ${note.path}`);
+      throw new Error(`${item.id} note ${note.id} html fragment contains blocked ${label}: ${note.path}`);
     }
   }
 }

@@ -1,9 +1,11 @@
-title: GitHub Gallery
-description: A contract-driven static gallery for curated GitHub projects.
+title: Gallery Platform
+description: A contract-driven static gallery platform for curated projects, models, and future halls.
 navigation:
-  - label: Projects
+  - label: 展馆入口
     href: /
-  - label: Collections
+  - label: GitHub 展馆
+    href: /halls/github/
+  - label: 模型展馆
+    href: /halls/models/
+  - label: 专题
     href: /collections/
-  - label: Categories
-    href: /#categories

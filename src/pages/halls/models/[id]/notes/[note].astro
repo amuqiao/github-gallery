@@ -1,0 +1,73 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import Button from "@/components/ui/Button.astro";
+import Prose from "@/components/ui/Prose.astro";
+import { loadModelNote } from "@/lib/catalog/details";
+import { getAllModels, type ModelItem, type ModelNote } from "@/lib/catalog/models";
+import { getSiteConfig } from "@/lib/catalog/projects";
+
+export async function getStaticPaths() {
+  const models = await getAllModels();
+
+  return models.flatMap((model) =>
+    model.notes.map((note) => ({
+      params: { id: model.id, note: note.id },
+      props: { model, note }
+    }))
+  );
+}
+
+const { model, note } = Astro.props as { model: ModelItem; note: ModelNote };
+const site = await getSiteConfig();
+const noteDetail = await loadModelNote(model, note);
+
+if (note.display === "standalone") {
+  if (noteDetail.type !== "html" || note.html_mode !== "document") {
+    throw new Error(`${model.id} note ${note.id} uses standalone display without html document content`);
+  }
+
+  return new Response(noteDetail.html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8"
+    }
+  });
+} else if (noteDetail.type === "html" && note.html_mode !== "fragment") {
+  throw new Error(`${model.id} note ${note.id} uses site display without html fragment content`);
+}
+
+const MarkdownContent = noteDetail.type === "markdown" ? noteDetail.Content : undefined;
+const htmlFragment = noteDetail.type === "html" ? noteDetail.html : undefined;
+const formatLabel = noteDetail.type === "markdown" ? "Markdown" : "HTML 片段";
+---
+
+<BaseLayout title={`${note.title} - ${model.name} - 模型展馆`} site={site} description={note.summary}>
+  <article class="grid gap-6">
+    <Breadcrumbs
+      items={[
+        { label: "展馆入口", href: "/" },
+        { label: "模型展馆", href: "/halls/models/" },
+        { label: model.name, href: model.route },
+        { label: note.title }
+      ]}
+    />
+    <PageHeader
+      eyebrow={`${model.name} / 模型笔记`}
+      title={note.title}
+      description={note.summary}
+      stats={[
+        { label: "格式", value: formatLabel },
+        { label: "展示", value: "站内文章" }
+      ]}
+    >
+      <Fragment slot="actions">
+        <Button href={model.route} variant="outline">返回模型</Button>
+      </Fragment>
+    </PageHeader>
+    <Prose>
+      {MarkdownContent && <MarkdownContent />}
+      {htmlFragment && <Fragment set:html={htmlFragment} />}
+    </Prose>
+  </article>
+</BaseLayout>

@@ -1,0 +1,12 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import PlannedHallPage from "@/components/PlannedHallPage.astro";
+import { getHallById } from "@/lib/catalog/halls";
+import { getSiteConfig } from "@/lib/catalog/projects";
+
+const [site, hall] = await Promise.all([getSiteConfig(), getHallById("movies")]);
+---
+
+<BaseLayout title={`${hall.title} - Gallery Platform`} site={site} description={hall.summary}>
+  <PlannedHallPage hall={hall} />
+</BaseLayout>

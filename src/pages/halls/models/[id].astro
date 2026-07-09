@@ -1,0 +1,112 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import BlockRenderer from "@/components/blocks/BlockRenderer.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import Button from "@/components/ui/Button.astro";
+import Badge from "@/components/ui/Badge.astro";
+import Prose from "@/components/ui/Prose.astro";
+import { loadModelDetail } from "@/lib/catalog/details";
+import { getAllModels, type ModelItem } from "@/lib/catalog/models";
+import { getSiteConfig } from "@/lib/catalog/projects";
+
+export async function getStaticPaths() {
+  const models = await getAllModels();
+  return models.map((model) => ({
+    params: { id: model.id },
+    props: { model }
+  }));
+}
+
+const { model } = Astro.props as { model: ModelItem };
+const site = await getSiteConfig();
+const detail = await loadModelDetail(model);
+const DetailContent = detail?.Content;
+const modalityLabel = `${model.modalities.input.join("+")} -> ${model.modalities.output.join("+")}`;
+---
+
+<BaseLayout title={`${model.name} - 模型展馆`} site={site} description={model.summary}>
+  <article class="grid gap-6">
+    <Breadcrumbs
+      items={[
+        { label: "展馆入口", href: "/" },
+        { label: "模型展馆", href: "/halls/models/" },
+        { label: model.name }
+      ]}
+    />
+    <PageHeader
+      eyebrow={`${model.provider} / 模型`}
+      title={model.name}
+      description={model.summary}
+      stats={[
+        { label: "模态", value: modalityLabel },
+        { label: "格式", value: model.formats.join(" · ") },
+        { label: "Runtime", value: model.runtimes.join(" · ") }
+      ]}
+    >
+      <Fragment slot="meta">
+        {model.tasks.map((task) => <Badge>{task}</Badge>)}
+      </Fragment>
+      <Fragment slot="actions">
+        <Button href={model.source_url}>打开来源</Button>
+        <Button href="/halls/models/" variant="outline">返回模型馆</Button>
+      </Fragment>
+    </PageHeader>
+
+    <section class="model-fact-grid" aria-label="模型事实">
+      <div>
+        <span>提供方</span>
+        <strong>{model.provider}</strong>
+      </div>
+      <div>
+        <span>访问方式</span>
+        <strong>{model.access.join(" · ")}</strong>
+      </div>
+      <div>
+        <span>License</span>
+        <strong>{model.license ?? "Unknown"}</strong>
+      </div>
+      <div>
+        <span>用途</span>
+        <strong>{model.use_cases.slice(0, 3).join(" · ")}</strong>
+      </div>
+    </section>
+
+    {
+      model.notes.length > 0 && (
+        <section class="gallery-section" aria-labelledby="model-notes-title">
+          <div class="editorial-section-head">
+            <span class="editorial-section-head__index">02</span>
+            <h2 class="editorial-section-head__title" id="model-notes-title">模型笔记</h2>
+            <span class="editorial-section-head__hint">{model.notes.length} 篇</span>
+          </div>
+          <div class="model-note-grid">
+            {model.notes.map((note) => (
+              <a class="model-note-card" href={note.route}>
+                <span>{note.type === "markdown" ? "Markdown" : "HTML"}</span>
+                <strong>{note.title}</strong>
+                <p>{note.summary}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      detail && (
+        <Prose>
+          {DetailContent && <DetailContent />}
+        </Prose>
+      )
+    }
+
+    {
+      model.blocks.length > 0 && (
+        <section class="content-blocks" aria-label="模型详情">
+          {model.blocks.map((block, index) => <BlockRenderer block={block} index={index} />)}
+        </section>
+      )
+    }
+  </article>
+</BaseLayout>

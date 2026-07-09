@@ -1,0 +1,31 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import HomePage from "@/components/presentation/HomePage.astro";
+import { getPublicCollections } from "@/lib/catalog/collections";
+import { getCatalogSnapshot } from "@/lib/catalog/projects";
+import { toProjectCardViewModels } from "@/lib/catalog/project-view-models";
+import { getActivePresentation } from "@/presentation";
+
+const [{ projects, site, taxonomy }, collections] = await Promise.all([
+  getCatalogSnapshot(),
+  getPublicCollections()
+]);
+const activeCategories = taxonomy.categories.filter((category) =>
+  projects.some((project) => project.category === category.id)
+);
+const activeTags = taxonomy.tags.filter((tag) => projects.some((project) => project.tags.includes(tag.id)));
+const projectItems = toProjectCardViewModels(projects, taxonomy);
+const { layout, home } = getActivePresentation();
+---
+
+<BaseLayout title="GitHub 展馆 - Gallery Platform" site={site}>
+  <HomePage
+    layout={layout}
+    home={home}
+    projects={projects}
+    collections={collections}
+    activeCategories={activeCategories}
+    activeTags={activeTags}
+    projectItems={projectItems}
+  />
+</BaseLayout>

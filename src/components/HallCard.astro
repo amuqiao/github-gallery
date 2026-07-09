@@ -1,0 +1,27 @@
+---
+import type { Hall } from "@/lib/catalog/halls";
+
+interface Props {
+  hall: Hall;
+  itemCount?: number;
+}
+
+const { hall, itemCount } = Astro.props;
+const isActive = hall.availability === "active";
+const statusLabel = isActive ? "已开放" : "装修中";
+const countLabel = typeof itemCount === "number" ? `${itemCount} 个条目` : "规划中";
+---
+
+<a
+  class:list={["hall-card", !isActive && "hall-card--planned"]}
+  href={hall.route}
+  aria-label={`${hall.title}，${statusLabel}`}
+>
+  <div class="hall-card__top">
+    <span class="hall-card__status">{statusLabel}</span>
+    <span class="hall-card__count">{countLabel}</span>
+  </div>
+  <h2 class="hall-card__title">{hall.title}</h2>
+  <p class="hall-card__summary">{hall.summary}</p>
+  <span class="hall-card__action">{isActive ? "进入展馆" : "查看进度"} →</span>
+</a>

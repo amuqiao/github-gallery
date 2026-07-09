@@ -30,11 +30,11 @@ const { layout } = getActivePresentation();
 const publicationStatusLabel = getPublicationStatusLabel(collection.publication_status);
 ---
 
-<BaseLayout title={`${collection.title} - GitHub Gallery`} site={site} description={collection.summary}>
+<BaseLayout title={`${collection.title} - GitHub 展馆`} site={site} description={collection.summary}>
   <article class="grid gap-6">
     <Breadcrumbs
       items={[
-        { label: "展馆", href: "/" },
+        { label: "GitHub 展馆", href: "/halls/github/" },
         { label: "专题", href: "/collections/" },
         { label: collection.title }
       ]}

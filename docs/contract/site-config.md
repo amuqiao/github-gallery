@@ -22,11 +22,15 @@ catalog/site.yaml
 
 ## Route Rules
 
+- 平台首页：`/`
+- 展馆路由：`/halls/<hall-id>/`
+- 模型详情路由：`/halls/models/<model-id>/`
+- 模型笔记路由：`/halls/models/<model-id>/notes/<note-id>/`
 - 项目路由：`/projects/<project-id>/`
 - 专题路由：`/collections/<collection-id>/`
 - 分类路由：`/categories/<category-id>/`
 - 标签路由：`/tags/<tag-id>/`
-- `project id`、`collection id`、`category id`、`tag id` 都是对外 URL 标识，重命名属于破坏性路由变更。
+- `hall id`、`model id`、`project id`、`collection id`、`category id`、`tag id` 都是对外 URL 标识，重命名属于破坏性路由变更。
 - 第一版允许空分类页和空标签页存在，因为 taxonomy id 是稳定入口。
 
 ## Change Rules

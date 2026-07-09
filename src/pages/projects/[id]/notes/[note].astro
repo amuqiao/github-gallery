@@ -42,11 +42,11 @@ const htmlFragment = noteDetail.type === "html" ? noteDetail.html : undefined;
 const formatLabel = noteDetail.type === "markdown" ? "Markdown" : "HTML 片段";
 ---
 
-<BaseLayout title={`${note.title} - ${project.name} - GitHub Gallery`} site={site} description={note.summary}>
+<BaseLayout title={`${note.title} - ${project.name} - GitHub 展馆`} site={site} description={note.summary}>
   <article class="grid gap-6">
     <Breadcrumbs
       items={[
-        { label: "展馆", href: "/" },
+        { label: "GitHub 展馆", href: "/halls/github/" },
         { label: category.label, href: `/categories/${category.id}/` },
         { label: project.name, href: project.route },
         { label: note.title }

@@ -1,31 +1,73 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import HomePage from "@/components/presentation/HomePage.astro";
+import CollectionGrid from "@/components/CollectionGrid.astro";
+import HallCard from "@/components/HallCard.astro";
+import ModelCard from "@/components/ModelCard.astro";
 import { getPublicCollections } from "@/lib/catalog/collections";
+import { getContentCatalogSnapshot } from "@/lib/catalog/content";
+import { getAllHalls } from "@/lib/catalog/halls";
+import { getAllModels } from "@/lib/catalog/models";
 import { getCatalogSnapshot } from "@/lib/catalog/projects";
-import { toProjectCardViewModels } from "@/lib/catalog/project-view-models";
 import { getActivePresentation } from "@/presentation";
 
-const [{ projects, site, taxonomy }, collections] = await Promise.all([
+await getContentCatalogSnapshot();
+
+const [{ projects, site }, collections, halls, models] = await Promise.all([
   getCatalogSnapshot(),
-  getPublicCollections()
+  getPublicCollections(),
+  getAllHalls(),
+  getAllModels()
 ]);
-const activeCategories = taxonomy.categories.filter((category) =>
-  projects.some((project) => project.category === category.id)
-);
-const activeTags = taxonomy.tags.filter((tag) => projects.some((project) => project.tags.includes(tag.id)));
-const projectItems = toProjectCardViewModels(projects, taxonomy);
-const { layout, home } = getActivePresentation();
+const { layout } = getActivePresentation();
+const itemCountByHall: Record<string, number> = {
+  github: projects.length,
+  models: models.length
+};
 ---
 
-<BaseLayout title="GitHub Gallery" site={site}>
-  <HomePage
-    layout={layout}
-    home={home}
-    projects={projects}
+<BaseLayout title="Gallery Platform" site={site}>
+  <header class="platform-home" aria-labelledby="platform-title">
+    <div class="platform-home__kicker">Gallery Platform</div>
+    <div class="platform-home__intro">
+      <h1 id="platform-title">面向资料收藏的<br /><em>多展馆入口</em></h1>
+      <p>这里从 GitHub 项目展馆开始，逐步接入模型资料，并预留音乐与电影展馆。内容发布仍以合同、loader 和构建验证作为门禁。</p>
+    </div>
+    <div class="platform-home__actions">
+      <a class="editorial-button editorial-button--dark" href="/halls/github/">进入 GitHub 展馆</a>
+      <a class="editorial-button" href="/halls/models/">浏览模型展馆</a>
+      <a class="editorial-button editorial-button--outline" href="/collections/">查看专题</a>
+    </div>
+  </header>
+
+  <section class="gallery-section" aria-labelledby="halls-title">
+    <div class="editorial-section-head">
+      <span class="editorial-section-head__index">01</span>
+      <h2 class="editorial-section-head__title" id="halls-title">展馆入口</h2>
+      <span class="editorial-section-head__hint">{halls.length} 个展馆</span>
+    </div>
+    <div class="hall-grid">
+      {halls.map((hall) => <HallCard hall={hall} itemCount={itemCountByHall[hall.id]} />)}
+    </div>
+  </section>
+
+  <section class="gallery-section" aria-labelledby="model-feature-title">
+    <div class="editorial-section-head">
+      <span class="editorial-section-head__index">02</span>
+      <h2 class="editorial-section-head__title" id="model-feature-title">模型样例</h2>
+      <span class="editorial-section-head__hint">{models.length} 个模型</span>
+    </div>
+    <div class="model-grid">
+      {models.slice(0, 3).map((model) => <ModelCard model={model} />)}
+    </div>
+  </section>
+
+  <CollectionGrid
+    id="collections"
+    index="03"
+    title="精选专题"
+    hint={`${collections.length} 个专题`}
     collections={collections}
-    activeCategories={activeCategories}
-    activeTags={activeTags}
-    projectItems={projectItems}
+    cardHeadingLevel={3}
+    variant={layout.home.collectionGridVariant}
   />
 </BaseLayout>

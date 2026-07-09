@@ -1,6 +1,6 @@
 # Catalog Contract Iteration Runbook
 
-本手册说明如何稳定迭代 GitHub Gallery 的配置合同。核心原则是：schema 定义字段级合同，loader 执行跨文件不变量，build 负责验证门禁，docs 只解释已实现规则。
+本手册说明如何稳定迭代 Gallery Platform 的配置合同。核心原则是：schema 定义字段级合同，loader 执行跨文件不变量，build 负责验证门禁，docs 只解释已实现规则。
 
 ## Mental Model
 
@@ -22,10 +22,13 @@ schema 定规则
 | Layer | Canonical location | Owns |
 | --- | --- | --- |
 | Schema | `src/lib/catalog/catalog-schema.js` | 可执行配置合同。 |
+| Hall loader | `src/lib/catalog/halls.ts` | hall YAML 读取、schema parse、展馆入口 read model。 |
+| Content loader | `src/lib/catalog/content.ts` | content bundle YAML 读取、schema parse、publication state、body/notes 文件和 collection item 引用校验。 |
+| Model loader | `src/lib/catalog/models.ts` | model YAML 读取、schema parse、模型详情和 notes 引用校验、model read model。 |
 | Project loader | `src/lib/catalog/projects.ts` | project YAML 读取、schema parse、taxonomy 校验、项目关系校验、project read model。 |
 | Collection loader | `src/lib/catalog/collections.ts` | collection YAML 读取、schema parse、专题引用项目校验、collection read model。 |
 | Block adapters | `src/lib/catalog/block-adapters.ts` | typed blocks 的归一化和默认标题。 |
-| Detail loader | `src/lib/catalog/details.ts` | 已实现项目和专题详情格式的加载。 |
+| Detail loader | `src/lib/catalog/details.ts` | 已实现项目、模型、专题详情和项目/模型 notes 内容的加载。 |
 | Build gate | `./scripts/verify.sh check` | 统一验证入口；当前委托 `npm run build`。 |
 | Script entrypoints | `scripts/` | 本地开发、验证和 catalog 维护的人类操作入口。 |
 | Import batch | `.tmp/import-batches/<batch-id>/` | AI 或人工整理结果进入正式 catalog 前的中间交换合同。 |
@@ -33,6 +36,20 @@ schema 定规则
 | Current docs | `docs/current/` | 当前已实现结构和运行路径。 |
 | Plans | `docs/plans/` | 未来缺口和验收条件。 |
 | Runbooks | `docs/runbooks/` | 可重复维护流程。 |
+
+## When Adding Or Changing A Content Bundle Field
+
+`catalog/content/` 当前是新发布模型的验证面，尚未替代旧页面数据源。修改它时按这个顺序执行：
+
+1. 判断字段属于通用 item/collection core、`github_project` profile、`ai_model` profile、body、notes，还是 typed block。
+2. 更新 `src/lib/catalog/catalog-schema.js`。
+3. 需要目录、publication state、hall、taxonomy、引用文件或 collection item 引用校验时，更新 `src/lib/catalog/content.ts`。
+4. 更新至少一个 `catalog/content/{drafts,published,archived}/...` 样例。
+5. 更新 [`../contract/content-bundle-config.md`](../contract/content-bundle-config.md)。
+6. 如果运行路径变化，更新 [`../current/structure.md`](../current/structure.md)。
+7. 运行 `./scripts/verify.sh check`。
+
+不要把 `docs/contract/content-bundle-config.md` 当成真相源。schema 和 loader 不支持的字段不能写入 content bundle 合同。
 
 ## When Adding Or Changing A Project Field
 

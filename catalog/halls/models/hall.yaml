@@ -1,0 +1,6 @@
+schema_version: 1
+id: models
+title: 模型展馆
+summary: 收集 AI 模型、音视频模型和多模态模型资料。
+availability: active
+order: 2

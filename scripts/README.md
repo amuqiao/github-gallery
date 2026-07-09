@@ -1,12 +1,13 @@
 # Scripts
 
-`scripts/` 提供本仓库稳定的人类操作入口。它们是薄 wrapper，真正的配置合同仍由 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 执行。
+`scripts/` 提供本仓库稳定的人类操作入口。它们是薄 wrapper，真正的配置合同仍由 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/content.ts`、`src/lib/catalog/projects.ts` 和 `src/lib/catalog/collections.ts` 执行。
 
 ## Mental Model
 
 ```text
 dev.sh       本地 Astro 开发和 dev server 管理入口
 verify.sh    一次性验证入口
+content.sh   content bundle 创建、发布、归档、恢复入口
 catalog.sh   catalog 项目维护入口
   import     .tmp/import-batches 安全导入入口
 deploy.sh    Docker 静态站点部署入口
@@ -19,7 +20,8 @@ deploy.sh    Docker 静态站点部署入口
 | Entrypoint | Owns | Does Not Own |
 | --- | --- | --- |
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、catalog 内容生成。 |
-| `verify.sh` | build/catalog/content 验证，包括 projects、collections、taxonomy、site 和被引用详情文件。 | README 或 `docs/` 漂移检查。 |
+| `verify.sh` | build/catalog/content 验证，包括 content bundles、halls、models、projects、collections、taxonomy、site 和被引用详情/notes 文件。 | README 或 `docs/` 漂移检查。 |
+| `content.sh` | content bundle item/collection 草稿创建、item note 添加、publish/archive/restore 状态移动。 | import batch、旧 project/root collection 维护、公开页面路由替换。 |
 | `catalog.sh` | project list/validate/new、collection list/show/new/delete/update、import batch validate/plan/diff/apply。 | GitHub API 抓取、taxonomy 自动修改、schema 之外的字段生成、全量替换 catalog。 |
 | `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`（可简写 `pre`）、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status；`up/down` 仅作兼容别名。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
@@ -40,6 +42,30 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
 ./scripts/verify.sh check
 ./scripts/verify.sh catalog
 ./scripts/verify.sh content
+
+./scripts/content.sh item new models ai_model example-model \
+  --title "Example Model" \
+  --summary "Example model summary." \
+  --source-type manual \
+  --source-url "https://example.com/model" \
+  --provider Example \
+  --input audio \
+  --output audio \
+  --task source-separation \
+  --access download \
+  --format onnx \
+  --runtime onnxruntime
+./scripts/content.sh item note add models example-model quick-start \
+  --title "Quick Start" \
+  --summary "Quick start note." \
+  --format markdown
+./scripts/content.sh collection new models example-models \
+  --title "Example Models" \
+  --summary "Example model collection." \
+  --item example-model
+./scripts/content.sh publish models item example-model
+./scripts/content.sh archive models item example-model
+./scripts/content.sh restore models item example-model
 
 ./scripts/catalog.sh list
 ./scripts/catalog.sh validate
@@ -116,7 +142,9 @@ cp .env.example .env
 
 `dev.sh stop` 和 `restart` 只会停止当前仓库 cwd 下的 dev server，杀进程前会校验 cwd 和命令，避免误杀其他项目。
 
-`catalog` 和 `content` 当前都通过 `npm run build` 触发可执行校验。项目、专题、taxonomy、site 和详情文件引用都由 schema/loader 在构建期验证。未来如果构建变慢，可以新增更窄的 catalog-only 校验，但仍应复用 schema/loader，不在 shell 里重写合同。
+`catalog` 和 `content` 当前都通过 `npm run build` 触发可执行校验。content bundles、展馆、模型、项目、专题、taxonomy、site 和详情/notes 文件引用都由 schema/loader 在构建期验证。未来如果构建变慢，可以新增更窄的 catalog-only 校验，但仍应复用 schema/loader，不在 shell 里重写合同。
+
+`content.sh` 写入 `catalog/content/drafts/`，并在 `drafts`、`published`、`archived` 之间移动 content bundle。`publish` 会运行 `./scripts/verify.sh check`；`archive` 和 `restore` 会运行 `./scripts/verify.sh catalog`。验证失败时脚本会回滚目录移动或文件写入。
 
 `catalog.sh new` 创建项目后会立即调用 `./scripts/catalog.sh validate`。如果 category、tag、maintenance_status、summary 或引用文件不符合合同，最终由 schema/loader 失败退出。项目 maintenance_status 和 category/tag 一样引用 `catalog/taxonomies.yaml` 中的受控 id。
 

@@ -1,0 +1,36 @@
+---
+import type { ModelItem } from "@/lib/catalog/models";
+
+interface Props {
+  model: ModelItem;
+}
+
+const { model } = Astro.props;
+const taskPreview = model.tasks.slice(0, 3).join(" · ");
+const modalityLabel = `${model.modalities.input.join("+")} → ${model.modalities.output.join("+")}`;
+const runtimeLabel = model.runtimes.join(" · ");
+---
+
+<a class="model-card" href={model.route} aria-label={`查看 ${model.name} 模型详情`}>
+  <div class="model-card__meta">
+    <span>{model.provider}</span>
+    <span>{model.license ?? "License unknown"}</span>
+  </div>
+  <h3 class="model-card__title">{model.name}</h3>
+  <p class="model-card__summary">{model.summary}</p>
+  <dl class="model-card__facts">
+    <div>
+      <dt>任务</dt>
+      <dd>{taskPreview}</dd>
+    </div>
+    <div>
+      <dt>模态</dt>
+      <dd>{modalityLabel}</dd>
+    </div>
+    <div>
+      <dt>运行</dt>
+      <dd>{runtimeLabel}</dd>
+    </div>
+  </dl>
+  <span class="model-card__action">查看模型 →</span>
+</a>

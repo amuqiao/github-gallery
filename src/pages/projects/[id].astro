@@ -42,11 +42,11 @@ const memberCollections = await getCollectionsForProject(project.id);
 const { layout } = getActivePresentation();
 ---
 
-<BaseLayout title={`${project.name} - GitHub Gallery`} site={site} description={project.summary}>
+<BaseLayout title={`${project.name} - GitHub 展馆`} site={site} description={project.summary}>
   <article class="grid gap-6">
     <Breadcrumbs
       items={[
-        { label: "展馆", href: "/" },
+        { label: "GitHub 展馆", href: "/halls/github/" },
         { label: category.label, href: `/categories/${category.id}/` },
         { label: project.name }
       ]}

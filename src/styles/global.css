@@ -521,6 +521,50 @@
     gap: 0.7rem;
   }
 
+  .platform-home {
+    display: grid;
+    gap: 1.35rem;
+    border-bottom: 1.5px solid var(--strong-border);
+    padding-block: 3.5rem 2.2rem;
+  }
+
+  .platform-home__kicker {
+    color: var(--accent-strong);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .platform-home__intro {
+    display: grid;
+    gap: 1.15rem;
+  }
+
+  .platform-home__intro h1 {
+    margin: 0;
+    font-size: clamp(3.1rem, 8vw, 5.7rem);
+    line-height: 0.98;
+  }
+
+  .platform-home__intro h1 em {
+    color: var(--primary);
+    font-style: italic;
+  }
+
+  .platform-home__intro p {
+    max-width: 44rem;
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 1.08rem;
+  }
+
+  .platform-home__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+  }
+
   .editorial-button {
     display: inline-flex;
     align-items: center;
@@ -590,9 +634,24 @@
   }
 
   .project-collection__grid,
-  .collection-grid__grid {
+  .collection-grid__grid,
+  .hall-grid,
+  .model-grid,
+  .model-note-grid {
     display: grid;
     gap: 0.9rem;
+  }
+
+  .hall-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  }
+
+  .model-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  }
+
+  .model-note-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
   }
 
   .project-collection__grid--standard,
@@ -613,7 +672,10 @@
 
   .project-card,
   .collection-card,
-  .project-note-card {
+  .project-note-card,
+  .hall-card,
+  .model-card,
+  .model-note-card {
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
@@ -631,16 +693,142 @@
 
   .project-card:hover,
   .collection-card:hover,
-  .project-note-card:hover {
+  .project-note-card:hover,
+  .hall-card:hover,
+  .model-card:hover,
+  .model-note-card:hover {
     transform: translate(-3px, -3px);
     box-shadow: var(--paper-shadow);
   }
 
   .project-card:focus-visible,
   .collection-card:focus-visible,
-  .project-note-card:focus-visible {
+  .project-note-card:focus-visible,
+  .hall-card:focus-visible,
+  .model-card:focus-visible,
+  .model-note-card:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 3px;
+  }
+
+  .hall-card--planned {
+    background: color-mix(in srgb, var(--card) 72%, var(--muted));
+  }
+
+  .hall-card__top,
+  .model-card__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    color: var(--accent-strong);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .hall-card__count,
+  .model-card__meta span:last-child {
+    color: var(--muted-foreground);
+  }
+
+  .hall-card__title,
+  .model-card__title {
+    margin: 0;
+    font-size: 2rem;
+    line-height: 1.05;
+  }
+
+  .hall-card__summary,
+  .model-card__summary,
+  .model-note-card p {
+    margin: 0;
+    color: var(--muted-foreground);
+  }
+
+  .hall-card__action,
+  .model-card__action,
+  .model-note-card span {
+    margin-top: auto;
+    color: var(--accent-strong);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .model-card__facts {
+    display: grid;
+    gap: 0.65rem;
+    margin: 0;
+  }
+
+  .model-card__facts div {
+    display: grid;
+    gap: 0.2rem;
+  }
+
+  .model-card__facts dt,
+  .model-fact-grid span {
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .model-card__facts dd {
+    margin: 0;
+    font-weight: 700;
+  }
+
+  .model-fact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 0.9rem;
+  }
+
+  .model-fact-grid div,
+  .planned-hall {
+    border: 1.5px solid var(--strong-border);
+    border-radius: var(--radius);
+    background: var(--card);
+    padding: 1.25rem;
+  }
+
+  .model-fact-grid strong {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 1rem;
+  }
+
+  .model-note-card {
+    min-height: 12rem;
+  }
+
+  .model-note-card strong {
+    font-family: var(--font-display);
+    font-size: 1.45rem;
+    line-height: 1.1;
+  }
+
+  .planned-hall {
+    display: grid;
+    gap: 0.65rem;
+    min-height: 12rem;
+    align-items: center;
+  }
+
+  .planned-hall h2 {
+    margin: 0 0 0.5rem;
+    font-size: 2rem;
+  }
+
+  .planned-hall p {
+    max-width: 44rem;
+    margin: 0;
+    color: var(--muted-foreground);
   }
 
   .project-notes {

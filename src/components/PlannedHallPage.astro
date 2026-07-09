@@ -1,0 +1,34 @@
+---
+import PageHeader from "@/components/PageHeader.astro";
+import Button from "@/components/ui/Button.astro";
+import type { Hall } from "@/lib/catalog/halls";
+
+interface Props {
+  hall: Hall;
+}
+
+const { hall } = Astro.props;
+---
+
+<article class="grid gap-6">
+  <PageHeader
+    eyebrow="Planned Hall"
+    title={hall.title}
+    description={hall.summary}
+    stats={[
+      { label: "状态", value: "装修中" },
+      { label: "合同", value: "未开放" }
+    ]}
+  >
+    <Fragment slot="actions">
+      <Button href="/" variant="outline">返回展馆入口</Button>
+    </Fragment>
+  </PageHeader>
+
+  <section class="planned-hall">
+    <div>
+      <h2>展馆正在规划</h2>
+      <p>这里会先保留入口和方向，不提前设计领域条目合同。等真实内容出现后，再按 schema、loader、脚本和文档一起落地。</p>
+    </div>
+  </section>
+</article>

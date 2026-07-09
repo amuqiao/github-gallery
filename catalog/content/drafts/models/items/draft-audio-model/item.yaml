@@ -1,0 +1,27 @@
+schema_version: 2
+id: draft-audio-model
+hall: models
+kind: ai_model
+title: Draft Audio Model
+summary: 用于验证 drafts 状态不会进入公开内容的模型草稿。
+source:
+  type: manual
+  url: https://example.com/draft-audio-model
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  provider: Example Lab
+  modalities:
+    input:
+      - audio
+    output:
+      - audio
+  tasks:
+    - draft-validation
+  access:
+    - local-inference
+  formats:
+    - onnx
+  runtimes:
+    - onnxruntime
