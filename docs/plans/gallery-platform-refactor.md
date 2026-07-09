@@ -2,7 +2,7 @@
 
 本文记录 Gallery Platform 的下一次破坏性重构计划：把当前“手写 YAML catalog 的静态站”改成“命令创建内容骨架、目录表达发布状态、统一发布前验证”的静态内容发布系统。
 
-本计划只描述未来工作和验收条件。已经实现的事实仍以 `docs/current/`、`docs/contract/` 和可执行 schema/loader/scripts 为准。
+本计划记录当前基线、剩余缺口、实施切片和验收条件。稳定事实仍以 `docs/current/`、`docs/contract/` 和可执行 schema/loader/scripts 为准。
 
 ## Mental Model
 
@@ -65,17 +65,18 @@ Release Gate
 - `scripts/catalog.sh` 当前支持 project list/new/validate、collection 子命令和 project/collection import batch。
 - `docs/contract/catalog-import-batch.md` 当前只允许 `target: project` 和 `target: collection`。
 - `./scripts/verify.sh check` 当前通过 `npm run build` 间接覆盖 hall、model、project、collection、taxonomy、site 和内容引用。
+- 已实现 `./scripts/verify.sh release`，当前通过 `scripts/verify/release-gate.mjs` 调用 `src/lib/catalog/content-validator.js`，再运行 Astro 静态构建。
 
 ## Remaining Gaps
 
 - 用户新增当前公开页面内容时仍需要理解 `project.yaml`、`model.yaml`、`collection.yaml`、`details.md`、`notes[]` 等底层配置关系。
 - `catalog/projects/`、`catalog/models/`、`catalog/collections/` 仍是当前公开页面的数据源；新 `catalog/content/` 尚未替代页面路由。
 - 已实现 `scripts/content.sh` 和 `scripts/content/content-cli.mjs`，支持 content bundle item/collection draft 创建、item note 添加、publish、archive、restore。
-- `publish` 当前委托 `./scripts/verify.sh check`；`archive` 和 `restore` 当前委托 `./scripts/verify.sh catalog`。独立 `verify.sh release` 仍属于后续 slice。
+- `publish` 当前委托 `./scripts/verify.sh release`；`archive` 和 `restore` 当前委托 `./scripts/verify.sh catalog`。
 - 专题的归属不清晰。未来应默认属于某个 hall，平台首页只做聚合展示。
 - import batch 是外部整理结果的安全入口，但不是日常创建内容的主入口。
 - `catalog.sh new` 只能创建 GitHub project，不能统一创建当前公开页面使用的 model、Markdown note、HTML note 或馆内专题。
-- 当前验证命令能发现构建期错误，但还没有独立 `release` 门禁和 content import batch。
+- 当前还没有 content import batch。
 
 ## Planned Work
 
@@ -354,32 +355,14 @@ src/lib/catalog/project-view-models.ts
 
 因为项目未上线，第一版不做 redirect 和兼容页。构建中如果仍有旧页面文件、旧 loader 或旧链接，应失败或在 review 中阻断。
 
-### 7. Build A Real Release Gate
+### 7. Route Public Pages From Published Content
 
-新增推荐发布前入口：
+后续切换公开页面数据源时，必须保证：
 
-```sh
-./scripts/verify.sh release
-```
-
-`release` 至少覆盖：
-
-- hall config schema。
-- content bundle 目录状态。
-- item manifest schema 和 kind profile。
-- collection hall ownership 和 item 引用。
-- published collection 只能引用同 hall 的 published item。
-- Markdown / HTML body 文件存在性。
-- notes 引用文件存在性。
-- symlink 禁止规则。
-- HTML note 的 fragment/standalone 展示约束。
+- 公开详情页只读取 `catalog/content/published/`。
 - draft 内容不会生成公开详情页，不进入公开列表。
 - archived 内容不会生成公开详情页，不进入公开列表。
-- `restore` 只能把 archived 内容移回 drafts。
-- Astro check。
-- static build。
-
-`./scripts/verify.sh release` 是唯一正式发布门禁。`check` 可以继续作为开发期总验证入口；`content.sh publish` 必须委托 `verify.sh release`，不能实现另一套 release-check。
+- `./scripts/verify.sh release` 继续作为唯一正式发布门禁。
 
 ### 8. Update Documentation Buckets Only When Implemented
 
@@ -393,7 +376,7 @@ docs/contract/
   只解释 schema/loader/scripts 已支持的 hall、item、collection、import batch、release gate 合同。
 
 docs/plans/
-  只保留尚未完成的 gaps 和 acceptance。
+  记录当前基线、已完成切片、尚未完成的 gaps 和 acceptance；稳定事实仍以 current/contract 和可执行代码为准。
 
 docs/runbooks/
   只写可以真实执行的创建、编辑、发布、归档、导入和验证流程。
@@ -434,15 +417,22 @@ docs/runbooks/
 - 已实现写操作加锁，验证失败回滚。
 - 已验证 draft item 的 publish -> archive -> restore 状态闭环。
 
-### Slice 5: Import And Release Gate
+### Slice 5: Release Gate
+
+- 已新增 `scripts/verify/release-gate.mjs`。
+- 已新增 `src/lib/catalog/content-validator.js` 作为 content bundle 校验共享入口。
+- 已新增 `./scripts/verify.sh release`。
+- 已让 `content.sh publish` 委托 `verify.sh release`。
+- 已验证当前 content bundle release gate。
+
+### Slice 6: Content Import Batch
 
 - 升级 import batch 到 `content-import-batch`。
 - 默认导入到 drafts。
 - 用户入口迁移为 `content.sh import`。
-- 新增 `verify.sh release`。
 - 给 content CLI 和 import CLI 增加最小脚本验证。
 
-### Slice 6: Documentation And Cleanup
+### Slice 7: Documentation And Cleanup
 
 - 更新 `docs/current/` 为新运行事实。
 - 替换 `docs/contract/project-config.md`、`model-config.md`、`collection-config.md`、`catalog-import-batch.md`。

@@ -6,7 +6,7 @@
 
 ```text
 dev.sh       本地 Astro 开发和 dev server 管理入口
-verify.sh    一次性验证入口
+verify.sh    一次性验证和正式发布门禁入口
 content.sh   content bundle 创建、发布、归档、恢复入口
 catalog.sh   catalog 项目维护入口
   import     .tmp/import-batches 安全导入入口
@@ -20,7 +20,7 @@ deploy.sh    Docker 静态站点部署入口
 | Entrypoint | Owns | Does Not Own |
 | --- | --- | --- |
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、catalog 内容生成。 |
-| `verify.sh` | build/catalog/content 验证，包括 content bundles、halls、models、projects、collections、taxonomy、site 和被引用详情/notes 文件。 | README 或 `docs/` 漂移检查。 |
+| `verify.sh` | build/catalog/content 验证和 release gate，包括 content bundles、halls、models、projects、collections、taxonomy、site 和被引用详情/notes 文件。 | README 或 `docs/` 漂移检查。 |
 | `content.sh` | content bundle item/collection 草稿创建、item note 添加、publish/archive/restore 状态移动。 | import batch、旧 project/root collection 维护、公开页面路由替换。 |
 | `catalog.sh` | project list/validate/new、collection list/show/new/delete/update、import batch validate/plan/diff/apply。 | GitHub API 抓取、taxonomy 自动修改、schema 之外的字段生成、全量替换 catalog。 |
 | `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`（可简写 `pre`）、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status；`up/down` 仅作兼容别名。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
@@ -40,6 +40,7 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
 ./scripts/dev.sh build
 
 ./scripts/verify.sh check
+./scripts/verify.sh release
 ./scripts/verify.sh catalog
 ./scripts/verify.sh content
 
@@ -144,7 +145,9 @@ cp .env.example .env
 
 `catalog` 和 `content` 当前都通过 `npm run build` 触发可执行校验。content bundles、展馆、模型、项目、专题、taxonomy、site 和详情/notes 文件引用都由 schema/loader 在构建期验证。未来如果构建变慢，可以新增更窄的 catalog-only 校验，但仍应复用 schema/loader，不在 shell 里重写合同。
 
-`content.sh` 写入 `catalog/content/drafts/`，并在 `drafts`、`published`、`archived` 之间移动 content bundle。`publish` 会运行 `./scripts/verify.sh check`；`archive` 和 `restore` 会运行 `./scripts/verify.sh catalog`。验证失败时脚本会回滚目录移动或文件写入。
+`verify.sh release` 会先通过 `scripts/verify/release-gate.mjs` 调用 `src/lib/catalog/content-validator.js` 检查 content bundle 发布语义，再运行 Astro 静态构建。release gate 覆盖 publication state 目录、active hall 归属、item/collection schema、body/notes 文件引用、重复 bundle key，以及 published collection 只能引用同 hall published item。
+
+`content.sh` 写入 `catalog/content/drafts/`，并在 `drafts`、`published`、`archived` 之间移动 content bundle。`publish` 会运行 `./scripts/verify.sh release`；`archive` 和 `restore` 会运行 `./scripts/verify.sh catalog`。验证失败时脚本会回滚目录移动或文件写入。
 
 `catalog.sh new` 创建项目后会立即调用 `./scripts/catalog.sh validate`。如果 category、tag、maintenance_status、summary 或引用文件不符合合同，最终由 schema/loader 失败退出。项目 maintenance_status 和 category/tag 一样引用 `catalog/taxonomies.yaml` 中的受控 id。
 

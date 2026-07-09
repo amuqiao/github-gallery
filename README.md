@@ -56,6 +56,7 @@ Requires Node.js 20 or newer.
 npm install
 ./scripts/dev.sh start
 ./scripts/verify.sh check
+./scripts/verify.sh release
 ```
 
 原始 npm 命令仍可直接使用：

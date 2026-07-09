@@ -68,12 +68,14 @@ catalog/halls/<id>/hall.yaml
 
 catalog/content/{drafts,published,archived}/<hall>/items/<id>/item.yaml
   -> src/lib/catalog/catalog-schema.js
+  -> src/lib/catalog/content-validator.js
   -> src/lib/catalog/content.ts
   -> src/pages/index.astro
   -> build-time validation only
 
 catalog/content/{drafts,published,archived}/<hall>/collections/<id>/collection.yaml
   -> src/lib/catalog/catalog-schema.js
+  -> src/lib/catalog/content-validator.js
   -> src/lib/catalog/content.ts
   -> src/pages/index.astro
   -> build-time validation only
@@ -135,6 +137,8 @@ catalog/projects/<id>/project.yaml blocks
   -> static HTML output
 
 scripts/verify.sh
+  -> scripts/verify/release-gate.mjs for release
+  -> src/lib/catalog/content-validator.js for content bundle release rules
   -> npm run build
   -> Astro check
   -> Astro static build
@@ -144,7 +148,8 @@ scripts/content.sh
   -> scripts/content/content-cli.mjs
   -> catalog/content/drafts/ for new item and collection bundles
   -> catalog/content/{drafts,published,archived}/ for publish/archive/restore
-  -> scripts/verify.sh catalog or check
+  -> scripts/verify.sh release for publish
+  -> scripts/verify.sh catalog for archive/restore
   -> rollback on failure
 
 .tmp/import-batches/<batch-id>/manifest.yaml
@@ -188,6 +193,7 @@ UI 样式架构见 [`ui-architecture.md`](ui-architecture.md)。当前实现采�
 
 - `npm run build` 会运行 `astro check` 和 `astro build`。
 - `./scripts/verify.sh check` 是推荐的一次性验证入口，当前委托 `npm run build`。
+- `./scripts/verify.sh release` 是正式发布门禁，先通过 `scripts/verify/release-gate.mjs` 调用 `src/lib/catalog/content-validator.js`，再运行 `npm run build`。
 - 配置违反 schema、引用未知 taxonomy、taxonomy 缺少双语字段、引用缺失文件、引用 symlink 详情或 note 文件、路径越出项目、模型、专题或 content bundle 目录、related project 不存在、专题引用未知项目、专题重复引用同一项目、content collection 引用非法 publication state item 时，构建应失败。
 - `schema_version: 1` 的项目和专题主详情只支持 Markdown；项目 notes 支持 Markdown 和 HTML。
 - `schema_version: 1` 支持 `links`、`highlights`、`use-cases` blocks。

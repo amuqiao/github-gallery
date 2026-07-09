@@ -18,6 +18,7 @@ usage() {
 
 命令：
   check      总验证入口，执行 catalog、content、build。
+  release    发布门禁，执行 content bundle 发布语义检查和静态构建。
   build      执行 npm run build。
   catalog    验证 content bundle、hall、model、project、collection、taxonomy、site config、relations 等 catalog 合同。
   content    验证已被 content/model/project/collection 配置引用的内容资产，例如 body、details.md 和 notes。
@@ -29,6 +30,7 @@ usage() {
 
 常用示例：
   ./scripts/verify.sh check
+  ./scripts/verify.sh release
   ./scripts/verify.sh catalog
   ./scripts/verify.sh content
 
@@ -64,6 +66,20 @@ EOF
   执行 npm run build。
 EOF
       ;;
+    release)
+      cat <<EOF
+用法：
+  ./scripts/verify.sh release
+
+作用域：
+  执行正式发布门禁：先验证 content bundle 的发布语义，再执行 Astro 静态构建。
+
+说明：
+  release gate 通过 src/lib/catalog/content-validator.js 检查 catalog/content/{drafts,published,archived}/ 目录形状、active hall 归属、
+  item/collection schema、body/notes 文件引用、重复 bundle key，以及 published collection 只能引用
+  同一 hall 下的 published item。
+EOF
+      ;;
     catalog)
       cat <<EOF
 用法：
@@ -94,6 +110,11 @@ EOF
 run_build_gate() {
   assert_no_catalog_detail_symlinks
   run_npm_script build
+}
+
+run_release_gate() {
+  require_command node "install Node.js 20 or newer"
+  (cd "$ROOT_DIR" && node scripts/verify/release-gate.mjs)
 }
 
 assert_no_catalog_detail_symlinks() {
@@ -132,6 +153,20 @@ case "$command" in
     event "COVERS" "catalog" "content item.yaml/collection.yaml, hall.yaml, model.yaml, project.yaml, collection.yaml, taxonomy, site config, relations"
     event "COVERS" "content" "configured content body, model, project, and collection details.md/notes references"
     event "COVERS" "build" "astro check and static build"
+    run_build_gate
+    ;;
+  release)
+    shift
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+      command_usage "$command"
+      exit $?
+    fi
+    [[ "$#" -eq 0 ]] || die "unexpected arguments for verify release: $*" 2
+    section "Release Gate"
+    event "COVERS" "content" "published content item.yaml/collection.yaml, hall ownership, body/notes references"
+    event "COVERS" "relations" "published collections only reference published items in the same hall"
+    event "COVERS" "build" "astro check and static build"
+    run_release_gate
     run_build_gate
     ;;
   build)

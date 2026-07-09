@@ -60,7 +60,7 @@ function usage() {
   ./scripts/content.sh archive <hall> <item|collection> <id>
   ./scripts/content.sh restore <hall> <item|collection> <id>
 
-写操作会加 catalog write lock，并在写后运行验证。publish 使用 ./scripts/verify.sh check。`);
+写操作会加 catalog write lock，并在写后运行验证。publish 使用 ./scripts/verify.sh release。`);
 }
 
 function parseOptions(args, allowedOptions = new Set(), booleanOptions = new Set()) {
@@ -629,7 +629,7 @@ async function runCommand() {
   }
 
   if (scope === "publish") {
-    await moveBundle([command, ...args], "drafts", "published", "check", "PUBLISHED");
+    await moveBundle([command, ...args], "drafts", "published", "release", "PUBLISHED");
     return;
   }
 

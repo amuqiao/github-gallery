@@ -101,7 +101,7 @@ Note commands only write to draft items. To edit a published item, archive or re
 
 Rules:
 
-- `publish` moves a bundle from `drafts` to `published` and runs `./scripts/verify.sh check`.
+- `publish` moves a bundle from `drafts` to `published` and runs `./scripts/verify.sh release`.
 - `archive` moves a bundle from `published` to `archived` and runs `./scripts/verify.sh catalog`.
 - `restore` moves a bundle from `archived` to `drafts` and runs `./scripts/verify.sh catalog`.
 - `restore` never publishes directly. Publish again after editing.
@@ -110,5 +110,4 @@ Rules:
 ## Boundaries
 
 - This workflow does not implement `content.sh import`.
-- This workflow does not implement `./scripts/verify.sh release`.
 - Current public pages still use the old project/model/root collection loaders until the route replacement slice.

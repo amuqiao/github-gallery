@@ -122,11 +122,11 @@ catalog/content/published/github/collections/voice-cloning/
 ./scripts/content.sh restore <hall> <item|collection> <id>
 ```
 
-`item new` 和 `collection new` 写入 `drafts`。`publish` 从 `drafts` 移到 `published` 并运行 `./scripts/verify.sh check`。`archive` 从 `published` 移到 `archived`。`restore` 从 `archived` 移回 `drafts`，不会直接发布。
+`item new` 和 `collection new` 写入 `drafts`。`publish` 从 `drafts` 移到 `published` 并运行 `./scripts/verify.sh release`。`archive` 从 `published` 移到 `archived`。`restore` 从 `archived` 移回 `drafts`，不会直接发布。
 
 ## Verification
 
-`src/pages/index.astro` 会在构建期调用 `getContentCatalogSnapshot()`，因此 `./scripts/verify.sh check`、`catalog` 和 `content` 都会触发 content bundle 校验。
+`src/pages/index.astro` 会在构建期调用 `getContentCatalogSnapshot()`，因此 `./scripts/verify.sh check`、`catalog`、`content` 和 `release` 都会触发 content bundle 校验。`release` 还会先通过 `scripts/verify/release-gate.mjs` 调用 `src/lib/catalog/content-validator.js`，作为正式发布门禁。
 
 校验覆盖：
 
@@ -139,3 +139,7 @@ catalog/content/published/github/collections/voice-cloning/
 - body 和 notes 文件存在，且不是 symlink。
 - body 和 notes 路径不能越出内容包目录。
 - collection item 引用和 publication state 规则。
+- 同一 `(hall, id)` item 或 collection 不能跨 publication state 重复出现。
+- published collection 只能引用同一 hall 下的 published item。
+
+`release` 的特有行为是先运行上述 content bundle gate，再运行 Astro check 和 static build。
