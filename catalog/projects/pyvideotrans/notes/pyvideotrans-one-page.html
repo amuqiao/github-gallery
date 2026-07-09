@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 pyVideoTrans · 开源视频翻译配音工具全解析</title>
+<style>
+  :root{
+    --bg:#101418;          /* 影院深灰 */
+    --panel:#1a2028;       /* 面板 */
+    --paper:#f6f4ef;       /* 正文底：暖纸白 */
+    --card:#ffffff;
+    --ink:#20242c;
+    --ink-soft:#5b6270;
+    --line:#e4e1d8;
+    --sub:#ffd24a;         /* 字幕黄 */
+    --asr:#4c8dff;         /* 蓝：识别 */
+    --trans:#9a6bff;       /* 紫：翻译 */
+    --tts:#ff7a59;         /* 珊瑚：配音 */
+    --merge:#2bb886;       /* 绿：合成 */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+    line-height:1.9;
+  }
+  ::selection{background:#ffd24a66}
+  a{color:#3568d4;text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{
+    background:#eceade;border-radius:5px;padding:2px 7px;
+    font-family:"SF Mono",Consolas,"Courier New",monospace;
+    font-size:.88em;color:#8a4b12;
+  }
+  pre{
+    background:#14181e;color:#d7dde8;border-radius:12px;
+    padding:18px 20px;overflow-x:auto;font-size:13.5px;line-height:1.7;
+    margin:14px 0;
+  }
+  pre code{background:none;color:inherit;padding:0}
+  pre .c{color:#6b7684}  pre .k{color:#ffd24a}
+
+  /* ============ HERO：视频播放器 ============ */
+  header{background:var(--bg);color:#e8ebf0;padding:64px 24px 72px}
+  .hero{max-width:980px;margin:0 auto}
+  .eyebrow{letter-spacing:.35em;font-size:12px;color:#8b95a5;margin-bottom:16px}
+  h1{
+    font-family:"Noto Serif SC","Songti SC","SimSun",serif;
+    font-size:clamp(32px,5.5vw,54px);font-weight:800;line-height:1.3;
+  }
+  h1 em{font-style:normal;color:var(--sub)}
+  .hero-sub{margin-top:18px;max-width:660px;color:#aeb6c4;font-size:16.5px}
+  .hero-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+  .tag{border:1px solid #3a4452;border-radius:999px;padding:4px 14px;font-size:13px;color:#9aa5b6}
+
+  /* 模拟播放器 */
+  .player{
+    margin-top:44px;background:#000;border-radius:16px;overflow:hidden;
+    border:1px solid #2a323e;box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .screen{
+    position:relative;height:230px;
+    background:
+      radial-gradient(ellipse at 30% 20%,#27405e 0%,transparent 55%),
+      radial-gradient(ellipse at 75% 70%,#3d2a55 0%,transparent 55%),
+      #0b0e13;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .lang-flow{
+    display:flex;align-items:center;gap:22px;font-family:"Noto Serif SC",serif;
+    font-size:clamp(20px,4vw,30px);font-weight:700;
+  }
+  .lang-flow .zh{color:#fff}
+  .lang-flow .en{color:var(--sub)}
+  .lang-flow .arr{color:#6f7c8f;font-size:.8em}
+  .subline{
+    position:absolute;bottom:16px;left:0;right:0;text-align:center;
+    font-size:14px;line-height:1.6;
+  }
+  .subline .l1{color:#fff;text-shadow:0 1px 3px #000}
+  .subline .l2{color:var(--sub);text-shadow:0 1px 3px #000}
+  .ctrl{
+    display:flex;align-items:center;gap:14px;background:#14181e;
+    padding:12px 18px;font-size:12px;color:#7d8797;
+  }
+  .ctrl .play{
+    width:30px;height:30px;border-radius:50%;background:var(--sub);
+    display:flex;align-items:center;justify-content:center;color:#111;font-size:12px;flex:none;
+  }
+  .bar{flex:1;height:4px;background:#2a323e;border-radius:2px;position:relative;overflow:hidden}
+  .bar::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:38%;
+    background:linear-gradient(90deg,var(--asr),var(--trans),var(--tts));border-radius:2px;
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .bar::before{animation:load 6s linear infinite}
+    @keyframes load{from{width:5%}to{width:96%}}
+  }
+
+  /* ============ 目录 ============ */
+  nav.toc{
+    max-width:980px;margin:-36px auto 0;padding:0 24px;position:relative;z-index:2;
+  }
+  .toc-inner{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:16px 22px;display:flex;flex-wrap:wrap;gap:6px 18px;
+    box-shadow:0 8px 24px rgba(20,20,30,.08);font-size:14px;
+  }
+  .toc-inner b{color:var(--ink-soft);font-weight:600}
+
+  /* ============ 主体 ============ */
+  main{max-width:980px;margin:0 auto;padding:56px 24px 80px}
+  section{margin-bottom:76px}
+  h2{
+    font-family:"Noto Serif SC","Songti SC",serif;
+    font-size:28px;margin-bottom:6px;display:flex;align-items:center;gap:12px;
+  }
+  h2 .no{
+    font-family:"SF Mono",Consolas,monospace;font-size:14px;color:#b3aa8c;
+    border:1.5px solid #d8d2bd;border-radius:8px;padding:2px 9px;flex:none;
+  }
+  .h2-note{color:var(--ink-soft);font-size:14px;margin-bottom:22px}
+  h3{font-size:18px;margin:28px 0 10px;padding-left:12px;border-left:4px solid var(--sub)}
+  p{margin-bottom:14px}
+  strong{color:#111}
+
+  /* 卡片 */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:18px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px;box-shadow:0 1px 3px rgba(20,20,30,.04);
+  }
+  .card h4{font-size:15.5px;margin-bottom:6px}
+  .card p{font-size:13.5px;color:var(--ink-soft);margin:0}
+  .card .icon{font-size:21px;display:block;margin-bottom:8px}
+
+  /* 流水线 */
+  .pipe{margin-top:22px;display:flex;flex-direction:column}
+  .pnode{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:14px 18px;display:flex;gap:16px;align-items:flex-start;
+  }
+  .pnode .pnum{
+    flex:none;width:34px;height:34px;border-radius:9px;color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;
+    font-family:"SF Mono",Consolas,monospace;margin-top:2px;
+  }
+  .pnode h4{font-size:15.5px}
+  .pnode h4 small{font-weight:400;color:#98a; color:var(--ink-soft);font-size:12px;margin-left:8px;font-family:Consolas,monospace}
+  .pnode p{font-size:13.5px;color:var(--ink-soft);margin:2px 0 0}
+  .parr{text-align:center;color:#b9b2a0;font-size:16px;line-height:1;padding:6px 0}
+  .c-pre .pnum{background:#6b7280}.c-asr .pnum{background:var(--asr)}
+  .c-trans .pnum{background:var(--trans)}.c-tts .pnum{background:var(--tts)}
+  .c-merge .pnum{background:var(--merge)}
+
+  /* 表格 */
+  table{
+    width:100%;border-collapse:collapse;margin-top:16px;background:var(--card);
+    border-radius:12px;overflow:hidden;font-size:14px;
+  }
+  th,td{padding:11px 15px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#20242c;color:#f0ead2;font-weight:600;font-size:13px}
+  tr:last-child td{border-bottom:none}
+  td:first-child{font-weight:600;white-space:nowrap}
+  .yes{color:var(--merge);font-weight:700}
+  .no2{color:#c0392b;font-weight:700}
+  .opt{color:#b08a1e;font-weight:700}
+
+  /* 提示框 */
+  .note{
+    border-left:5px solid var(--sub);background:#fbf4dc;border-radius:0 12px 12px 0;
+    padding:15px 20px;font-size:14px;color:#5d4d15;margin-top:18px;
+  }
+  .note strong{color:#7a5c00}
+  .note.blue{border-color:var(--asr);background:#e8f0fe;color:#25457e}
+  .note.blue strong{color:#1d3a75}
+
+  /* 步骤 */
+  ol.steps{counter-reset:s;list-style:none;margin-top:14px}
+  ol.steps li{position:relative;padding:0 0 22px 52px}
+  ol.steps li::before{
+    counter-increment:s;content:counter(s);
+    position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50%;
+    background:var(--ink);color:var(--sub);font-weight:800;
+    display:flex;align-items:center;justify-content:center;font-size:15px;
+  }
+  ol.steps li:not(:last-child)::after{
+    content:"";position:absolute;left:16px;top:40px;bottom:0;width:2px;background:var(--line);
+  }
+  ol.steps h4{font-size:15.5px;margin-bottom:2px}
+  ol.steps p{font-size:13.5px;color:var(--ink-soft);margin:0}
+
+  footer{background:var(--bg);color:#7d8797;text-align:center;padding:30px 24px;font-size:13px;line-height:2}
+  @media(max-width:640px){ .screen{height:190px} }
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<header>
+  <div class="hero">
+    <div class="eyebrow">OPEN SOURCE · VIDEO TRANSLATION</div>
+    <h1>一文读懂 <em>pyVideoTrans</em><br>让任何视频「开口说」另一种语言</h1>
+    <p class="hero-sub">
+      pyVideoTrans 是 <strong style="color:#fff">jianchang512</strong> 开发的开源视频翻译配音工具：
+      导入一个视频，它自动完成 <strong style="color:#fff">语音识别 → 字幕翻译 → AI 配音 → 音画同步合成</strong> 全流程，
+      产出带目标语言字幕和配音的新视频。支持本地离线运行，也支持接入各类主流在线 API。
+    </p>
+    <div class="hero-meta">
+      <span class="tag">GPL-3.0 开源</span>
+      <span class="tag">Windows / macOS / Linux</span>
+      <span class="tag">Python 3.10+ · PySide6</span>
+      <span class="tag">GUI · CLI · WebUI · Docker</span>
+    </div>
+
+    <!-- 模拟播放器 -->
+    <div class="player" aria-hidden="true">
+      <div class="screen">
+        <div class="lang-flow">
+          <span class="zh">中文视频</span>
+          <span class="arr">➜</span>
+          <span class="en">English Video</span>
+        </div>
+        <div class="subline">
+          <div class="l1">这是一段自动生成的双语字幕</div>
+          <div class="l2">This is an auto-generated bilingual subtitle</div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="play">▶</div>
+        <div class="bar"></div>
+        <span>识别 → 翻译 → 配音 → 合成</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- 目录 -->
+<nav class="toc">
+  <div class="toc-inner">
+    <b>本文导航</b>
+    <a href="#what">① 它是什么</a>
+    <a href="#features">② 核心功能</a>
+    <a href="#pipeline">③ 九阶段流水线</a>
+    <a href="#modes">④ 工作模式</a>
+    <a href="#arch">⑤ 内部架构</a>
+    <a href="#engines">⑥ 引擎生态</a>
+    <a href="#install">⑦ 安装使用</a>
+    <a href="#tips">⑧ 实战建议</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- ① 它是什么 -->
+<section id="what">
+  <h2><span class="no">01</span>它是什么？解决什么问题？</h2>
+  <p class="h2-note">一句话：视频界的「全自动翻译流水线」</p>
+  <p>
+    想把一部中文教程视频发到 YouTube 面向英语观众，传统做法要：听录逐句文稿 → 人工翻译 → 找配音或自己念 → 剪辑对轨 → 压制字幕。
+    一个 10 分钟视频可能耗掉一整天。
+  </p>
+  <p>
+    <strong>pyVideoTrans 把这条链路整个自动化了。</strong>你只需选择视频、源语言、目标语言和一个配音声音，点击开始，
+    软件依次完成音频分离、语音识别（ASR）、字幕翻译、语音合成（TTS）、音画对齐和最终合成，最后输出一个
+    「说着目标语言、带目标语言字幕」的新视频。
+  </p>
+  <p>它的三个关键设计取向：</p>
+  <div class="cards">
+    <div class="card">
+      <span class="icon">🧩</span>
+      <h4>模块化 · 每一环都可换</h4>
+      <p>识别、翻译、配音三大环节各自支持二十多种渠道/模型，本地模型与在线 API 自由组合，不被任何单一服务绑死。</p>
+    </div>
+    <div class="card">
+      <span class="icon">🔒</span>
+      <h4>可完全离线</h4>
+      <p>Faster-Whisper 识别 + Ollama/M2M100 翻译 + 本地 TTS，全流程可在本机跑通，隐私敏感素材不出电脑。</p>
+    </div>
+    <div class="card">
+      <span class="icon">🎛️</span>
+      <h4>可暂停校对</h4>
+      <p>识别、翻译、配音每个阶段都可以暂停下来人工修改字幕再继续，兼顾自动化效率与成品质量。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ② 核心功能 -->
+<section id="features">
+  <h2><span class="no">02</span>核心功能一览</h2>
+  <p class="h2-note">不只是「视频翻译」，更是一个音视频处理工具箱</p>
+  <div class="cards">
+    <div class="card">
+      <span class="icon">🎥</span>
+      <h4>全自动视频翻译</h4>
+      <p>一键完成 ASR → 翻译 → TTS → 合成的完整链路，这是软件的主功能（标准模式）。</p>
+    </div>
+    <div class="card">
+      <span class="icon">📝</span>
+      <h4>音视频转字幕</h4>
+      <p>批量把音频/视频转成 SRT 字幕，支持<strong>说话人分离</strong>（Speaker Diarization），自动区分「谁在说话」。</p>
+    </div>
+    <div class="card">
+      <span class="icon">🗣️</span>
+      <h4>多角色 AI 配音</h4>
+      <p>为不同说话人分配不同配音音色——访谈、对话类视频不再「一个声音念到底」。</p>
+    </div>
+    <div class="card">
+      <span class="icon">🧬</span>
+      <h4>声音克隆配音</h4>
+      <p>集成 F5-TTS、CosyVoice、GPT-SoVITS 等零样本克隆模型，可从原视频截取参考片段，让配音保留「原声音色」。</p>
+    </div>
+    <div class="card">
+      <span class="icon">🌐</span>
+      <h4>字幕翻译</h4>
+      <p>单独翻译 SRT 字幕文件，支持传统机器翻译和 LLM 翻译（可结合上下文，译文更自然），可输出双语字幕。</p>
+    </div>
+    <div class="card">
+      <span class="icon">🔊</span>
+      <h4>字幕配音</h4>
+      <p>拿一份 SRT 字幕直接合成整段配音音频，常用于给已有字幕的视频补配音。</p>
+    </div>
+    <div class="card">
+      <span class="icon">🛠️</span>
+      <h4>辅助工具箱</h4>
+      <p>人声/背景音分离、音视频合并、字幕嵌入、音画对齐、文稿匹配等一批实用小工具。</p>
+    </div>
+    <div class="card">
+      <span class="icon">💻</span>
+      <h4>四种使用形态</h4>
+      <p>图形界面（GUI）、命令行（CLI，适合服务器批处理）、浏览器 WebUI（远程/内网）、Docker 容器化部署。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ③ 流水线 -->
+<section id="pipeline">
+  <h2><span class="no">03</span>工作原理：九阶段处理流水线</h2>
+  <p class="h2-note">理解了这条流水线，就理解了整个项目（官方架构文档 v4.03）</p>
+  <p>
+    软件把「视频翻译配音」拆解为 <strong>9 个独立阶段</strong>，像工厂流水线一样依次执行。
+    每个阶段职责单一、可被跳过——这正是它能衍生出多种工作模式的原因。颜色对应四大环节：
+    <span style="color:var(--asr);font-weight:700">■ 识别</span>
+    <span style="color:var(--trans);font-weight:700">■ 翻译</span>
+    <span style="color:var(--tts);font-weight:700">■ 配音</span>
+    <span style="color:var(--merge);font-weight:700">■ 合成</span>。
+  </p>
+
+  <div class="pipe">
+    <div class="pnode c-pre">
+      <div class="pnum">①</div>
+      <div><h4>预处理 <small>prepare()</small></h4>
+      <p>用 FFmpeg 把视频拆成「无声视频流 + 原始音频流」；可选人声/背景分离（UVR / Spleeter）与降噪；建立缓存目录。</p></div>
+    </div>
+    <div class="parr">▼</div>
+    <div class="pnode c-asr">
+      <div class="pnum">②</div>
+      <div><h4>语音识别 <small>recogn()</small></h4>
+      <p>调用 ASR 引擎（默认 Faster-Whisper，共支持 22 种渠道）把音频转成<strong>带时间戳的 SRT 字幕</strong>；可选标点恢复、LLM 智能重新断句。</p></div>
+    </div>
+    <div class="parr">▼</div>
+    <div class="pnode c-asr">
+      <div class="pnum">③</div>
+      <div><h4>说话人分离 <small>diariz()</small></h4>
+      <p>用 pyannote、阿里 CAM++ 等模型给每条字幕标注说话人（spk），为多角色配音做准备。此步失败不会阻断整体流程。</p></div>
+    </div>
+    <div class="parr">▼</div>
+    <div class="pnode c-trans">
+      <div class="pnum">④</div>
+      <div><h4>字幕翻译 <small>trans()</small></h4>
+      <p>把源语言字幕翻译为目标语言（支持 24 种翻译渠道：DeepSeek、ChatGPT、Gemini、谷歌、微软、本地 Ollama 等），可生成双语字幕。</p></div>
+    </div>
+    <div class="parr">▼</div>
+    <div class="pnode c-tts">
+      <div class="pnum">⑤</div>
+      <div><h4>配音 <small>dubbing()</small></h4>
+      <p>按目标字幕逐条调用 TTS 引擎（34 种渠道）合成语音；克隆类引擎可自动从原音频截取参考片段来复刻原声音色。</p></div>
+    </div>
+    <div class="parr">▼</div>
+    <div class="pnode c-tts">
+      <div class="pnum">⑥</div>
+      <div><h4>音画对齐 <small>align()</small></h4>
+      <p><strong>最见功力的一步。</strong>翻译后句子长度必然变化（中译英通常变长），软件通过「配音加速 + 视频慢放 + 去除字幕间隙静音 + 强制对齐」组合策略，让新配音精确贴合原画面口型节奏。</p></div>
+    </div>
+    <div class="parr">▼</div>
+    <div class="pnode c-asr">
+      <div class="pnum">⑦</div>
+      <div><h4>二次识别 <small>recogn2pass()</small></h4>
+      <p>对合成好的配音再做一次 ASR，重新生成时间轴更精确、句子更短小的字幕——保证最终字幕与配音严丝合缝。</p></div>
+    </div>
+    <div class="parr">▼</div>
+    <div class="pnode c-merge">
+      <div class="pnum">⑧</div>
+      <div><h4>最终合成 <small>assembling()</small></h4>
+      <p>FFmpeg 把无声视频流、新配音、背景音乐、目标字幕合并为成品视频（字幕可硬嵌或软封装）。</p></div>
+    </div>
+    <div class="parr">▼</div>
+    <div class="pnode c-merge">
+      <div class="pnum">⑨</div>
+      <div><h4>收尾 <small>task_done()</small></h4>
+      <p>把成品从临时目录移入输出目录，清理缓存，发送完成通知。</p></div>
+    </div>
+  </div>
+
+  <div class="note blue">
+    <strong>为什么要「人声分离」？</strong>如果视频有背景音乐，直接替换音轨会把 BGM 一起丢掉。
+    先把人声和背景分开，只翻译替换人声，最后再把原背景音乐合回去——成品听感自然得多。
+  </div>
+</section>
+
+<!-- ④ 模式 -->
+<section id="modes">
+  <h2><span class="no">04</span>五个开关 = 多种工作模式</h2>
+  <p class="h2-note">流水线之所以灵活，靠的是 5 个布尔标志位</p>
+  <p>
+    每个任务创建时会根据你的配置自动算出 5 个标志位，决定哪些阶段被执行、哪些被跳过
+    （定义于 <code>videotrans/task/_base.py</code>）：
+  </p>
+<pre><code><span class="k">should_recogn</span>    <span class="c"># 需要语音识别吗？（没有现成字幕 → True）</span>
+<span class="k">should_trans</span>     <span class="c"># 需要翻译吗？（源语言 ≠ 目标语言 → True）</span>
+<span class="k">should_dubbing</span>   <span class="c"># 需要配音吗？（选择了配音角色 → True）</span>
+<span class="k">should_hebing</span>    <span class="c"># 需要合并嵌入吗？（有配音或需嵌字幕 → True）</span>
+<span class="k">should_separate</span>  <span class="c"># 需要人声/背景分离吗？</span></code></pre>
+  <p>不同的开关组合，就「拼」出了软件菜单里的各种功能：</p>
+  <table>
+    <thead><tr><th>功能</th><th>识别</th><th>翻译</th><th>配音</th><th>合并</th></tr></thead>
+    <tbody>
+      <tr><td>视频翻译配音（标准模式）</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>音视频转字幕（提取模式）</td><td class="yes">✓</td><td class="opt">可选</td><td class="no2">✗</td><td class="no2">✗</td></tr>
+      <tr><td>字幕配音</td><td class="no2">✗</td><td class="no2">✗</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>仅翻译字幕文件</td><td class="no2">✗</td><td class="yes">✓</td><td class="no2">✗</td><td class="no2">✗</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:14px">
+    这是一种很值得学习的工程设计：<strong>不为每个功能写一套代码，而是用一条流水线 + 开关组合覆盖所有场景</strong>，
+    新功能往往只是一种新的开关组合。
+  </p>
+</section>
+
+<!-- ⑤ 架构 -->
+<section id="arch">
+  <h2><span class="no">05</span>内部架构：多线程「生产者-消费者」</h2>
+  <p class="h2-note">批量处理 100 个视频时，它是怎么不卡界面、还能并行的？</p>
+  <p>
+    软件基于 <strong>多队列 + 专职工作线程</strong> 的经典生产者-消费者模式（PySide6 的 <code>QThread</code>）：
+  </p>
+  <ol class="steps">
+    <li><h4>生产者投料</h4>
+      <p><code>MultVideo</code> 线程把每个视频封装为任务对象，推入第一个队列 <code>prepare_queue</code>。</p></li>
+    <li><h4>九类专职 Worker 接力</h4>
+      <p>每个处理阶段对应一类 Worker 线程（WorkerPrepare、WorkerRegcon、WorkerTrans、WorkerDubb、WorkerAlign、WorkerAssemb……），各自只盯自己的专属队列，取到任务就处理。</p></li>
+    <li><h4>按开关智能路由</h4>
+      <p>Worker 干完活后，根据任务的标志位决定「下一跳」：比如翻译完成后，有配音角色就丢进 <code>dubb_queue</code>，没有就直接跳到合成或收尾队列。</p></li>
+    <li><h4>统一容错</h4>
+      <p>所有 Worker 继承同一个 <code>BaseWorker</code> 基类，异常被统一捕获并翻译成用户可读的错误提示；单个任务失败不影响队列中的其他任务。</p></li>
+  </ol>
+  <p>
+    这带来两个直观好处：<strong>① 流水线并行</strong>——第 1 个视频在配音时，第 2 个视频可以同时在做识别，批量效率高；
+    <strong>② 界面不冻结</strong>——所有重活都在后台线程，主线程只负责 UI 与进度信号。
+  </p>
+  <div class="note">
+    <strong>技术栈速览：</strong>Python 3.10+ · GUI 用 PySide6（Qt）· 音视频处理靠 FFmpeg ·
+    本地识别用 faster-whisper · WebUI 基于 Gradio · 任务配置用分层 dataclass 体系（TaskCfgBase → STT/TTS/STS → VTT）。
+  </div>
+</section>
+
+<!-- ⑥ 引擎生态 -->
+<section id="engines">
+  <h2><span class="no">06</span>引擎生态：三大环节、几十种渠道</h2>
+  <p class="h2-note">识别 22 种 · 翻译 24 种 · 配音 34 种（部分列举）</p>
+  <table>
+    <thead><tr><th style="width:110px">环节</th><th style="width:220px">代表渠道 / 模型</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr>
+        <td rowspan="3" style="color:var(--asr)">🎙️ ASR<br>语音识别</td>
+        <td><strong>Faster-Whisper</strong>（本地）</td>
+        <td>官方推荐默认，速度快、准确率高，完全离线；有 GPU 更快。</td>
+      </tr>
+      <tr><td>WhisperX / Parakeet</td><td>支持精确时间戳对齐与说话人分离。</td></tr>
+      <tr><td>阿里 Qwen3-ASR / 字节火山 / Azure / Google</td><td>在线 API，中文识别效果尤佳（阿里、字节）。</td></tr>
+      <tr>
+        <td rowspan="3" style="color:var(--trans)">🌐 翻译</td>
+        <td><strong>DeepSeek / ChatGPT / Claude / Gemini</strong></td>
+        <td>LLM 翻译，能结合上下文，译文自然、术语更一致，是质量首选。</td>
+      </tr>
+      <tr><td>Google / 微软翻译</td><td>传统机器翻译，速度快、免费额度友好。</td></tr>
+      <tr><td>Ollama / M2M100</td><td>完全本地离线翻译，隐私场景适用。</td></tr>
+      <tr>
+        <td rowspan="3" style="color:var(--tts)">🔊 TTS<br>语音合成</td>
+        <td><strong>Edge-TTS</strong></td>
+        <td>微软免费接口，音色自然、语种多，零成本上手首选。</td>
+      </tr>
+      <tr><td><strong>F5-TTS / CosyVoice / GPT-SoVITS</strong></td><td>开源声音克隆方案，需本地部署，可复刻原视频说话人音色。</td></tr>
+      <tr><td>OpenAI / Azure / 302.AI / ChatTTS / MiniMax</td><td>商业 API 或开源模型，音质上限高。</td></tr>
+    </tbody>
+  </table>
+  <div class="note">
+    <strong>零成本组合参考：</strong>Faster-Whisper（本地识别）＋ Google 翻译 ＋ Edge-TTS（免费配音）——
+    不花一分钱、不需要任何 API Key 就能跑通完整视频翻译。追求质量时再把翻译换成 DeepSeek/ChatGPT、配音换成克隆模型。
+  </div>
+</section>
+
+<!-- ⑦ 安装使用 -->
+<section id="install">
+  <h2><span class="no">07</span>安装与使用</h2>
+  <p class="h2-note">从「双击就能用」到「服务器批量部署」</p>
+
+  <h3>方式一：Windows 整合包（最简单）</h3>
+  <ol class="steps">
+    <li><h4>下载</h4><p>到 GitHub Releases 页面下载预打包版本（Win 10/11，免装 Python）。</p></li>
+    <li><h4>解压</h4><p>解压到<strong>不含中文和空格</strong>的路径，如 <code>D:\pyVideoTrans</code>（不要在压缩包里直接运行）。</p></li>
+    <li><h4>启动</h4><p>双击 <code>sp.exe</code>。想用 GPU 加速需安装 CUDA 12.8 与 cuDNN 9.11。</p></li>
+  </ol>
+
+  <h3>方式二：源码部署（macOS / Linux / 开发者）</h3>
+  <p>官方推荐用 <code>uv</code> 管理环境；前置要求：Python 3.10、FFmpeg（须在 PATH 中）。</p>
+<pre><code><span class="c"># 1. 安装 FFmpeg（macOS 示例：brew install ffmpeg libsndfile git）</span>
+<span class="c"># 2. 克隆并安装依赖</span>
+git clone https://github.com/jianchang512/pyvideotrans.git
+cd pyvideotrans
+uv sync
+
+<span class="c"># 3. 启动图形界面</span>
+uv run sp.py</code></pre>
+
+  <h3>方式三：命令行 CLI（服务器 / 批处理）</h3>
+<pre><code><span class="c"># 视频翻译：中文 → 英文，用指定配音角色</span>
+uv run cli.py --task <span class="k">vtv</span> --name "./video.mp4" \
+  --source_language_code zh-cn --target_language_code en \
+  --voice_role "en-US-GuyNeural"
+
+<span class="c"># 音频转字幕</span>
+uv run cli.py --task <span class="k">stt</span> --name "./audio.wav" --model_name large-v3
+
+<span class="c"># 翻译字幕文件</span>
+uv run cli.py --task <span class="k">sts</span> --name "./subs.srt" --target_language_code en
+
+<span class="c"># 字幕转语音</span>
+uv run cli.py --task <span class="k">tts</span> --name "./subs.srt" --voice_role "zh-CN-YunyangNeural"</code></pre>
+  <p style="font-size:13.5px;color:var(--ink-soft)">
+    四个任务代号即四种核心模式：<code>vtv</code> 视频翻译、<code>stt</code> 语音转字幕、<code>sts</code> 字幕翻译、<code>tts</code> 字幕配音。
+  </p>
+
+  <h3>方式四：WebUI / Docker（远程与容器化）</h3>
+<pre><code><span class="c"># WebUI（基于 Gradio，浏览器访问，适合内网共享）</span>
+uv sync --extra webui
+uv run webui.py
+
+<span class="c"># Docker 部署</span>
+docker build -t pyvideotrans-webui .
+docker run -d -p 7860:7860 --name pyvideotrans pyvideotrans-webui</code></pre>
+</section>
+
+<!-- ⑧ 建议 -->
+<section id="tips">
+  <h2><span class="no">08</span>实战建议与常见坑</h2>
+  <p class="h2-note">来自文档与社区的高频经验</p>
+  <div class="cards">
+    <div class="card">
+      <span class="icon">🎧</span>
+      <h4>源音频质量决定上限</h4>
+      <p>识别是整条链路的第一环，嘈杂/带混响的音频会让后续全部走偏。BGM 重的视频务必勾选人声分离。</p>
+    </div>
+    <div class="card">
+      <span class="icon">✍️</span>
+      <h4>善用「暂停校对」</h4>
+      <p>在识别和翻译完成后暂停，花几分钟人工修正字幕，成品质量远高于全自动一把梭。</p>
+    </div>
+    <div class="card">
+      <span class="icon">⏱️</span>
+      <h4>理解音画对齐的取舍</h4>
+      <p>译文变长时只能「配音加速」或「视频慢放」，两者都开由软件自动平衡；语速要求高的内容建议先精简译文。</p>
+    </div>
+    <div class="card">
+      <span class="icon">🖥️</span>
+      <h4>GPU 不是必需但很值</h4>
+      <p>CPU 也能跑，但 Faster-Whisper 在 NVIDIA GPU（CUDA）下速度提升数倍；长视频批量处理强烈建议上 GPU。</p>
+    </div>
+    <div class="card">
+      <span class="icon">🈶</span>
+      <h4>路径避开中文与空格</h4>
+      <p>Windows 下软件目录和素材路径尽量使用纯英文路径，可避开大量 FFmpeg 相关的诡异报错。</p>
+    </div>
+    <div class="card">
+      <span class="icon">📖</span>
+      <h4>遇到报错先查文档</h4>
+      <p>官方文档 pyvideotrans.com 与问答社区 bbs.pyvideotrans.com 覆盖了绝大多数 FAQ，社区支持把错误日志交给 AI 自动分析。</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>版权与合规提醒：</strong>本项目为开源免费的非商业项目（GPL-3.0）。翻译他人视频、调用第三方 API 产生的法律责任由使用者自行承担——
+    处理有版权的视频内容前请确认授权，遵守当地法规与各服务商条款。
+  </div>
+
+  <h3>一段话总结</h3>
+  <p>
+    pyVideoTrans 的本质是一条<strong>可自由换件的视频本地化流水线</strong>：
+    九个阶段各司其职，五个开关组合出全部功能，几十种识别/翻译/配音引擎即插即用，
+    从「双击 exe 的小白」到「Docker 批量部署的团队」都能找到自己的用法。
+    如果你有跨语言分发视频内容的需求，它几乎是目前开源世界里最完整的一站式方案。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  《一文读懂 pyVideoTrans》 · 内容依据项目 README 与官方架构文档（v4.03）整理<br>
+  项目地址：github.com/jianchang512/pyvideotrans · 文档：pyvideotrans.com · 作者：jianchang512
+</footer>
+
+</body>
+</html>

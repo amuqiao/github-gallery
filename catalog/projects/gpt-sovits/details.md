@@ -1,8 +1,14 @@
 # GPT-SoVITS
 
-GPT-SoVITS is included as a sample GitHub Gallery entry for an AI audio project with a WebUI, training workflow, and voice cloning use case.
+GPT-SoVITS 是一个面向少样本语音克隆和文本转语音实验的开源项目。它把素材准备、文本标注、语音特征提取、模型训练和推理 WebUI 串成一条相对完整的工作流，适合用来理解现代开源 TTS 项目的端到端流程。
 
-## Notes
+## 适合关注什么
 
-- Treat the `project.yaml` file as the machine-readable source for cards, filters, and project routes.
-- Use this Markdown file for longer human-readable notes, evaluation, screenshots, and links that do not need to become filterable fields.
+- 少样本音色克隆和语音合成的基础流程。
+- WebUI、数据预处理、训练和推理之间的协作方式。
+- GPT、SoVITS 等组件在语音生成链路中的分工。
+- 本地实验时的素材质量、标注质量和推理参数对输出结果的影响。
+
+## 使用边界
+
+GPT-SoVITS 更适合作为学习、实验和原型验证工具。真实生产使用时，还需要额外评估声音授权、素材来源、输出稳定性、推理成本、部署环境和生成内容合规风险。

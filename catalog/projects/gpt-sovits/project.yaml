@@ -65,3 +65,10 @@ notes:
     summary: 一篇使用本站页面壳层承载的受控 HTML 片段笔记。
     display: site
     html_mode: fragment
+  - id: gpt-sovits-one-page
+    title: GPT-SoVITS 一文读懂
+    type: html
+    path: ./notes/gpt-sovits-one-page.html
+    summary: 从数据链视角介绍 GPT-SoVITS 的少样本语音克隆、语音合成流程和核心模块。
+    display: standalone
+    html_mode: document

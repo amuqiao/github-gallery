@@ -37,3 +37,10 @@ notes:
     summary: 介绍 pyVideoTrans 的视频翻译配音流程、核心模块和适用场景。
     display: standalone
     html_mode: document
+  - id: pyvideotrans-one-page
+    title: pyVideoTrans 一文读懂：全解析
+    type: html
+    path: ./notes/pyvideotrans-one-page.html
+    summary: 解析 pyVideoTrans 的视频翻译配音流程、核心模块和适用场景。
+    display: standalone
+    html_mode: document
