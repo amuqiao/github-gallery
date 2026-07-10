@@ -131,9 +131,20 @@ catalog/content/published/github/collections/voice-cloning/
 ./scripts/content.sh publish <hall> <item|collection> <id>
 ./scripts/content.sh archive <hall> <item|collection> <id>
 ./scripts/content.sh restore <hall> <item|collection> <id>
+./scripts/content.sh list [[drafts|published|archived] [hall] | [hall]]
+./scripts/content.sh show <hall> <item|collection> <id>
+./scripts/content.sh status <hall> <item|collection> <id>
 ```
 
 `item new`、`collection new` 和 `import apply` 写入 `drafts`。`publish` 从 `drafts` 移到 `published` 并运行 `./scripts/verify.sh release`。`archive` 从 `published` 移到 `archived`。`restore` 从 `archived` 移回 `drafts`，不会直接发布。
+
+`list`、`show` 和 `status` 是只读查询命令，不加 `.data/catalog-write.lock`，不运行 `verify.sh`，也不触发 Astro build。`list` 可以不带过滤条件、只带 publication state、只带 active hall，或同时带 publication state 和 active hall；未知 hall 和 planned hall 会失败。输出合同：
+
+```text
+list:   state<TAB>hall<TAB>type<TAB>id<TAB>title
+status: state<TAB>hall<TAB>type<TAB>id<TAB>path
+show:   YAML，前两行注释标注 state 和 path
+```
 
 Content import batch 合同见 [`content-import-batch.md`](./content-import-batch.md)。
 

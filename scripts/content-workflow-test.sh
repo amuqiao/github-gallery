@@ -36,10 +36,10 @@ usage() {
   在仓库外隔离副本中运行 content workflow 回归测试，避免污染当前项目现场。
 
 当前阶段：
-  Phase 4 覆盖隔离副本、主仓库现场不变、item/note/collection 生命周期、
-  import batch create/replace/delete、drafts-only、失败路径、幂等性、planned hall 边界、
-  canonical route、列表可见性和渲染内容断言。
-  后续阶段会逐步加入更深的中断恢复和只读管理命令测试。
+  Phase 5 覆盖隔离副本、主仓库现场不变、item/note/collection 生命周期、
+  只读 list/show/status、import batch create/replace/delete、drafts-only、失败路径、
+  幂等性、planned hall 边界、canonical route、列表可见性和渲染内容断言。
+  后续阶段会逐步加入更深的中断恢复测试。
 
 选项：
   --tmp-root <path>       仓库外临时根目录，默认 CONTENT_WORKFLOW_TEST_TMP_ROOT、TMPDIR 或 /tmp。
@@ -202,6 +202,64 @@ expect_copy_failure_contains() {
 
   if ! grep -Fq "$expected" <<<"$output"; then
     die "expected failed command output to contain '$expected': $*" 1
+  fi
+}
+
+expect_copy_failure_status_contains() {
+  local label="$1"
+  local expected_status="$2"
+  local expected="$3"
+  shift 3
+  local output
+  local status
+
+  event "FAIL" "$label" "$*"
+  set +e
+  output="$(cd "$copy_dir" && "$@" 2>&1)"
+  status="$?"
+  set -e
+  printf "%s\n" "$output"
+
+  if [[ "$status" -ne "$expected_status" ]]; then
+    die "expected command to fail with status $expected_status, got $status: $*" 1
+  fi
+
+  if ! grep -Fq "$expected" <<<"$output"; then
+    die "expected failed command output to contain '$expected': $*" 1
+  fi
+}
+
+copy_command_output() {
+  (cd "$copy_dir" && "$@")
+}
+
+assert_copy_command_output_contains() {
+  local label="$1"
+  local expected="$2"
+  shift 2
+  local output
+
+  event "ASSERT" "$label" "$*"
+  output="$(copy_command_output "$@")"
+  printf "%s\n" "$output"
+
+  if ! grep -Fq "$expected" <<<"$output"; then
+    die "expected command output to contain '$expected': $*" 1
+  fi
+}
+
+assert_copy_command_output_not_contains() {
+  local label="$1"
+  local unexpected="$2"
+  shift 2
+  local output
+
+  event "ASSERT" "$label" "$*"
+  output="$(copy_command_output "$@")"
+  printf "%s\n" "$output"
+
+  if grep -Fq "$unexpected" <<<"$output"; then
+    die "expected command output to omit '$unexpected': $*" 1
   fi
 }
 
@@ -493,6 +551,72 @@ assert_republished_content_rendered() {
   assert_copy_file_contains "dist/halls/models/collections/$model_collection_id/index.html" "WORKFLOW-SENTINEL-COLLECTION-REPUBLISH"
 }
 
+run_readonly_content_commands() {
+  section "Read-only Content Commands"
+
+  local data_snapshot
+  local astro_snapshot
+  local dist_index_snapshot
+  local transient_id
+  data_snapshot="$(copy_path_snapshot ".data")"
+  astro_snapshot="$(copy_path_snapshot ".astro")"
+  dist_index_snapshot="$(copy_path_snapshot "dist/halls/models/index.html")"
+  transient_id=".workflow-transient-$run_stamp"
+
+  mkdir -p "$copy_dir/catalog/content/published/models/items/$transient_id"
+
+  assert_copy_command_output_contains "list-header" \
+    $'state\thall\ttype\tid\ttitle' \
+    ./scripts/content.sh list published models
+  assert_copy_command_output_contains "list-pub-models" \
+    $'published\tmodels\titem\t'"$model_item_id"$'\tWorkflow Model Fixture' \
+    ./scripts/content.sh list published models
+  assert_copy_command_output_contains "list-pub-collections" \
+    $'published\tmodels\tcollection\t'"$model_collection_id"$'\tWorkflow Model Collection' \
+    ./scripts/content.sh list published models
+  assert_copy_command_output_contains "list-hall-only" \
+    $'published\tmodels\titem\t'"$model_item_id"$'\tWorkflow Model Fixture' \
+    ./scripts/content.sh list models
+  assert_copy_command_output_not_contains "list-omits-transient" "$transient_id" \
+    ./scripts/content.sh list published models
+  rm -rf "$copy_dir/catalog/content/published/models/items/$transient_id"
+  assert_copy_command_output_contains "list-pub-github" \
+    $'published\tgithub\titem\t'"$github_item_id"$'\tWorkflow GitHub Fixture' \
+    ./scripts/content.sh list published github
+  assert_copy_command_output_contains "status-header" \
+    $'state\thall\ttype\tid\tpath' \
+    ./scripts/content.sh status models item "$model_item_id"
+  assert_copy_command_output_contains "status-model" \
+    $'published\tmodels\titem\t'"$model_item_id"$'\tcatalog/content/published/models/items/'"$model_item_id" \
+    ./scripts/content.sh status models item "$model_item_id"
+  assert_copy_command_output_contains "status-collection" \
+    $'published\tmodels\tcollection\t'"$model_collection_id"$'\tcatalog/content/published/models/collections/'"$model_collection_id" \
+    ./scripts/content.sh status models collection "$model_collection_id"
+  assert_copy_command_output_contains "show-model-state" "# state: published" \
+    ./scripts/content.sh show models item "$model_item_id"
+  assert_copy_command_output_contains "show-model-path" \
+    "# path: catalog/content/published/models/items/$model_item_id/item.yaml" \
+    ./scripts/content.sh show models item "$model_item_id"
+  assert_copy_command_output_contains "show-model-id" "id: $model_item_id" \
+    ./scripts/content.sh show models item "$model_item_id"
+  assert_copy_command_output_contains "show-model-note" "notes:" \
+    ./scripts/content.sh show models item "$model_item_id"
+  assert_copy_command_output_contains "show-collection-state" "# state: published" \
+    ./scripts/content.sh show models collection "$model_collection_id"
+  assert_copy_command_output_contains "show-collection-item" "item: $model_item_id" \
+    ./scripts/content.sh show models collection "$model_collection_id"
+  expect_copy_failure_status_contains "status-missing" 4 "not found in drafts, published, archived" \
+    ./scripts/content.sh status models item "workflow-missing-status-$run_stamp"
+  expect_copy_failure_status_contains "list-unknown-hall" 4 "unknown hall: workflow-missing-hall" \
+    ./scripts/content.sh list published workflow-missing-hall
+  expect_copy_failure_status_contains "list-planned-hall" 4 "is not an active content hall" \
+    ./scripts/content.sh list music
+  assert_copy_path_snapshot_unchanged "readonly-data" ".data" "$data_snapshot"
+  assert_copy_path_snapshot_unchanged "readonly-astro" ".astro" "$astro_snapshot"
+  assert_copy_path_snapshot_unchanged "readonly-dist-index" "dist/halls/models/index.html" "$dist_index_snapshot"
+  assert_copy_path_missing ".data/catalog-write.lock"
+}
+
 write_import_manifest() {
   local batch_id="$1"
   local operations="$2"
@@ -621,6 +745,12 @@ run_content_lifecycle() {
       --runtime onnxruntime
   assert_copy_path_exists "catalog/content/drafts/models/items/$model_item_id/item.yaml"
   assert_copy_path_missing "dist/halls/models/items/$model_item_id/index.html"
+  assert_copy_command_output_contains "status-model-draft" \
+    $'drafts\tmodels\titem\t'"$model_item_id"$'\tcatalog/content/drafts/models/items/'"$model_item_id" \
+    ./scripts/content.sh status models item "$model_item_id"
+  assert_copy_command_output_contains "list-draft-models" \
+    $'drafts\tmodels\titem\t'"$model_item_id"$'\tWorkflow Model Fixture' \
+    ./scripts/content.sh list drafts models
 
   run_in_copy "note-md" \
     ./scripts/content.sh item note add models "$model_item_id" "$markdown_note_id" \
@@ -643,6 +773,9 @@ run_content_lifecycle() {
       --summary "用于验证模型展馆专题状态流转的临时专题。" \
       --item "$model_item_id"
   assert_copy_path_exists "catalog/content/drafts/models/collections/$model_collection_id/collection.yaml"
+  assert_copy_command_output_contains "status-col-draft" \
+    $'drafts\tmodels\tcollection\t'"$model_collection_id"$'\tcatalog/content/drafts/models/collections/'"$model_collection_id" \
+    ./scripts/content.sh status models collection "$model_collection_id"
 
   run_in_copy "publish-git" ./scripts/content.sh publish github item "$github_item_id"
   run_in_copy "publish-model" ./scripts/content.sh publish models item "$model_item_id"
@@ -660,6 +793,12 @@ run_content_lifecycle() {
   assert_copy_path_exists "catalog/content/archived/github/items/$github_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/archived/models/items/$model_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/archived/models/collections/$model_collection_id/collection.yaml"
+  assert_copy_command_output_contains "status-model-archived" \
+    $'archived\tmodels\titem\t'"$model_item_id"$'\tcatalog/content/archived/models/items/'"$model_item_id" \
+    ./scripts/content.sh status models item "$model_item_id"
+  assert_copy_command_output_contains "list-archived-models" \
+    $'archived\tmodels\tcollection\t'"$model_collection_id"$'\tWorkflow Model Collection' \
+    ./scripts/content.sh list archived models
 
   run_in_copy "restore-model" ./scripts/content.sh restore models item "$model_item_id"
   run_in_copy "restore-col" ./scripts/content.sh restore models collection "$model_collection_id"
@@ -667,6 +806,9 @@ run_content_lifecycle() {
   assert_copy_path_exists "catalog/content/drafts/github/items/$github_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/drafts/models/items/$model_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/drafts/models/collections/$model_collection_id/collection.yaml"
+  assert_copy_command_output_contains "status-model-restored" \
+    $'drafts\tmodels\titem\t'"$model_item_id"$'\tcatalog/content/drafts/models/items/'"$model_item_id" \
+    ./scripts/content.sh status models item "$model_item_id"
 
   write_copy_file "catalog/content/drafts/github/items/$github_item_id/index.md" \
     "# Workflow GitHub Fixture\n\nWORKFLOW-SENTINEL-GITHUB-REPUBLISH\n"
@@ -686,6 +828,7 @@ run_content_lifecycle() {
   assert_published_routes_exist
   assert_public_indexes_include_fixtures
   assert_republished_content_rendered
+  run_readonly_content_commands
 }
 
 run_failure_idempotency_lifecycle() {
@@ -891,6 +1034,9 @@ run_import_lifecycle() {
   run_in_copy "import-diff-c" ./scripts/content.sh import diff ".tmp/import-batches/$create_batch_id"
   run_in_copy "import-apply-c" ./scripts/content.sh import apply ".tmp/import-batches/$create_batch_id"
   assert_import_drafts_exist
+  assert_copy_command_output_contains "status-import-c" \
+    $'drafts\tmodels\titem\t'"$import_item_id"$'\tcatalog/content/drafts/models/items/'"$import_item_id" \
+    ./scripts/content.sh status models item "$import_item_id"
   assert_copy_file_contains "catalog/content/drafts/models/items/$import_item_id/index.md" "WORKFLOW-IMPORT-CREATE-ITEM"
   assert_copy_file_contains "catalog/content/drafts/models/items/$import_item_id/notes/import-note.md" "WORKFLOW-IMPORT-CREATE-NOTE"
   assert_copy_file_contains "catalog/content/drafts/models/collections/$import_collection_id/index.md" "WORKFLOW-IMPORT-CREATE-COLLECTION"
@@ -912,6 +1058,9 @@ run_import_lifecycle() {
   assert_copy_file_contains "catalog/content/drafts/models/collections/$import_collection_id/index.md" "WORKFLOW-IMPORT-CREATE-COLLECTION"
   run_in_copy "import-apply-r" ./scripts/content.sh import apply ".tmp/import-batches/$replace_batch_id" --allow-replace
   assert_import_drafts_exist
+  assert_copy_command_output_contains "status-import-r" \
+    $'drafts\tmodels\tcollection\t'"$import_collection_id"$'\tcatalog/content/drafts/models/collections/'"$import_collection_id" \
+    ./scripts/content.sh status models collection "$import_collection_id"
   assert_copy_file_contains "catalog/content/drafts/models/items/$import_item_id/index.md" "WORKFLOW-IMPORT-REPLACE-ITEM"
   assert_copy_file_contains "catalog/content/drafts/models/items/$import_item_id/notes/import-note.md" "WORKFLOW-IMPORT-REPLACE-NOTE"
   assert_copy_file_contains "catalog/content/drafts/models/collections/$import_collection_id/index.md" "WORKFLOW-IMPORT-REPLACE-COLLECTION"
@@ -928,6 +1077,8 @@ run_import_lifecycle() {
   assert_copy_file_contains "catalog/content/drafts/models/collections/$import_collection_id/index.md" "WORKFLOW-IMPORT-REPLACE-COLLECTION"
   run_in_copy "import-apply-d" ./scripts/content.sh import apply ".tmp/import-batches/$delete_batch_id" --allow-delete
   assert_import_drafts_missing
+  expect_copy_failure_contains "status-import-d" "not found in drafts, published, archived" \
+    ./scripts/content.sh status models item "$import_item_id"
   assert_import_absent_from_public_output
 
   write_import_rollback_batch "$rollback_batch_id" "$rollback_item_id" "$rollback_collection_id" "$missing_item_id"
@@ -966,7 +1117,7 @@ main() {
   initial_pollution_snapshot="$(repo_pollution_snapshot)"
 
   section "Content Workflow Test"
-  event "PHASE" "4" "isolated lifecycle, import batch, failures, and idempotency"
+  event "PHASE" "5" "isolated lifecycle, read-only commands, import batch, failures, and idempotency"
   event "ROOT" "repo" "$root_real"
   event "ROOT" "tmp" "$tmp_root_real"
 

@@ -21,7 +21,7 @@
 - `src/lib/catalog/block-adapters.ts` 在渲染前适配 typed blocks。
 - `src/presentation/` 只提供展示层 layout/theme registry，不定义内容选择。
 - `src/components/ContentItemCard.astro` 和 `src/components/ContentCollectionCard.astro` 是当前内容卡片入口。
-- `scripts/content.sh` 创建、导入、发布、归档和恢复 content bundle。
+- `scripts/content.sh` 创建、导入、发布、归档、恢复和只读查询 content bundle。
 - `scripts/verify.sh` 是一次性验证和发布门禁入口。
 
 ## Runtime Path
@@ -73,6 +73,7 @@ scripts/content.sh
   -> scripts/content/content-import-cli.mjs
   -> catalog/content/drafts/ for new and imported bundles
   -> catalog/content/{drafts,published,archived}/ for publish/archive/restore
+  -> TSV or YAML output for list/show/status
   -> scripts/verify.sh catalog or release
   -> rollback on failure
 
@@ -121,3 +122,4 @@ Legacy root routes such as `/projects/*`, `/collections/*`, `/categories/*`, `/t
 - `./scripts/verify.sh check` runs the content release gate and static build.
 - `./scripts/verify.sh release` validates published content semantics and then builds.
 - Content validation fails on invalid schema, unknown hall, planned hall content, missing body/note files, symlinks, path escape, duplicate bundle keys, unknown taxonomy ids, invalid related project ids, or published collections referencing non-published items.
+- `./scripts/content.sh list`、`show` 和 `status` 是只读 catalog 查询；它们不会加 catalog write lock，不会运行验证，也不会触发 build。

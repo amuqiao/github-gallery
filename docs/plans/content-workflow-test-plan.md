@@ -3,17 +3,17 @@
 ## Current Baseline
 
 - `catalog/content/{drafts,published,archived}/<hall>/items|collections/` 是公开展馆内容的唯一内容源。
-- `scripts/content.sh` 是内容维护入口，当前支持 item 草稿创建、item note 添加、collection 草稿创建、content import batch、publish、archive 和 restore。
+- `scripts/content.sh` 是内容维护入口，当前支持 item 草稿创建、item note 添加、collection 草稿创建、content import batch、publish、archive、restore，以及只读 `list`、`show`、`status` 查询。
 - `scripts/verify.sh check` 和 `scripts/verify.sh release` 会运行 content release gate、Astro check 和 static build。
 - `scripts/content.sh` 写操作会加 `.data/catalog-write.lock`，写入或移动失败时会尝试回滚。
-- `scripts/content-workflow-test.sh` 已作为独立测试入口存在。当前 Phase 4 覆盖仓库外隔离副本、主仓库前后状态检查、成功清理、失败留痕，GitHub item、模型 item、Markdown note、HTML note、同馆 collection 的创建、发布、归档、恢复、手工编辑、重新发布、列表可见性和渲染内容断言，import batch 的 create、replace、delete、drafts-only 和最小回滚路径，以及确定性失败/幂等边界。
+- `scripts/content-workflow-test.sh` 已作为独立测试入口存在。当前 Phase 5 覆盖仓库外隔离副本、主仓库前后状态检查、成功清理、失败留痕，GitHub item、模型 item、Markdown note、HTML note、同馆 collection 的创建、发布、归档、恢复、手工编辑、重新发布、只读 list/show/status、列表可见性和渲染内容断言，import batch 的 create、replace、delete、drafts-only 和最小回滚路径，以及确定性失败/幂等边界。
 - `scripts/content-workflow-test.sh` 当前不会写入真实 `catalog/content/`，也不会默认进入 `scripts/verify.sh check`；真实生命周期测试只在仓库外副本执行。
 - 为了避免在测试里联网安装依赖，隔离副本在确认初始复制没有包含 `node_modules/` 后，会把主仓库已有 `node_modules/` 复制到临时副本中执行 Astro build，构建缓存和副作用只留在临时目录。
 - 成功和失败退出路径都会比较主仓库 `git status` 与忽略路径递归 checksum，降低失败时漏报主仓库污染的风险。
 
 ## Remaining Gaps
 
-- `content.sh` 目前不是完整 CRUD 管理面：缺少 `list`、`show`、`status`、安全删除等查询或管理命令。
+- `content.sh` 目前不是完整 CRUD 管理面：安全删除等管理命令仍未设计，暂不提供物理删除入口。
 - import apply 的重复执行语义尚未完整固定：重复 create、replace、delete 的退出码和状态保持需要继续扩展测试。
 - 新展馆上线时缺少统一测试矩阵，容易只更新页面或 schema，遗漏脚本和发布门禁。
 
@@ -59,8 +59,8 @@
 
 ### Phase 5: Add Script Capability Feedback Loop
 
-- 如果 workflow test 需要查询状态但只能通过 `find` 或手写路径判断，评估给 `content.sh` 增加只读命令：
-  - `list [drafts|published|archived] [hall]`
+- workflow test 需要查询状态时不再依赖 `find` 或手写路径判断，`content.sh` 提供只读命令：
+  - `list [[drafts|published|archived] [hall] | [hall]]`
   - `show <hall> <item|collection> <id>`
   - `status <hall> <item|collection> <id>`
 - 测试脚本需要验证时直接调用 `scripts/verify.sh` 或复用内部 helper，不给 `content.sh` 增加 `validate`，避免验证入口和内容管理入口重叠。
@@ -87,6 +87,7 @@
 | Model item | `item new models ai_model`、Markdown body、Markdown note、HTML note、publish、archive、restore、republish |
 | Collection | `collection new`、同 hall item 引用、publish、archive、restore |
 | Import batch | `import validate`、`plan`、`diff`、`apply create`、`apply replace --allow-replace`、`apply delete --allow-delete`、缺少授权失败、最小回滚 |
+| Read-only commands | `list [[state] [hall] | [hall]]`、`show <hall> <item|collection> <id>`、`status <hall> <item|collection> <id>` |
 | Published routes | `/halls/<hall>/items/<id>/`、`/notes/<note>/`、`/collections/`、`/collections/<id>/` |
 | Draft isolation | drafts 内容不进入 `dist`，不进入展馆列表 |
 | Archived isolation | archived 内容不进入 `dist`，restore 后只回到 drafts |
@@ -121,9 +122,17 @@
 - 测试能证明 item 仍 archived 时先 restore collection 会失败并回滚 collection 到 archived。
 - 失败断言必须检查错误输出包含可定位原因，并确认 `.data/catalog-write.lock` 不残留。
 
+## Phase 5 Acceptance
+
+- `content.sh list [[drafts|published|archived] [hall] | [hall]]` 能以稳定 TSV 输出 state、hall、type、id 和 title。
+- `content.sh list` 能过滤点号临时目录，未知 hall 和 planned hall 不能被误判为空结果。
+- `content.sh status <hall> <item|collection> <id>` 能输出单个 bundle 当前 state 和目录路径，不存在时失败。
+- `content.sh show <hall> <item|collection> <id>` 能输出匹配 bundle 的 YAML，并在头部标注 state 和 path。
+- 只读命令不加 catalog write lock，不触发 `verify.sh`，也不触发 Astro build。
+- `content-workflow-test.sh` 覆盖只读命令成功路径、表头/path 输出、missing status 退出码、未知 hall 失败、点号临时目录过滤和代表性路径快照。
+
 ## Final Acceptance
 
 - 测试能证明重复 import apply 和更复杂 import 失败回滚不会破坏已有内容。
 - 测试能覆盖中断或模拟中断后的 lock、backup、staging 清理或人工恢复提示。
-- 如果实现过程中发现 `content.sh` 缺少必要只读能力，新增命令必须更新 `scripts/README.md`、相关 runbook 和本计划。
 - 当测试入口稳定后，把已实现事实移动到 `docs/current/` 或 `scripts/README.md`，并关闭或缩减本计划。

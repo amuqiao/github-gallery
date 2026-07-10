@@ -80,6 +80,20 @@ HTML note:
 
 Note commands only write to draft items. To edit a published item, archive or restore it first, then publish again after editing.
 
+## Inspect Content
+
+只读查询不会加 `.data/catalog-write.lock`，不会运行验证，也不会触发 build。
+
+```sh
+./scripts/content.sh list drafts models
+./scripts/content.sh list published github
+./scripts/content.sh list models
+./scripts/content.sh status models item htdemucs-ft-onnx
+./scripts/content.sh show models item htdemucs-ft-onnx
+```
+
+`list` 输出 state、hall、type、id 和 title，可以按 publication state、active hall，或二者同时过滤。未知 hall 和 planned hall 会失败，避免把拼写错误误判为空结果。`status` 输出单个 bundle 当前 state 和目录路径。`show` 输出匹配 bundle 的 YAML，并在开头标注 state 和 path。
+
 ## Create Collection Draft
 
 ```sh

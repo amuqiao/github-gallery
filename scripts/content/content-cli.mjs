@@ -9,6 +9,7 @@ import { dump, load } from "js-yaml";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const contentRoot = path.join(rootDir, "catalog", "content");
+const hallsRoot = path.join(rootDir, "catalog", "halls");
 const lockDir = path.join(rootDir, ".data", "catalog-write.lock");
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const contentTypes = new Set(["item", "collection"]);
@@ -16,6 +17,7 @@ const contentKinds = {
   item: "items",
   collection: "collections"
 };
+const contentStates = ["drafts", "published", "archived"];
 const writeCommands = new Set(["item", "collection", "publish", "archive", "restore"]);
 let lockHeld = false;
 
@@ -59,6 +61,9 @@ function usage() {
   ./scripts/content.sh publish <hall> <item|collection> <id>
   ./scripts/content.sh archive <hall> <item|collection> <id>
   ./scripts/content.sh restore <hall> <item|collection> <id>
+  ./scripts/content.sh list [[drafts|published|archived] [hall] | [hall]]
+  ./scripts/content.sh show <hall> <item|collection> <id>
+  ./scripts/content.sh status <hall> <item|collection> <id>
 
 写操作会加 catalog write lock，并在写后运行验证。publish 使用 ./scripts/verify.sh release。`);
 }
@@ -186,6 +191,37 @@ async function pathExists(itemPath) {
   }
 }
 
+async function readDirectoriesIfExists(directory) {
+  try {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    const directories = [];
+
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
+
+      if (!entry.isDirectory()) {
+        die(`${path.relative(rootDir, directory)} must only contain directories: ${entry.name}`, 1);
+      }
+
+      if (!slugPattern.test(entry.name)) {
+        die(`${path.relative(rootDir, directory)} must only contain lowercase kebab-case directories: ${entry.name}`, 1);
+      }
+
+      directories.push(entry.name);
+    }
+
+    return directories.sort();
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
 async function collectMissingParents(startDirectory, stopDirectory) {
   const stop = path.resolve(stopDirectory);
   const missingParents = [];
@@ -229,6 +265,10 @@ function bundleDirectory(state, hall, type, id) {
   return path.join(contentRoot, state, hall, kindDirectory, id);
 }
 
+function bundleConfigPath(directory, type) {
+  return path.join(directory, type === "item" ? "item.yaml" : "collection.yaml");
+}
+
 async function assertNoBundleExists(hall, type, id) {
   for (const state of ["drafts", "published", "archived"]) {
     const directory = bundleDirectory(state, hall, type, id);
@@ -247,6 +287,45 @@ async function findExistingBundle(hall, type, id, allowedStates) {
   }
 
   die(`${hall}/${type}/${id} not found in ${allowedStates.join(", ")}`, 4);
+}
+
+async function findBundleAcrossStates(hall, type, id) {
+  const matches = [];
+
+  for (const state of contentStates) {
+    const directory = bundleDirectory(state, hall, type, id);
+    if (await pathExists(directory)) {
+      matches.push({ state, directory });
+    }
+  }
+
+  if (matches.length === 0) {
+    die(`${hall}/${type}/${id} not found in ${contentStates.join(", ")}`, 4);
+  }
+
+  if (matches.length > 1) {
+    die(`${hall}/${type}/${id} exists in multiple states`, 3);
+  }
+
+  return matches[0];
+}
+
+async function assertActiveHall(hall) {
+  assertId(hall, "hall id");
+
+  const hallConfigPath = path.join(hallsRoot, hall, "hall.yaml");
+  if (!(await pathExists(hallConfigPath))) {
+    die(`unknown hall: ${hall}`, 4);
+  }
+
+  const { config } = await readYamlObject(hallConfigPath, `${hall} hall.yaml`);
+  if (config.id !== hall) {
+    die(`${hall} hall.yaml id must match its directory`, 1);
+  }
+
+  if (config.availability !== "active") {
+    die(`${hall} is not an active content hall`, 4);
+  }
 }
 
 async function writeYaml(filePath, config) {
@@ -643,6 +722,93 @@ async function moveBundle(args, fromState, toState, validationCommand, action) {
   event(action, id, `${fromState} -> ${toState}`);
 }
 
+async function listContent(args) {
+  if (args.length > 2) {
+    die("list accepts [drafts|published|archived] [hall] or [hall]");
+  }
+
+  let states = contentStates;
+  let hallFilter;
+
+  if (args.length === 1) {
+    if (contentStates.includes(args[0])) {
+      states = [args[0]];
+    } else {
+      hallFilter = args[0];
+    }
+  }
+
+  if (args.length === 2) {
+    if (!contentStates.includes(args[0])) {
+      die(`publication state must be one of ${contentStates.join(", ")}: ${args[0]}`);
+    }
+    states = [args[0]];
+    hallFilter = args[1];
+  }
+
+  if (hallFilter) {
+    await assertActiveHall(hallFilter);
+  }
+
+  console.log("state\thall\ttype\tid\ttitle");
+  for (const state of states) {
+    const stateDirectory = path.join(contentRoot, state);
+    const halls = hallFilter ? [hallFilter] : await readDirectoriesIfExists(stateDirectory);
+
+    for (const hall of halls) {
+      await assertActiveHall(hall);
+
+      for (const type of ["item", "collection"]) {
+        const kindDirectory = path.join(stateDirectory, hall, contentKinds[type]);
+        const ids = await readDirectoriesIfExists(kindDirectory);
+
+        for (const id of ids) {
+          const directory = path.join(kindDirectory, id);
+          const { config } = await readYamlObject(bundleConfigPath(directory, type), `${id} ${type}.yaml`);
+          console.log(`${state}\t${hall}\t${type}\t${id}\t${config.title ?? ""}`);
+        }
+      }
+    }
+  }
+}
+
+async function showContent(args) {
+  const [hall, type, id] = args;
+  if (!hall || !type || !id || args.length !== 3) {
+    die("show requires <hall> <item|collection> <id>");
+  }
+
+  assertId(hall, "hall id");
+  assertId(id, `${type} id`);
+  if (!contentTypes.has(type)) {
+    die("content type must be item or collection");
+  }
+
+  const { state, directory } = await findBundleAcrossStates(hall, type, id);
+  const configPath = bundleConfigPath(directory, type);
+  const raw = await fs.readFile(configPath, "utf8");
+  console.log(`# state: ${state}`);
+  console.log(`# path: ${path.relative(rootDir, configPath)}`);
+  process.stdout.write(raw);
+}
+
+async function showStatus(args) {
+  const [hall, type, id] = args;
+  if (!hall || !type || !id || args.length !== 3) {
+    die("status requires <hall> <item|collection> <id>");
+  }
+
+  assertId(hall, "hall id");
+  assertId(id, `${type} id`);
+  if (!contentTypes.has(type)) {
+    die("content type must be item or collection");
+  }
+
+  const { state, directory } = await findBundleAcrossStates(hall, type, id);
+  console.log("state\thall\ttype\tid\tpath");
+  console.log(`${state}\t${hall}\t${type}\t${id}\t${path.relative(rootDir, directory)}`);
+}
+
 async function runCommand() {
   const [scope, command, ...args] = process.argv.slice(2);
 
@@ -680,6 +846,21 @@ async function runCommand() {
 
   if (scope === "restore") {
     await moveBundle([command, ...args], "archived", "drafts", "catalog", "RESTORED");
+    return;
+  }
+
+  if (scope === "list") {
+    await listContent([command, ...args].filter((value) => value !== undefined));
+    return;
+  }
+
+  if (scope === "show") {
+    await showContent([command, ...args]);
+    return;
+  }
+
+  if (scope === "status") {
+    await showStatus([command, ...args]);
     return;
   }
 

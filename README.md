@@ -77,6 +77,8 @@ Content bundle 发布入口：
 ./scripts/content.sh import validate .tmp/import-batches/example-content-batch
 ./scripts/content.sh import apply .tmp/import-batches/example-content-batch
 ./scripts/content.sh publish models item example-model
+./scripts/content.sh status models item example-model
+./scripts/content.sh list published models
 ```
 
 Docker 部署入口：

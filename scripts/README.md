@@ -7,7 +7,7 @@
 ```text
 dev.sh       本地 Astro 开发和 dev server 管理入口
 verify.sh    一次性验证和正式发布门禁入口
-content.sh   content bundle 创建、导入、发布、归档、恢复入口
+content.sh   content bundle 创建、导入、发布、归档、恢复和只读查询入口
 content-workflow-test.sh
              content workflow 隔离回归测试入口
 deploy.sh    Docker 静态站点部署入口
@@ -21,8 +21,8 @@ deploy.sh    Docker 静态站点部署入口
 | --- | --- | --- |
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、content 生成。 |
 | `verify.sh` | content bundle、halls、taxonomy、site、内容资产和 static build 验证。 | README 或 `docs/` 漂移检查。 |
-| `content.sh` | content bundle item/collection 草稿创建、item note 添加、content import batch、publish/archive/restore 状态移动。 | 旧 project/root collection 维护、GitHub API 抓取、taxonomy 自动修改。 |
-| `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 4 覆盖现场隔离、GitHub item、模型 item、notes、collection 的创建、发布、归档、恢复、手工编辑、重新发布、列表可见性、渲染内容断言、import batch create/replace/delete、最小回滚，以及确定性失败/幂等边界。 | 日常内容创建、真实 catalog 写入、默认发布门禁、中断故障注入覆盖。 |
+| `content.sh` | content bundle item/collection 草稿创建、item note 添加、content import batch、publish/archive/restore 状态移动，以及 list/show/status 只读查询。 | 旧 project/root collection 维护、GitHub API 抓取、taxonomy 自动修改、物理删除。 |
+| `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 5 覆盖现场隔离、GitHub item、模型 item、notes、collection 的创建、发布、归档、恢复、手工编辑、重新发布、list/show/status、列表可见性、渲染内容断言、import batch create/replace/delete、最小回滚，以及确定性失败/幂等边界。 | 日常内容创建、真实 catalog 写入、默认发布门禁、中断故障注入覆盖。 |
 | `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
 ## Commands
@@ -71,6 +71,10 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
 ./scripts/content.sh publish models item example-model
 ./scripts/content.sh archive models item example-model
 ./scripts/content.sh restore models item example-model
+./scripts/content.sh list published models
+./scripts/content.sh list models
+./scripts/content.sh status models item example-model
+./scripts/content.sh show models item example-model
 
 ./scripts/content-workflow-test.sh
 ./scripts/content-workflow-test.sh --cleanup-on-fail
@@ -98,7 +102,7 @@ cp .env.example .env
 
 `dev.sh stop` 和 `restart` 只会停止当前仓库 cwd 下的 dev server，杀进程前会校验 cwd 和命令，避免误杀其他项目。
 
-## Content Writes
+## Content Commands
 
 `content.sh` 写入 `catalog/content/drafts/`，并在 `drafts`、`published`、`archived` 之间移动 content bundle。
 
@@ -106,6 +110,24 @@ cp .env.example .env
 - `publish` 会运行 `./scripts/verify.sh release`。
 - `archive` 和 `restore` 会运行 `./scripts/verify.sh catalog`。
 - 验证失败时脚本会回滚目录移动或文件写入。
+- `list`、`show`、`status` 是只读命令，不加写锁，不运行验证，也不触发 build。
+
+只读命令输出：
+
+```text
+./scripts/content.sh list [[drafts|published|archived] [hall] | [hall]]
+state	hall	type	id	title
+
+./scripts/content.sh status <hall> <item|collection> <id>
+state	hall	type	id	path
+
+./scripts/content.sh show <hall> <item|collection> <id>
+# state: <state>
+# path: catalog/content/<state>/<hall>/<items|collections>/<id>/<item.yaml|collection.yaml>
+<yaml>
+```
+
+`list` 可以不带过滤条件、只带 publication state、只带 active hall，或同时带 publication state 和 active hall。未知 hall 和 planned hall 会失败，避免把拼写错误误判为空结果。
 
 ## Import Batch
 
@@ -126,6 +148,7 @@ Content import 合同说明见 [`../docs/contract/content-import-batch.md`](../d
 ```text
 item new -> note add -> collection new -> publish -> route/list exists
 archive -> route/list missing -> restore -> edit generated files -> republish -> route/list/content exists
+list/show/status -> published bundle visible
 duplicate create/note/publish/archive/restore -> fail -> bundle unchanged
 bad references/planned hall/wrong archive-restore order -> fail -> rollback
 import validate/plan/diff/apply create -> drafts-only

@@ -23,6 +23,9 @@ usage() {
   publish <hall> <item|collection> <id>
   archive <hall> <item|collection> <id>
   restore <hall> <item|collection> <id>
+  list [[drafts|published|archived] [hall] | [hall]]
+  show <hall> <item|collection> <id>
+  status <hall> <item|collection> <id>
   help
 
 常用示例：
@@ -65,6 +68,10 @@ usage() {
   ./scripts/content.sh publish models item htdemucs-ft-onnx
   ./scripts/content.sh archive models item htdemucs-ft-onnx
   ./scripts/content.sh restore models item htdemucs-ft-onnx
+  ./scripts/content.sh list published models
+  ./scripts/content.sh list models
+  ./scripts/content.sh status models item htdemucs-ft-onnx
+  ./scripts/content.sh show models item htdemucs-ft-onnx
 EOF
 }
 
