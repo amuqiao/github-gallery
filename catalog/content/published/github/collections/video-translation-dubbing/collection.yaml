@@ -1,0 +1,32 @@
+schema_version: 2
+id: video-translation-dubbing
+hall: github
+title: 视频翻译配音工具
+summary: 整理把 ASR、字幕翻译、TTS 配音、对齐合成串成视频本地化流程的开源项目。
+body:
+  type: markdown
+  path: ./index.md
+items:
+  - item: pyvideotrans
+    note: 适合比较后端选择较多的视频翻译配音工作流。
+  - item: videolingo
+    note: 适合关注字幕翻译质量和多步 LLM 翻译流程。
+  - item: krillinai
+    note: 适合关注轻量部署和一键视频本地化流程。
+  - item: linly-dubbing
+    note: 适合研究人声分离、多说话人识别和口型同步链路。
+  - item: youdub-webui
+    note: 适合关注 YouTube 视频中文化和垂直搬运场景。
+blocks:
+  - type: highlights
+    title: 固定流程
+    items:
+      - 视频翻译配音通常包含 ASR、字幕翻译、TTS 配音、对齐和合成。
+      - 这些工具的核心价值是把多步骤流水线编排成可重复流程。
+      - 音色克隆通常依赖外部 TTS 服务，本工具负责接入和编排。
+  - type: use-cases
+    title: 对比方向
+    items:
+      - 翻译质量策略。
+      - 配音对齐方式。
+      - 部署形态和本地模型接入能力。

@@ -1,0 +1,36 @@
+schema_version: 2
+id: linly-dubbing
+hall: github
+kind: github_project
+title: Linly-Dubbing
+summary: 集成语音分离、说话人识别和唇形同步组件的视频配音研究流程。
+source:
+  type: github
+  url: https://github.com/Kedreamix/Linly-Dubbing
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/Kedreamix/Linly-Dubbing
+  category: ai
+  tags:
+    - audio
+    - multilingual
+    - machine-learning
+    - research
+    - webui
+    - video-translation
+    - dubbing
+    - lip-sync
+  maintenance_status: unknown
+  languages:
+    - Python
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/Kedreamix/Linly-Dubbing
+  - type: use-cases
+    items:
+      - Researching end-to-end video dubbing pipelines.
+      - Comparing speaker recognition, separation, and lip-sync components.

@@ -8,11 +8,11 @@
 catalog/halls/<id>/hall.yaml       # 展馆入口机器可读事实
 catalog/content/{drafts,published,archived}/ # content bundle 合同；published 生成 canonical 页面
 catalog/models/<id>/model.yaml     # legacy 模型展馆条目机器可读事实
-catalog/projects/<id>/project.yaml  # 项目机器可读事实
-catalog/projects/<id>/details.md    # 可选详情正文
-catalog/projects/<id>/notes/        # 可选项目附加笔记
-catalog/collections/<id>/collection.yaml # 专题机器可读事实
-catalog/collections/<id>/details.md  # 可选专题详情正文
+catalog/projects/<id>/project.yaml  # legacy 项目详情、分类和标签页机器可读事实
+catalog/projects/<id>/details.md    # legacy 项目详情正文
+catalog/projects/<id>/notes/        # legacy 项目附加笔记
+catalog/collections/<id>/collection.yaml # legacy root 专题机器可读事实
+catalog/collections/<id>/details.md  # legacy root 专题详情正文
 catalog/taxonomies.yaml             # 共享分类、标签和项目维护状态词表
 catalog/site.yaml                   # 站点标题、描述和导航
 src/lib/catalog/                    # schema、loader、adapter

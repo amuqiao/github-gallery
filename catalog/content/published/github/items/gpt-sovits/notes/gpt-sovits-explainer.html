@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPT-SoVITS 讲解 · 少样本语音克隆与合成</title>
+<style>
+  :root{
+    --ink:#141a2e;          /* 深墨蓝：正文 */
+    --ink-soft:#4a5270;     /* 次级文字 */
+    --paper:#f5f7fb;        /* 底色：冷调纸白 */
+    --card:#ffffff;
+    --line:#dfe4f0;
+    --gpt:#7c5cff;          /* 紫：GPT / 语义阶段 */
+    --sovits:#00a8a8;       /* 青：SoVITS / 声学阶段 */
+    --amber:#e8930c;        /* 琥珀：提示与要点 */
+    --spec:linear-gradient(90deg,#2b1d67 0%,#7c5cff 35%,#00a8a8 70%,#7ee081 100%); /* 频谱渐变 */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+    line-height:1.85;
+  }
+  ::selection{background:#7c5cff33}
+
+  /* ---------- 顶部 Hero ---------- */
+  header{
+    background:#0e1230;
+    color:#eef0ff;
+    padding:72px 24px 0;
+    overflow:hidden;
+  }
+  .hero-inner{max-width:960px;margin:0 auto}
+  .eyebrow{
+    letter-spacing:.35em;
+    font-size:12px;
+    color:#9aa3d8;
+    text-transform:uppercase;
+    margin-bottom:18px;
+  }
+  h1{
+    font-family:"Noto Serif SC","Songti SC","SimSun",serif;
+    font-size:clamp(34px,6vw,58px);
+    font-weight:700;
+    line-height:1.25;
+  }
+  h1 .grad{
+    background:var(--spec);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .hero-sub{
+    margin-top:20px;
+    max-width:640px;
+    color:#c3c9ec;
+    font-size:17px;
+  }
+  .hero-meta{
+    display:flex;flex-wrap:wrap;gap:10px;margin-top:28px;
+  }
+  .tag{
+    border:1px solid #3a4170;
+    border-radius:999px;
+    padding:4px 14px;
+    font-size:13px;
+    color:#aeb6e6;
+  }
+  /* 波形装饰 */
+  .wave{display:block;width:100%;height:110px;margin-top:48px}
+  .wave rect{fill:url(#specGrad)}
+  @media (prefers-reduced-motion:no-preference){
+    .wave rect{animation:pulse 2.4s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+    @keyframes pulse{0%,100%{transform:scaleY(.55)}50%{transform:scaleY(1)}}
+  }
+
+  /* ---------- 主体 ---------- */
+  main{max-width:960px;margin:0 auto;padding:56px 24px 80px}
+  section{margin-bottom:72px}
+  h2{
+    font-family:"Noto Serif SC","Songti SC","SimSun",serif;
+    font-size:28px;
+    margin-bottom:8px;
+  }
+  .h2-note{color:var(--ink-soft);font-size:14px;margin-bottom:24px}
+  h2::before{
+    content:"";
+    display:block;
+    width:56px;height:5px;
+    background:var(--spec);
+    border-radius:3px;
+    margin-bottom:14px;
+  }
+  h3{font-size:18px;margin:26px 0 8px}
+  p{margin-bottom:14px;color:#232a45}
+  strong{color:var(--ink)}
+  code{
+    background:#e9ecf7;
+    border-radius:5px;
+    padding:2px 7px;
+    font-size:.9em;
+    font-family:"SF Mono",Consolas,"Courier New",monospace;
+    color:#5138c9;
+  }
+
+  /* 特性卡片 */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:20px}
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px 22px 18px;
+    box-shadow:0 1px 3px rgba(20,26,46,.05);
+  }
+  .card h4{font-size:16px;margin-bottom:8px}
+  .card p{font-size:14px;color:var(--ink-soft);margin:0}
+  .card .icon{font-size:22px;margin-bottom:10px;display:block}
+
+  /* 架构流程图 */
+  .arch{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:28px 20px;
+    margin-top:20px;
+  }
+  .flow{display:flex;flex-direction:column;gap:0;align-items:stretch}
+  .stage{
+    border-radius:12px;
+    padding:18px 20px;
+    border-left:6px solid;
+  }
+  .stage.gpt{background:#f3f0ff;border-color:var(--gpt)}
+  .stage.sovits{background:#e9f8f8;border-color:var(--sovits)}
+  .stage .stage-label{
+    font-size:12px;letter-spacing:.2em;font-weight:700;
+    margin-bottom:6px;
+  }
+  .stage.gpt .stage-label{color:var(--gpt)}
+  .stage.sovits .stage-label{color:var(--sovits)}
+  .stage p{font-size:14px;margin:0;color:#33395c}
+  .arrow{
+    text-align:center;color:var(--ink-soft);
+    font-size:20px;line-height:1;padding:10px 0;
+  }
+  .io{
+    background:#f0f2fa;border:1px dashed #b9c1e0;border-radius:10px;
+    padding:12px 18px;font-size:14px;color:#3a4165;text-align:center;
+  }
+
+  /* 步骤 */
+  ol.steps{counter-reset:step;list-style:none;margin-top:16px}
+  ol.steps li{
+    position:relative;
+    padding:0 0 26px 56px;
+  }
+  ol.steps li::before{
+    counter-increment:step;
+    content:counter(step,decimal-leading-zero);
+    position:absolute;left:0;top:2px;
+    width:38px;height:38px;
+    border-radius:50%;
+    background:var(--ink);color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:700;
+    font-family:"SF Mono",Consolas,monospace;
+  }
+  ol.steps li:not(:last-child)::after{
+    content:"";position:absolute;left:18px;top:44px;bottom:2px;
+    width:2px;background:var(--line);
+  }
+  ol.steps h4{font-size:16px;margin-bottom:4px}
+  ol.steps p{font-size:14px;color:var(--ink-soft);margin:0}
+
+  /* 表格 */
+  table{width:100%;border-collapse:collapse;margin-top:16px;background:var(--card);border-radius:12px;overflow:hidden;font-size:14px}
+  th,td{padding:12px 16px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#0e1230;color:#dfe3ff;font-weight:600;font-size:13px;letter-spacing:.05em}
+  tr:last-child td{border-bottom:none}
+  td:first-child{white-space:nowrap;font-weight:600}
+
+  /* 提示框 */
+  .note{
+    border-left:5px solid var(--amber);
+    background:#fdf5e8;
+    border-radius:0 12px 12px 0;
+    padding:16px 20px;
+    font-size:14px;
+    color:#5a4520;
+    margin-top:20px;
+  }
+  .note strong{color:#8a5f05}
+
+  footer{
+    background:#0e1230;color:#8f97c9;
+    text-align:center;padding:28px 24px;font-size:13px;
+  }
+  @media (max-width:640px){
+    header{padding-top:52px}
+    main{padding-top:40px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hero-inner">
+    <div class="eyebrow">Few-shot Voice Cloning · TTS</div>
+    <h1>GPT-SoVITS<br><span class="grad">一分钟语音，克隆一个声音</span></h1>
+    <p class="hero-sub">
+      GPT-SoVITS 是由 RVC-Boss（花儿不哭）于 2024 年 1 月开源的<strong style="color:#fff">少样本语音克隆与文本转语音（TTS）</strong>框架。
+      仅需约 1 分钟的目标说话人录音即可微调出高相似度的音色模型；甚至只用一段 5 秒参考音频，也能进行零样本（Zero-shot）合成。
+    </p>
+    <div class="hero-meta">
+      <span class="tag">开源 · MIT 协议</span>
+      <span class="tag">中 / 英 / 日 / 韩 / 粤</span>
+      <span class="tag">Zero-shot & Few-shot</span>
+      <span class="tag">GitHub 6 万+ Star</span>
+    </div>
+    <!-- 波形装饰 -->
+    <svg class="wave" viewBox="0 0 960 110" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="specGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#2b1d67"/>
+          <stop offset="35%" stop-color="#7c5cff"/>
+          <stop offset="70%" stop-color="#00a8a8"/>
+          <stop offset="100%" stop-color="#7ee081"/>
+        </linearGradient>
+      </defs>
+      <g id="bars"></g>
+    </svg>
+  </div>
+</header>
+
+<main>
+
+  <!-- 概览 -->
+  <section id="intro">
+    <h2>它是什么？</h2>
+    <p class="h2-note">一句话：把「GPT 式语言模型」和「SoVITS 声学模型」拼在一起的语音克隆系统</p>
+    <p>
+      传统 TTS（如早期的 Tacotron、FastSpeech）想合成某个人的声音，往往需要<strong>数小时的高质量录音</strong>来训练。
+      GPT-SoVITS 的突破在于把需求压缩到了极致：<strong>1 分钟语音即可微调（Few-shot），5 秒参考音频即可直接推理（Zero-shot）</strong>，
+      并且合成结果在音色相似度、自然度上都达到了可实用的水平。
+    </p>
+    <p>
+      名字中的两个部分对应它的两阶段架构：<strong style="color:var(--gpt)">GPT</strong> 指一个自回归 Transformer，负责「决定说什么、怎么说」（语义与韵律）；
+      <strong style="color:var(--sovits)">SoVITS</strong>（源自 SoftVC + VITS）负责「用谁的声音说出来」（音色与波形生成）。
+    </p>
+  </section>
+
+  <!-- 核心特性 -->
+  <section id="features">
+    <h2>核心特性</h2>
+    <p class="h2-note">为什么它在开源社区迅速走红</p>
+    <div class="cards">
+      <div class="card">
+        <span class="icon">🎯</span>
+        <h4>少样本克隆</h4>
+        <p>约 1 分钟干声即可微调出专属音色模型，训练在消费级显卡上几分钟到几十分钟即可完成。</p>
+      </div>
+      <div class="card">
+        <span class="icon">⚡</span>
+        <h4>零样本合成</h4>
+        <p>不训练也能用：提供一段 5 秒左右的参考音频，模型即时模仿其音色与说话风格。</p>
+      </div>
+      <div class="card">
+        <span class="icon">🌏</span>
+        <h4>跨语言能力</h4>
+        <p>用中文录音克隆的音色，可以直接说英语、日语等；v2 起支持中、英、日、韩、粤五种语言。</p>
+      </div>
+      <div class="card">
+        <span class="icon">🧰</span>
+        <h4>一体化 WebUI</h4>
+        <p>内置数据切分、降噪、ASR 自动标注、微调训练、推理合成的完整图形界面，零代码可用。</p>
+      </div>
+      <div class="card">
+        <span class="icon">🎭</span>
+        <h4>情感与风格迁移</h4>
+        <p>参考音频的语气、情绪会被带入合成结果，换一段参考音频就能换一种情绪。</p>
+      </div>
+      <div class="card">
+        <span class="icon">🖥️</span>
+        <h4>硬件门槛低</h4>
+        <p>推理与微调在 6GB 显存左右的显卡上即可运行，也提供 CPU / Mac / 云端整合包方案。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 架构原理 -->
+  <section id="arch">
+    <h2>架构原理：两阶段流水线</h2>
+    <p class="h2-note">文本 → 语义 token → 声学波形</p>
+    <p>
+      GPT-SoVITS 借鉴了 VALL-E 等「语言模型式 TTS」的思路，把语音合成拆成两步。
+      关键中间产物是<strong>语义 token（semantic tokens）</strong>——由自监督语音模型（HuBERT 类）提取并量化得到的离散单元，
+      它编码了「说了什么内容、什么节奏」，但基本剥离了音色信息。
+    </p>
+
+    <div class="arch">
+      <div class="flow">
+        <div class="io">输入：目标文本（转为音素）＋ 参考音频（5 秒左右）</div>
+        <div class="arrow">↓</div>
+        <div class="stage gpt">
+          <div class="stage-label">STAGE 1 · GPT（自回归 Transformer）</div>
+          <p>
+            以文本音素和参考音频的语义 token 为提示（prompt），像语言模型「续写」一样，
+            <strong>逐个预测目标语音的语义 token 序列</strong>。
+            这一步决定了发音、停顿、语速、韵律——即「怎么说」。参考音频在此充当风格示例，让模型模仿其说话习惯。
+          </p>
+        </div>
+        <div class="arrow">↓ 语义 token 序列</div>
+        <div class="stage sovits">
+          <div class="stage-label">STAGE 2 · SoVITS（VITS 声学模型 + 音色编码）</div>
+          <p>
+            基于 VITS（变分推断 + 对抗训练的端到端声学模型），把语义 token 序列<strong>还原成真实波形</strong>。
+            同时从参考音频中提取说话人音色特征注入解码器——即「用谁的声音说」。
+            由于语义与音色解耦，换参考音频就等于换嗓子。
+          </p>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="io">输出：目标说话人音色的语音波形</div>
+      </div>
+    </div>
+
+    <h3>为什么这样设计有效？</h3>
+    <p>
+      <strong>解耦</strong>是核心思想：内容/韵律（Stage 1）与音色/声学细节（Stage 2）分开建模。
+      GPT 部分在大规模多说话人数据上预训练，学到了通用的「语音语法」；微调时只需少量数据让两个模型适配新音色，
+      因此 1 分钟数据就够。这也是它跨语言合成的基础——语义 token 是跨语言相对通用的表示。
+    </p>
+  </section>
+
+  <!-- 使用流程 -->
+  <section id="workflow">
+    <h2>使用流程</h2>
+    <p class="h2-note">WebUI 中的典型微调路径（0 → 专属音色模型）</p>
+    <ol class="steps">
+      <li>
+        <h4>准备素材</h4>
+        <p>收集目标说话人 1～5 分钟的干净录音（无 BGM、无混响为佳）。WebUI 提供人声分离（UVR5）、切片、降噪工具。</p>
+      </li>
+      <li>
+        <h4>自动标注</h4>
+        <p>用内置 ASR（中文常用达摩院 FunASR，英文/日文用 Faster-Whisper）自动生成文本标注，并可人工校对。</p>
+      </li>
+      <li>
+        <h4>特征提取与训练格式化</h4>
+        <p>一键完成文本音素化、HuBERT 语义 token 提取、说话人特征提取等预处理。</p>
+      </li>
+      <li>
+        <h4>微调两个模型</h4>
+        <p>分别微调 SoVITS（声学/音色）和 GPT（语义/韵律）权重，消费级 GPU 上通常十几分钟内完成。</p>
+      </li>
+      <li>
+        <h4>推理合成</h4>
+        <p>在推理页选择模型 + 一段参考音频（附文本），输入任意目标文本即可合成；可调节语速、切句方式、top_k / temperature 等采样参数。</p>
+      </li>
+    </ol>
+    <div class="note">
+      <strong>经验提示：</strong>参考音频的选择对结果影响极大——它的情绪、语气会直接迁移到输出。想要平稳旁白就选平稳的参考片段，想要激动语气就选情绪饱满的片段。
+    </div>
+  </section>
+
+  <!-- 版本演进 -->
+  <section id="versions">
+    <h2>版本演进</h2>
+    <p class="h2-note">从 v1 到 v4 的主要变化（截至 2025 年）</p>
+    <table>
+      <thead>
+        <tr><th style="width:110px">版本</th><th>时间</th><th>主要改进</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>v1</td><td>2024.01</td>
+          <td>首个开源版本；支持中英日；确立 GPT + SoVITS 两阶段架构，凭「1 分钟克隆」迅速出圈。</td>
+        </tr>
+        <tr>
+          <td>v2</td><td>2024.08</td>
+          <td>新增韩语、粤语支持；扩大预训练数据规模；优化文本前端与低质量参考音频下的鲁棒性。</td>
+        </tr>
+        <tr>
+          <td>v3</td><td>2025.02</td>
+          <td>更大的预训练底模，音色相似度与情感表现力显著提升；引入更好的音频超分/声码方案提高音质上限。</td>
+        </tr>
+        <tr>
+          <td>v4</td><td>2025.04</td>
+          <td>在 v3 基础上修复金属音等瑕疵，原生支持 48kHz 高音质输出，进一步降低显存占用。</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:14px;font-size:13px;color:var(--ink-soft)">注：项目迭代较快，以上信息可能已有更新，请以 GitHub 仓库 <code>RVC-Boss/GPT-SoVITS</code> 的最新说明为准。</p>
+  </section>
+
+  <!-- 对比 -->
+  <section id="compare">
+    <h2>与相关项目的区别</h2>
+    <p class="h2-note">经常被放在一起讨论的几个开源项目</p>
+    <table>
+      <thead>
+        <tr><th style="width:150px">项目</th><th>类型</th><th>与 GPT-SoVITS 的差异</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>So-VITS-SVC</td>
+          <td>歌声/语音转换（SVC）</td>
+          <td>做「变声」：输入必须是一段人声，把它换成目标音色，不能凭文本直接合成。GPT-SoVITS 是 TTS，输入是文本。</td>
+        </tr>
+        <tr>
+          <td>RVC</td>
+          <td>实时变声（VC）</td>
+          <td>同为变声器，主打低延迟实时转换；同样不具备文本转语音能力。作者与 GPT-SoVITS 为同一人。</td>
+        </tr>
+        <tr>
+          <td>Bert-VITS2</td>
+          <td>TTS</td>
+          <td>同为克隆式 TTS，但通常需要更多训练数据、更长训练时间；GPT-SoVITS 在少样本与零样本场景优势明显。</td>
+        </tr>
+        <tr>
+          <td>VALL-E / CosyVoice 等</td>
+          <td>LM 式 TTS</td>
+          <td>思路同源（语言模型 + 离散语音 token）。GPT-SoVITS 的特点是完全开源、可本地微调、社区生态与整合包成熟。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 应用与伦理 -->
+  <section id="ethics">
+    <h2>应用场景与使用边界</h2>
+    <p class="h2-note">能做什么，以及不该做什么</p>
+    <p>
+      <strong>常见应用：</strong>有声书与配音生产、虚拟主播/游戏角色语音、个人语音助手定制、视频解说批量配音、
+      语言学习发音示范、为失声者保留个人声音等。配合流式推理接口，也被用于实时对话式应用。
+    </p>
+    <div class="note">
+      <strong>伦理与法律边界：</strong>克隆他人声音<strong>必须取得声音主人的明确授权</strong>。
+      未经许可克隆真人声音用于诈骗、造谣、冒充身份等行为在多数司法辖区已属违法（中国《民法典》明确保护自然人声音权益，深度合成内容需显著标识）。
+      项目本身也在协议中要求使用者对合成内容负责。技术无罪，用法有界。
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  GPT-SoVITS 技术讲解 · 内容基于公开资料整理 · 项目地址：github.com/RVC-Boss/GPT-SoVITS
+</footer>
+
+<script>
+  // 生成 hero 波形条
+  (function(){
+    const g = document.getElementById('bars');
+    const W = 960, H = 110, n = 96, bw = 6, gap = W/n;
+    for(let i=0;i<n;i++){
+      const t = i/n;
+      // 类似语音包络的高度分布
+      const env = Math.sin(t*Math.PI)* (0.5 + 0.5*Math.abs(Math.sin(t*23) * Math.cos(t*7)));
+      const h = 8 + env*90;
+      const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      r.setAttribute('x', i*gap + (gap-bw)/2);
+      r.setAttribute('y', (H-h)/2 + H*0.18);
+      r.setAttribute('width', bw);
+      r.setAttribute('height', h);
+      r.setAttribute('rx', 3);
+      r.style.animationDelay = (i*0.04)+'s';
+      g.appendChild(r);
+    }
+  })();
+</script>
+
+</body>
+</html>

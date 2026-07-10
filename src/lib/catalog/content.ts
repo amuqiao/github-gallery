@@ -9,7 +9,13 @@ export type ContentNote = ProjectNoteConfig & {
   route: string;
 };
 
-export type ContentItem = Omit<ContentItemConfig, "blocks" | "notes"> & {
+type ContentItemConfigBase = ContentItemConfig extends infer ItemConfig
+  ? ItemConfig extends ContentItemConfig
+    ? Omit<ItemConfig, "blocks" | "notes">
+    : never
+  : never;
+
+export type ContentItem = ContentItemConfigBase & {
   blocks: AdaptedProjectBlock[];
   notes: ContentNote[];
   directory: string;
@@ -73,6 +79,27 @@ export async function getPublishedContentCollectionsForItem(hall: string, itemId
   return (await getPublishedContentCollectionsByHall(hall)).filter((collection) =>
     collection.items.some((entry) => entry.item.id === itemId)
   );
+}
+
+export async function getRelatedPublishedContentItems(item: ContentItem): Promise<ContentItem[]> {
+  if (item.kind !== "github_project") {
+    return [];
+  }
+
+  const snapshot = await getContentCatalogSnapshot();
+  return (item.relations?.related_projects ?? []).map((relatedId) => {
+    const relatedItem = snapshot.itemsByKey.get(contentKey(item.hall, relatedId));
+
+    if (!relatedItem) {
+      throw new Error(`${item.hall}/${item.id} references unknown related content item: ${relatedId}`);
+    }
+
+    if (relatedItem.publicationState !== "published") {
+      throw new Error(`${item.hall}/${item.id} references non-published related content item: ${relatedId}`);
+    }
+
+    return relatedItem;
+  });
 }
 
 export function getContentItemNoteById(item: ContentItem, noteId: string): ContentNote {

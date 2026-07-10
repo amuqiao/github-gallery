@@ -1,0 +1,33 @@
+schema_version: 2
+id: f5-tts
+hall: github
+kind: github_project
+title: F5-TTS
+summary: 基于 flow matching 的文本转语音项目，适合零样本音色合成实验。
+source:
+  type: github
+  url: https://github.com/SWivid/F5-TTS
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/SWivid/F5-TTS
+  category: ai
+  tags:
+    - audio
+    - text-to-speech
+    - voice-cloning
+    - research
+    - inference
+  maintenance_status: unknown
+  languages:
+    - Python
+blocks:
+  - type: use-cases
+    items:
+      - Zero-shot TTS research.
+      - Expressive speech synthesis experiments.
+relations:
+  related_projects:
+    - xtts
+    - cosyvoice

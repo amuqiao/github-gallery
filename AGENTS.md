@@ -10,7 +10,7 @@
 # 配置维护规则
 
 - 配置规则真源是 `src/lib/catalog/catalog-schema.js`。新增、删除或重命名字段时，先改 schema，再同步 loader、脚本和文档。
-- 内容真源位于 `catalog/`：项目使用 `catalog/projects/<id>/project.yaml`，专题使用 `catalog/collections/<id>/collection.yaml`，站点配置使用 `catalog/site.yaml`。
+- 内容真源位于 `catalog/`：新公开展馆内容使用 `catalog/content/{drafts,published,archived}/<hall>/items|collections/`；legacy 项目详情、分类、标签页暂用 `catalog/projects/<id>/project.yaml`；legacy root 专题暂用 `catalog/collections/<id>/collection.yaml`；站点配置使用 `catalog/site.yaml`。
 - 受控词表真源是 `catalog/taxonomies.yaml`，只维护项目内容会引用的词表：`categories`、`tags`、`project_maintenance_statuses`。
 - 项目维护状态字段必须叫 `maintenance_status`，引用 `catalog/taxonomies.yaml` 的 `project_maintenance_statuses[].id`。
 - 专题发布状态字段必须叫 `publication_status`，枚举 `published`、`draft`、`archived`，不放入 taxonomy。

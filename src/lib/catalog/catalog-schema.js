@@ -265,7 +265,8 @@ const contentItemBaseSchema = z
 export const contentItemConfigSchema = z.discriminatedUnion("kind", [
   contentItemBaseSchema.extend({
     kind: z.literal("github_project"),
-    profile: githubProjectProfileSchema
+    profile: githubProjectProfileSchema,
+    relations: relationsSchema.optional()
   }),
   contentItemBaseSchema.extend({
     kind: z.literal("ai_model"),

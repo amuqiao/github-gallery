@@ -2,14 +2,21 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import BlockRenderer from "@/components/blocks/BlockRenderer.astro";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import ContentCollectionCard from "@/components/ContentCollectionCard.astro";
+import ContentItemCard from "@/components/ContentItemCard.astro";
 import PageHeader from "@/components/PageHeader.astro";
 import Badge from "@/components/ui/Badge.astro";
 import Button from "@/components/ui/Button.astro";
 import Prose from "@/components/ui/Prose.astro";
-import { getPublishedContentItems, type ContentItem } from "@/lib/catalog/content";
+import {
+  getPublishedContentCollectionsForItem,
+  getPublishedContentItems,
+  getRelatedPublishedContentItems,
+  type ContentItem
+} from "@/lib/catalog/content";
 import { loadContentItemBody } from "@/lib/catalog/details";
 import { getHallById } from "@/lib/catalog/halls";
-import { getSiteConfig } from "@/lib/catalog/projects";
+import { getCategory, getProjectMaintenanceStatus, getSiteConfig, getTag, getTaxonomyCatalog } from "@/lib/catalog/projects";
 
 export async function getStaticPaths() {
   const items = await getPublishedContentItems();
@@ -20,15 +27,22 @@ export async function getStaticPaths() {
 }
 
 const { item } = Astro.props as { item: ContentItem };
-const [site, hall, body] = await Promise.all([
+const [site, hall, body, memberCollections, relatedItems] = await Promise.all([
   getSiteConfig(),
   getHallById(item.hall),
-  loadContentItemBody(item)
+  loadContentItemBody(item),
+  getPublishedContentCollectionsForItem(item.hall, item.id),
+  getRelatedPublishedContentItems(item)
 ]);
 const BodyContent = body.type === "markdown" ? body.Content : undefined;
 const htmlFragment = body.type === "html" ? body.html : undefined;
 const profile = item.profile;
 const isAiModel = "provider" in profile;
+const taxonomy = isAiModel ? undefined : await getTaxonomyCatalog();
+const category = !isAiModel && taxonomy ? getCategory(taxonomy, profile.category) : undefined;
+const tags = !isAiModel && taxonomy ? profile.tags.map((tag) => getTag(taxonomy, tag)) : [];
+const maintenanceStatus =
+  !isAiModel && taxonomy ? getProjectMaintenanceStatus(taxonomy, profile.maintenance_status) : undefined;
 const stats =
   isAiModel
     ? [
@@ -37,11 +51,17 @@ const stats =
         { label: "格式", value: profile.formats.join(" · ") }
       ]
     : [
-        { label: "类型", value: "GitHub 项目" },
-        { label: "维护", value: profile.maintenance_status },
+        { label: "分类", value: category?.label ?? profile.category },
+        { label: "维护", value: maintenanceStatus?.label ?? profile.maintenance_status },
+        { label: "语言", value: profile.languages?.[0] ?? "Unknown" },
         { label: "License", value: profile.license ?? "Unknown" }
       ];
-const badges = isAiModel ? profile.tasks : profile.tags;
+const badges = isAiModel ? profile.tasks : tags.map((tag) => tag.label);
+let sectionNumber = 1;
+const notesSectionIndex = item.notes.length > 0 ? String(sectionNumber++).padStart(2, "0") : undefined;
+const memberCollectionsSectionIndex =
+  memberCollections.length > 0 ? String(sectionNumber++).padStart(2, "0") : undefined;
+const relatedItemsSectionIndex = relatedItems.length > 0 ? String(sectionNumber++).padStart(2, "0") : undefined;
 ---
 
 <BaseLayout title={`${item.title} - ${hall.title}`} site={site} description={item.summary}>
@@ -72,7 +92,7 @@ const badges = isAiModel ? profile.tasks : profile.tags;
       item.notes.length > 0 && (
         <section class="gallery-section" aria-labelledby="content-notes-title">
           <div class="editorial-section-head">
-            <span class="editorial-section-head__index">01</span>
+            <span class="editorial-section-head__index">{notesSectionIndex}</span>
             <h2 class="editorial-section-head__title" id="content-notes-title">附加笔记</h2>
             <span class="editorial-section-head__hint">{item.notes.length} 篇</span>
           </div>
@@ -89,6 +109,21 @@ const badges = isAiModel ? profile.tasks : profile.tags;
       )
     }
 
+    {
+      memberCollections.length > 0 && (
+        <section class="gallery-section" aria-labelledby="content-collections-title">
+          <div class="editorial-section-head">
+            <span class="editorial-section-head__index">{memberCollectionsSectionIndex}</span>
+            <h2 class="editorial-section-head__title" id="content-collections-title">出现在这些专题</h2>
+            <span class="editorial-section-head__hint">{memberCollections.length} 个专题</span>
+          </div>
+          <div class="collection-grid__grid collection-grid__grid--standard">
+            {memberCollections.map((collection) => <ContentCollectionCard collection={collection} />)}
+          </div>
+        </section>
+      )
+    }
+
     <Prose>
       {BodyContent && <BodyContent />}
       {htmlFragment && <Fragment set:html={htmlFragment} />}
@@ -98,6 +133,21 @@ const badges = isAiModel ? profile.tasks : profile.tags;
       item.blocks.length > 0 && (
         <section class="content-blocks" aria-label="条目详情">
           {item.blocks.map((block, index) => <BlockRenderer block={block} index={index} />)}
+        </section>
+      )
+    }
+
+    {
+      relatedItems.length > 0 && (
+        <section class="gallery-section" aria-labelledby="related-content-title">
+          <div class="editorial-section-head">
+            <span class="editorial-section-head__index">{relatedItemsSectionIndex}</span>
+            <h2 class="editorial-section-head__title" id="related-content-title">相关项目</h2>
+            <span class="editorial-section-head__hint">{relatedItems.length} 个项目</span>
+          </div>
+          <div class="project-collection__grid project-collection__grid--compact">
+            {relatedItems.map((relatedItem) => <ContentItemCard item={relatedItem} />)}
+          </div>
         </section>
       )
     }

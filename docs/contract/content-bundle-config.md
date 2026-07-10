@@ -2,7 +2,7 @@
 
 本文解释当前已经实现的 `catalog/content/{drafts,published,archived}/` 内容包合同。可执行真相源是 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/content-validator.js` 和 `src/lib/catalog/content.ts`。
 
-当前 published content bundle 已驱动平台首页、GitHub 展馆首页、模型展馆首页和 canonical content 路由。旧 `catalog/projects/`、legacy `catalog/models/` 和 root `catalog/collections/` 仍暂时驱动 legacy 详情、筛选和 root 专题页面，等待后续切除。
+当前 published content bundle 已驱动平台首页、GitHub 展馆首页、模型展馆首页和 canonical content 路由。旧 GitHub projects 和 root collections 已镜像到 `catalog/content/published/github/`；旧 `catalog/projects/`、legacy `catalog/models/` 和 root `catalog/collections/` 仍暂时驱动 legacy 详情、筛选和 root 专题页面，等待后续切除。
 
 ## Directory
 
@@ -52,6 +52,7 @@ catalog/content/published/github/collections/voice-cloning/
 | `source.url` | 必填，来源 URL。 |
 | `body` | 必填，正文入口。 |
 | `profile` | 必填，按 `kind` 使用严格 schema。 |
+| `relations` | `github_project` 可选，表达同馆相关项目引用。 |
 | `notes` | 可选，Markdown 或受控 HTML note。 |
 | `blocks` | 可选，复用已实现的 `links`、`highlights`、`use-cases`。 |
 
@@ -71,6 +72,12 @@ catalog/content/published/github/collections/voice-cloning/
 | `maintenance_status` | 必填，引用 `project_maintenance_statuses` id。 |
 | `license` | 可选，展示事实。 |
 | `languages` | 可选，展示事实。 |
+
+`github_project.relations`：
+
+| Field | Rule |
+| --- | --- |
+| `related_projects` | 可选，引用同 hall content item id；published item 只能引用 published item。 |
 
 `ai_model.profile`：
 
@@ -142,6 +149,7 @@ Content import batch 合同见 [`content-import-batch.md`](./content-import-batc
 - 目录名与 `id` 一致。
 - `hall` 与目录 hall 一致。
 - GitHub profile 的 taxonomy 引用。
+- GitHub related project 引用和 publication state 规则。
 - body 和 notes 文件存在，且不是 symlink。
 - body 和 notes 路径不能越出内容包目录。
 - collection item 引用和 publication state 规则。

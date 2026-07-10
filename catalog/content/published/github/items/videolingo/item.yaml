@@ -1,0 +1,36 @@
+schema_version: 2
+id: videolingo
+hall: github
+kind: github_project
+title: VideoLingo
+summary: 面向视频字幕翻译和配音流程的 Web UI，侧重多步骤 LLM 翻译。
+source:
+  type: github
+  url: https://github.com/Huanshere/VideoLingo
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/Huanshere/VideoLingo
+  category: ai
+  tags:
+    - multilingual
+    - webui
+    - machine-learning
+    - video-translation
+    - subtitles
+    - speech-to-text
+    - translation
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - Python
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/Huanshere/VideoLingo
+  - type: use-cases
+    items:
+      - Knowledge-video subtitle translation experiments.
+      - Comparing multi-step LLM translation workflows.

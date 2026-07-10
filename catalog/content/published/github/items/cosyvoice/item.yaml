@@ -1,0 +1,34 @@
+schema_version: 2
+id: cosyvoice
+hall: github
+kind: github_project
+title: CosyVoice
+summary: 支持多语言语音生成、推理、训练和部署流程的开源项目。
+source:
+  type: github
+  url: https://github.com/FunAudioLLM/CosyVoice
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/FunAudioLLM/CosyVoice
+  category: ai
+  tags:
+    - audio
+    - text-to-speech
+    - voice-cloning
+    - multilingual
+    - training
+    - inference
+  maintenance_status: unknown
+  languages:
+    - Python
+blocks:
+  - type: use-cases
+    items:
+      - Multilingual voice generation.
+      - End-to-end TTS workflow exploration.
+relations:
+  related_projects:
+    - f5-tts
+    - fish-speech

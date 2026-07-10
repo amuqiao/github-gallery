@@ -183,7 +183,7 @@ scripts/content.sh
 
 `catalog/content/` 是新的 content bundle 合同面。`published` content 当前驱动平台首页、GitHub 展馆首页、模型展馆首页，以及 canonical routes：`/halls/<hall>/items/<id>/`、`/halls/<hall>/items/<id>/notes/<note>/`、`/halls/<hall>/collections/` 和 `/halls/<hall>/collections/<id>/`。`drafts`、`published`、`archived` 由目录表达发布状态；content bundle 只能位于 `availability: active` 的 hall 下；`published` collection 只能引用同一 hall 的 `published` item。
 
-`/` 当前用 published content 计算 hall item 数、模型样例和精选专题。`/halls/github/` 当前读取 `catalog/content/published/github/items/` 中的 `github_project` item 和 `catalog/content/published/github/collections/` 中的 collection。`/halls/models/` 当前读取 `catalog/content/published/models/items/` 中的 `ai_model` item。旧 `catalog/models/` 路由仍暂时存在，作为后续破坏性切换前的 legacy 页面。
+`/` 当前用 published content 计算 hall item 数、模型样例和精选专题。`/halls/github/` 当前读取 `catalog/content/published/github/items/` 中的 `github_project` item 和 `catalog/content/published/github/collections/` 中的 collection；旧 GitHub projects 和 root collections 已镜像为 GitHub published content。`/halls/models/` 当前读取 `catalog/content/published/models/items/` 中的 `ai_model` item。旧 `catalog/models/` 路由仍暂时存在，作为后续破坏性切换前的 legacy 页面。
 
 `model.yaml` 的 stable core 字段是模型馆卡片、模型详情首屏和模型笔记入口的机器可读来源。模型性能数据、benchmark、部署硬件和一次性实验观察优先进入 `details.md`、`notes` 或 typed blocks。
 
@@ -201,7 +201,7 @@ scripts/content.sh
 
 `details.md` 是人类可读长文说明，不定义可筛选字段。
 
-`notes` 是项目或模型附加内容索引。详情页只显示 notes 卡片入口；每篇 note 生成独立路由。`type: markdown` + `display: site` 使用本站页面壳层，`type: html` + `display: site` + `html_mode: fragment` 渲染受控 HTML 正文片段，`type: html` + `display: standalone` + `html_mode: document` 返回独立 HTML。
+`notes` 是 content item、legacy 项目或 legacy 模型的附加内容索引。详情页只显示 notes 卡片入口；每篇 note 生成独立路由。`type: markdown` + `display: site` 使用本站页面壳层，`type: html` + `display: site` + `html_mode: fragment` 渲染受控 HTML 正文片段，`type: html` + `display: standalone` + `html_mode: document` 返回独立 HTML。
 
 `.tmp/import-batches/` 是中间交换区，不是长期数据源。`content.sh import` 导入成功后，正式草稿来源是 `catalog/content/drafts/`；旧 `catalog.sh import` 导入成功后，正式来源仍是 `catalog/projects/` 和 `catalog/collections/`。导入失败时脚本会回滚已写入的 bundle 目录。日常操作见 [`../runbooks/content-import-workflow.md`](../runbooks/content-import-workflow.md) 和 [`../runbooks/catalog-import-workflow.md`](../runbooks/catalog-import-workflow.md)。
 

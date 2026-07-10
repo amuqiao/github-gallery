@@ -55,7 +55,7 @@ Release Gate
 
 - 站点是 Astro static site，构建期通过 loader 读取 `catalog/` 并生成静态页面。
 - 已有多展馆入口：`catalog/halls/<id>/hall.yaml`、`/` 平台首页、`/halls/github/`、`/halls/models/`、`/halls/music/`、`/halls/movies/`。
-- GitHub 公开入口已切到 `catalog/content/published/github/`；legacy project detail、root collection、category/tag 页面仍暂留 `catalog/projects/<id>/project.yaml` 链路。
+- GitHub 公开入口已切到 `catalog/content/published/github/`，旧 GitHub projects 和 root collections 已镜像为 published content；legacy project detail、root collection、category/tag 页面仍暂留 `catalog/projects/<id>/project.yaml` 链路。
 - 模型内容当前使用 `catalog/models/<id>/model.yaml`，是为了验证模型馆样例的过渡设计。
 - 专题当前使用 `catalog/collections/<id>/collection.yaml`，并通过 `items[].project` 引用 GitHub 项目。
 - 已实现 content bundle 验证面：`catalog/content/{drafts,published,archived}/<hall>/items/<id>/item.yaml` 和 `collections/<id>/collection.yaml`。
@@ -444,6 +444,7 @@ docs/runbooks/
 - 已让 `/halls/models/` 读取 `catalog/content/published/models/items/` 中的 `ai_model` content item。
 - 已让平台首页 `/` 读取 published content 的 hall item count、模型样例和精选专题。
 - 已让 `/halls/github/` 读取 published GitHub content item 和 GitHub hall collection。
+- 已把旧 GitHub projects 全量迁移为 `catalog/content/published/github/items/`，旧 root collections 全量迁移为 `catalog/content/published/github/collections/`。
 - 旧 `/projects/*`、`/collections/*`、`/categories/*`、`/tags/*` 和 legacy `/halls/models/[id]/*` 仍暂留，等待后续破坏性切换。
 
 ### Slice 8: Documentation And Cleanup

@@ -22,6 +22,7 @@ export async function readValidatedContentCatalog() {
 
   assertUniqueBundleKeys("content items", itemConfigs);
   assertUniqueBundleKeys("content collections", collectionConfigs);
+  assertContentItemRelations(itemConfigs);
   assertCollectionReferences(itemConfigs, collectionConfigs);
 
   return { itemConfigs, collectionConfigs };
@@ -281,6 +282,28 @@ function assertCollectionReferences(items, collections) {
 
       if (collection.publicationState === "drafts" && item.publicationState === "archived") {
         throw new Error(`${collection.id} draft content collection references archived item: ${item.id}`);
+      }
+    }
+  }
+}
+
+function assertContentItemRelations(items) {
+  const itemsByKey = new Map(items.map((item) => [contentKey(item.hall, item.id), item]));
+
+  for (const item of items) {
+    if (item.kind !== "github_project") {
+      continue;
+    }
+
+    for (const relatedId of item.relations?.related_projects ?? []) {
+      const relatedItem = itemsByKey.get(contentKey(item.hall, relatedId));
+
+      if (!relatedItem) {
+        throw new Error(`${item.id} content item references unknown related project: ${item.hall}/${relatedId}`);
+      }
+
+      if (item.publicationState === "published" && relatedItem.publicationState !== "published") {
+        throw new Error(`${item.id} published content item references non-published related project: ${relatedId}`);
       }
     }
   }

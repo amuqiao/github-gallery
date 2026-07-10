@@ -1,0 +1,36 @@
+schema_version: 2
+id: krillinai
+hall: github
+kind: github_project
+title: KrillinAI
+summary: 以 Go 单可执行文件分发的轻量级视频翻译和配音工具。
+source:
+  type: github
+  url: https://github.com/krillinai/KrillinAI
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/krillinai/KrillinAI
+  category: ai
+  tags:
+    - audio
+    - multilingual
+    - video-translation
+    - dubbing
+    - subtitles
+    - speech-to-text
+    - translation
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - Go
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/krillinai/KrillinAI
+  - type: use-cases
+    items:
+      - Lightweight video dubbing workflow trials.
+      - Short-video translation and publishing experiments.

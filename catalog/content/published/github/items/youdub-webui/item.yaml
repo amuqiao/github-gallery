@@ -1,0 +1,36 @@
+schema_version: 2
+id: youdub-webui
+hall: github
+kind: github_project
+title: YouDub-webui
+summary: 面向 YouTube 视频本地化的 Web UI，覆盖翻译、配音和字幕处理流程。
+source:
+  type: github
+  url: https://github.com/liuzhao1225/YouDub-webui
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/liuzhao1225/YouDub-webui
+  category: ai
+  tags:
+    - audio
+    - multilingual
+    - webui
+    - video-translation
+    - dubbing
+    - subtitles
+    - translation
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - Python
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/liuzhao1225/YouDub-webui
+  - type: use-cases
+    items:
+      - YouTube video localization workflow trials.
+      - Comparing vertical video translation and dubbing tools.

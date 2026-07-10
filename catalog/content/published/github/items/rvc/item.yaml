@@ -1,0 +1,34 @@
+schema_version: 2
+id: rvc
+hall: github
+kind: github_project
+title: RVC
+summary: 基于检索的语音转换 WebUI，用于训练和应用音色转换模型。
+source:
+  type: github
+  url: https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI
+  category: ai
+  tags:
+    - audio
+    - voice-conversion
+    - machine-learning
+    - webui
+    - training
+    - inference
+  maintenance_status: unknown
+  languages:
+    - Python
+blocks:
+  - type: use-cases
+    items:
+      - Voice conversion.
+      - Voice model training.
+relations:
+  related_projects:
+    - gpt-sovits
+    - openvoice

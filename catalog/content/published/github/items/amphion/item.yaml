@@ -1,0 +1,33 @@
+schema_version: 2
+id: amphion
+hall: github
+kind: github_project
+title: Amphion
+summary: 面向音频、音乐和语音生成研究开发的开源工具集。
+source:
+  type: github
+  url: https://github.com/open-mmlab/Amphion
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/open-mmlab/Amphion
+  category: ai
+  tags:
+    - audio
+    - machine-learning
+    - research
+    - toolkit
+    - pytorch
+  maintenance_status: unknown
+  languages:
+    - Python
+blocks:
+  - type: use-cases
+    items:
+      - Audio generation research.
+      - Speech and music generation experiments.
+relations:
+  related_projects:
+    - f5-tts
+    - cosyvoice

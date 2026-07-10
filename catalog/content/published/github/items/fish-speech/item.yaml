@@ -1,0 +1,34 @@
+schema_version: 2
+id: fish-speech
+hall: github
+kind: github_project
+title: Fish Speech
+summary: 面向语音生成和音色合成实验的开源文本转语音项目。
+source:
+  type: github
+  url: https://github.com/fishaudio/fish-speech
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/fishaudio/fish-speech
+  category: ai
+  tags:
+    - audio
+    - text-to-speech
+    - voice-cloning
+    - multilingual
+    - machine-learning
+    - inference
+  maintenance_status: unknown
+  languages:
+    - Python
+blocks:
+  - type: use-cases
+    items:
+      - Speech generation experiments.
+      - Voice synthesis comparison.
+relations:
+  related_projects:
+    - cosyvoice
+    - openvoice
