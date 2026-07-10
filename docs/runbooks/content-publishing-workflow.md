@@ -1,6 +1,6 @@
 # Content Publishing Workflow
 
-本文说明当前已实现的 content bundle 创建和发布流程。它只覆盖 `catalog/content/`，不替代旧 `catalog.sh` 的 project 和 root collection 工作流。
+本文说明当前已实现的 content bundle 创建和发布流程。`catalog/content/` 是公开展馆内容的唯一内容来源。
 
 ## Flow
 
@@ -138,4 +138,3 @@ Rules:
 ## Boundaries
 
 - Canonical content routes 只读取 `catalog/content/published/`。
-- 旧 `/projects/*`、`/collections/*`、`/categories/*`、`/tags/*` 和 legacy `/halls/models/[id]/*` 页面仍暂时存在，后续切换阶段再移除。

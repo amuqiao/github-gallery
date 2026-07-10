@@ -1,6 +1,6 @@
 # Site Config Contract
 
-本文说明站点级配置 `catalog/site.yaml`。真正执行校验的代码在 `src/lib/catalog/catalog-schema.js`。
+本文说明站点级配置 `catalog/site.yaml`。真正执行校验的代码在 `src/lib/catalog/catalog-schema.js` 和 `src/lib/catalog/site.ts`。
 
 ## Purpose
 
@@ -20,21 +20,20 @@ catalog/site.yaml
 | `description` | 必填，默认 meta description。 |
 | `navigation` | 必填，非空 `{ label, href }` 数组。 |
 
-## Route Rules
+## Navigation Route Rules
+
+`navigation[].href` 只能使用入口级 canonical 路径：
 
 - 平台首页：`/`
-- 展馆路由：`/halls/<hall-id>/`
-- 模型详情路由：`/halls/models/<model-id>/`
-- 模型笔记路由：`/halls/models/<model-id>/notes/<note-id>/`
-- 项目路由：`/projects/<project-id>/`
-- 专题路由：`/collections/<collection-id>/`
-- 分类路由：`/categories/<category-id>/`
-- 标签路由：`/tags/<tag-id>/`
-- `hall id`、`model id`、`project id`、`collection id`、`category id`、`tag id` 都是对外 URL 标识，重命名属于破坏性路由变更。
-- 第一版允许空分类页和空标签页存在，因为 taxonomy id 是稳定入口。
+- 展馆入口：`/halls/<hall-id>/`
+- active 展馆的专题列表：`/halls/<hall-id>/collections/`
+
+`hall id` 必须引用 `catalog/halls/<id>/hall.yaml` 中存在的 hall。`planned` hall 可以作为展馆入口导航，但不能配置专题列表导航。
+
+Content item、note 和 collection detail 路由由 content bundle 自动生成，不写进站点导航。
 
 ## Change Rules
 
 - 不要在共享布局里硬编码领域分类。
 - 新增导航项时修改 `catalog/site.yaml`。
-- 导航链接优先保持简单稳定：根页面、锚点、专题页、分类页或标签页。
+- 导航链接优先保持简单稳定：根页面、展馆页或馆内专题页。

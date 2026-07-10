@@ -7,12 +7,6 @@
 ```text
 catalog/halls/<id>/hall.yaml       # 展馆入口机器可读事实
 catalog/content/{drafts,published,archived}/ # content bundle 合同；published 生成 canonical 页面
-catalog/models/<id>/model.yaml     # legacy 模型展馆条目机器可读事实
-catalog/projects/<id>/project.yaml  # legacy 项目详情、分类和标签页机器可读事实
-catalog/projects/<id>/details.md    # legacy 项目详情正文
-catalog/projects/<id>/notes/        # legacy 项目附加笔记
-catalog/collections/<id>/collection.yaml # legacy root 专题机器可读事实
-catalog/collections/<id>/details.md  # legacy root 专题详情正文
 catalog/taxonomies.yaml             # 共享分类、标签和项目维护状态词表
 catalog/site.yaml                   # 站点标题、描述和导航
 src/lib/catalog/                    # schema、loader、adapter
@@ -35,12 +29,8 @@ docs/runbooks/                      # 可重复维护流程
 3. [Hall 配置合同](docs/contract/hall-config.md)
 4. [Content Bundle 配置合同](docs/contract/content-bundle-config.md)
 5. [Content Import Batch 合同](docs/contract/content-import-batch.md)
-6. [Model 配置合同](docs/contract/model-config.md)
-7. [项目配置合同](docs/contract/project-config.md)
-8. [专题配置合同](docs/contract/collection-config.md)
-9. [Taxonomy 配置合同](docs/contract/taxonomy-config.md)
-10. [站点配置合同](docs/contract/site-config.md)
-11. [Catalog 合同迭代手册](docs/runbooks/catalog-contract-iteration.md)
+6. [Taxonomy 配置合同](docs/contract/taxonomy-config.md)
+7. [站点配置合同](docs/contract/site-config.md)
 
 修改前端 UI 时按这个顺序阅读：
 
@@ -66,15 +56,6 @@ npm install
 npm run dev
 npm run build
 npm run preview
-```
-
-Catalog 维护入口：
-
-```sh
-./scripts/catalog.sh list
-./scripts/catalog.sh validate
-./scripts/catalog.sh collection list
-./scripts/catalog.sh collection show voice-cloning
 ```
 
 Content bundle 发布入口：

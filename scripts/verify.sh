@@ -13,15 +13,15 @@ usage() {
   ./scripts/verify.sh -h|--help
 
 作用域：
-  当前仓库的一次性验证入口。验证代码、catalog 配置和被配置引用的内容资产。
+  当前仓库的一次性验证入口。验证代码、content bundle、hall、taxonomy、site 和被配置引用的内容资产。
   不把 README 或 docs 作为验证对象；文档只解释已实现规则，不是真相源。
 
 命令：
-  check      总验证入口，执行 catalog、content、build。
+  check      总验证入口，执行 content catalog、content assets、build。
   release    发布门禁，执行 content bundle 发布语义检查和静态构建。
   build      执行 npm run build。
-  catalog    验证 content bundle、hall、model、project、collection、taxonomy、site config、relations 等 catalog 合同。
-  content    验证已被 content/model/project/collection 配置引用的内容资产，例如 body、details.md 和 notes。
+  catalog    验证 content bundle、hall、taxonomy、site config、relations 等 catalog 合同。
+  content    验证已被 content 配置引用的内容资产，例如 body 和 notes。
   help       显示帮助。
 
 副作用与边界：
@@ -53,8 +53,8 @@ command_usage() {
   执行 catalog、content 和 build 验证。
 
 说明：
-  catalog/content 目前共用 npm run build 作为可执行门禁，因为 loader 已在构建期校验 content bundle、schema、
-  taxonomy、collection references、relations 和 details 文件引用。未来需要更快反馈时，再拆出 catalog-only 校验。
+  catalog/content 目前共用 release gate 和 npm run build 作为可执行门禁，因为 loader 已在构建期校验 content bundle、
+  schema、taxonomy、collection references、relations 和内容文件引用。未来需要更快反馈时，再拆出 catalog-only 校验。
 EOF
       ;;
     build)
@@ -86,8 +86,8 @@ EOF
   ./scripts/verify.sh catalog
 
 作用域：
-  验证 catalog 配置合同：content item.yaml、content collection.yaml、hall.yaml、model.yaml、project.yaml、collection.yaml、taxonomies.yaml、site.yaml、relations。
-  当前实现通过 npm run build 触发 loader 校验。
+  验证 catalog 配置合同：content item.yaml、content collection.yaml、hall.yaml、taxonomies.yaml、site.yaml、relations。
+  当前实现通过 release gate 和 npm run build 触发 loader 校验。
 EOF
       ;;
     content)
@@ -96,8 +96,8 @@ EOF
   ./scripts/verify.sh content
 
 作用域：
-  验证已被配置引用的内容资产，例如 content body、details.md 和 notes。
-  当前实现通过 npm run build 触发 loader 的引用文件校验。
+  验证已被配置引用的内容资产，例如 content body 和 notes。
+  当前实现通过 release gate 和 npm run build 触发 loader 的引用文件校验。
 EOF
       ;;
     *)
@@ -108,20 +108,12 @@ EOF
 }
 
 run_build_gate() {
-  assert_no_catalog_detail_symlinks
   run_npm_script build
 }
 
 run_release_gate() {
   require_command node "install Node.js 20 or newer"
   (cd "$ROOT_DIR" && node scripts/verify/release-gate.mjs)
-}
-
-assert_no_catalog_detail_symlinks() {
-  local item
-  while IFS= read -r item; do
-    die "catalog details file must not be a symlink: ${item#$ROOT_DIR/}" 2
-  done < <(find "$ROOT_DIR/catalog" -path '*/.*' -prune -o -name details.md -type l -print)
 }
 
 section_name_for() {
@@ -150,9 +142,10 @@ case "$command" in
     fi
     [[ "$#" -eq 0 ]] || die "unexpected arguments for verify check: $*" 2
     section "Build Gate"
-    event "COVERS" "catalog" "content item.yaml/collection.yaml, hall.yaml, model.yaml, project.yaml, collection.yaml, taxonomy, site config, relations"
-    event "COVERS" "content" "configured content body, model, project, and collection details.md/notes references"
+    event "COVERS" "catalog" "content item.yaml/collection.yaml, hall.yaml, taxonomy, site config, relations"
+    event "COVERS" "content" "configured content body and notes references"
     event "COVERS" "build" "astro check and static build"
+    run_release_gate
     run_build_gate
     ;;
   release)
@@ -164,7 +157,7 @@ case "$command" in
     [[ "$#" -eq 0 ]] || die "unexpected arguments for verify release: $*" 2
     section "Release Gate"
     event "COVERS" "content" "published content item.yaml/collection.yaml, hall ownership, body/notes references"
-    event "COVERS" "relations" "published collections only reference published items in the same hall"
+    event "COVERS" "relations" "published collections and related content only reference published items in the same hall"
     event "COVERS" "build" "astro check and static build"
     run_release_gate
     run_build_gate
@@ -187,6 +180,7 @@ case "$command" in
     fi
     [[ "$#" -eq 0 ]] || die "unexpected arguments for verify $command: $*" 2
     section "$(section_name_for "$command")"
+    run_release_gate
     run_build_gate
     ;;
   *)

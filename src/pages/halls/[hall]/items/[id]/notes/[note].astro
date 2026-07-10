@@ -7,7 +7,7 @@ import Prose from "@/components/ui/Prose.astro";
 import { getPublishedContentItems, type ContentItem, type ContentNote } from "@/lib/catalog/content";
 import { loadContentNote } from "@/lib/catalog/details";
 import { getHallById } from "@/lib/catalog/halls";
-import { getSiteConfig } from "@/lib/catalog/projects";
+import { getSiteConfig } from "@/lib/catalog/site";
 
 export async function getStaticPaths() {
   const items = await getPublishedContentItems();

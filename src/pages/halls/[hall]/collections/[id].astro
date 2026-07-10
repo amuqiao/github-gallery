@@ -9,7 +9,7 @@ import Prose from "@/components/ui/Prose.astro";
 import { getPublishedContentCollections, type ContentCollection } from "@/lib/catalog/content";
 import { loadContentCollectionBody } from "@/lib/catalog/details";
 import { getHallById } from "@/lib/catalog/halls";
-import { getSiteConfig } from "@/lib/catalog/projects";
+import { getSiteConfig } from "@/lib/catalog/site";
 
 export async function getStaticPaths() {
   const collections = await getPublishedContentCollections();

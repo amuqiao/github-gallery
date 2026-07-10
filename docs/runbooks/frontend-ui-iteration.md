@@ -31,7 +31,7 @@ src/pages/*
 2. 颜色、半径、基础语义 token 改 `src/styles/global.css`。
 3. 新增皮肤版本时，先在 `src/presentation/themes.ts` 和 `src/presentation/types.ts` 注册 theme。
 4. Button、Badge、Card、EmptyState 这类通用样式改 `src/components/ui/`。
-5. ProjectCard、FilterPanel、ProjectHero 这类业务展示改 `src/components/`。
+5. ContentItemCard、ContentCollectionCard、HallCard 这类业务展示改 `src/components/`。
 6. 页面只调整组件顺序和 props，不堆复杂 Tailwind class。
 7. 运行 `./scripts/verify.sh check`。
 

@@ -1,18 +1,18 @@
 # Taxonomy Config Contract
 
-本文说明 `catalog/taxonomies.yaml` 的配置合同。真正执行校验的代码在 `src/lib/catalog/catalog-schema.js` 和 `src/lib/catalog/projects.ts`；本文只解释已经实现的规则。
+本文说明 `catalog/taxonomies.yaml` 的配置合同。真正执行校验的代码在 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/content-validator.js` 和 `src/lib/catalog/taxonomy.ts`；本文只解释已经实现的规则。
 
 ## Purpose
 
-`catalog/taxonomies.yaml` 是分类、标签和项目维护状态的受控词表。项目配置只引用 `category id`、`tag id` 和 `maintenance_status id`，不直接写展示名或视觉颜色。
+`catalog/taxonomies.yaml` 是分类、标签和项目维护状态的受控词表。GitHub content item 只引用 `category id`、`tag id` 和 `maintenance_status id`，不直接写展示名或视觉颜色。
 
 Hall availability 不属于 taxonomy。展馆入口的 `availability` 由 `catalog/halls/<id>/hall.yaml` 直接使用 `active` / `planned` 枚举。模型馆当前的 `tasks`、`modalities`、`formats`、`runtimes` 和 `access` 也不属于本 taxonomy 合同。
 
 ```text
 catalog/taxonomies.yaml
   -> category/tag/project_maintenance_status id registry
-  -> catalog/projects/<id>/project.yaml references ids
-  -> loader validates references
+  -> catalog/content/<state>/github/items/<id>/item.yaml profile references ids
+  -> content validator validates references
   -> frontend renders localized labels
 ```
 
@@ -45,7 +45,7 @@ catalog/taxonomies.yaml
 | `description.zh` | 必填，中文说明。 |
 | `description.en` | 必填，英文说明。 |
 
-当前 taxonomy 是固定双语 registry，不是任意多语言系统。新增第三种语言需要先修改 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/projects.ts` 和 `scripts/catalog/catalog-import-cli.mjs`，不能只改 `catalog/taxonomies.yaml`。
+当前 taxonomy 是固定双语 registry，不是任意多语言系统。新增第三种语言需要先修改 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/taxonomy.ts` 和 content import 相关校验，不能只改 `catalog/taxonomies.yaml`。
 
 示例：
 
@@ -66,7 +66,7 @@ tags:
 
 | Field | Rule |
 | --- | --- |
-| `id` | 必填，唯一，小写 kebab-case。作为 `project.yaml.maintenance_status` 的引用。 |
+| `id` | 必填，唯一，小写 kebab-case。作为 `github_project.profile.maintenance_status` 的引用。 |
 | `name.zh` | 必填，中文展示名。 |
 | `name.en` | 必填，英文展示名。 |
 | `description.zh` | 必填，中文说明。 |
@@ -89,11 +89,9 @@ project_maintenance_statuses:
 
 `id` 是稳定机器合同：
 
-- `project.yaml` 的 `category` 必须引用 `categories[].id`。
-- `project.yaml` 的 `tags` 必须引用 `tags[].id`。
-- `project.yaml` 的 `maintenance_status` 必须引用 `project_maintenance_statuses[].id`。
-- 分类路由使用 `/categories/<category-id>/`。
-- 标签路由使用 `/tags/<tag-id>/`。
+- `github_project.profile.category` 必须引用 `categories[].id`。
+- `github_project.profile.tags` 必须引用 `tags[].id`。
+- `github_project.profile.maintenance_status` 必须引用 `project_maintenance_statuses[].id`。
 
 重命名 `id` 属于破坏性路由变更。只修改展示名时，优先修改 `name.zh` 或 `name.en`，不要改 `id`。
 
@@ -127,5 +125,5 @@ maintenance_status 必须从 project_maintenance_statuses[].id 中选择一个�
 - 新增 item 必须同时提供 `zh` 和 `en` 的 `name`、`description`。
 - 新增 project maintenance status 后，如果前端会渲染它，还必须在 `src/presentation/maintenance-status-tones.ts` 增加展示 tone 映射。
 - 修改 `locale.default` 可以切换默认展示语言；新增第三语言必须先改代码合同。
-- 删除或重命名 id 前，先检查所有项目引用和公开 URL 影响。
+- 删除或重命名 id 前，先检查所有 GitHub content item 引用和公开页面展示影响。
 - 更新后运行 `./scripts/verify.sh check`。

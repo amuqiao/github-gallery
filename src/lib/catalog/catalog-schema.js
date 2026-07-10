@@ -8,8 +8,6 @@ const relativePathSchema = z
   .regex(relativePathPattern, "Path must be a relative catalog item-local path such as ./details.md");
 
 const nonEmptyString = z.string().trim().min(1);
-/** @type {["published", "draft", "archived"]} */
-export const collectionPublicationStatuses = ["published", "draft", "archived"];
 export const localeCodeSchema = z.enum(["zh", "en"]);
 
 export const localizedTextSchema = z
@@ -18,22 +16,6 @@ export const localizedTextSchema = z
     en: nonEmptyString
   })
   .strict();
-
-export const detailsSchema = z
-  .object({
-    type: z.literal("markdown"),
-    path: relativePathSchema
-  })
-  .strict()
-  .superRefine((details, ctx) => {
-    if (details.path !== "./details.md") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "details.path must be ./details.md in schema_version 1",
-        path: ["path"]
-      });
-    }
-  });
 
 export const hallAvailabilities = ["active", "planned"];
 
@@ -116,13 +98,6 @@ export const projectNoteSchema = z
       });
     }
   });
-
-export const metaSchema = z
-  .object({
-    license: nonEmptyString.optional(),
-    languages: z.array(nonEmptyString).min(1).optional()
-  })
-  .strict();
 
 export const relationsSchema = z
   .object({
@@ -294,70 +269,6 @@ export const contentCollectionConfigSchema = z
   })
   .strict();
 
-export const projectConfigSchema = z
-  .object({
-    schema_version: z.literal(1),
-    id: z.string().regex(slugPattern, "id must use lowercase kebab-case"),
-    name: nonEmptyString,
-    repo: z.string().url(),
-    summary: nonEmptyString.max(160),
-    category: z.string().regex(slugPattern),
-    tags: z.array(z.string().regex(slugPattern)).min(1).max(8),
-    maintenance_status: z.string().regex(slugPattern),
-    details: detailsSchema.optional(),
-    meta: metaSchema.optional(),
-    relations: relationsSchema.optional(),
-    notes: z.array(projectNoteSchema).optional(),
-    blocks: z.array(projectBlockSchema).optional()
-  })
-  .strict();
-
-export const modelConfigSchema = z
-  .object({
-    schema_version: z.literal(1),
-    id: z.string().regex(slugPattern, "id must use lowercase kebab-case"),
-    name: nonEmptyString,
-    provider: nonEmptyString,
-    source_url: z.string().url(),
-    summary: nonEmptyString.max(180),
-    modalities: z
-      .object({
-        input: z.array(nonEmptyString).min(1).max(8),
-        output: z.array(nonEmptyString).min(1).max(8)
-      })
-      .strict(),
-    tasks: z.array(nonEmptyString).min(1).max(12),
-    access: z.array(nonEmptyString).min(1).max(8),
-    formats: z.array(nonEmptyString).min(1).max(8),
-    runtimes: z.array(nonEmptyString).min(1).max(8),
-    license: nonEmptyString.optional(),
-    use_cases: z.array(nonEmptyString).min(1).max(8),
-    details: detailsSchema.optional(),
-    notes: z.array(projectNoteSchema).optional(),
-    blocks: z.array(projectBlockSchema).optional()
-  })
-  .strict();
-
-export const collectionItemSchema = z
-  .object({
-    project: z.string().regex(slugPattern),
-    note: nonEmptyString.max(180).optional()
-  })
-  .strict();
-
-export const collectionConfigSchema = z
-  .object({
-    schema_version: z.literal(1),
-    id: z.string().regex(slugPattern, "id must use lowercase kebab-case"),
-    title: nonEmptyString,
-    summary: nonEmptyString.max(180),
-    publication_status: z.enum(collectionPublicationStatuses),
-    items: z.array(collectionItemSchema).min(1),
-    details: detailsSchema.optional(),
-    blocks: z.array(projectBlockSchema).optional()
-  })
-  .strict();
-
 export const taxonomyItemSchema = z
   .object({
     id: z.string().regex(slugPattern),
@@ -410,6 +321,14 @@ export const taxonomyCatalogSchema = z
     }
   });
 
+export const siteNavigationHrefSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^\/$|^\/halls\/[a-z0-9]+(?:-[a-z0-9]+)*\/(?:collections\/)?$/,
+    "navigation.href must be /, /halls/<hall>/, or /halls/<hall>/collections/"
+  );
+
 export const siteConfigSchema = z
   .object({
     title: nonEmptyString,
@@ -419,7 +338,7 @@ export const siteConfigSchema = z
         z
           .object({
             label: nonEmptyString,
-            href: nonEmptyString
+            href: siteNavigationHrefSchema
           })
           .strict()
       )

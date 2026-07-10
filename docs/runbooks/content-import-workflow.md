@@ -93,5 +93,4 @@ Replace 和 delete 需要显式授权：
 ## Boundaries
 
 - Content import batch 的合同见 [`../contract/content-import-batch.md`](../contract/content-import-batch.md)。
-- 旧 `catalog.sh import` 仍只服务 `catalog/projects/` 和 root `catalog/collections/`。
 - Import batch 不是长期内容源；导入成功后，正式来源是 `catalog/content/drafts/`。

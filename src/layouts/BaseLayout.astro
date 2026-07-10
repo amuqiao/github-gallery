@@ -28,13 +28,6 @@ const matchesNavigationPath = (normalizedHref: string) => {
     return currentPath === "/";
   }
 
-  if (
-    normalizedHref === "/halls/github/" &&
-    (currentPath.startsWith("/projects/") || currentPath.startsWith("/categories/") || currentPath.startsWith("/tags/"))
-  ) {
-    return true;
-  }
-
   return currentPath.startsWith(normalizedHref);
 };
 const activeNavigationHref = navigationItems

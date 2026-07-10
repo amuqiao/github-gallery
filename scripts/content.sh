@@ -14,7 +14,6 @@ usage() {
 
 作用域：
   管理 catalog/content/{drafts,published,archived}/ 下的 content bundle 骨架和发布状态。
-  不替代旧 catalog.sh 的 project/collection/import 工作流。
 
 命令：
   item new <hall> <github_project|ai_model> <id> [options]

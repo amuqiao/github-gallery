@@ -7,13 +7,15 @@ import Button from "@/components/ui/Button.astro";
 import EmptyState from "@/components/ui/EmptyState.astro";
 import { getPublishedContentCollectionsByHall } from "@/lib/catalog/content";
 import { getAllHalls, getHallById } from "@/lib/catalog/halls";
-import { getSiteConfig } from "@/lib/catalog/projects";
+import { getSiteConfig } from "@/lib/catalog/site";
 
 export async function getStaticPaths() {
   const halls = await getAllHalls();
-  return halls.map((hall) => ({
-    params: { hall: hall.id }
-  }));
+  return halls
+    .filter((hall) => hall.availability === "active")
+    .map((hall) => ({
+      params: { hall: hall.id }
+    }));
 }
 
 const { hall: hallId } = Astro.params;

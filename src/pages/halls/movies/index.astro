@@ -2,7 +2,7 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import PlannedHallPage from "@/components/PlannedHallPage.astro";
 import { getHallById } from "@/lib/catalog/halls";
-import { getSiteConfig } from "@/lib/catalog/projects";
+import { getSiteConfig } from "@/lib/catalog/site";
 
 const [site, hall] = await Promise.all([getSiteConfig(), getHallById("movies")]);
 ---

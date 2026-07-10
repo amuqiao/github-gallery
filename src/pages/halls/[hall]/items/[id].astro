@@ -16,7 +16,8 @@ import {
 } from "@/lib/catalog/content";
 import { loadContentItemBody } from "@/lib/catalog/details";
 import { getHallById } from "@/lib/catalog/halls";
-import { getCategory, getProjectMaintenanceStatus, getSiteConfig, getTag, getTaxonomyCatalog } from "@/lib/catalog/projects";
+import { getSiteConfig } from "@/lib/catalog/site";
+import { getCategory, getProjectMaintenanceStatus, getTag, getTaxonomyCatalog } from "@/lib/catalog/taxonomy";
 
 export async function getStaticPaths() {
   const items = await getPublishedContentItems();

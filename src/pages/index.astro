@@ -9,7 +9,7 @@ import {
   getPublishedContentItemsByHallAndKind
 } from "@/lib/catalog/content";
 import { getAllHalls } from "@/lib/catalog/halls";
-import { getSiteConfig } from "@/lib/catalog/projects";
+import { getSiteConfig } from "@/lib/catalog/site";
 
 const [site, collections, halls, publishedItems, models] = await Promise.all([
   getSiteConfig(),

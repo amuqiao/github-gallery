@@ -20,7 +20,7 @@
 
 ## Acceptance
 
-- 搜索不需要修改 `project.yaml` core 合同。
+- 搜索不需要修改 content item core 合同。
 - generated metadata 不覆盖手写项目事实。
 - 缺失文件、未知标签、错误 related project id 在部署前失败。
 - 新 block type 必须有 schema、adapter、renderer、样例数据和文档。

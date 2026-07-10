@@ -10,10 +10,10 @@
 # 配置维护规则
 
 - 配置规则真源是 `src/lib/catalog/catalog-schema.js`。新增、删除或重命名字段时，先改 schema，再同步 loader、脚本和文档。
-- 内容真源位于 `catalog/`：新公开展馆内容使用 `catalog/content/{drafts,published,archived}/<hall>/items|collections/`；legacy 项目详情、分类、标签页暂用 `catalog/projects/<id>/project.yaml`；legacy root 专题暂用 `catalog/collections/<id>/collection.yaml`；站点配置使用 `catalog/site.yaml`。
+- 内容真源位于 `catalog/`：公开展馆内容使用 `catalog/content/{drafts,published,archived}/<hall>/items|collections/`；展馆配置使用 `catalog/halls/<id>/hall.yaml`；站点配置使用 `catalog/site.yaml`。
 - 受控词表真源是 `catalog/taxonomies.yaml`，只维护项目内容会引用的词表：`categories`、`tags`、`project_maintenance_statuses`。
 - 项目维护状态字段必须叫 `maintenance_status`，引用 `catalog/taxonomies.yaml` 的 `project_maintenance_statuses[].id`。
-- 专题发布状态字段必须叫 `publication_status`，枚举 `published`、`draft`、`archived`，不放入 taxonomy。
+- Content item 和 collection 的发布状态由 `catalog/content/{drafts,published,archived}/` 目录表达，不在 `item.yaml` 或 `collection.yaml` 内维护发布状态字段。
 - 不使用裸 `status` / `statuses` 表达配置字段，除非是在子进程退出码等非 catalog 语义中使用。
-- 展示配置属于 `src/presentation/`，例如项目维护状态的视觉 tone 位于 `src/presentation/maintenance-status-tones.ts`，专题发布状态的显示文案位于 `src/presentation/publication-status-labels.ts`；不要把颜色、布局或卡片样式写进 `project.yaml` 或 `collection.yaml`。
+- 展示配置属于 `src/presentation/`，例如项目维护状态的视觉 tone 位于 `src/presentation/maintenance-status-tones.ts`；不要把颜色、布局或卡片样式写进 `item.yaml` 或 `collection.yaml`。
 - 文档只解释已实现规则，不作为项目依赖。可执行真相源始终是 schema、loader 和脚本验证。

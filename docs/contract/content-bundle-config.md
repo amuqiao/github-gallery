@@ -2,7 +2,7 @@
 
 本文解释当前已经实现的 `catalog/content/{drafts,published,archived}/` 内容包合同。可执行真相源是 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/content-validator.js` 和 `src/lib/catalog/content.ts`。
 
-当前 published content bundle 已驱动平台首页、GitHub 展馆首页、模型展馆首页和 canonical content 路由。旧 GitHub projects 和 root collections 已镜像到 `catalog/content/published/github/`；旧 `catalog/projects/`、legacy `catalog/models/` 和 root `catalog/collections/` 仍暂时驱动 legacy 详情、筛选和 root 专题页面，等待后续切除。
+当前 published content bundle 已驱动平台首页、GitHub 展馆首页、模型展馆首页和 canonical content 路由。旧 GitHub projects、root collections 和模型样例已迁移到 `catalog/content/published/`；legacy project/model/root collection 路由和数据目录已切除。
 
 ## Directory
 

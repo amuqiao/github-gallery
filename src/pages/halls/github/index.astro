@@ -11,7 +11,7 @@ import {
   getPublishedContentItemsByHallAndKind
 } from "@/lib/catalog/content";
 import { getHallById } from "@/lib/catalog/halls";
-import { getSiteConfig } from "@/lib/catalog/projects";
+import { getSiteConfig } from "@/lib/catalog/site";
 
 const [site, hall, items, collections] = await Promise.all([
   getSiteConfig(),
