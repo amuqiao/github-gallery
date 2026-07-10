@@ -22,7 +22,7 @@ deploy.sh    Docker 静态站点部署入口
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、content 生成。 |
 | `verify.sh` | content bundle、halls、taxonomy、site、内容资产和 static build 验证。 | README 或 `docs/` 漂移检查。 |
 | `content.sh` | content bundle item/collection 草稿创建、item note 添加、content import batch、publish/archive/restore 状态移动。 | 旧 project/root collection 维护、GitHub API 抓取、taxonomy 自动修改。 |
-| `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 3 覆盖现场隔离、GitHub item、模型 item、notes、collection 的创建、发布、归档、恢复、手工编辑、重新发布、列表可见性、渲染内容断言，以及 import batch create/replace/delete 和最小回滚。 | 日常内容创建、真实 catalog 写入、默认发布门禁、完整失败矩阵覆盖。 |
+| `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 4 覆盖现场隔离、GitHub item、模型 item、notes、collection 的创建、发布、归档、恢复、手工编辑、重新发布、列表可见性、渲染内容断言、import batch create/replace/delete、最小回滚，以及确定性失败/幂等边界。 | 日常内容创建、真实 catalog 写入、默认发布门禁、中断故障注入覆盖。 |
 | `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
 ## Commands
@@ -126,6 +126,8 @@ Content import 合同说明见 [`../docs/contract/content-import-batch.md`](../d
 ```text
 item new -> note add -> collection new -> publish -> route/list exists
 archive -> route/list missing -> restore -> edit generated files -> republish -> route/list/content exists
+duplicate create/note/publish/archive/restore -> fail -> bundle unchanged
+bad references/planned hall/wrong archive-restore order -> fail -> rollback
 import validate/plan/diff/apply create -> drafts-only
 import apply replace/delete with --allow-* -> drafts-only -> removed
 import apply invalid batch -> rollback

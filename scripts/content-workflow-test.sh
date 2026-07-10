@@ -20,6 +20,11 @@ markdown_note_id="quick-start"
 html_note_id="html-fragment"
 import_item_id=""
 import_collection_id=""
+draft_ref_item_id=""
+draft_ref_collection_id=""
+missing_ref_collection_id=""
+planned_item_id=""
+duplicate_note_id="dupe-note"
 
 usage() {
   cat <<EOF
@@ -31,9 +36,10 @@ usage() {
   在仓库外隔离副本中运行 content workflow 回归测试，避免污染当前项目现场。
 
 当前阶段：
-  Phase 3 覆盖隔离副本、主仓库现场不变、item/note/collection 生命周期、
-  import batch create/replace/delete、drafts-only、canonical route、列表可见性和渲染内容断言。
-  后续阶段会逐步加入失败路径、幂等性和 planned hall 边界测试。
+  Phase 4 覆盖隔离副本、主仓库现场不变、item/note/collection 生命周期、
+  import batch create/replace/delete、drafts-only、失败路径、幂等性、planned hall 边界、
+  canonical route、列表可见性和渲染内容断言。
+  后续阶段会逐步加入更深的中断恢复和只读管理命令测试。
 
 选项：
   --tmp-root <path>       仓库外临时根目录，默认 CONTENT_WORKFLOW_TEST_TMP_ROOT、TMPDIR 或 /tmp。
@@ -174,6 +180,98 @@ expect_copy_failure() {
   if (cd "$copy_dir" && "$@"); then
     die "expected command to fail in isolated copy: $*" 1
   fi
+}
+
+expect_copy_failure_contains() {
+  local label="$1"
+  local expected="$2"
+  shift 2
+  local output
+  local status
+
+  event "FAIL" "$label" "$*"
+  set +e
+  output="$(cd "$copy_dir" && "$@" 2>&1)"
+  status="$?"
+  set -e
+  printf "%s\n" "$output"
+
+  if [[ "$status" -eq 0 ]]; then
+    die "expected command to fail in isolated copy: $*" 1
+  fi
+
+  if ! grep -Fq "$expected" <<<"$output"; then
+    die "expected failed command output to contain '$expected': $*" 1
+  fi
+}
+
+copy_path_snapshot() {
+  local path="$1"
+  local full_path="$copy_dir/$path"
+
+  if [[ -L "$full_path" ]]; then
+    printf "LINK %s -> %s\n" "$path" "$(readlink "$full_path")"
+    return
+  fi
+
+  if [[ -f "$full_path" ]]; then
+    printf "FILE %s\n" "$path"
+    (cd "$copy_dir" && cksum "$path")
+    return
+  fi
+
+  if [[ -d "$full_path" ]]; then
+    printf "DIR %s\n" "$path"
+    (
+      cd "$copy_dir"
+      find "$path" -xdev -print | LC_ALL=C sort | while IFS= read -r entry; do
+        if [[ -L "$entry" ]]; then
+          printf "LINK %s -> %s\n" "$entry" "$(readlink "$entry")"
+        elif [[ -f "$entry" ]]; then
+          cksum "$entry"
+        elif [[ -d "$entry" ]]; then
+          printf "DIR %s\n" "$entry"
+        else
+          printf "OTHER %s\n" "$entry"
+        fi
+      done
+    )
+    return
+  fi
+
+  printf "MISSING %s\n" "$path"
+}
+
+assert_copy_path_snapshot_unchanged() {
+  local label="$1"
+  local relative_path="$2"
+  local expected="$3"
+  local current
+
+  current="$(copy_path_snapshot "$relative_path")"
+  if [[ "$current" != "$expected" ]]; then
+    printf "ERROR: isolated copy path changed after failed command: %s\n" "$relative_path" >&2
+    printf "\n== Before ==\n%s\n" "$expected" >&2
+    printf "\n== After ==\n%s\n" "$current" >&2
+    die "$label changed isolated copy path: $relative_path" 1
+  fi
+
+  event "ASSERT" "unchanged" "$relative_path"
+}
+
+assert_no_copy_transient_bundle_paths() {
+  local hall="$1"
+  local kind="$2"
+  local id="$3"
+  local found
+
+  found="$(cd "$copy_dir" && find catalog/content -path "*/$hall/$kind/.$id.*" -print)"
+  if [[ -n "$found" ]]; then
+    printf "ERROR: found transient bundle paths after failed command\n%s\n" "$found" >&2
+    die "expected no transient bundle paths for $hall/$kind/$id" 1
+  fi
+
+  event "ASSERT" "no-transient" "$hall/$kind/$id"
 }
 
 assert_copy_path_exists() {
@@ -353,6 +451,10 @@ initialize_fixture_ids() {
   model_collection_id="workflow-models-$run_stamp"
   import_item_id="workflow-import-model-$run_stamp"
   import_collection_id="workflow-import-models-$run_stamp"
+  draft_ref_item_id="workflow-draft-ref-model-$run_stamp"
+  draft_ref_collection_id="workflow-draft-ref-models-$run_stamp"
+  missing_ref_collection_id="workflow-missing-ref-models-$run_stamp"
+  planned_item_id="workflow-planned-model-$run_stamp"
 }
 
 assert_published_routes_exist() {
@@ -586,6 +688,185 @@ run_content_lifecycle() {
   assert_republished_content_rendered
 }
 
+run_failure_idempotency_lifecycle() {
+  section "Failure And Idempotency Semantics"
+  event "FIXTURE" "draft-ref-item" "$draft_ref_item_id"
+  event "FIXTURE" "draft-ref-collection" "$draft_ref_collection_id"
+
+  local published_model_path="catalog/content/published/models/items/$model_item_id"
+  local published_collection_path="catalog/content/published/models/collections/$model_collection_id"
+  local archived_model_path="catalog/content/archived/models/items/$model_item_id"
+  local archived_collection_path="catalog/content/archived/models/collections/$model_collection_id"
+  local archived_github_path="catalog/content/archived/github/items/$github_item_id"
+  local archived_model_parent_path="catalog/content/archived/models/items"
+  local draft_ref_item_path="catalog/content/drafts/models/items/$draft_ref_item_id"
+  local draft_ref_collection_path="catalog/content/drafts/models/collections/$draft_ref_collection_id"
+  local draft_models_parent_path="catalog/content/drafts/models/items"
+  local draft_collections_parent_path="catalog/content/drafts/models/collections"
+  local published_collections_parent_path="catalog/content/published/models/collections"
+  local missing_ref_collection_path="catalog/content/drafts/models/collections/$missing_ref_collection_id"
+  local planned_hall_path="catalog/content/drafts/music"
+  local planned_item_path="$planned_hall_path/items/$planned_item_id"
+  local before_path
+  local before_collection
+  local before_archived
+  local before_parent
+
+  before_path="$(copy_path_snapshot "$published_model_path")"
+  expect_copy_failure_contains "dup-item" "already exists in published" \
+    ./scripts/content.sh item new models ai_model "$model_item_id" \
+      --title "Duplicate Workflow Model" \
+      --summary "重复创建应失败且不改变已有 published item。" \
+      --source-type manual \
+      --source-url "https://example.com/models/$model_item_id" \
+      --provider "Workflow Lab" \
+      --input audio \
+      --output audio \
+      --task source-separation \
+      --access download \
+      --format onnx \
+      --runtime onnxruntime
+  assert_copy_path_snapshot_unchanged "dup-item" "$published_model_path" "$before_path"
+
+  before_parent="$(copy_path_snapshot "$draft_collections_parent_path")"
+  expect_copy_failure_contains "missing-ref-col" "references unknown item" \
+    ./scripts/content.sh collection new models "$missing_ref_collection_id" \
+      --title "Workflow Missing Reference Collection" \
+      --summary "引用不存在 item 的 collection 应失败并回滚。" \
+      --item "workflow-missing-model-$run_stamp"
+  assert_copy_path_snapshot_unchanged "missing-ref-col" "$draft_collections_parent_path" "$before_parent"
+  assert_copy_path_missing "$missing_ref_collection_path"
+  assert_no_copy_transient_bundle_paths "models" "collections" "$missing_ref_collection_id"
+  assert_copy_path_missing ".data/catalog-write.lock"
+
+  before_path="$(copy_path_snapshot "$planned_hall_path")"
+  expect_copy_failure_contains "planned-hall" "references planned hall without item contract" \
+    ./scripts/content.sh item new music ai_model "$planned_item_id" \
+      --title "Workflow Planned Hall Model" \
+      --summary "planned hall 不能承载 content bundle。" \
+      --source-type manual \
+      --source-url "https://example.com/models/$planned_item_id" \
+      --provider "Workflow Lab" \
+      --input audio \
+      --output audio \
+      --task source-separation \
+      --access download \
+      --format onnx \
+      --runtime onnxruntime
+  assert_copy_path_snapshot_unchanged "planned-hall" "$planned_hall_path" "$before_path"
+  assert_copy_path_missing "$planned_item_path"
+  assert_no_copy_transient_bundle_paths "music" "items" "$planned_item_id"
+  assert_copy_path_missing ".data/catalog-write.lock"
+
+  run_in_copy "draft-ref-item" \
+    ./scripts/content.sh item new models ai_model "$draft_ref_item_id" \
+      --title "Workflow Draft Reference Model" \
+      --summary "用于验证 draft item 被 published collection 引用时发布门禁失败。" \
+      --source-type manual \
+      --source-url "https://example.com/models/$draft_ref_item_id" \
+      --provider "Workflow Lab" \
+      --input audio \
+      --output audio \
+      --task source-separation \
+      --access download \
+      --format onnx \
+      --runtime onnxruntime
+  assert_copy_path_exists "$draft_ref_item_path/item.yaml"
+
+  before_parent="$(copy_path_snapshot "$draft_models_parent_path")"
+  before_path="$(copy_path_snapshot "$draft_ref_item_path")"
+  expect_copy_failure_contains "dup-draft-item" "already exists in drafts" \
+    ./scripts/content.sh item new models ai_model "$draft_ref_item_id" \
+      --title "Duplicate Draft Workflow Model" \
+      --summary "重复创建已有 draft item 应失败且不改变已有 draft。" \
+      --source-type manual \
+      --source-url "https://example.com/models/$draft_ref_item_id" \
+      --provider "Workflow Lab" \
+      --input audio \
+      --output audio \
+      --task source-separation \
+      --access download \
+      --format onnx \
+      --runtime onnxruntime
+  assert_copy_path_snapshot_unchanged "dup-draft-item" "$draft_models_parent_path" "$before_parent"
+  assert_copy_path_snapshot_unchanged "dup-draft-item" "$draft_ref_item_path" "$before_path"
+
+  run_in_copy "draft-ref-note" \
+    ./scripts/content.sh item note add models "$draft_ref_item_id" "$duplicate_note_id" \
+      --title "Duplicate Guard" \
+      --summary "用于验证重复 note add 不会改变 item bundle。" \
+      --format markdown
+  assert_copy_path_exists "$draft_ref_item_path/notes/$duplicate_note_id.md"
+
+  before_path="$(copy_path_snapshot "$draft_ref_item_path")"
+  expect_copy_failure_contains "dup-note" "already has note" \
+    ./scripts/content.sh item note add models "$draft_ref_item_id" "$duplicate_note_id" \
+      --title "Duplicate Guard" \
+      --summary "重复 note add 应失败且不改变 item.yaml 或 note 文件。" \
+      --format markdown
+  assert_copy_path_snapshot_unchanged "dup-note" "$draft_ref_item_path" "$before_path"
+
+  run_in_copy "draft-ref-col" \
+    ./scripts/content.sh collection new models "$draft_ref_collection_id" \
+      --title "Workflow Draft Reference Collection" \
+      --summary "用于验证 published collection 不能引用 draft item。" \
+      --item "$draft_ref_item_id"
+  assert_copy_path_exists "$draft_ref_collection_path/collection.yaml"
+
+  before_parent="$(copy_path_snapshot "$published_collections_parent_path")"
+  before_path="$(copy_path_snapshot "$draft_ref_collection_path")"
+  expect_copy_failure_contains "publish-draft-ref" "published content collection references non-published item" \
+    ./scripts/content.sh publish models collection "$draft_ref_collection_id"
+  assert_copy_path_snapshot_unchanged "publish-draft-ref" "$published_collections_parent_path" "$before_parent"
+  assert_copy_path_snapshot_unchanged "publish-draft-ref" "$draft_ref_collection_path" "$before_path"
+  assert_copy_path_missing "catalog/content/published/models/collections/$draft_ref_collection_id"
+  assert_no_copy_transient_bundle_paths "models" "collections" "$draft_ref_collection_id"
+  assert_copy_path_missing ".data/catalog-write.lock"
+
+  before_path="$(copy_path_snapshot "$published_model_path")"
+  expect_copy_failure_contains "repeat-publish" "not found in drafts" \
+    ./scripts/content.sh publish models item "$model_item_id"
+  assert_copy_path_snapshot_unchanged "repeat-publish" "$published_model_path" "$before_path"
+
+  before_path="$(copy_path_snapshot "$published_model_path")"
+  expect_copy_failure_contains "restore-non-archived" "not found in archived" \
+    ./scripts/content.sh restore models item "$model_item_id"
+  assert_copy_path_snapshot_unchanged "restore-non-archived" "$published_model_path" "$before_path"
+
+  before_path="$(copy_path_snapshot "$published_model_path")"
+  before_collection="$(copy_path_snapshot "$published_collection_path")"
+  before_archived="$(copy_path_snapshot "$archived_model_path")"
+  before_parent="$(copy_path_snapshot "$archived_model_parent_path")"
+  expect_copy_failure_contains "archive-referenced-item" "published content collection references non-published item" \
+    ./scripts/content.sh archive models item "$model_item_id"
+  assert_copy_path_snapshot_unchanged "archive-referenced-item" "$published_model_path" "$before_path"
+  assert_copy_path_snapshot_unchanged "archive-referenced-item" "$published_collection_path" "$before_collection"
+  assert_copy_path_snapshot_unchanged "archive-referenced-item" "$archived_model_path" "$before_archived"
+  assert_copy_path_snapshot_unchanged "archive-referenced-item" "$archived_model_parent_path" "$before_parent"
+  assert_no_copy_transient_bundle_paths "models" "items" "$model_item_id"
+  assert_copy_path_missing ".data/catalog-write.lock"
+
+  run_in_copy "archive-github-once" ./scripts/content.sh archive github item "$github_item_id"
+  before_path="$(copy_path_snapshot "$archived_github_path")"
+  expect_copy_failure_contains "repeat-archive" "not found in published" \
+    ./scripts/content.sh archive github item "$github_item_id"
+  assert_copy_path_snapshot_unchanged "repeat-archive" "$archived_github_path" "$before_path"
+
+  run_in_copy "archive-col-for-order" ./scripts/content.sh archive models collection "$model_collection_id"
+  run_in_copy "archive-model-for-order" ./scripts/content.sh archive models item "$model_item_id"
+  before_path="$(copy_path_snapshot "$archived_collection_path")"
+  before_archived="$(copy_path_snapshot "$archived_model_path")"
+  expect_copy_failure_contains "restore-col-first" "draft content collection references archived item" \
+    ./scripts/content.sh restore models collection "$model_collection_id"
+  assert_copy_path_snapshot_unchanged "restore-col-first" "$archived_collection_path" "$before_path"
+  assert_copy_path_snapshot_unchanged "restore-col-first" "$archived_model_path" "$before_archived"
+  assert_copy_path_missing "catalog/content/drafts/models/collections/$model_collection_id"
+  assert_no_copy_transient_bundle_paths "models" "collections" "$model_collection_id"
+  assert_copy_path_missing ".data/catalog-write.lock"
+
+  run_in_copy "verify-failures" ./scripts/verify.sh release
+}
+
 run_import_lifecycle() {
   section "Import Batch Lifecycle"
   event "FIXTURE" "import-item" "$import_item_id"
@@ -685,7 +966,7 @@ main() {
   initial_pollution_snapshot="$(repo_pollution_snapshot)"
 
   section "Content Workflow Test"
-  event "PHASE" "3" "isolated lifecycle and import batch"
+  event "PHASE" "4" "isolated lifecycle, import batch, failures, and idempotency"
   event "ROOT" "repo" "$root_real"
   event "ROOT" "tmp" "$tmp_root_real"
 
@@ -701,6 +982,7 @@ main() {
   run_copy_smoke
   setup_copy_dependencies
   run_content_lifecycle
+  run_failure_idempotency_lifecycle
   run_import_lifecycle
 
   section "Main Workspace"

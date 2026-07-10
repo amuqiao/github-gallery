@@ -186,6 +186,40 @@ async function pathExists(itemPath) {
   }
 }
 
+async function collectMissingParents(startDirectory, stopDirectory) {
+  const stop = path.resolve(stopDirectory);
+  const missingParents = [];
+  let current = path.dirname(startDirectory);
+
+  while (current.startsWith(`${stop}${path.sep}`)) {
+    if (!(await pathExists(current))) {
+      missingParents.push(current);
+    }
+
+    current = path.dirname(current);
+  }
+
+  return missingParents;
+}
+
+async function removeEmptyDirectories(directories) {
+  for (const directory of directories) {
+    try {
+      await fs.rmdir(directory);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        continue;
+      }
+
+      if (error.code === "ENOTEMPTY" || error.code === "EEXIST") {
+        return;
+      }
+
+      throw error;
+    }
+  }
+}
+
 function bundleDirectory(state, hall, type, id) {
   const kindDirectory = contentKinds[type];
   if (!kindDirectory) {
@@ -392,6 +426,7 @@ async function createItem(args) {
 
   const targetDir = bundleDirectory("drafts", hall, "item", id);
   const tmpDir = path.join(path.dirname(targetDir), `.${id}.tmp.${process.pid}`);
+  const createdParents = await collectMissingParents(targetDir, path.join(contentRoot, "drafts"));
   const config = buildItemConfig(hall, kind, id, options);
 
   try {
@@ -403,6 +438,7 @@ async function createItem(args) {
   } catch (error) {
     await fs.rm(tmpDir, { recursive: true, force: true });
     await fs.rm(targetDir, { recursive: true, force: true });
+    await removeEmptyDirectories(createdParents);
     throw error;
   }
 
@@ -531,6 +567,7 @@ async function createCollection(args) {
 
   const targetDir = bundleDirectory("drafts", hall, "collection", id);
   const tmpDir = path.join(path.dirname(targetDir), `.${id}.tmp.${process.pid}`);
+  const createdParents = await collectMissingParents(targetDir, path.join(contentRoot, "drafts"));
   const config = {
     schema_version: 2,
     id,
@@ -553,6 +590,7 @@ async function createCollection(args) {
   } catch (error) {
     await fs.rm(tmpDir, { recursive: true, force: true });
     await fs.rm(targetDir, { recursive: true, force: true });
+    await removeEmptyDirectories(createdParents);
     throw error;
   }
 
@@ -583,6 +621,7 @@ async function moveBundle(args, fromState, toState, validationCommand, action) {
     die(`${hall}/${type}/${id} already exists in ${toState}`, 3);
   }
 
+  const createdParents = await collectMissingParents(targetDir, path.join(contentRoot, toState));
   await fs.mkdir(path.dirname(targetDir), { recursive: true });
   let movedToTarget = false;
 
@@ -597,6 +636,7 @@ async function moveBundle(args, fromState, toState, validationCommand, action) {
     } else if (await pathExists(backupDir)) {
       await fs.rename(backupDir, sourceDir);
     }
+    await removeEmptyDirectories(createdParents);
     throw error;
   }
 

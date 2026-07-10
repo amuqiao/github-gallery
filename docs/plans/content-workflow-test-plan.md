@@ -6,7 +6,7 @@
 - `scripts/content.sh` 是内容维护入口，当前支持 item 草稿创建、item note 添加、collection 草稿创建、content import batch、publish、archive 和 restore。
 - `scripts/verify.sh check` 和 `scripts/verify.sh release` 会运行 content release gate、Astro check 和 static build。
 - `scripts/content.sh` 写操作会加 `.data/catalog-write.lock`，写入或移动失败时会尝试回滚。
-- `scripts/content-workflow-test.sh` 已作为独立测试入口存在。当前 Phase 3 覆盖仓库外隔离副本、主仓库前后状态检查、成功清理、失败留痕，GitHub item、模型 item、Markdown note、HTML note、同馆 collection 的创建、发布、归档、恢复、手工编辑、重新发布、列表可见性和渲染内容断言，以及 import batch 的 create、replace、delete、drafts-only 和最小回滚路径。
+- `scripts/content-workflow-test.sh` 已作为独立测试入口存在。当前 Phase 4 覆盖仓库外隔离副本、主仓库前后状态检查、成功清理、失败留痕，GitHub item、模型 item、Markdown note、HTML note、同馆 collection 的创建、发布、归档、恢复、手工编辑、重新发布、列表可见性和渲染内容断言，import batch 的 create、replace、delete、drafts-only 和最小回滚路径，以及确定性失败/幂等边界。
 - `scripts/content-workflow-test.sh` 当前不会写入真实 `catalog/content/`，也不会默认进入 `scripts/verify.sh check`；真实生命周期测试只在仓库外副本执行。
 - 为了避免在测试里联网安装依赖，隔离副本在确认初始复制没有包含 `node_modules/` 后，会把主仓库已有 `node_modules/` 复制到临时副本中执行 Astro build，构建缓存和副作用只留在临时目录。
 - 成功和失败退出路径都会比较主仓库 `git status` 与忽略路径递归 checksum，降低失败时漏报主仓库污染的风险。
@@ -14,8 +14,7 @@
 ## Remaining Gaps
 
 - `content.sh` 目前不是完整 CRUD 管理面：缺少 `list`、`show`、`status`、安全删除等查询或管理命令。
-- 幂等性边界尚未固定：重复创建、重复发布、重复归档、重复恢复、重复添加 note、重复 import apply 的退出码和错误语义需要被测试约束。
-- Planned hall 边界需要回归测试：音乐、电影等 `planned` 展馆不能写入 content bundle，也不能生成 collections 索引。
+- import apply 的重复执行语义尚未完整固定：重复 create、replace、delete 的退出码和状态保持需要继续扩展测试。
 - 新展馆上线时缺少统一测试矩阵，容易只更新页面或 schema，遗漏脚本和发布门禁。
 
 ## Planned Work
@@ -114,10 +113,17 @@
 - 测试能证明 replace 和 delete 缺少显式 `--allow-*` 参数时会失败，并且失败后 drafts 保持原状态。
 - 测试能证明 import apply 在 catalog 验证失败后会回滚已写入 drafts bundle，并清理 `.data/catalog-write.lock`。
 
+## Phase 4 Acceptance
+
+- 测试能证明重复 `item new`、重复 `item note add`、重复 `publish`、重复 `archive`、非 archived `restore` 都会失败，并且目标 bundle 快照保持不变。
+- 测试能证明 collection 引用不存在 item、published collection 引用 draft item、planned hall 写入 content bundle 都会失败，并回滚新增目录或状态移动。
+- 测试能证明 published collection 仍引用 published item 时，先 archive item 会失败并回滚 item 到 published。
+- 测试能证明 item 仍 archived 时先 restore collection 会失败并回滚 collection 到 archived。
+- 失败断言必须检查错误输出包含可定位原因，并确认 `.data/catalog-write.lock` 不残留。
+
 ## Final Acceptance
 
-- 测试能证明重复创建、重复发布、重复归档、重复恢复、错误 archive/restore 顺序和 import 失败回滚不会破坏已有内容。
-- 测试能证明 planned hall 不能承载 content bundle。
+- 测试能证明重复 import apply 和更复杂 import 失败回滚不会破坏已有内容。
 - 测试能覆盖中断或模拟中断后的 lock、backup、staging 清理或人工恢复提示。
 - 如果实现过程中发现 `content.sh` 缺少必要只读能力，新增命令必须更新 `scripts/README.md`、相关 runbook 和本计划。
 - 当测试入口稳定后，把已实现事实移动到 `docs/current/` 或 `scripts/README.md`，并关闭或缩减本计划。
