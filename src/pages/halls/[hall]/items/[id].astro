@@ -5,6 +5,7 @@ import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import ContentCollectionCard from "@/components/ContentCollectionCard.astro";
 import ContentItemCard from "@/components/ContentItemCard.astro";
 import PageHeader from "@/components/PageHeader.astro";
+import SourceLinkRow from "@/components/SourceLinkRow.astro";
 import Badge from "@/components/ui/Badge.astro";
 import Button from "@/components/ui/Button.astro";
 import Prose from "@/components/ui/Prose.astro";
@@ -83,8 +84,10 @@ const relatedItemsSectionIndex = relatedItems.length > 0 ? String(sectionNumber+
       <Fragment slot="meta">
         {badges.map((badge) => <Badge>{badge}</Badge>)}
       </Fragment>
+      <Fragment slot="footer">
+        <SourceLinkRow source={item.source} />
+      </Fragment>
       <Fragment slot="actions">
-        <Button href={item.source.url}>打开来源</Button>
         <Button href={`/halls/${item.hall}/`} variant="outline">返回展馆</Button>
       </Fragment>
     </PageHeader>

@@ -275,6 +275,103 @@
     box-shadow: 3px 3px 0 var(--accent-strong);
   }
 
+  .source-link-row {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    max-width: 100%;
+    min-width: 0;
+    gap: 0.5rem;
+  }
+
+  .source-link-row__type {
+    color: var(--accent-strong);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .source-link-row__url {
+    min-width: 0;
+    max-width: min(72vw, 42rem);
+    overflow: hidden;
+    border-radius: 5px;
+    color: var(--primary);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.12rem 0.18rem;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .source-link-row__url:hover {
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    color: var(--accent-strong);
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+  }
+
+  .source-link-row__url:focus-visible,
+  .source-link-row__copy:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .source-link-row__copy {
+    position: relative;
+    display: inline-grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+
+  .source-link-row__copy:hover {
+    border-color: var(--strong-border);
+    background: var(--card);
+    color: var(--accent-strong);
+  }
+
+  .source-link-row__copy svg {
+    position: absolute;
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    transition:
+      opacity 120ms ease,
+      transform 120ms ease;
+  }
+
+  .source-link-row__check-icon {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+
+  .source-link-row__copy.is-copied {
+    color: var(--primary);
+  }
+
+  .source-link-row__copy.is-copied .source-link-row__copy-icon {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+
+  .source-link-row__copy.is-copied .source-link-row__check-icon {
+    opacity: 1;
+    transform: scale(1);
+  }
+
   .page-header__aside {
     display: grid;
     gap: 1rem;
