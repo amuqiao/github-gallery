@@ -18,6 +18,8 @@ usage() {
 命令：
   item new <hall> <github_project|ai_model> <id> [options]
   item note add <hall> <id> <note-id> [options]
+  item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>]
+  item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
   collection new <hall> <id> [options]
   import <validate|plan|diff|apply> <batch> [options]
   publish <hall> <item|collection> <id>
@@ -54,6 +56,17 @@ usage() {
     --title "快速试用" \\
     --summary "记录模型定位、运行入口、输入输出和适用边界。" \\
     --format markdown
+
+  ./scripts/content.sh item note import models htdemucs-ft-onnx deployment-guide \\
+    --state published \\
+    --file .data/htdemucs-ft-onnx-指南.html \\
+    --title "HTDemucs-FT ONNX 模型讲解与阿里云部署指南" \\
+    --summary "讲解 HTDemucs-FT ONNX 模型原理、运行方式和阿里云部署路径。" \\
+    --display standalone
+
+  ./scripts/content.sh item note replace models htdemucs-ft-onnx deployment-guide \\
+    --state published \\
+    --file .data/htdemucs-ft-onnx-指南.html
 
   ./scripts/content.sh collection new github voice-cloning \\
     --title "声音克隆项目" \\

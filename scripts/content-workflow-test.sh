@@ -18,6 +18,8 @@ model_item_id=""
 model_collection_id=""
 markdown_note_id="quick-start"
 html_note_id="html-fragment"
+imported_markdown_note_id="imported-markdown"
+published_html_note_id="published-guide"
 import_item_id=""
 import_collection_id=""
 draft_ref_item_id=""
@@ -520,6 +522,7 @@ assert_published_routes_exist() {
   assert_copy_path_exists "dist/halls/models/items/$model_item_id/index.html"
   assert_copy_path_exists "dist/halls/models/items/$model_item_id/notes/$markdown_note_id/index.html"
   assert_copy_path_exists "dist/halls/models/items/$model_item_id/notes/$html_note_id/index.html"
+  assert_copy_path_exists "dist/halls/models/items/$model_item_id/notes/$imported_markdown_note_id/index.html"
   assert_copy_path_exists "dist/halls/models/collections/$model_collection_id/index.html"
 }
 
@@ -528,6 +531,8 @@ assert_published_routes_missing() {
   assert_copy_path_missing "dist/halls/models/items/$model_item_id/index.html"
   assert_copy_path_missing "dist/halls/models/items/$model_item_id/notes/$markdown_note_id/index.html"
   assert_copy_path_missing "dist/halls/models/items/$model_item_id/notes/$html_note_id/index.html"
+  assert_copy_path_missing "dist/halls/models/items/$model_item_id/notes/$imported_markdown_note_id/index.html"
+  assert_copy_path_missing "dist/halls/models/items/$model_item_id/notes/$published_html_note_id/index.html"
   assert_copy_path_missing "dist/halls/models/collections/$model_collection_id/index.html"
 }
 
@@ -548,6 +553,8 @@ assert_republished_content_rendered() {
   assert_copy_file_contains "dist/halls/models/items/$model_item_id/index.html" "WORKFLOW-SENTINEL-MODEL-REPUBLISH"
   assert_copy_file_contains "dist/halls/models/items/$model_item_id/notes/$markdown_note_id/index.html" "WORKFLOW-SENTINEL-MARKDOWN-NOTE"
   assert_copy_file_contains "dist/halls/models/items/$model_item_id/notes/$html_note_id/index.html" "WORKFLOW-SENTINEL-HTML-NOTE"
+  assert_copy_file_contains "dist/halls/models/items/$model_item_id/notes/$imported_markdown_note_id/index.html" "WORKFLOW-IMPORTED-MARKDOWN-NOTE"
+  assert_copy_file_contains "dist/halls/models/items/$model_item_id/notes/$published_html_note_id/index.html" "WORKFLOW-PUBLISHED-HTML-REPLACED"
   assert_copy_file_contains "dist/halls/models/collections/$model_collection_id/index.html" "WORKFLOW-SENTINEL-COLLECTION-REPUBLISH"
 }
 
@@ -767,6 +774,53 @@ run_content_lifecycle() {
       --display site
   assert_copy_path_exists "catalog/content/drafts/models/items/$model_item_id/notes/$html_note_id.html"
 
+  write_copy_file ".tmp/note-sources/$imported_markdown_note_id.md" \
+    "# Imported Markdown\n\nWORKFLOW-IMPORTED-MARKDOWN-NOTE\n"
+  run_in_copy "note-import-md" \
+    ./scripts/content.sh item note import models "$model_item_id" "$imported_markdown_note_id" \
+      --state drafts \
+      --file ".tmp/note-sources/$imported_markdown_note_id.md" \
+      --title "Imported Markdown" \
+      --summary "验证从外部 Markdown 文件导入草稿 note。"
+  assert_copy_path_exists "catalog/content/drafts/models/items/$model_item_id/notes/$imported_markdown_note_id.md"
+  assert_copy_file_contains "catalog/content/drafts/models/items/$model_item_id/notes/$imported_markdown_note_id.md" "WORKFLOW-IMPORTED-MARKDOWN-NOTE"
+
+  before_path="$(copy_path_snapshot "catalog/content/drafts/models/items/$model_item_id")"
+  write_copy_file ".tmp/note-sources/bad-site-fragment.html" \
+    "<section style=\"color:red\">WORKFLOW-BAD-SITE-FRAGMENT</section>\n"
+  expect_copy_failure_contains "note-import-bad-site" "blocked inline style attribute" \
+    ./scripts/content.sh item note import models "$model_item_id" bad-site-fragment \
+      --state drafts \
+      --file ".tmp/note-sources/bad-site-fragment.html" \
+      --title "Bad Site Fragment" \
+      --summary "验证不安全 HTML fragment 会被拒绝。" \
+      --display site
+  assert_copy_path_snapshot_unchanged "note-import-bad-site" "catalog/content/drafts/models/items/$model_item_id" "$before_path"
+
+  before_path="$(copy_path_snapshot "catalog/content/drafts/models/items/$model_item_id")"
+  write_copy_file ".tmp/note-sources/bad-standalone.html" \
+    "<html><head><title>Bad Standalone</title></head><main>WORKFLOW-BAD-STANDALONE</main></html>\n"
+  expect_copy_failure_contains "note-import-bad-standalone" "must be a complete html document" \
+    ./scripts/content.sh item note import models "$model_item_id" bad-standalone \
+      --state drafts \
+      --file ".tmp/note-sources/bad-standalone.html" \
+      --title "Bad Standalone" \
+      --summary "验证不完整 HTML document 会被拒绝。" \
+      --display standalone
+  assert_copy_path_snapshot_unchanged "note-import-bad-standalone" "catalog/content/drafts/models/items/$model_item_id" "$before_path"
+
+  before_path="$(copy_path_snapshot "catalog/content/drafts/models/items/$model_item_id")"
+  write_copy_file ".tmp/real-note-sources/symlink-parent.md" \
+    "# Symlink Parent\n\nWORKFLOW-SYMLINK-PARENT\n"
+  ln -s real-note-sources "$copy_dir/.tmp/symlink-note-sources"
+  expect_copy_failure_contains "note-import-source-symlink-parent" "must not contain symlinks" \
+    ./scripts/content.sh item note import models "$model_item_id" symlink-parent \
+      --state drafts \
+      --file ".tmp/symlink-note-sources/symlink-parent.md" \
+      --title "Symlink Parent" \
+      --summary "验证源文件父目录 symlink 会被拒绝。"
+  assert_copy_path_snapshot_unchanged "note-import-source-symlink-parent" "catalog/content/drafts/models/items/$model_item_id" "$before_path"
+
   run_in_copy "collection-new" \
     ./scripts/content.sh collection new models "$model_collection_id" \
       --title "Workflow Model Collection" \
@@ -783,6 +837,40 @@ run_content_lifecycle() {
   run_in_copy "verify-release" ./scripts/verify.sh release
   assert_published_routes_exist
   assert_public_indexes_include_fixtures
+
+  write_copy_file ".tmp/note-sources/$published_html_note_id.html" \
+    "<!doctype html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><title>Published Guide</title></head><body><main>WORKFLOW-PUBLISHED-HTML-NOTE</main></body></html>\n"
+  run_in_copy "note-import-published-html" \
+    ./scripts/content.sh item note import models "$model_item_id" "$published_html_note_id" \
+      --state published \
+      --file ".tmp/note-sources/$published_html_note_id.html" \
+      --title "Published Guide" \
+      --summary "验证从外部完整 HTML 文件导入已发布 standalone note。" \
+      --display standalone
+  assert_copy_path_exists "catalog/content/published/models/items/$model_item_id/notes/$published_html_note_id.html"
+  assert_copy_file_contains "dist/halls/models/items/$model_item_id/notes/$published_html_note_id/index.html" "WORKFLOW-PUBLISHED-HTML-NOTE"
+
+  write_copy_file ".tmp/note-sources/$published_html_note_id-replace.html" \
+    "<!doctype html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><title>Published Guide Replacement</title></head><body><main>WORKFLOW-PUBLISHED-HTML-REPLACED</main></body></html>\n"
+  run_in_copy "note-replace-published-html" \
+    ./scripts/content.sh item note replace models "$model_item_id" "$published_html_note_id" \
+      --state published \
+      --file ".tmp/note-sources/$published_html_note_id-replace.html"
+  assert_copy_file_contains "catalog/content/published/models/items/$model_item_id/notes/$published_html_note_id.html" "WORKFLOW-PUBLISHED-HTML-REPLACED"
+  assert_copy_file_contains "dist/halls/models/items/$model_item_id/notes/$published_html_note_id/index.html" "WORKFLOW-PUBLISHED-HTML-REPLACED"
+
+  write_copy_file ".tmp/note-sources/bad-published-summary.html" \
+    "<!doctype html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><title>Bad Published Summary</title></head><body><main>WORKFLOW-BAD-PUBLISHED-SUMMARY</main></body></html>\n"
+  before_path="$(copy_path_snapshot "catalog/content/published/models/items/$model_item_id")"
+  expect_copy_failure "note-import-published-rollback" \
+    ./scripts/content.sh item note import models "$model_item_id" bad-published-summary \
+      --state published \
+      --file ".tmp/note-sources/bad-published-summary.html" \
+      --title "Bad Published Summary" \
+      --summary "This summary is intentionally longer than the content note schema maximum so the command writes the note file and item metadata first, then release validation rejects the bundle and the command must restore the previous published item bundle snapshot without leaving a partial note behind." \
+      --display standalone
+  assert_copy_path_snapshot_unchanged "note-import-published-rollback" "catalog/content/published/models/items/$model_item_id" "$before_path"
+  assert_copy_path_missing ".data/catalog-write.lock"
 
   run_in_copy "archive-col" ./scripts/content.sh archive models collection "$model_collection_id"
   run_in_copy "archive-model" ./scripts/content.sh archive models item "$model_item_id"
@@ -948,6 +1036,17 @@ run_failure_idempotency_lifecycle() {
       --summary "重复 note add 应失败且不改变 item.yaml 或 note 文件。" \
       --format markdown
   assert_copy_path_snapshot_unchanged "dup-note" "$draft_ref_item_path" "$before_path"
+
+  write_copy_file ".tmp/note-sources/$duplicate_note_id.md" \
+    "# Duplicate Guard\n\nWORKFLOW-DUPLICATE-IMPORT\n"
+  before_path="$(copy_path_snapshot "$draft_ref_item_path")"
+  expect_copy_failure_contains "dup-note-import" "already has note" \
+    ./scripts/content.sh item note import models "$draft_ref_item_id" "$duplicate_note_id" \
+      --state drafts \
+      --file ".tmp/note-sources/$duplicate_note_id.md" \
+      --title "Duplicate Guard" \
+      --summary "重复 note import 应失败且不改变 item.yaml 或 note 文件。"
+  assert_copy_path_snapshot_unchanged "dup-note-import" "$draft_ref_item_path" "$before_path"
 
   run_in_copy "draft-ref-col" \
     ./scripts/content.sh collection new models "$draft_ref_collection_id" \

@@ -60,6 +60,14 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
   --title "Quick Start" \
   --summary "Quick start note." \
   --format markdown
+./scripts/content.sh item note import models example-model implementation-guide \
+  --state drafts \
+  --file .tmp/note-sources/implementation-guide.md \
+  --title "Implementation Guide" \
+  --summary "Imported note file."
+./scripts/content.sh item note replace models example-model implementation-guide \
+  --state drafts \
+  --file .tmp/note-sources/implementation-guide.md
 ./scripts/content.sh collection new models example-models \
   --title "Example Models" \
   --summary "Example model collection." \
@@ -104,9 +112,11 @@ cp .env.example .env
 
 ## Content Commands
 
-`content.sh` 写入 `catalog/content/drafts/`，并在 `drafts`、`published`、`archived` 之间移动 content bundle。
+`content.sh` 是 content bundle 和 item note 文件写入的安全入口。它创建 `catalog/content/drafts/` 内容，在 `drafts`、`published`、`archived` 之间移动 content bundle，并可把外部 Markdown/HTML 文件导入或替换为 item note。
 
 - `import apply` 只写入 `drafts` 并运行 `./scripts/verify.sh catalog`。
+- `item note import` 新增外部 `.md` 或 `.html` 文件为 `drafts` 或 `published` item note，写后按目标 state 运行验证。
+- `item note replace` 只替换已有 note 正文，不修改 note 元数据，写后按目标 state 运行验证。
 - `publish` 会运行 `./scripts/verify.sh release`。
 - `archive` 和 `restore` 会运行 `./scripts/verify.sh catalog`。
 - 验证失败时脚本会回滚目录移动或文件写入。
@@ -146,7 +156,8 @@ Content import 合同说明见 [`../docs/contract/content-import-batch.md`](../d
 当前覆盖的 happy path：
 
 ```text
-item new -> note add -> collection new -> publish -> route/list exists
+item new -> note add -> note import -> collection new -> publish -> route/list exists
+published note import/replace -> route/content updated
 archive -> route/list missing -> restore -> edit generated files -> republish -> route/list/content exists
 list/show/status -> published bundle visible
 duplicate create/note/publish/archive/restore -> fail -> bundle unchanged

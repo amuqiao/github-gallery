@@ -112,7 +112,7 @@ Legacy root routes such as `/projects/*`, `/collections/*`, `/categories/*`, `/t
 
 `src/presentation/config.ts` owns the active layout/theme ids. It does not select content.
 
-`notes` are content item attachments. Markdown notes render inside the site shell; HTML notes may be site fragments or standalone documents according to the note contract.
+`notes` are content item attachments. Markdown notes render inside the site shell; HTML notes may be site fragments or standalone documents according to the note contract. `scripts/content.sh item note import` and `item note replace` are the safe file-level entrypoints for external Markdown/HTML note files.
 
 `.tmp/import-batches/` is a temporary exchange area. Successful content imports write to `catalog/content/drafts/`.
 

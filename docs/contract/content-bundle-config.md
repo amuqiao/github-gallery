@@ -123,6 +123,8 @@ catalog/content/published/github/collections/voice-cloning/
 ```sh
 ./scripts/content.sh item new <hall> <github_project|ai_model> <id> ...
 ./scripts/content.sh item note add <hall> <id> <note-id> ...
+./scripts/content.sh item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>]
+./scripts/content.sh item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
 ./scripts/content.sh collection new <hall> <id> ...
 ./scripts/content.sh import validate .tmp/import-batches/<batch-id>
 ./scripts/content.sh import plan .tmp/import-batches/<batch-id>
@@ -136,7 +138,7 @@ catalog/content/published/github/collections/voice-cloning/
 ./scripts/content.sh status <hall> <item|collection> <id>
 ```
 
-`item new`、`collection new` 和 `import apply` 写入 `drafts`。`publish` 从 `drafts` 移到 `published` 并运行 `./scripts/verify.sh release`。`archive` 从 `published` 移到 `archived`。`restore` 从 `archived` 移回 `drafts`，不会直接发布。
+`item new`、`collection new` 和 `import apply` 写入 `drafts`。`item note add` 只在 draft item 上创建 note 骨架。`item note import` 从外部 `.md` 或 `.html` 文件新增 note，目标 state 必须显式写为 `drafts` 或 `published`；HTML import 必须显式声明 `--display site` 或 `--display standalone`。`item note replace` 只替换已有 note 文件正文，不修改 note 元数据。写入 `drafts` 后运行 `./scripts/verify.sh catalog`，写入 `published` 后运行 `./scripts/verify.sh release`。`publish` 从 `drafts` 移到 `published` 并运行 `./scripts/verify.sh release`。`archive` 从 `published` 移到 `archived`。`restore` 从 `archived` 移回 `drafts`，不会直接发布。
 
 `list`、`show` 和 `status` 是只读查询命令，不加 `.data/catalog-write.lock`，不运行 `verify.sh`，也不触发 Astro build。`list` 可以不带过滤条件、只带 publication state、只带 active hall，或同时带 publication state 和 active hall；未知 hall 和 planned hall 会失败。输出合同：
 

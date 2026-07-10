@@ -59,7 +59,7 @@ catalog/content/drafts/<hall>/items/<id>/
 
 ## Add Item Note
 
-Markdown note:
+Create a Markdown note skeleton on a draft item:
 
 ```sh
 ./scripts/content.sh item note add models htdemucs-ft-onnx quick-start \
@@ -68,7 +68,7 @@ Markdown note:
   --format markdown
 ```
 
-HTML note:
+Create an HTML note skeleton on a draft item:
 
 ```sh
 ./scripts/content.sh item note add github gpt-sovits architecture-note \
@@ -78,7 +78,26 @@ HTML note:
   --display site
 ```
 
-Note commands only write to draft items. To edit a published item, archive or restore it first, then publish again after editing.
+Import an existing Markdown or HTML note file into a draft or published item:
+
+```sh
+./scripts/content.sh item note import models htdemucs-ft-onnx deployment-guide \
+  --state published \
+  --file .data/htdemucs-ft-onnx-指南.html \
+  --title "HTDemucs-FT ONNX 模型讲解与阿里云部署指南" \
+  --summary "讲解 HTDemucs-FT ONNX 模型原理、运行方式和阿里云部署路径。" \
+  --display standalone
+```
+
+Replace the body of an existing note without changing note metadata:
+
+```sh
+./scripts/content.sh item note replace models htdemucs-ft-onnx deployment-guide \
+  --state published \
+  --file .data/htdemucs-ft-onnx-指南.html
+```
+
+`item note add` only writes skeleton notes to draft items. `item note import` and `item note replace` are the safe entrypoints for external Markdown/HTML files. Full HTML documents are standalone notes; site HTML notes must be safe fragments.
 
 ## Inspect Content
 

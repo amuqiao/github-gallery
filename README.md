@@ -76,6 +76,11 @@ Content bundle 发布入口：
   --runtime onnxruntime
 ./scripts/content.sh import validate .tmp/import-batches/example-content-batch
 ./scripts/content.sh import apply .tmp/import-batches/example-content-batch
+./scripts/content.sh item note import models example-model implementation-guide \
+  --state drafts \
+  --file .tmp/note-sources/implementation-guide.md \
+  --title "Implementation Guide" \
+  --summary "Imported note file."
 ./scripts/content.sh publish models item example-model
 ./scripts/content.sh status models item example-model
 ./scripts/content.sh list published models

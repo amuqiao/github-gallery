@@ -36,6 +36,13 @@ notes:
     path: ./notes/quick-start.md
     summary: 记录模型定位、运行入口、输入输出和适用边界。
     display: site
+  - id: deployment-guide
+    title: HTDemucs-FT ONNX 模型讲解与阿里云部署指南
+    type: html
+    path: ./notes/deployment-guide.html
+    summary: 讲解 HTDemucs-FT ONNX 模型原理、运行方式和阿里云部署路径。
+    display: standalone
+    html_mode: document
 blocks:
   - type: links
     items:

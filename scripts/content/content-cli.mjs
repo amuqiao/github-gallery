@@ -20,6 +20,7 @@ const contentKinds = {
 const contentStates = ["drafts", "published", "archived"];
 const writeCommands = new Set(["item", "collection", "publish", "archive", "restore"]);
 let lockHeld = false;
+let signalRollback;
 
 function cleanupLockSync() {
   if (lockHeld) {
@@ -29,13 +30,23 @@ function cleanupLockSync() {
 }
 
 process.once("exit", cleanupLockSync);
+async function exitAfterSignal(code) {
+  try {
+    if (signalRollback) {
+      await signalRollback();
+      signalRollback = undefined;
+    }
+  } finally {
+    cleanupLockSync();
+    process.exit(code);
+  }
+}
+
 process.once("SIGINT", () => {
-  cleanupLockSync();
-  process.exit(130);
+  void exitAfterSignal(130);
 });
 process.once("SIGTERM", () => {
-  cleanupLockSync();
-  process.exit(143);
+  void exitAfterSignal(143);
 });
 
 function die(message, code = 2) {
@@ -57,6 +68,8 @@ function usage() {
   console.log(`用法：
   ./scripts/content.sh item new <hall> <github_project|ai_model> <id> [options]
   ./scripts/content.sh item note add <hall> <id> <note-id> [options]
+  ./scripts/content.sh item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>]
+  ./scripts/content.sh item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
   ./scripts/content.sh collection new <hall> <id> --title <title> --summary <summary> --item <id> [--item <id> ...]
   ./scripts/content.sh publish <hall> <item|collection> <id>
   ./scripts/content.sh archive <hall> <item|collection> <id>
@@ -344,6 +357,223 @@ function htmlDocumentSkeleton(title) {
   return `<!doctype html>\n<html lang="zh-CN">\n<head>\n  <meta charset="utf-8" />\n  <title>${escapeHtml(title)}</title>\n</head>\n<body>\n  <main>\n    <h1>${escapeHtml(title)}</h1>\n    <p>Add standalone HTML note content here.</p>\n  </main>\n</body>\n</html>\n`;
 }
 
+function assertContentState(state) {
+  if (!["drafts", "published"].includes(state)) {
+    die("--state must be drafts or published");
+  }
+}
+
+function validationCommandForState(state) {
+  return state === "published" ? "release" : "catalog";
+}
+
+function assertDisplay(display) {
+  if (!["site", "standalone"].includes(display)) {
+    die("--display must be site or standalone");
+  }
+}
+
+function noteFormatFromFilePath(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+
+  if (extension === ".md") {
+    return { type: "markdown", extension: "md" };
+  }
+
+  if (extension === ".html") {
+    return { type: "html", extension: "html" };
+  }
+
+  die("--file must point to a .md or .html file");
+}
+
+async function readNoteSourceFile(filePath) {
+  const sourcePath = path.isAbsolute(filePath) ? filePath : path.resolve(rootDir, filePath);
+  let stats;
+
+  try {
+    stats = await fs.lstat(sourcePath);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      die(`note source file does not exist: ${filePath}`, 4);
+    }
+
+    throw error;
+  }
+
+  if (stats.isSymbolicLink()) {
+    die(`note source file must not be a symlink: ${filePath}`);
+  }
+
+  if (!stats.isFile()) {
+    die(`note source path must be a file: ${filePath}`);
+  }
+
+  const realSourcePath = await fs.realpath(sourcePath);
+  if (realSourcePath !== sourcePath) {
+    die(`note source path must not contain symlinks: ${filePath}`);
+  }
+
+  return {
+    content: await fs.readFile(sourcePath, "utf8"),
+    ...noteFormatFromFilePath(sourcePath)
+  };
+}
+
+async function assertSafeDirectoryChain(baseDirectory, targetDirectory, label) {
+  const relativeDirectory = path.relative(baseDirectory, targetDirectory);
+
+  if (relativeDirectory === "") {
+    return;
+  }
+
+  if (relativeDirectory.startsWith("..") || path.isAbsolute(relativeDirectory)) {
+    die(`${label} directory must stay inside its content bundle: ${path.relative(rootDir, targetDirectory)}`);
+  }
+
+  let current = baseDirectory;
+  for (const segment of relativeDirectory.split(path.sep)) {
+    current = path.join(current, segment);
+
+    if (!(await pathExists(current))) {
+      continue;
+    }
+
+    const stats = await fs.lstat(current);
+
+    if (stats.isSymbolicLink()) {
+      die(`${label} directory must not contain symlinks: ${path.relative(rootDir, current)}`);
+    }
+
+    if (!stats.isDirectory()) {
+      die(`${label} path must be a directory: ${path.relative(rootDir, current)}`);
+    }
+  }
+}
+
+function resolveBundleLocalPath(directory, relativePath, label) {
+  if (!relativePath.startsWith("./notes/")) {
+    die(`${label} path must be under ./notes/: ${relativePath}`);
+  }
+
+  const fullPath = path.resolve(directory, relativePath);
+  const relativeToBundle = path.relative(directory, fullPath);
+
+  if (relativeToBundle.startsWith("..") || path.isAbsolute(relativeToBundle)) {
+    die(`${label} path must stay inside its content bundle: ${relativePath}`);
+  }
+
+  return fullPath;
+}
+
+async function assertSafeExistingNoteFile(notePath, relativePath) {
+  const stats = await fs.lstat(notePath);
+
+  if (stats.isSymbolicLink()) {
+    die(`note file must not be a symlink: ${relativePath}`);
+  }
+
+  if (!stats.isFile()) {
+    die(`note path must be a file: ${relativePath}`);
+  }
+}
+
+async function assertRealPathInsideBundle(directory, filePath, relativePath) {
+  const [realBundleDirectory, realFilePath] = await Promise.all([
+    fs.realpath(directory),
+    fs.realpath(filePath)
+  ]);
+  const relativeToBundle = path.relative(realBundleDirectory, realFilePath);
+
+  if (relativeToBundle.startsWith("..") || path.isAbsolute(relativeToBundle)) {
+    die(`note path must stay inside its content bundle: ${relativePath}`);
+  }
+}
+
+function assertHtmlDocument(html, label) {
+  const trimmedHtml = html.trimStart();
+  const documentPattern = /^(?:<!doctype\s+html[^>]*>\s*)?<html\b[\s\S]*<body\b[\s\S]*<\/body>[\s\S]*<\/html>\s*$/i;
+
+  if (!documentPattern.test(trimmedHtml)) {
+    die(`${label} standalone HTML note must be a complete html document with html and body elements`);
+  }
+}
+
+function assertSafeHtmlFragment(html, label) {
+  const blockedPatterns = [
+    { pattern: /<\s*!doctype\b/i, name: "doctype" },
+    { pattern: /<\s*html\b/i, name: "html" },
+    { pattern: /<\s*head\b/i, name: "head" },
+    { pattern: /<\s*body\b/i, name: "body" },
+    { pattern: /<\s*script\b/i, name: "script" },
+    { pattern: /<\s*style\b/i, name: "style" },
+    { pattern: /<\s*link\b/i, name: "link" },
+    { pattern: /<\s*meta\b/i, name: "meta" },
+    { pattern: /\son[a-z]+\s*=/i, name: "inline event handler" },
+    { pattern: /\sstyle\s*=/i, name: "inline style attribute" }
+  ];
+
+  for (const { pattern, name } of blockedPatterns) {
+    if (pattern.test(html)) {
+      die(`${label} site HTML note contains blocked ${name}`);
+    }
+  }
+}
+
+function resolveImportedNoteDisplay(source, requestedDisplay) {
+  if (source.type === "markdown") {
+    if (requestedDisplay) {
+      die("markdown notes must not set --display");
+    }
+
+    return { display: "site" };
+  }
+
+  if (!requestedDisplay) {
+    die("html note import requires --display site or --display standalone");
+  }
+
+  assertDisplay(requestedDisplay);
+  if (requestedDisplay === "standalone") {
+    assertHtmlDocument(source.content, "imported");
+    return { display: "standalone", html_mode: "document" };
+  }
+
+  assertSafeHtmlFragment(source.content, "imported");
+  return { display: "site", html_mode: "fragment" };
+}
+
+function assertReplacementMatchesNote(note, source) {
+  if (note.type !== source.type) {
+    die(`replacement file type ${source.type} does not match note type ${note.type}`);
+  }
+
+  if (source.type === "markdown") {
+    if (note.display !== "site" || note.html_mode) {
+      die(`markdown note ${note.id} has invalid display metadata`);
+    }
+    return;
+  }
+
+  if (note.display === "standalone") {
+    if (note.html_mode !== "document") {
+      die(`standalone HTML note ${note.id} must use html_mode: document`);
+    }
+    assertHtmlDocument(source.content, "replacement");
+    return;
+  }
+
+  if (note.display === "site") {
+    if (note.html_mode !== "fragment") {
+      die(`site HTML note ${note.id} must use html_mode: fragment`);
+    }
+    assertSafeHtmlFragment(source.content, "replacement");
+    return;
+  }
+
+  die(`note ${note.id} display must be site or standalone`);
+}
+
 function escapeHtml(value) {
   return value
     .replaceAll("&", "&amp;")
@@ -621,6 +851,148 @@ async function addItemNote(args) {
   event("UPDATED", itemId, `added note ${noteId}`);
 }
 
+async function importItemNote(args) {
+  const [hall, itemId, noteId, ...rest] = args;
+  if (!hall || !itemId || !noteId) {
+    die("item note import requires <hall> <id> <note-id>");
+  }
+
+  assertId(hall, "hall id");
+  assertId(itemId, "item id");
+  assertId(noteId, "note id");
+
+  const { options, positionals } = parseOptions(
+    rest,
+    new Set(["state", "file", "title", "summary", "display"])
+  );
+  if (positionals.length > 0) {
+    die(`unexpected arguments for item note import: ${positionals.join(" ")}`);
+  }
+
+  const state = requiredOption(options, "state");
+  assertContentState(state);
+
+  const title = requiredOption(options, "title");
+  const summary = requiredOption(options, "summary");
+  const source = await readNoteSourceFile(requiredOption(options, "file"));
+  const display = optionalOption(options, "display");
+  const displayConfig = resolveImportedNoteDisplay(source, display);
+
+  await assertActiveHall(hall);
+  const { directory } = await findExistingBundle(hall, "item", itemId, [state]);
+  const itemPath = path.join(directory, "item.yaml");
+  const { raw, config } = await readYamlObject(itemPath, `${itemId} item.yaml`);
+  const notes = Array.isArray(config.notes) ? config.notes : [];
+
+  if (notes.some((note) => note.id === noteId)) {
+    die(`${itemId} already has note: ${noteId}`, 3);
+  }
+
+  const noteDirectory = path.join(directory, "notes");
+  const noteDirectoryExisted = await pathExists(noteDirectory);
+  await assertSafeDirectoryChain(directory, noteDirectory, "notes");
+
+  const notePath = path.join(noteDirectory, `${noteId}.${source.extension}`);
+  const relativeNotePath = `./notes/${noteId}.${source.extension}`;
+
+  if (await pathExists(notePath)) {
+    die(`${relativeNotePath} already exists`, 3);
+  }
+
+  const note = {
+    id: noteId,
+    title,
+    type: source.type,
+    path: relativeNotePath,
+    summary,
+    ...displayConfig
+  };
+
+  config.notes = [...notes, note];
+  const rollback = async () => {
+    await fs.writeFile(itemPath, raw, "utf8");
+    await fs.rm(notePath, { force: true });
+    if (!noteDirectoryExisted) {
+      await fs.rm(noteDirectory, { recursive: true, force: true });
+    }
+  };
+
+  try {
+    signalRollback = rollback;
+    await fs.mkdir(noteDirectory, { recursive: true });
+    await fs.writeFile(notePath, source.content, "utf8");
+    await writeYaml(itemPath, config);
+    validateCatalog(validationCommandForState(state));
+  } catch (error) {
+    await rollback();
+    throw error;
+  } finally {
+    if (signalRollback === rollback) {
+      signalRollback = undefined;
+    }
+  }
+
+  event("UPDATED", itemId, `imported note ${noteId} into ${state}`);
+}
+
+async function replaceItemNote(args) {
+  const [hall, itemId, noteId, ...rest] = args;
+  if (!hall || !itemId || !noteId) {
+    die("item note replace requires <hall> <id> <note-id>");
+  }
+
+  assertId(hall, "hall id");
+  assertId(itemId, "item id");
+  assertId(noteId, "note id");
+
+  const { options, positionals } = parseOptions(rest, new Set(["state", "file"]));
+  if (positionals.length > 0) {
+    die(`unexpected arguments for item note replace: ${positionals.join(" ")}`);
+  }
+
+  const state = requiredOption(options, "state");
+  assertContentState(state);
+
+  const source = await readNoteSourceFile(requiredOption(options, "file"));
+
+  await assertActiveHall(hall);
+  const { directory } = await findExistingBundle(hall, "item", itemId, [state]);
+  const { config } = await readYamlObject(path.join(directory, "item.yaml"), `${itemId} item.yaml`);
+  const notes = Array.isArray(config.notes) ? config.notes : [];
+  const note = notes.find((entry) => entry.id === noteId);
+
+  if (!note) {
+    die(`${itemId} does not have note: ${noteId}`, 4);
+  }
+
+  assertReplacementMatchesNote(note, source);
+
+  const notePath = resolveBundleLocalPath(directory, note.path, `note ${noteId}`);
+  await assertSafeDirectoryChain(directory, path.dirname(notePath), `note ${noteId}`);
+  await assertSafeExistingNoteFile(notePath, note.path);
+  await assertRealPathInsideBundle(directory, notePath, note.path);
+
+  const previousContent = await fs.readFile(notePath, "utf8");
+  const rollback = async () => {
+    await fs.writeFile(notePath, previousContent, "utf8");
+  };
+
+  try {
+    signalRollback = rollback;
+    await fs.writeFile(notePath, source.content, "utf8");
+    validateCatalog(validationCommandForState(state));
+  } catch (error) {
+    await rollback();
+    throw error;
+  } finally {
+    if (signalRollback === rollback) {
+      signalRollback = undefined;
+    }
+  }
+
+  event("UPDATED", itemId, `replaced note ${noteId} in ${state}`);
+}
+
 async function createCollection(args) {
   const [hall, id, ...rest] = args;
   if (!hall || !id) {
@@ -825,6 +1197,16 @@ async function runCommand() {
 
     if (command === "note" && args[0] === "add") {
       await addItemNote(args.slice(1));
+      return;
+    }
+
+    if (command === "note" && args[0] === "import") {
+      await importItemNote(args.slice(1));
+      return;
+    }
+
+    if (command === "note" && args[0] === "replace") {
+      await replaceItemNote(args.slice(1));
       return;
     }
   }
