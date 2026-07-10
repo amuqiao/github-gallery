@@ -13,7 +13,7 @@ src/lib/catalog/                    # schema、loader、adapter
 src/styles/global.css               # Tailwind 入口和 shadcn-style token
 src/components/ui/                  # 通用 UI primitives
 src/components/blocks/              # typed block renderers
-scripts/                            # 本地开发、验证、catalog 维护和 Docker 部署入口
+scripts/                            # 本地开发、验证、content 维护测试和 Docker 部署入口
 docs/contract/                      # 维护者可读合同说明
 docs/current/                       # 当前已实现结构
 docs/plans/                         # 未来计划
@@ -41,13 +41,14 @@ docs/runbooks/                      # 可重复维护流程
 
 ## Commands
 
-Requires Node.js 20 or newer.
+Requires Node.js 20 or newer. `./scripts/content-workflow-test.sh` also requires Git, rsync, and mktemp.
 
 ```sh
 npm install
 ./scripts/dev.sh start
 ./scripts/verify.sh check
 ./scripts/verify.sh release
+./scripts/content-workflow-test.sh
 ```
 
 原始 npm 命令仍可直接使用：

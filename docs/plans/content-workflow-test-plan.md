@@ -1,0 +1,105 @@
+# Content Workflow Test Plan
+
+## Current Baseline
+
+- `catalog/content/{drafts,published,archived}/<hall>/items|collections/` 是公开展馆内容的唯一内容源。
+- `scripts/content.sh` 是内容维护入口，当前支持 item 草稿创建、item note 添加、collection 草稿创建、content import batch、publish、archive 和 restore。
+- `scripts/verify.sh check` 和 `scripts/verify.sh release` 会运行 content release gate、Astro check 和 static build。
+- `scripts/content.sh` 写操作会加 `.data/catalog-write.lock`，写入或移动失败时会尝试回滚。
+- `scripts/content-workflow-test.sh` 已作为独立测试入口存在。当前 Phase 1 只覆盖仓库外隔离副本、主仓库前后状态检查、成功清理和失败留痕。
+- `scripts/content-workflow-test.sh` 当前不会写入真实 `catalog/content/`，也不会默认进入 `scripts/verify.sh check`。
+
+## Remaining Gaps
+
+- 缺少覆盖 `content.sh` 全生命周期的可重复测试，无法系统验证创建、编辑、发布、归档、恢复和重新发布是否一直可用。
+- 现有 `content-workflow-test.sh` 只验证隔离 runner 可用，还没有创建 fixture 或断言 content 状态迁移。
+- `content.sh` 目前不是完整 CRUD 管理面：缺少 `list`、`show`、`status`、安全删除等查询或管理命令。
+- 幂等性边界尚未固定：重复创建、重复发布、重复归档、重复恢复、重复添加 note、重复 import apply 的退出码和错误语义需要被测试约束。
+- Planned hall 边界需要回归测试：音乐、电影等 `planned` 展馆不能写入 content bundle，也不能生成 collections 索引。
+- 新展馆上线时缺少统一测试矩阵，容易只更新页面或 schema，遗漏脚本和发布门禁。
+
+## Planned Work
+
+### Phase 2: Cover Happy Path Lifecycle
+
+- 在隔离副本中创建一个 GitHub 展馆测试 item 草稿。
+- 在隔离副本中创建一个模型展馆测试 item 草稿。
+- 为测试 item 添加 Markdown note。
+- 为测试 item 添加 HTML fragment note。
+- 创建同 hall collection 草稿，并引用测试 item。
+- 发布 item，再发布 collection。
+- 运行 `scripts/verify.sh release`，确认 published item、note 和 collection 生成 canonical routes。
+- 归档 collection 和 item，确认公开路由不再生成。
+- restore 到 drafts，编辑生成的 Markdown 或 HTML 内容，再次 publish。
+- 覆盖 import batch 的 `validate`、`plan`、`diff` 和 `apply create`，确认 import 只写入 drafts。
+- 覆盖 import batch 的 `apply replace --allow-replace` 和 `apply delete --allow-delete`，确认替换和删除只作用于隔离副本中的 drafts。
+- 每次 build 后检查隔离副本 `dist/` 中具体 route 文件存在或不存在，而不是只依赖 `verify.sh release` 成功。
+
+### Phase 3: Cover Failure And Idempotency Semantics
+
+- 重复 `item new` 应失败，并且不破坏已有 draft。
+- 重复 `item note add` 应失败，并且不破坏已有 note 和 `item.yaml`。
+- collection 引用不存在 item 应在验证阶段失败，并回滚新建目录。
+- published collection 引用 draft item 应在 release gate 失败。
+- 对已 published bundle 重复 publish 应失败，并保持 published 内容不变。
+- 对已 archived bundle 重复 archive 应失败，并保持 archived 内容不变。
+- 对非 archived bundle restore 应失败，并保持现有状态不变。
+- planned hall 写入 content bundle 应失败，并保持原仓库现场不变。
+- import apply 验证失败时应回滚 staging、backup 和目标 drafts bundle，不留下半写入目录。
+- published collection 引用 published item 时，先 archive item 应失败并回滚 item 到 published。
+- item 仍 archived 时先 restore collection 应失败并回滚 collection 到 archived。
+- import apply 或普通状态移动被中断后，应能证明 lock、backup、staging 目录不会污染原仓库；需要人工恢复时必须输出隔离副本路径和残留位置。
+- 失败路径应检查退出码非 0、错误信息可定位，并比较失败前后的隔离副本内容快照。
+
+### Phase 4: Add Script Capability Feedback Loop
+
+- 如果 workflow test 需要查询状态但只能通过 `find` 或手写路径判断，评估给 `content.sh` 增加只读命令：
+  - `list [drafts|published|archived] [hall]`
+  - `show <hall> <item|collection> <id>`
+  - `status <hall> <item|collection> <id>`
+- 测试脚本需要验证时直接调用 `scripts/verify.sh` 或复用内部 helper，不给 `content.sh` 增加 `validate`，避免验证入口和内容管理入口重叠。
+- 如果需要物理删除测试草稿，优先在隔离副本中直接删除；不要先给生产内容入口增加默认 delete。
+- 只有在明确需要人工内容删除流程时，再设计 `delete --force`，并单独测试确认不会误删 published 内容。
+
+### Phase 5: Decide Optional Verification Integration
+
+- `scripts/content-workflow-test.sh` 保持为独立入口，适合本地回归和 CI 深度检查。
+- `scripts/verify.sh check` 不默认调用 workflow test，避免每次构建都复制仓库和跑全生命周期。
+- 只有在独立入口稳定后，才评估是否增加显式命令 `scripts/verify.sh content-workflow` 转发调用 `scripts/content-workflow-test.sh`。
+- 发布前人工 checklist 可选择运行：
+
+```sh
+./scripts/verify.sh check
+./scripts/content-workflow-test.sh
+```
+
+## Test Matrix
+
+| Area | Required Coverage |
+| --- | --- |
+| GitHub item | `item new github github_project`、Markdown body、publish、archive、restore、republish |
+| Model item | `item new models ai_model`、Markdown body、Markdown note、HTML note、publish、archive、restore、republish |
+| Collection | `collection new`、同 hall item 引用、publish、archive、restore |
+| Import batch | `import validate`、`plan`、`diff`、`apply create`、`apply replace --allow-replace`、`apply delete --allow-delete` |
+| Published routes | `/halls/<hall>/items/<id>/`、`/notes/<note>/`、`/collections/`、`/collections/<id>/` |
+| Draft isolation | drafts 内容不进入 `dist`，不进入展馆列表 |
+| Archived isolation | archived 内容不进入 `dist`，restore 后只回到 drafts |
+| Planned hall | planned hall 不能创建 content bundle，planned collections route 不生成 |
+| Idempotency | 重复执行和错误顺序失败时退出码非 0，已有 bundle、notes、collections 不变 |
+| Route files | published route 对应 `dist/**/*.html` 存在，draft 和 archived route 对应文件不存在 |
+| Cleanup | 原仓库测试前后状态一致，且测试不在原仓库内创建目录 |
+
+## Acceptance
+
+- `scripts/content-workflow-test.sh` 在隔离副本中运行全生命周期测试。
+- 测试前后原仓库工作区状态一致；测试不得修改、删除或新增真实 `catalog/content/` 内容，也不得在原仓库内创建测试目录。
+- 成功运行必须清理隔离副本；失败运行默认保留隔离副本并打印路径，可通过 `--cleanup-on-fail` 改为失败后清理。
+- 测试能证明 GitHub item、model item、Markdown note、HTML note 和 collection 的 draft、publish、archive、restore、republish 路径可用。
+- 测试能证明 import batch 的 validate、plan、diff、create、replace 和 delete 路径可用，且只写入隔离副本中的 drafts。
+- 测试能通过检查隔离副本 `dist/` 具体文件证明 published route 生成，draft 和 archived route 不生成。
+- 测试能证明重复创建、重复发布、重复归档、重复恢复、错误 archive/restore 顺序和 import 失败回滚不会破坏已有内容。
+- 测试能证明 planned hall 不能承载 content bundle。
+- 测试能覆盖中断或模拟中断后的 lock、backup、staging 清理或人工恢复提示。
+- 测试输出必须列出每个生命周期步骤、断言结果、失败命令、退出码；失败时保留隔离目录并打印路径。
+- 如果实现过程中发现 `content.sh` 缺少必要只读能力，新增命令必须更新 `scripts/README.md`、相关 runbook 和本计划。
+- 当测试入口稳定后，把已实现事实移动到 `docs/current/` 或 `scripts/README.md`，并关闭或缩减本计划。

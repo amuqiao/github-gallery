@@ -8,6 +8,8 @@
 dev.sh       本地 Astro 开发和 dev server 管理入口
 verify.sh    一次性验证和正式发布门禁入口
 content.sh   content bundle 创建、导入、发布、归档、恢复入口
+content-workflow-test.sh
+             content workflow 隔离回归测试入口
 deploy.sh    Docker 静态站点部署入口
 ```
 
@@ -20,11 +22,12 @@ deploy.sh    Docker 静态站点部署入口
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、content 生成。 |
 | `verify.sh` | content bundle、halls、taxonomy、site、内容资产和 static build 验证。 | README 或 `docs/` 漂移检查。 |
 | `content.sh` | content bundle item/collection 草稿创建、item note 添加、content import batch、publish/archive/restore 状态移动。 | 旧 project/root collection 维护、GitHub API 抓取、taxonomy 自动修改。 |
+| `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 1 检查测试入口、现场隔离和主仓库状态不变。 | 日常内容创建、真实 catalog 写入、默认发布门禁、完整生命周期覆盖。 |
 | `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
 ## Commands
 
-Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgrep`, `lsof`; `logs` also uses `tail`).
+Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgrep`, `lsof`; `logs` also uses `tail`). `content-workflow-test.sh` additionally requires `git`, `rsync`, and `mktemp`.
 
 ```sh
 ./scripts/dev.sh start
@@ -68,6 +71,9 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
 ./scripts/content.sh publish models item example-model
 ./scripts/content.sh archive models item example-model
 ./scripts/content.sh restore models item example-model
+
+./scripts/content-workflow-test.sh
+./scripts/content-workflow-test.sh --cleanup-on-fail
 
 cp .env.example .env
 ./scripts/deploy.sh check
