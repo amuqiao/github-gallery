@@ -41,7 +41,7 @@ docs/runbooks/                      # 可重复维护流程
 
 ## Commands
 
-Requires Node.js 20 or newer. `./scripts/content-workflow-test.sh` also requires Git, rsync, and mktemp.
+Requires Node.js 20 or newer. `./scripts/content-workflow-test.sh` also requires Git, rsync, mktemp, date, cksum, and an existing `node_modules/` in the main repository.
 
 ```sh
 npm install

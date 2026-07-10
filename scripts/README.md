@@ -22,12 +22,12 @@ deploy.sh    Docker 静态站点部署入口
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、content 生成。 |
 | `verify.sh` | content bundle、halls、taxonomy、site、内容资产和 static build 验证。 | README 或 `docs/` 漂移检查。 |
 | `content.sh` | content bundle item/collection 草稿创建、item note 添加、content import batch、publish/archive/restore 状态移动。 | 旧 project/root collection 维护、GitHub API 抓取、taxonomy 自动修改。 |
-| `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 1 检查测试入口、现场隔离和主仓库状态不变。 | 日常内容创建、真实 catalog 写入、默认发布门禁、完整生命周期覆盖。 |
+| `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 2 覆盖现场隔离、GitHub item、模型 item、notes、collection 的创建、发布、归档、恢复、手工编辑、重新发布、列表可见性和渲染内容断言。 | 日常内容创建、真实 catalog 写入、默认发布门禁、import batch 与失败矩阵覆盖。 |
 | `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
 ## Commands
 
-Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgrep`, `lsof`; `logs` also uses `tail`). `content-workflow-test.sh` additionally requires `git`, `rsync`, and `mktemp`.
+Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgrep`, `lsof`; `logs` also uses `tail`). `content-workflow-test.sh` additionally requires `git`, `rsync`, `mktemp`, `date`, `cksum`, and an existing `node_modules/` in the main repository.
 
 ```sh
 ./scripts/dev.sh start
@@ -116,3 +116,20 @@ cp .env.example .env
 Import batch 不是长期数据源。`content.sh import` 应用成功后，正式草稿来源是 `catalog/content/drafts/`。
 
 Content import 合同说明见 [`../docs/contract/content-import-batch.md`](../docs/contract/content-import-batch.md)，日常操作手册见 [`../docs/runbooks/content-import-workflow.md`](../docs/runbooks/content-import-workflow.md)。
+
+## Content Workflow Test
+
+`content-workflow-test.sh` 会先记录主仓库状态和忽略路径递归 checksum，再把当前工作树复制到仓库外临时目录，确认 `.git/`、`dist/`、`.data/`、`.tmp/`、`.run/`、`.env` 和 `node_modules/` 没有进入初始副本，再把主仓库已有 `node_modules/` 复制到临时副本用于真实 build。测试成功会删除临时目录，失败默认保留临时目录并打印路径；成功和失败路径都会检查主仓库现场是否改变。
+
+当前覆盖的 happy path：
+
+```text
+item new -> note add -> collection new -> publish -> route/list exists
+archive -> route/list missing -> restore -> edit generated files -> republish -> route/list/content exists
+```
+
+这条测试不写入真实 `catalog/content/`，也不作为 `verify.sh check` 的默认子步骤。发布前需要深度确认内容工作流时手动运行：
+
+```sh
+./scripts/content-workflow-test.sh
+```
