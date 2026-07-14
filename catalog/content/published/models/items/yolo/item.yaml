@@ -1,0 +1,51 @@
+schema_version: 2
+id: yolo
+hall: models
+kind: ai_model
+title: YOLO
+summary: 实时目标检测模型家族，把候选框定位和类别预测合并为一次前向推理。
+source:
+  type: paper
+  url: https://arxiv.org/abs/1506.02640
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  provider: YOLO community
+  modalities:
+    input:
+      - image
+    output:
+      - bounding-boxes
+  tasks:
+    - object-detection
+  access:
+    - paper
+  formats:
+    - architecture
+  runtimes:
+    - pytorch
+notes:
+  - id: yolo-explainer
+    title: 一文读懂 YOLO · 目标检测与版本演进
+    type: html
+    path: ./notes/yolo-explainer.html
+    summary: 从单阶段检测、网格预测、NMS、版本演进和部署取舍理解 YOLO 目标检测模型家族。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Paper
+        url: https://arxiv.org/abs/1506.02640
+  - type: highlights
+    title: 模型要点
+    items:
+      - One-stage object detection family optimized for real-time inference.
+      - Combines localization, class prediction, and confidence scoring in a single forward pass.
+      - Widely used as a reference family for detection deployment tradeoffs.
+  - type: use-cases
+    items:
+      - Learning object detection concepts such as bounding boxes, confidence, and NMS.
+      - Comparing real-time detection models for edge, camera, and batch vision workflows.
+      - Reviewing version differences before choosing a concrete YOLO implementation.

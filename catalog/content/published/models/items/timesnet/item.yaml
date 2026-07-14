@@ -1,0 +1,54 @@
+schema_version: 2
+id: timesnet
+hall: models
+kind: ai_model
+title: TimesNet
+summary: 面向时间序列分析的通用骨干模型，把一维序列折成二维表示并用 2D 卷积建模周期变化。
+source:
+  type: github
+  url: https://github.com/thuml/Time-Series-Library
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  provider: THUML
+  modalities:
+    input:
+      - time-series
+    output:
+      - time-series
+  tasks:
+    - time-series-analysis
+    - forecasting
+    - classification
+    - anomaly-detection
+  access:
+    - code
+  formats:
+    - pytorch
+  runtimes:
+    - pytorch
+notes:
+  - id: timesnet-explainer
+    title: 一文读懂 TimesNet · 把时间序列折成二维
+    type: html
+    path: ./notes/timesnet-explainer.html
+    summary: 从 FFT 找周期、1D 到 2D 折叠、TimesBlock 和多任务头理解 TimesNet 的时间序列建模思路。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/thuml/Time-Series-Library
+  - type: highlights
+    title: 模型要点
+    items:
+      - General time-series backbone that models temporal 2D variation.
+      - Folds 1D series into 2D representations based on discovered periods.
+      - Targets forecasting, classification, anomaly detection, and imputation-style tasks.
+  - type: use-cases
+    items:
+      - Learning how periodicity can reshape time-series modeling.
+      - Comparing deep time-series models against simpler statistical or baseline methods.
+      - Reviewing THUML Time-Series-Library as a research implementation entry point.

@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Demucs / HTDemucs — 音乐源分离</title>
+<style>
+:root{
+  --bg:#0F141A; --bg2:#131A22; --panel:#182130; --panel2:#1E2A3C; --line:#2A3850;
+  --text:#E9EEF6; --muted:#95A3B8; --faint:#6B7A92;
+  --drums:#F0865C; --bass:#8B7BFF; --other:#3EC9A7; --vocals:#F2B33D;
+  --time:#4CC9F0; --spec:#E074C6;
+  --radius:14px;
+  --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.75;font-size:16px}
+::selection{background:#2E4A6B;color:#fff}
+a{color:var(--time);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1060px;margin:0 auto;padding:0 22px}
+
+/* ---- 顶部导航:模拟走带条 ---- */
+nav{position:sticky;top:0;z-index:50;background:rgba(15,20,26,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:6px;height:52px;overflow-x:auto}
+nav .logo{font-family:var(--mono);font-size:13px;color:var(--vocals);white-space:nowrap;margin-right:10px;letter-spacing:.05em}
+nav a.tab{font-size:13.5px;color:var(--muted);padding:5px 11px;border-radius:8px;white-space:nowrap}
+nav a.tab:hover{color:var(--text);background:var(--panel);text-decoration:none}
+
+/* ---- Hero ---- */
+header{padding:60px 0 30px;background:
+  radial-gradient(1200px 500px at 70% -10%, rgba(76,201,240,.08), transparent 60%),
+  radial-gradient(900px 420px at 15% 10%, rgba(139,123,255,.09), transparent 60%);
+  border-bottom:1px solid var(--line)}
+.eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.18em;color:var(--faint);text-transform:uppercase}
+h1{font-size:clamp(30px,5vw,46px);font-weight:800;letter-spacing:-.01em;line-height:1.2;margin:10px 0 14px}
+h1 .hl{color:var(--vocals)}
+.lede{color:var(--muted);max-width:720px;font-size:17px}
+.hero-stage{margin-top:34px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:14px 14px 8px;position:relative}
+.hero-stage canvas{width:100%;height:280px;display:block}
+.solo-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 4px 6px;font-family:var(--mono);font-size:12.5px}
+.solo-bar span.hint{color:var(--faint);margin-right:4px}
+.chip{cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--text);font-family:var(--mono);font-size:12.5px;padding:4px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:7px;transition:.15s}
+.chip .dot{width:9px;height:9px;border-radius:50%}
+.chip:hover{border-color:var(--faint)}
+.chip.on{background:var(--panel2);border-color:var(--faint)}
+.chip.dim{opacity:.35}
+.hero-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:26px}
+.fact{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.fact b{display:block;font-size:14px;margin-bottom:2px}
+.fact span{font-size:13.5px;color:var(--muted)}
+.fact .k{font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.1em;display:block;margin-bottom:6px}
+
+/* ---- 章节 ---- */
+section{padding:64px 0 10px}
+.secno{font-family:var(--mono);color:var(--faint);font-size:12.5px;letter-spacing:.16em}
+h2{font-size:clamp(23px,3.4vw,31px);font-weight:800;margin:8px 0 18px;letter-spacing:-.01em}
+h3{font-size:18px;font-weight:700;margin:26px 0 10px}
+p{margin:0 0 14px;color:#C9D3E2}
+p b,li b{color:var(--text)}
+ul.tight{margin:0 0 16px 1.3em;color:#C9D3E2}
+ul.tight li{margin-bottom:7px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:760px){.cols2{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px}
+.card h4{font-size:15px;margin-bottom:10px}
+.card p,.card li{font-size:14.5px}
+.io-card{border-top:3px solid var(--time)}
+.io-card.out{border-top-color:var(--vocals)}
+code{font-family:var(--mono);font-size:.9em;background:var(--panel2);border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#DCE6F5;white-space:nowrap}
+pre{background:#0B1015;border:1px solid var(--line);border-radius:12px;padding:16px 18px;overflow-x:auto;margin:0 0 16px;position:relative}
+pre code{background:none;border:none;padding:0;white-space:pre;font-size:13px;line-height:1.7;color:#D7E2F2}
+.cm{color:#5F7189}.kw{color:#4CC9F0}.st{color:#F2B33D}.fn{color:#8B7BFF}.nm{color:#3EC9A7}
+.copy{position:absolute;top:8px;right:8px;font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:3px 9px;cursor:pointer}
+.copy:hover{color:var(--text)}
+.note{border-left:3px solid var(--vocals);background:rgba(242,179,61,.06);padding:12px 16px;border-radius:0 10px 10px 0;font-size:14.5px;color:#D8E0EC;margin:0 0 16px}
+.note.blue{border-color:var(--time);background:rgba(76,201,240,.06)}
+
+/* ---- 时间线 ---- */
+.timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:6px 0 20px}
+@media(max-width:820px){.timeline{grid-template-columns:1fr}}
+.era{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;position:relative}
+.era .yr{font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:.1em}
+.era h4{font-size:16px;margin:5px 0 8px}
+.era p{font-size:14px;margin-bottom:8px}
+.era .sdr{font-family:var(--mono);font-size:12.5px;color:var(--other)}
+.era.v4{border-color:#3d5378;box-shadow:0 0 0 1px rgba(76,201,240,.15)}
+
+/* ---- SDR 图 ---- */
+.bars{margin:18px 0 8px}
+.bar-row{display:grid;grid-template-columns:190px 1fr 74px;align-items:center;gap:12px;margin-bottom:10px;font-size:13.5px}
+.bar-row .nm2{color:var(--muted);font-family:var(--mono);font-size:12.5px;text-align:right}
+.bar-track{background:var(--panel2);border-radius:6px;height:22px;overflow:hidden}
+.bar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#2A6F97,var(--time));width:0;transition:width .9s cubic-bezier(.2,.7,.2,1)}
+.bar-row.us .bar-fill{background:linear-gradient(90deg,#B0812B,var(--vocals))}
+.bar-row .val{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.src-note{font-size:12.5px;color:var(--faint)}
+
+/* ---- 数据流交互 ---- */
+.flow-box{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:18px}
+.svg-scroll{overflow-x:auto;padding-bottom:6px}
+.svg-scroll svg{min-width:940px;width:100%;height:auto;display:block}
+.blk{fill:var(--panel2);stroke:var(--line);stroke-width:1.2;rx:8}
+.g-step rect{transition:.25s}
+.g-step text{fill:#B9C6D9;font-family:var(--mono);font-size:11px}
+.g-step .lbl{fill:#DCE6F5;font-size:12px}
+.g-step.hot rect.blk{stroke:var(--vocals);stroke-width:2;fill:#2A3448}
+.g-step.hot text{fill:#fff}
+.lane-t{stroke:var(--time)} .lane-s{stroke:#E074C6}
+.arrow{stroke:#41506B;stroke-width:1.6;fill:none;marker-end:url(#arr)}
+.arrow.hot{stroke:var(--vocals);stroke-width:2.2}
+.skipline{stroke:#41506B;stroke-width:1.2;stroke-dasharray:4 5;fill:none;opacity:.7}
+.skipline.hot{stroke:var(--vocals);opacity:1}
+.stepper{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.stepper button{font-family:var(--mono);font-size:12.5px;background:var(--panel);color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:6px 14px;cursor:pointer;transition:.15s}
+.stepper button:hover{color:var(--text);border-color:var(--faint)}
+.stepper button.cur{background:var(--vocals);color:#1A1408;border-color:var(--vocals);font-weight:700}
+.step-info{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;min-height:150px}
+.step-info h4{font-size:16px;margin-bottom:8px}
+.step-info h4 .n{font-family:var(--mono);color:var(--vocals);margin-right:8px;font-size:13px}
+.step-info p{font-size:14.5px;margin-bottom:10px}
+.shape-chips{display:flex;flex-wrap:wrap;gap:8px}
+.shape-chips span{font-family:var(--mono);font-size:12px;background:#0B1015;border:1px solid var(--line);border-radius:8px;padding:4px 10px;color:#AFC6E8}
+.shape-chips span b{color:var(--other);font-weight:600}
+.step-nav{display:flex;gap:8px;margin-top:12px}
+.step-nav button{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 16px;cursor:pointer;font-size:13.5px}
+.step-nav button:hover{border-color:var(--faint)}
+
+/* ---- 训练/推理 tabs ---- */
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:14.5px;padding:8px 16px;cursor:pointer;font-family:var(--sans)}
+.tabs button.cur{color:var(--text);border-bottom-color:var(--vocals);font-weight:600}
+.tabpane{display:none}.tabpane.cur{display:block}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 18px}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-size:13px;font-family:var(--mono);font-weight:600;color:#C4D2E6}
+td{color:#C9D3E2;background:var(--panel)}
+td code{white-space:nowrap}
+.tbl-scroll{overflow-x:auto}
+.tbl-scroll table{min-width:640px}
+.good{color:var(--other)} .bad{color:var(--drums)}
+
+/* ---- 折叠 ---- */
+details{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+details summary{cursor:pointer;padding:14px 18px;font-weight:600;font-size:15px;list-style:none;position:relative;padding-right:44px}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"+";position:absolute;right:18px;top:11px;font-family:var(--mono);color:var(--faint);font-size:18px}
+details[open] summary::after{content:"–"}
+details .body{padding:0 18px 16px;font-size:14.5px;color:#C9D3E2}
+details .body p{font-size:14.5px}
+
+footer{margin-top:70px;border-top:1px solid var(--line);padding:26px 0 40px;color:var(--faint);font-size:13px;font-family:var(--mono)}
+.kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 7px;background:var(--panel2)}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="logo">DEMUCS · HTDEMUCS</span>
+  <a class="tab" href="#task">任务</a>
+  <a class="tab" href="#evolve">三代演化</a>
+  <a class="tab" href="#flow">数据流</a>
+  <a class="tab" href="#train">训练 vs 推理</a>
+  <a class="tab" href="#hands">上手</a>
+  <a class="tab" href="#compare">对比与边界</a>
+  <a class="tab" href="#takeaway">结论</a>
+</div></nav>
+
+<header><div class="wrap">
+  <div class="eyebrow">一文读懂 · Music Source Separation</div>
+  <h1>Demucs / HTDemucs:<br>把一首混好的歌,<span class="hl">拆回四轨</span></h1>
+  <p class="lede">输入一段普通立体声音乐,输出 <b>drums / bass / other / vocals</b> 四条独立音轨。Demucs 是 Meta(FAIR)开源的音乐源分离模型家族,HTDemucs(v4)是其中"卷积 U-Net + 双域 + Transformer"的最终形态,也是目前工程上最常被直接拿来用的开源分离模型之一。</p>
+
+  <div class="hero-stage">
+    <canvas id="heroCv" height="280"></canvas>
+    <div class="solo-bar">
+      <span class="hint">点击试听式 SOLO(高亮某一轨)→</span>
+      <button class="chip on" data-solo="all"><span class="dot" style="background:#8FA1BC"></span>mixture 全部</button>
+      <button class="chip" data-solo="drums"><span class="dot" style="background:var(--drums)"></span>drums</button>
+      <button class="chip" data-solo="bass"><span class="dot" style="background:var(--bass)"></span>bass</button>
+      <button class="chip" data-solo="other"><span class="dot" style="background:var(--other)"></span>other</button>
+      <button class="chip" data-solo="vocals"><span class="dot" style="background:var(--vocals)"></span>vocals</button>
+    </div>
+  </div>
+
+  <div class="hero-facts">
+    <div class="fact"><span class="k">INPUT</span><b>立体声波形</b><span>44.1 kHz,tensor 形状 <code>(2, T)</code>,任意长度(内部切段处理)</span></div>
+    <div class="fact"><span class="k">OUTPUT</span><b>4 条同长度立体声波形</b><span><code>(4, 2, T)</code>:drums、bass、other、vocals,四轨相加 ≈ 原曲</span></div>
+    <div class="fact"><span class="k">核心路径</span><b>波形支路 + 频谱支路</b><span>两套卷积编码器,底部用 Transformer 跨域互相注意,再各自解码回波形</span></div>
+    <div class="fact"><span class="k">量级</span><b>SDR ≈ 9 dB</b><span>MUSDB18-HQ 测试集;单个 checkpoint 约 80 MB,CPU 可跑,GPU 更快</span></div>
+  </div>
+</div></header>
+
+<main class="wrap">
+
+<!-- ================= 1 任务 ================= -->
+<section id="task">
+  <div class="secno">01 · WHY</div>
+  <h2>它解决什么问题:音乐源分离</h2>
+  <p>一首成品歌曲是混音的结果:鼓、贝斯、人声、吉他键盘等几十轨在录音棚里被叠加成 2 个声道。<b>音乐源分离(music source separation)就是这个过程的逆问题</b>——只拿到混好的 2 声道,把它拆回若干条独立音轨(stem)。它是典型的病态逆问题:加法丢失了信息,不同乐器在时间和频率上大量重叠,没有唯一解,只能靠模型学到的"乐器长什么样"的先验去猜。</p>
+  <div class="cols2">
+    <div class="card io-card">
+      <h4>输入是什么</h4>
+      <ul class="tight">
+        <li>任意一段音乐音频(<code>mp3</code> / <code>wav</code> / <code>flac</code> …),内部统一为 <b>44.1 kHz 立体声</b>波形</li>
+        <li>不需要 MIDI、歌词、乐器标注等任何附加信息</li>
+        <li>推理时长曲会被切成约 <b>7.8 s</b> 的重叠片段分别处理再拼回</li>
+      </ul>
+    </div>
+    <div class="card io-card out">
+      <h4>输出是什么</h4>
+      <ul class="tight">
+        <li>与输入等长的 <b>4 条立体声波形</b>:<code>drums</code> <code>bass</code> <code>other</code> <code>vocals</code></li>
+        <li><code>other</code> 是"剩下的一切":吉他、钢琴、合成器、弦乐都在这里</li>
+        <li>模型被训练成四轨之和逼近原曲,所以"伴奏"= 原曲 − vocals ≈ 其余三轨之和</li>
+      </ul>
+    </div>
+  </div>
+  <h3>为什么会出现 Demucs 这条路线</h3>
+  <p>2019 年之前的主流做法(如 Open-Unmix、Spleeter)是在<b>频谱图上做掩码</b>:对混音做 STFT,用网络预测每个源的 mask,乘回频谱,再用<b>混音自己的相位</b>做 iSTFT。这条路好训练,但有个天花板——相位是借来的,重叠区域的相位错误会造成难以消除的"水声"伪影。Demucs 的出发点是:<b>直接在波形上端到端回归,让模型自己学相位</b>。后来的故事(见下一节)则证明:波形和频谱两种表示各有擅长,合起来最强。</p>
+  <div class="note">一句话边界:HTDemucs 只会把音乐拆成<b>固定的四类</b>(或 6 源实验版的六类)。它不做"把小提琴单独拿出来"这种任意指定乐器的分离,不做语音降噪,也不是实时模型。</div>
+</section>
+
+<!-- ================= 2 演化 ================= -->
+<section id="evolve">
+  <div class="secno">02 · EVOLUTION</div>
+  <h2>三代演化:波形 → 双域 → 双域 + Transformer</h2>
+  <p>"Demucs"其实是一个家族名,三代架构差异很大,读代码或选模型前先分清版本:</p>
+  <div class="timeline">
+    <div class="era">
+      <span class="yr">2019–2020 · v1/v2</span>
+      <h4>Demucs:纯波形 U-Net</h4>
+      <p>1D 卷积编码器(stride 4)逐层压缩波形,瓶颈处放 <b>BiLSTM</b> 建模长时依赖,转置卷积解码,U-Net skip 连接。证明了波形端到端可以打平甚至超过频谱掩码法,代价是模型很大。</p>
+      <span class="sdr">SDR ≈ 6.3 dB</span>
+    </div>
+    <div class="era">
+      <span class="yr">2021 · v3</span>
+      <h4>Hybrid Demucs:双域并联</h4>
+      <p>新增一条<b>频谱支路</b>:STFT 后把复数当通道(CaC),沿频率轴做 2D 卷积;与波形支路在瓶颈处融合、共享,再各自解码。鼓的瞬态归波形,和声的稳态归频谱。拿下 MDX 2021 比赛 Track A 冠军。</p>
+      <span class="sdr">SDR ≈ 7.7 dB</span>
+    </div>
+    <div class="era v4">
+      <span class="yr">2022 · v4(本文主角)</span>
+      <h4>HTDemucs:混合 Transformer</h4>
+      <p>保留双支路各 4 层卷积,把最里层换成 <b>Cross-Domain Transformer</b>:域内 self-attention + 跨域 cross-attention 交替,让波形序列与频谱序列直接互相"看"。配合约 800 首额外训练数据。</p>
+      <span class="sdr">SDR ≈ 9.0 dB(ft 版更高)</span>
+    </div>
+  </div>
+
+  <div class="bars" id="sdrBars">
+    <div class="bar-row"><span class="nm2">Open-Unmix (2019)</span><div class="bar-track"><div class="bar-fill" data-v="5.3"></div></div><span class="val">5.3 dB</span></div>
+    <div class="bar-row"><span class="nm2">Spleeter (2019)</span><div class="bar-track"><div class="bar-fill" data-v="5.9"></div></div><span class="val">5.9 dB</span></div>
+    <div class="bar-row"><span class="nm2">Demucs v2 (2020)</span><div class="bar-track"><div class="bar-fill" data-v="6.3"></div></div><span class="val">6.3 dB</span></div>
+    <div class="bar-row"><span class="nm2">Hybrid Demucs v3</span><div class="bar-track"><div class="bar-fill" data-v="7.7"></div></div><span class="val">7.7 dB</span></div>
+    <div class="bar-row us"><span class="nm2">HTDemucs v4</span><div class="bar-track"><div class="bar-fill" data-v="9.0"></div></div><span class="val">≈9.0 dB</span></div>
+    <div class="bar-row us"><span class="nm2">htdemucs_ft(分源微调)</span><div class="bar-track"><div class="bar-fill" data-v="9.2"></div></div><span class="val">≈9.2 dB</span></div>
+  </div>
+  <p class="src-note">SDR = Signal-to-Distortion Ratio,MUSDB18(-HQ)测试集四源平均,数值越高越好;不同论文训练数据量不同(v4 用了额外 800 首内部数据),仅作量级参考。经验上:5 dB 能听出是那个乐器,7 dB 可用,9 dB 多数歌曲上接近"能直接拿去用"的水平,但仍有串音与伪影。</p>
+</section>
+<!-- ================= 3 数据流 ================= -->
+<section id="flow">
+  <div class="secno">03 · DATA FLOW</div>
+  <h2>核心数据流:一段波形在 HTDemucs 里的旅程</h2>
+  <p>下图是 HTDemucs 的完整前向路径。点击步骤按钮(或用 <span class="kbd">←</span> <span class="kbd">→</span> 键)逐段追踪:图中对应模块会点亮,下方面板给出该阶段的作用和<b>张量形状</b>(以一个 7.8 s、44.1 kHz 立体声片段为例,T = 343 980 采样点)。</p>
+
+  <div class="flow-box">
+    <div class="svg-scroll">
+    <svg id="archSvg" viewBox="0 0 1080 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HTDemucs 架构数据流图">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#41506B"/>
+        </marker>
+      </defs>
+
+      <text x="142" y="56" fill="#4CC9F0" font-family="ui-monospace,monospace" font-size="12">时间支路 · waveform</text>
+      <text x="142" y="384" fill="#E074C6" font-family="ui-monospace,monospace" font-size="12">频谱支路 · spectrogram</text>
+
+      <!-- 输入 -->
+      <g class="g-step" id="g-input">
+        <rect class="blk" x="10" y="172" width="80" height="56" rx="8"/>
+        <text class="lbl" x="50" y="196" text-anchor="middle">mixture</text>
+        <text x="50" y="214" text-anchor="middle">(2, T)</text>
+      </g>
+      <path class="arrow" id="a-in-t" d="M90,188 C118,188 112,105 138,105"/>
+      <path class="arrow" id="a-in-s" d="M90,212 C118,212 112,295 138,295"/>
+
+      <!-- STFT -->
+      <g class="g-step" id="g-stft">
+        <rect class="blk" x="142" y="268" width="58" height="54" rx="8"/>
+        <text class="lbl" x="171" y="291" text-anchor="middle">STFT</text>
+        <text x="171" y="308" text-anchor="middle">CaC</text>
+      </g>
+      <path class="arrow" d="M200,295 L228,295"/>
+
+      <!-- 时间编码器 -->
+      <g class="g-step" id="g-tenc">
+        <rect class="blk" x="142" y="78" width="64" height="54" rx="8"/>
+        <text class="lbl" x="174" y="101" text-anchor="middle">TEnc₁</text>
+        <text x="174" y="118" text-anchor="middle">48ch</text>
+        <rect class="blk" x="224" y="78" width="64" height="54" rx="8"/>
+        <text class="lbl" x="256" y="101" text-anchor="middle">TEnc₂</text>
+        <text x="256" y="118" text-anchor="middle">96ch</text>
+        <rect class="blk" x="306" y="78" width="64" height="54" rx="8"/>
+        <text class="lbl" x="338" y="101" text-anchor="middle">TEnc₃</text>
+        <text x="338" y="118" text-anchor="middle">192ch</text>
+        <rect class="blk" x="388" y="78" width="64" height="54" rx="8"/>
+        <text class="lbl" x="420" y="101" text-anchor="middle">TEnc₄</text>
+        <text x="420" y="118" text-anchor="middle">384ch</text>
+        <path class="arrow" d="M206,105 L222,105"/>
+        <path class="arrow" d="M288,105 L304,105"/>
+        <path class="arrow" d="M370,105 L386,105"/>
+      </g>
+      <path class="arrow" d="M452,105 C500,105 500,140 542,150"/>
+
+      <!-- 频谱编码器 -->
+      <g class="g-step" id="g-senc">
+        <rect class="blk" x="232" y="268" width="64" height="54" rx="8"/>
+        <text class="lbl" x="264" y="291" text-anchor="middle">SEnc₁</text>
+        <text x="264" y="308" text-anchor="middle">48ch</text>
+        <rect class="blk" x="314" y="268" width="64" height="54" rx="8"/>
+        <text class="lbl" x="346" y="291" text-anchor="middle">SEnc₂</text>
+        <text x="346" y="308" text-anchor="middle">96ch</text>
+        <rect class="blk" x="396" y="268" width="64" height="54" rx="8"/>
+        <text class="lbl" x="428" y="291" text-anchor="middle">SEnc₃</text>
+        <text x="428" y="308" text-anchor="middle">192ch</text>
+        <rect class="blk" x="478" y="268" width="64" height="54" rx="8"/>
+        <text class="lbl" x="510" y="291" text-anchor="middle">SEnc₄</text>
+        <text x="510" y="308" text-anchor="middle">384ch</text>
+        <path class="arrow" d="M296,295 L312,295"/>
+        <path class="arrow" d="M378,295 L394,295"/>
+        <path class="arrow" d="M460,295 L476,295"/>
+      </g>
+      <path class="arrow" d="M542,295 C556,295 550,270 566,250"/>
+
+      <!-- Transformer -->
+      <g class="g-step" id="g-xfmr">
+        <rect class="blk" x="560" y="90" width="128" height="220" rx="10"/>
+        <text class="lbl" x="624" y="140" text-anchor="middle">Cross-Domain</text>
+        <text class="lbl" x="624" y="158" text-anchor="middle">Transformer</text>
+        <text x="624" y="186" text-anchor="middle">self-attn 域内</text>
+        <text x="624" y="204" text-anchor="middle">cross-attn 跨域</text>
+        <text x="624" y="222" text-anchor="middle">× 5 层 · d=512</text>
+        <path d="M596,244 C610,258 638,258 652,244" stroke="#4CC9F0" stroke-width="1.4" fill="none"/>
+        <path d="M596,258 C610,244 638,244 652,258" stroke="#E074C6" stroke-width="1.4" fill="none"/>
+      </g>
+      <path class="arrow" d="M688,150 C712,140 706,105 730,105"/>
+      <path class="arrow" d="M688,250 C712,262 706,295 730,295"/>
+
+      <!-- 解码器 -->
+      <g class="g-step" id="g-tdec">
+        <rect class="blk" x="732" y="78" width="106" height="54" rx="8"/>
+        <text class="lbl" x="785" y="101" text-anchor="middle">Time Decoder</text>
+        <text x="785" y="118" text-anchor="middle">转置卷积 ×4</text>
+      </g>
+      <g class="g-step" id="g-sdec">
+        <rect class="blk" x="732" y="268" width="106" height="54" rx="8"/>
+        <text class="lbl" x="785" y="291" text-anchor="middle">Spec Decoder</text>
+        <text x="785" y="308" text-anchor="middle">转置卷积 ×4</text>
+      </g>
+
+      <!-- skip 连接 -->
+      <path class="skipline" id="sk-t" d="M256,74 C420,20 640,20 780,74"/>
+      <path class="skipline" id="sk-s" d="M346,326 C480,380 640,380 780,326"/>
+      <text x="500" y="34" text-anchor="middle" fill="#5F7189" font-family="ui-monospace,monospace" font-size="10.5">U-Net skip ×4</text>
+      <text x="500" y="368" text-anchor="middle" fill="#5F7189" font-family="ui-monospace,monospace" font-size="10.5">U-Net skip ×4</text>
+
+      <!-- iSTFT -->
+      <g class="g-step" id="g-istft">
+        <rect class="blk" x="856" y="268" width="56" height="54" rx="8"/>
+        <text class="lbl" x="884" y="300" text-anchor="middle">iSTFT</text>
+      </g>
+      <path class="arrow" d="M838,295 L854,295"/>
+
+      <!-- 求和 -->
+      <g class="g-step" id="g-sum">
+        <circle cx="944" cy="200" r="16" fill="#1E2A3C" stroke="#2A3850" stroke-width="1.2"/>
+        <text class="lbl" x="944" y="206" text-anchor="middle" font-size="16">+</text>
+      </g>
+      <path class="arrow" d="M838,105 C900,105 916,168 930,190"/>
+      <path class="arrow" d="M912,295 C930,295 936,232 942,218"/>
+
+      <!-- 输出 -->
+      <g class="g-step" id="g-out">
+        <rect class="blk" x="978" y="140" width="94" height="120" rx="8"/>
+        <line x1="990" y1="163" x2="1030" y2="163" stroke="#F0865C" stroke-width="3.2" stroke-linecap="round"/>
+        <text x="1036" y="167" font-size="10.5">drums</text>
+        <line x1="990" y1="188" x2="1030" y2="188" stroke="#8B7BFF" stroke-width="3.2" stroke-linecap="round"/>
+        <text x="1036" y="192" font-size="10.5">bass</text>
+        <line x1="990" y1="213" x2="1030" y2="213" stroke="#3EC9A7" stroke-width="3.2" stroke-linecap="round"/>
+        <text x="1036" y="217" font-size="10.5">other</text>
+        <line x1="990" y1="238" x2="1030" y2="238" stroke="#F2B33D" stroke-width="3.2" stroke-linecap="round"/>
+        <text x="1036" y="242" font-size="10.5">vocals</text>
+      </g>
+      <path class="arrow" d="M960,200 L976,200"/>
+    </svg>
+    </div>
+
+    <div class="stepper" id="stepper"></div>
+    <div class="step-info" id="stepInfo"></div>
+    <div class="step-nav">
+      <button id="prevStep">← 上一步</button>
+      <button id="nextStep">下一步 →</button>
+    </div>
+  </div>
+
+  <h3>为什么要"双域"?一张分工表</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>信号成分</th><th>波形支路擅长</th><th>频谱支路擅长</th></tr>
+    <tr><td><b>drums</b>(瞬态、宽频冲击)</td><td class="good">✓ 起音边缘锐利,不受 STFT 时间分辨率限制</td><td>时频窗内被抹平,鼓点容易发"糊"</td></tr>
+    <tr><td><b>bass</b>(低频、周期性强)</td><td class="good">✓ 直接拟合低频周期波形</td><td>低频 bin 少、分辨率差</td></tr>
+    <tr><td><b>vocals / 和声</b>(谐波结构)</td><td>长时谐波结构在时域上不直观</td><td class="good">✓ 谐波在频谱上是清晰的横向条纹,mask 好学</td></tr>
+    <tr><td>混响尾音、稳态铺底</td><td>难</td><td class="good">✓ 稳态能量分布明确</td></tr>
+  </table></div>
+  <p>v3 之前的模型只能二选一;v3 把两条支路并联;v4 更进一步——<b>让两个域在 Transformer 里逐层互相注意</b>,鼓点的时域证据可以直接帮助频谱支路判断,反之亦然。这就是 HTDemucs 名字里 "H(ybrid)T(ransformer)" 的含义。</p>
+</section>
+<!-- ================= 4 训练 vs 推理 ================= -->
+<section id="train">
+  <div class="secno">04 · TRAIN vs INFER</div>
+  <h2>训练时学什么,推理时算什么</h2>
+  <div class="tabs" role="tablist">
+    <button class="cur" data-tab="t-train">训练阶段</button>
+    <button data-tab="t-infer">推理阶段</button>
+    <button data-tab="t-knobs">影响结果的旋钮</button>
+  </div>
+
+  <div class="tabpane cur" id="t-train">
+    <p>训练是一个<b>有监督回归</b>问题:数据集里每首歌都带真实分轨(ground-truth stems),把它们加起来得到混音喂给模型,让模型输出的四条波形逼近真实分轨,损失就是<b>波形上的 L1 距离</b>——不需要相位技巧,不需要 mask 标签,监督信号就是波形本身。</p>
+    <ul class="tight">
+      <li><b>学到的东西:</b>编码器学"各类乐器在时域/频域长什么样"的先验;Transformer 学长程结构(主歌副歌里同一乐器音色一致);解码器学如何把判断还原成干净波形。</li>
+      <li><b>数据:</b>公开的 <b>MUSDB18-HQ</b>(150 首带分轨的歌,约 10 小时,其中 86 训练 / 14 验证 / 50 测试)+ Meta 内部约 <b>800 首</b>额外带分轨曲目。数据稀缺是这个领域的根本瓶颈——带分轨的版权音乐极难获得。</li>
+      <li><b>数据增强(非常关键):</b>随机<b>重混(remix)</b>——把不同歌曲的 stems 随机组合成"新歌";随机变调/变速(repitch/tempo);随机增益、声道交换。等于把 150 首歌组合爆炸成近乎无限的训练混音。</li>
+      <li><b>训练片段固定 7.8 s:</b>Transformer 的位置编码在这个长度上训练,这也解释了为什么推理必须切段(见下一个 tab)。</li>
+      <li><b>htdemucs_ft:</b>在通用模型之后,<b>每个源单独微调一个模型</b>,推理时四个模型各跑一遍,各取所长。质量再涨一截,代价是约 4 倍推理时间。</li>
+    </ul>
+    <div class="note blue">和分类模型不同,这里没有"标签类别"——模型学的是从波形到波形的映射。因此它对<b>训练数据分布</b>极其敏感:流行/摇滚效果最好,民乐、电子极端音色、live 录音会明显退化。</div>
+  </div>
+
+  <div class="tabpane" id="t-infer">
+    <p>推理时模型权重全部冻结,一首完整歌曲的处理流程是纯粹的"切段 → 前向 → 拼接":</p>
+    <ul class="tight">
+      <li><b>切段:</b>整曲切成约 7.8 s 的片段,相邻片段重叠(默认 <code>overlap=0.25</code>)。</li>
+      <li><b>逐段前向:</b>每段走一遍上面的双域数据流,输出 <code>(4, 2, T_seg)</code>。</li>
+      <li><b>overlap-add:</b>重叠区用三角窗加权平均,消除拼接边界的咔哒声。</li>
+      <li><b>可选 shift trick:</b><code>shifts=N</code> 把输入随机平移 N 次分别推理再对齐平均,SDR 略有提升,耗时 ×N。</li>
+      <li><b>耗时量级:</b>GPU 上一首 4 分钟歌曲通常几秒~十几秒;CPU 上是分钟级(<code>htdemucs_ft</code> 再 ×4)。显存不够可用 <code>segment</code> 参数减小分段。</li>
+    </ul>
+    <p>值得注意的确定性问题:<code>shifts=0</code> 时推理是确定的,同一输入永远得到同一输出;开 shifts 后带随机性(可固定种子)。</p>
+  </div>
+
+  <div class="tabpane" id="t-knobs">
+    <div class="tbl-scroll"><table>
+      <tr><th>旋钮</th><th>作用</th><th>取舍</th></tr>
+      <tr><td><code>-n 模型名</code></td><td>选 checkpoint:<code>htdemucs</code>(默认)/ <code>htdemucs_ft</code> / <code>htdemucs_6s</code> / <code>mdx_extra</code> 等</td><td><code>ft</code> 质量最好但慢 4 倍;<code>6s</code> 多 guitar/piano 两轨但 piano 质量一般</td></tr>
+      <tr><td><code>--two-stems=vocals</code></td><td>只输出 vocals + 其余合并(karaoke 模式)</td><td>只是合并输出,<b>计算量并不减少</b></td></tr>
+      <tr><td><code>--shifts=N</code></td><td>随机平移取平均</td><td>质量小幅 ↑,时间线性 ↑,N=1~5 常见</td></tr>
+      <tr><td><code>--overlap</code></td><td>分段重叠率(默认 0.25)</td><td>调低省时间,过低有拼接痕迹</td></tr>
+      <tr><td><code>--segment</code></td><td>分段秒数</td><td>主要用于省显存;<b>不能大幅调大</b>,Transformer 位置编码没在长片段上训练过</td></tr>
+      <tr><td><code>-d cpu/cuda</code>、<code>--float32</code>、<code>--mp3</code></td><td>设备与输出格式</td><td>常规工程选项,对分离质量影响很小</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<!-- ================= 5 上手 ================= -->
+<section id="hands">
+  <div class="secno">05 · HANDS-ON</div>
+  <h2>五分钟上手:最小可验证示例</h2>
+  <div class="tabs">
+    <button class="cur" data-tab="h-cli">命令行</button>
+    <button data-tab="h-py">Python API</button>
+    <button data-tab="h-out">输出与日志</button>
+  </div>
+
+  <div class="tabpane cur" id="h-cli">
+<pre><button class="copy">复制</button><code><span class="cm"># 安装(需要 Python ≥3.8 与 ffmpeg;首次运行自动下载权重,约 80 MB)</span>
+pip install demucs
+
+<span class="cm"># 默认模型 htdemucs,分四轨</span>
+demucs song.mp3
+
+<span class="cm"># 质量优先:分源微调版 + 平移平均(约 4×N 倍耗时)</span>
+demucs -n htdemucs_ft --shifts=2 song.mp3
+
+<span class="cm"># 只要人声/伴奏(卡拉OK)</span>
+demucs --two-stems=vocals song.mp3
+
+<span class="cm"># CPU 环境 + 输出 mp3 省空间</span>
+demucs -d cpu --mp3 song.mp3</code></pre>
+    <p>就这么多——没有配置文件,没有前处理脚本。任何 ffmpeg 认识的格式都能直接喂。</p>
+  </div>
+
+  <div class="tabpane" id="h-py">
+<pre><button class="copy">复制</button><code><span class="kw">import</span> torch, torchaudio
+<span class="kw">from</span> demucs.pretrained <span class="kw">import</span> get_model
+<span class="kw">from</span> demucs.apply <span class="kw">import</span> apply_model
+
+model = <span class="fn">get_model</span>(<span class="st">"htdemucs"</span>)          <span class="cm"># 自动下载并加载权重</span>
+model.<span class="fn">eval</span>()
+<span class="fn">print</span>(model.sources)                   <span class="cm"># ['drums', 'bass', 'other', 'vocals']</span>
+
+wav, sr = torchaudio.<span class="fn">load</span>(<span class="st">"song.wav"</span>)  <span class="cm"># 期望 44100 Hz 立体声,形状 (2, T)</span>
+wav = wav.<span class="fn">unsqueeze</span>(0)                 <span class="cm"># (1, 2, T):加 batch 维</span>
+
+<span class="kw">with</span> torch.no_grad():
+    <span class="cm"># apply_model 自动完成 切段 → 前向 → overlap-add</span>
+    sources = <span class="fn">apply_model</span>(model, wav, overlap=0.25, shifts=1)[0]
+                                        <span class="cm"># (4, 2, T)</span>
+
+<span class="kw">for</span> name, src <span class="kw">in</span> <span class="fn">zip</span>(model.sources, sources):
+    torchaudio.<span class="fn">save</span>(<span class="st">f"{name}.wav"</span>, src.cpu(), sr)
+
+<span class="cm"># 快速验证:四轨相加应非常接近原曲</span>
+<span class="fn">print</span>((sources.<span class="fn">sum</span>(0) - wav[0]).<span class="fn">abs</span>().<span class="fn">mean</span>())   <span class="cm"># 一个很小的数</span></code></pre>
+    <p>最后一行是最好的"理解自检":HTDemucs 的输出被训练成<b>可加性分解</b>,四轨之和 ≈ 输入。如果你的场景需要"分解后可无损重构",这一性质很有用。</p>
+  </div>
+
+  <div class="tabpane" id="h-out">
+<pre><code><span class="cm"># 运行日志(节选)</span>
+Selected model is a bag of 1 models. You will see that many progress bars per track.
+Separated tracks will be stored in /content/separated/htdemucs
+Separating track song.mp3
+100%|████████████████████| 187.65/187.65 [00:07&lt;00:00, 25.5seconds/s]
+
+<span class="cm"># 输出目录结构</span>
+separated/
+└── htdemucs/          <span class="cm"># 模型名一层</span>
+    └── song/          <span class="cm"># 每首歌一个目录</span>
+        ├── drums.wav
+        ├── bass.wav
+        ├── other.wav
+        └── vocals.wav</code></pre>
+    <p>权重缓存在 <code>~/.cache/torch/hub/checkpoints/</code>(Windows 在用户目录下的对应位置)。离线部署时把 <code>.th</code> 权重文件随镜像打包即可;<code>htdemucs_ft</code> 实际是 4 个 checkpoint 的 "bag of models"。</p>
+  </div>
+</section>
+
+<!-- ================= 6 对比与边界 ================= -->
+<section id="compare">
+  <div class="secno">06 · BOUNDARIES</div>
+  <h2>横向对比、适用边界与常见误区</h2>
+
+  <h3>和相近模型比,它站在哪</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>模型</th><th>域</th><th>思路</th><th>SDR(参考)</th><th>一句话定位</th></tr>
+    <tr><td>Open-Unmix</td><td>频谱</td><td>BiLSTM 预测幅度 mask</td><td>≈5.3</td><td>教科书式基线,代码最好读</td></tr>
+    <tr><td>Spleeter</td><td>频谱</td><td>U-Net mask,预训练即用</td><td>≈5.9</td><td>曾经的工业界默认,现已过时</td></tr>
+    <tr><td>Demucs v2</td><td>波形</td><td>U-Net + BiLSTM 直接回归波形</td><td>≈6.3</td><td>证明波形路线可行</td></tr>
+    <tr><td>Hybrid Demucs v3</td><td>双域</td><td>时/频双支路并联</td><td>≈7.7</td><td>MDX 2021 冠军</td></tr>
+    <tr><td><b>HTDemucs v4</b></td><td>双域</td><td>双支路 + 跨域 Transformer</td><td><b>≈9.0</b></td><td><b>开源即用的事实标准</b></td></tr>
+    <tr><td>BS-RoFormer (2023)</td><td>频谱</td><td>Band-Split + RoPE Transformer</td><td>≈9.7+</td><td>刷榜更高,但训练数据更大、开源生态较弱</td></tr>
+  </table></div>
+  <p class="src-note">SDR 来自各论文在 MUSDB18(-HQ)测试集的报告,训练数据规模不一,只用于感受量级与代际差。</p>
+
+  <div class="cols2" style="margin-top:20px">
+    <div class="card" style="border-top:3px solid var(--other)">
+      <h4>适合用它,当你要…</h4>
+      <ul class="tight">
+        <li>提取伴奏 / 人声(卡拉OK、翻唱、DJ remix、采样)</li>
+        <li>扒谱、听写、音乐教学前的预处理(先把目标乐器凸显出来)</li>
+        <li>为下游任务批量造数据:歌声转换、歌词转写、MIR 研究</li>
+        <li>离线批处理管线:输入输出干净、CLI 稳定、许可宽松(代码 MIT,权重研究许可需自查)</li>
+        <li>借鉴架构思想:双域并联、跨域 cross-attention、波形 L1 监督、remix 增强</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:3px solid var(--drums)">
+      <h4>不适合,当你要…</h4>
+      <ul class="tight">
+        <li><b>任意指定乐器</b>的分离("把小提琴拿出来")——固定 4/6 类,其余全进 other</li>
+        <li><b>语音</b>增强、会议降噪、说话人分离——那是 speech 系模型的领域</li>
+        <li><b>实时低延迟</b>处理——非因果、按 7.8 s 分段,天然不实时</li>
+        <li>录音棚级"零串音"分轨——9 dB SDR 仍意味着可闻残留与伪影</li>
+        <li>极小算力端侧部署——几十 MB 权重 + 秒级 GPU 推理,不是 TinyML 目标</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">常见误区(点开自查)</h3>
+  <details>
+    <summary>误区一:"HTDemucs 是纯 Transformer 模型"</summary>
+    <div class="body"><p>不是。它是 <b>卷积 U-Net 为主体、只在最深处放 5 层 Transformer</b> 的混合架构。绝大部分参数和计算仍在卷积编解码器里;Transformer 的职责是长程建模与<b>跨域信息交换</b>。把它当 "音频版 ViT" 来理解会读错代码。</p></div>
+  </details>
+  <details>
+    <summary>误区二:"波形模型已经淘汰了频谱模型"</summary>
+    <div class="body"><p>恰恰相反,Demucs 家族自己的演化否定了这个说法:v3/v4 的提升正来自<b>把频谱支路加回来</b>;而 2023 年的 BS-RoFormer 用纯频谱架构再次登顶。结论是:表示(波形/频谱)不是胜负手,数据规模、增强策略和架构细节才是。</p></div>
+  </details>
+  <details>
+    <summary>误区三:"SDR 9 dB = 输出完美可用"</summary>
+    <div class="body"><p>SDR 是全曲平均能量比。9 dB 意味着多数流行歌上效果惊艳,但依旧存在:人声轨里的镲片残留、贝斯与底鼓互相串音、密集段落的"水声"伪影。对最终交付质量敏感的场景(母带、商用采样)需要人工审听,或叠加多模型 ensemble。</p></div>
+  </details>
+  <details>
+    <summary>误区四:"segment 调大点,长曲一次过,效果更好"</summary>
+    <div class="body"><p>不行。Transformer 的位置编码只在 <b>7.8 s</b> 片段上训练过,输入远超此长度会显著退化(v4 论文专门讨论过这一点)。长曲质量靠的是 overlap-add 拼接,而不是加长上下文。这也是所有"定长训练 + 位置编码"模型的通病,工程上要牢记。</p></div>
+  </details>
+  <details>
+    <summary>误区五:"--two-stems 只分两轨,应该快一倍"</summary>
+    <div class="body"><p>不会更快。模型永远输出 4(或 6)个源,<code>--two-stems</code> 只是把非目标源<b>加起来存成一个文件</b>。想省时间应该调 <code>overlap</code>、关 <code>shifts</code>、或不用 <code>_ft</code> 版本。</p></div>
+  </details>
+  <details>
+    <summary>误区六:"训练一个自己的 Demucs 很容易,反正代码开源"</summary>
+    <div class="body"><p>代码确实全开源(含训练管线),但复现 9 dB 的隐形门槛是<b>带分轨的训练数据</b>:公开可用的只有 MUSDB18 的 86 首训练曲,Meta 的 800 首内部数据不公开。没有额外数据,从头训练大约只能到 v3 水平。这也是为什么绝大多数使用者直接用官方权重或做小规模微调。</p></div>
+  </details>
+</section>
+
+<!-- ================= 7 收束 ================= -->
+<section id="takeaway">
+  <div class="secno">07 · TL;DR</div>
+  <h2>带走这五句话</h2>
+  <ul class="tight">
+    <li><b>任务:</b>音乐源分离——2 声道混音进,drums / bass / other / vocals 四条波形出,四轨之和 ≈ 原曲。</li>
+    <li><b>架构:</b>波形与频谱两条卷积 U-Net 支路,在瓶颈处用 5 层 self + cross attention 的 Transformer 互相注意,再各自解码、相加。</li>
+    <li><b>训练:</b>MUSDB18-HQ + 800 首内部分轨数据,波形 L1 损失,remix/变调等增强是关键;推理靠 7.8 s 切段 + overlap-add。</li>
+    <li><b>选型:</b>要开箱即用选 <code>htdemucs</code>;要极致质量选 <code>htdemucs_ft</code>(慢 4 倍);要吉他/钢琴试 <code>htdemucs_6s</code>;要刷 SDR 榜再看 BS-RoFormer 系。</li>
+    <li><b>可借鉴:</b>双域互补 + 跨域注意力这个模式,不止适用于音乐——任何"同一信号存在多种互补表示"的任务(雷达、脑电、金融时序)都值得抄这份作业。</li>
+  </ul>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  参考:Défossez et al., <i>Music Source Separation in the Waveform Domain</i> (2019) · Défossez, <i>Hybrid Spectrogram and Waveform Source Separation</i> (2021) · Rouard, Massa, Défossez, <i>Hybrid Transformers for Music Source Separation</i> (ICASSP 2023) · 代码 github.com/facebookresearch/demucs<br>
+  本页为单文件离线交互式讲解,数值为论文报告的近似值,以官方仓库为准。
+</div></footer>
+<style>
+.g-step.hot circle{stroke:var(--vocals);stroke-width:2;fill:#2A3448}
+</style>
+<script>
+(function(){
+"use strict";
+var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ============ Hero canvas:混音 → 模型 → 四轨 ============ */
+var cv = document.getElementById("heroCv");
+var ctx = cv.getContext("2d");
+var solo = "all";
+var COLORS = {mix:"#8FA1BC", drums:"#F0865C", bass:"#8B7BFF", other:"#3EC9A7", vocals:"#F2B33D"};
+
+function sDrums(u,t){ var p=((u*3.2+t*.55)%1+1)%1; return Math.exp(-9*p)*Math.sin(90*u+t*8)*1.15; }
+function sBass(u,t){ return .8*Math.sin(6.28*(u*1.6-t*.25)); }
+function sVocals(u,t){ return .7*Math.sin(6.28*(u*5-t*.8))*(.55+.45*Math.sin(6.28*(u*.6-t*.11))); }
+function sOther(u,t){ return .38*(Math.sin(6.28*(u*9.3-t*1.3))+Math.sin(6.28*(u*13.7+t*.7)))*.9; }
+var STEMS=[["drums",sDrums],["bass",sBass],["other",sOther],["vocals",sVocals]];
+function sMix(u,t){ return .3*(sDrums(u,t)+sBass(u,t)+sVocals(u,t)+sOther(u,t)); }
+
+function drawWave(fn,t,x0,x1,yc,amp,color,alpha,lw){
+  ctx.beginPath();
+  var n=Math.max(40,Math.floor((x1-x0)/3));
+  for(var i=0;i<=n;i++){
+    var u=i/n, x=x0+u*(x1-x0), y=yc+fn(u,t)*amp;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  }
+  ctx.strokeStyle=color; ctx.globalAlpha=alpha; ctx.lineWidth=lw||1.6; ctx.stroke(); ctx.globalAlpha=1;
+}
+
+function render(t){
+  var dpr=window.devicePixelRatio||1;
+  var W=cv.clientWidth, H=280;
+  if(cv.width!==W*dpr){ cv.width=W*dpr; cv.height=H*dpr; }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+  var narrow = W<560;
+  var mixX0=10, mixX1=W*.30, boxX0=W*.345, boxX1=W*.525, outX0=W*.58, outX1=W-84;
+  if(narrow){ mixX1=W*.26; boxX0=W*.30; boxX1=W*.50; outX0=W*.55; outX1=W-62; }
+  var midY=H/2;
+
+  // 输入混音
+  ctx.font="11px ui-monospace,monospace"; ctx.fillStyle="#6B7A92";
+  ctx.fillText("mixture · (2, T)", mixX0, 36);
+  var mixFn = solo==="all" ? sMix : {drums:sDrums,bass:sBass,other:sOther,vocals:sVocals}[solo];
+  if(solo!=="all") drawWave(sMix,t,mixX0,mixX1,midY,34,COLORS.mix,.18);
+  drawWave(mixFn,t,mixX0,mixX1,midY,34, solo==="all"?COLORS.mix:COLORS[solo], .95, 1.8);
+
+  // 模型盒
+  var glow = solo==="all" ? "#3C4C68" : COLORS[solo];
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(boxX0,midY-46,boxX1-boxX0,92,12); else ctx.rect(boxX0,midY-46,boxX1-boxX0,92);
+  ctx.fillStyle="#1E2A3C"; ctx.fill();
+  ctx.strokeStyle=glow; ctx.lineWidth=1.6; ctx.stroke();
+  ctx.fillStyle="#E9EEF6"; ctx.font="700 "+(narrow?12:14)+"px ui-monospace,monospace";
+  ctx.textAlign="center";
+  ctx.fillText("HTDEMUCS",(boxX0+boxX1)/2,midY-6);
+  if(!narrow){
+    ctx.fillStyle="#6B7A92"; ctx.font="10px ui-monospace,monospace";
+    ctx.fillText("波形 ⇄ 频谱 · Transformer",(boxX0+boxX1)/2,midY+14);
+  }
+  ctx.textAlign="left";
+  // 连接线 入
+  ctx.strokeStyle="#3C4C68"; ctx.lineWidth=1.3;
+  ctx.beginPath(); ctx.moveTo(mixX1+4,midY); ctx.lineTo(boxX0-4,midY); ctx.stroke();
+
+  // 输出四轨
+  var laneH=H/5;
+  for(var k=0;k<4;k++){
+    var name=STEMS[k][0], fn=STEMS[k][1];
+    var yc=laneH*(k+1)-4;
+    var on = solo==="all"||solo===name;
+    ctx.beginPath();
+    ctx.moveTo(boxX1+4,midY+(k-1.5)*10);
+    ctx.bezierCurveTo(boxX1+34,midY+(k-1.5)*10, outX0-30,yc, outX0-4,yc);
+    ctx.strokeStyle=on?COLORS[name]:"#2A3850"; ctx.globalAlpha=on?.85:.6; ctx.lineWidth=1.2; ctx.stroke(); ctx.globalAlpha=1;
+    drawWave(fn,t,outX0,outX1,yc,laneH*.34,COLORS[name],on?.95:.14,1.7);
+    ctx.fillStyle=on?COLORS[name]:"#3C4C68"; ctx.font="11px ui-monospace,monospace";
+    ctx.fillText(name,outX1+8,yc+4);
+  }
+}
+var t0=0;
+function loop(ts){ t0=ts/1000; render(t0); requestAnimationFrame(loop); }
+if(reduceMotion){ render(2.3); window.addEventListener("resize",function(){render(2.3);}); }
+else requestAnimationFrame(loop);
+
+document.querySelectorAll(".chip").forEach(function(ch){
+  ch.addEventListener("click",function(){
+    solo=ch.dataset.solo;
+    document.querySelectorAll(".chip").forEach(function(c){
+      c.classList.toggle("on",c===ch);
+      c.classList.toggle("dim",c!==ch && c.dataset.solo!=="all" && solo!=="all" && c.dataset.solo!==solo);
+    });
+    if(reduceMotion) render(2.3);
+  });
+});
+
+/* ============ 数据流步骤 ============ */
+var STEPS=[
+ {t:"切段与标准化",ids:["g-input"],
+  d:"完整歌曲先被切成约 7.8 s 的片段(训练时的固定长度),每段减去均值、除以标准差做归一化——分离完成后再把这两个统计量乘/加回去。之后的一切都发生在单个片段上。",
+  s:[["输入片段","(B, 2, 343 980)"],["含义","batch × 双声道 × (7.8 s × 44 100 Hz)"]]},
+ {t:"一份信号,两种表示",ids:["g-input","g-stft","a-in-t","a-in-s"],
+  d:"同一段波形兵分两路:时间支路原样进入;频谱支路先做 STFT(n_fft=4096, hop=1024),然后用 CaC(complex-as-channels)技巧——把复数的实部和虚部直接当作两个通道,而不是只取幅度。这样相位信息全程保留,不需要事后\u201c借相位\u201d。",
+  s:[["STFT 复数谱","(B, 2, 2048, 336)"],["CaC 展开","(B, 4, 2048, 336)"],["帧数","343 980 / 1024 ≈ 336 帧"]]},
+ {t:"双支路卷积编码",ids:["g-tenc","g-senc"],
+  d:"两条支路各 4 层卷积,stride=4,通道 48→96→192→384。时间支路用 1D 卷积压缩时间轴(每层 ÷4);频谱支路用 2D 卷积主要沿频率轴压缩(2048→512→128→32→8),时间帧数保持不变。瞬态细节(鼓的起音)天然留在时间支路,稳态谐波(人声、和声)在频谱支路上是清晰的条纹。",
+  s:[["时间支路出","(B, 384, 1 344)"],["频谱支路出","(B, 384, 8, 336)"]]},
+ {t:"Cross-Domain Transformer",ids:["g-xfmr"],
+  d:"v4 的核心升级。两支路先经 1×1 卷积升到 512 维;频谱表示按(频率 × 时间)展平成 8×336=2 688 个 token,时间支路是 1 344 个 token,各自加位置编码(频谱用 2D、时间用 1D)。5 层结构中,self-attention 在各自域内建模长程依赖(副歌里的人声可以参考主歌),cross-attention 让两个域互读对方——时域的鼓点证据可以直接修正频域的判断,反之亦然。",
+  s:[["时间 token","(B, 1 344, 512)"],["频谱 token","(B, 2 688, 512)"],["结构","5 层 · 8 头 · self ⇄ cross 交替"]]},
+ {t:"双支路解码 + U-Net skip",ids:["g-tdec","g-sdec","sk-t","sk-s"],
+  d:"两条支路各自用镜像的转置卷积逐层放大,每一层都加上编码器同层的 skip 特征——压缩时丢掉的细节(精确的瞬态位置、谐波微结构)从这里找回来。最后一层把通道扩成\u201c源数 × 声道数\u201d,即每个源一份输出。",
+  s:[["时间支路出","(B, 4, 2, 343 980)"],["频谱支路出","(B, 16, 2048, 336)"],["16 =","4 源 × 2 声道 × (实, 虚)"]]},
+ {t:"回到波形,逐源相加",ids:["g-istft","g-sum","g-out"],
+  d:"频谱支路的输出做 iSTFT 变回波形(相位是模型自己预测的,不是借的)。此时每个源都有两份\u201c答案\u201d——时域一份、频域一份,直接逐源相加,再把归一化统计量还原。训练中模型自动学会分工:鼓主要由时间支路给出,人声主要由频谱支路给出。",
+  s:[["片段最终输出","(B, 4, 2, 343 980)"],["顺序","drums · bass · other · vocals"]]},
+ {t:"长曲拼接(仅推理)",ids:["g-out"],
+  d:"以上处理的只是一个 7.8 s 片段。完整歌曲的各片段之间重叠 25%,用三角窗加权做 overlap-add 平滑拼接;可选 shifts=N 把输入随机平移多次、结果对齐平均,再换取一点点质量。这一步没有任何可学习参数——纯粹的推理期工程。",
+  s:[["整曲输出","(4, 2, T_full)"],["默认","overlap=0.25 · shifts=0"]]}
+];
+
+var stepper=document.getElementById("stepper"), info=document.getElementById("stepInfo");
+var cur=0;
+STEPS.forEach(function(st,i){
+  var b=document.createElement("button");
+  b.textContent=(i+1)+". "+st.t;
+  b.addEventListener("click",function(){go(i);});
+  stepper.appendChild(b);
+});
+function go(i){
+  cur=(i+STEPS.length)%STEPS.length;
+  var st=STEPS[cur];
+  stepper.querySelectorAll("button").forEach(function(b,j){b.classList.toggle("cur",j===cur);});
+  document.querySelectorAll("#archSvg .hot").forEach(function(el){el.classList.remove("hot");});
+  st.ids.forEach(function(id){var el=document.getElementById(id); if(el)el.classList.add("hot");});
+  var html='<h4><span class="n">STEP '+(cur+1)+"/"+STEPS.length+"</span>"+st.t+"</h4><p>"+st.d+"</p>"+
+    '<div class="shape-chips">'+st.s.map(function(p){return "<span>"+p[0]+" <b>"+p[1]+"</b></span>";}).join("")+"</div>";
+  info.innerHTML=html;
+}
+document.getElementById("prevStep").addEventListener("click",function(){go(cur-1);});
+document.getElementById("nextStep").addEventListener("click",function(){go(cur+1);});
+go(0);
+
+var flowVisible=false;
+if("IntersectionObserver" in window){
+  new IntersectionObserver(function(es){es.forEach(function(e){flowVisible=e.isIntersecting;});},{threshold:.25})
+    .observe(document.getElementById("flow"));
+}
+document.addEventListener("keydown",function(e){
+  if(!flowVisible)return;
+  if(e.key==="ArrowRight"){go(cur+1);e.preventDefault();}
+  if(e.key==="ArrowLeft"){go(cur-1);e.preventDefault();}
+});
+
+/* ============ SDR 条形图 ============ */
+function fillBars(){
+  document.querySelectorAll("#sdrBars .bar-fill").forEach(function(f){
+    f.style.width=(parseFloat(f.dataset.v)/10*100)+"%";
+  });
+}
+if("IntersectionObserver" in window && !reduceMotion){
+  var done=false;
+  new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting&&!done){done=true;fillBars();} });
+  },{threshold:.3}).observe(document.getElementById("sdrBars"));
+}else fillBars();
+
+/* ============ Tabs ============ */
+document.querySelectorAll(".tabs").forEach(function(bar){
+  var sec=bar.parentElement;
+  bar.querySelectorAll("button").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      bar.querySelectorAll("button").forEach(function(b){b.classList.toggle("cur",b===btn);});
+      sec.querySelectorAll(":scope > .tabpane").forEach(function(p){
+        p.classList.toggle("cur",p.id===btn.dataset.tab);
+      });
+    });
+  });
+});
+
+/* ============ 复制按钮 ============ */
+document.querySelectorAll(".copy").forEach(function(btn){
+  btn.addEventListener("click",function(){
+    var code=btn.parentElement.querySelector("code");
+    var txt=code?code.textContent:"";
+    function ok(){btn.textContent="已复制";setTimeout(function(){btn.textContent="复制";},1400);}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok,ok);}
+    else{var ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}document.body.removeChild(ta);ok();}
+  });
+});
+})();
+</script>
+</body>
+</html>

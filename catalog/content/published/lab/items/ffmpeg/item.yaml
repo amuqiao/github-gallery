@@ -1,0 +1,45 @@
+schema_version: 2
+id: ffmpeg
+hall: lab
+kind: github_project
+title: FFmpeg
+summary: 多媒体处理工具集与库，用统一命令和 libav* 组件完成解封装、编解码、滤镜、转码和推流等任务。
+source:
+  type: github
+  url: https://github.com/ffmpeg/ffmpeg
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/ffmpeg/ffmpeg
+  category: infrastructure
+  tags:
+    - audio
+    - toolkit
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - C
+notes:
+  - id: ffmpeg-explainer
+    title: 一文读懂 FFmpeg · 多媒体处理的基础设施
+    type: html
+    path: ./notes/ffmpeg-explainer.html
+    summary: 从解封装、解码、滤镜、编码、封装和 libav* 模块理解 FFmpeg 的多媒体处理链路。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/ffmpeg/ffmpeg
+  - type: highlights
+    items:
+      - Multimedia processing toolkit for decode, encode, filter, mux, demux, and stream workflows.
+      - Provides both command-line utilities and libav* libraries for application integration.
+      - Common foundation for audio/video automation, transcoding, extraction, and delivery pipelines.
+  - type: use-cases
+    items:
+      - Learning the structure of practical media processing pipelines.
+      - Building batch conversion, clipping, subtitle, thumbnail, and streaming workflows.
+      - Reviewing media tooling boundaries before wrapping FFmpeg in backend jobs.
