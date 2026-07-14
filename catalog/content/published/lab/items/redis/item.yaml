@@ -1,0 +1,44 @@
+schema_version: 2
+id: redis
+hall: lab
+kind: github_project
+title: Redis
+summary: 高性能内存数据结构存储，常用于缓存、计数、排行榜、会话和实时数据访问。
+source:
+  type: github
+  url: https://github.com/redis/redis
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/redis/redis
+  category: infrastructure
+  tags:
+    - toolkit
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - C
+notes:
+  - id: redis-explainer
+    title: 一文读懂 Redis · 把热数据放进内存
+    type: html
+    path: ./notes/redis-explainer.html
+    summary: 从内存数据结构、缓存、持久化、过期淘汰和典型使用场景理解 Redis 的核心价值。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/redis/redis
+  - type: highlights
+    items:
+      - In-memory data structure store for low-latency access paths.
+      - Supports multiple data structures beyond simple key-value caching.
+      - Commonly used for cache, counters, sessions, rankings, and rate limits.
+  - type: use-cases
+    items:
+      - Learning cache design and invalidation tradeoffs.
+      - Comparing hot data storage patterns in backend systems.
+      - Reviewing Redis usage boundaries before production adoption.

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Kafka:它不是队列,是一盘日志磁带</title>
+<style>
+:root{
+  --bg:#0B0F0D; --panel:#121816; --panel2:#18201C; --line:#26332C;
+  --text:#E4EBE6; --mut:#7E8F85; --green:#4ADE80; --amber:#FBBF24; --blue:#60A5FA; --red:#F87171;
+  --mono:"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.75;font-size:16px}
+.wrap{max-width:900px;margin:0 auto;padding:0 20px}
+h1,h2,h3{line-height:1.3;font-weight:700}
+h2{font-size:26px;margin:70px 0 8px}
+h2::before{content:"$ ";font-family:var(--mono);color:var(--green)}
+h3{font-size:18px;margin:28px 0 8px}
+p{margin:13px 0;color:#C3CEC7}
+strong{color:var(--text)}
+code{font-family:var(--mono);font-size:.87em;background:var(--panel2);padding:2px 6px;border-radius:4px;color:var(--amber)}
+pre{background:#070A08;border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto;margin:16px 0;line-height:1.6}
+pre code{background:none;padding:0;color:#CFE0D4;font-size:13.5px}
+pre .c{color:#5A6E62}pre .k{color:var(--green)}pre .v{color:var(--amber)}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--green);margin-bottom:6px}
+.sub{color:var(--mut);font-size:15px;margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:18px 0}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-weight:600;white-space:nowrap}
+td{color:#C3CEC7}
+button{font-family:var(--sans);cursor:pointer}
+.btn{background:var(--green);color:#06280F;border:none;border-radius:8px;padding:8px 16px;font-size:13.5px;font-weight:700;transition:transform .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn.amber{background:var(--amber);color:#3A2A00}
+.btn.blue{background:var(--blue);color:#0A2A4A}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:#C3CEC7;font-weight:600}
+.btn.ghost:hover{border-color:var(--mut)}
+.note{border-left:3px solid var(--amber);background:rgba(251,191,36,.07);padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;font-size:14.5px;color:#E3D9BE}
+.note.bad{border-left-color:var(--red);background:rgba(248,113,113,.07);color:#E8C8C8}
+details{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden}
+details summary{padding:13px 18px;cursor:pointer;font-weight:600;list-style:none;position:relative;font-size:15px}
+details summary::after{content:"+";position:absolute;right:18px;color:var(--mut);font-family:var(--mono)}
+details[open] summary::after{content:"–"}
+details .body{padding:0 18px 15px;font-size:14.5px;color:#C3CEC7}
+footer{margin:90px 0 40px;color:var(--mut);font-size:13px;text-align:center}
+.flow{font-family:var(--mono);font-size:12.5px;background:#070A08;color:#9FB8A8;border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin:12px 0;white-space:pre;overflow-x:auto;line-height:1.75}
+.flow b{color:var(--amber);font-weight:400}
+.flow i{color:var(--green);font-style:normal}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:26px 0 4px}
+.toc a{font-size:12.5px;font-family:var(--mono);color:var(--mut);text-decoration:none;border:1px solid var(--line);border-radius:16px;padding:4px 12px}
+.toc a:hover{color:var(--green);border-color:var(--green)}
+/* hero */
+.hero{padding:60px 0 30px;border-bottom:1px solid var(--line)}
+.hero h1{font-size:clamp(30px,5.2vw,46px);margin:10px 0 8px;font-family:var(--sans)}
+.hero h1 em{font-style:normal;color:var(--green)}
+.hero .lead{font-size:17px;color:#AEBDB3;max-width:660px}
+.tape{font-family:var(--mono);font-size:12px;background:#070A08;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:26px;overflow:hidden;white-space:nowrap;position:relative}
+.tape .strip{display:inline-block;animation:scroll 24s linear infinite}
+@keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.tape .cell{display:inline-block;border:1px solid var(--line);border-radius:4px;padding:3px 9px;margin-right:6px;color:var(--mut)}
+.tape .cell b{color:var(--amber);font-weight:400}
+.tape .cell i{color:var(--green);font-style:normal}
+/* log sandbox */
+.sandbox{background:var(--panel);border:1px solid var(--green);border-radius:14px;padding:18px 20px;margin:20px 0}
+.sandbox .lbl{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;color:var(--mut);margin:12px 0 6px}
+.ctr{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.part{margin:10px 0}
+.part .pname{font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:4px}
+.cells{display:flex;gap:4px;overflow-x:auto;padding:14px 2px 30px;position:relative;min-height:78px}
+.cell2{min-width:52px;height:40px;flex:0 0 auto;border:1px solid var(--line);border-radius:6px;background:var(--panel2);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);font-size:10.5px;color:#C3CEC7;position:relative}
+.cell2 .off{color:var(--mut);font-size:9.5px}
+.cell2.new{animation:pop .4s ease}
+@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+.cur{position:absolute;bottom:2px;font-family:var(--mono);font-size:10px;transition:left .35s ease;white-space:nowrap}
+.cur::before{content:"▲";display:block;text-align:left;margin-left:2px}
+.cur.gA{color:var(--amber)}
+.cur.gB{color:var(--blue)}
+.slog{font-family:var(--mono);font-size:12.5px;background:#070A08;border-radius:8px;padding:10px 14px;margin-top:10px;min-height:42px;color:#9FB8A8;line-height:1.7}
+.slog b{color:var(--amber)}.slog i{color:var(--blue);font-style:normal}.slog em{color:var(--green);font-style:normal}
+/* rebalance */
+.rb{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+.rb .cons{border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:130px;background:var(--panel2)}
+.rb .cons .cname{font-family:var(--mono);font-size:12px;color:var(--blue);margin-bottom:6px}
+.rb .cons .p{display:inline-block;font-family:var(--mono);font-size:11px;border:1px solid var(--green);color:var(--green);border-radius:4px;padding:1px 7px;margin:2px 3px 0 0}
+.rb .cons.idle{opacity:.55}
+.rb .cons.idle .cname{color:var(--red)}
+/* acks */
+.ackrow{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}.tape .strip{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="eyebrow">一文读懂 · KAFKA</div>
+  <h1>它不是队列,<br>是一盘只增不删的<em>日志磁带</em></h1>
+  <p class="lead">进入 Kafka 世界前先扔掉"消息队列"的直觉:消息<strong>不因消费而删除</strong>,消费者只是拿着一个书签(offset)在磁带上移动。读懂"日志 + 书签"这两个词,Kafka 的一切设计都会变得顺理成章。</p>
+  <div class="tape" aria-hidden="true"><div class="strip" id="strip"></div></div>
+  <div style="font-family:var(--mono);font-size:11.5px;color:var(--mut);margin-top:8px">↑ 一个 partition 的真实样子:按到达顺序追加,每条记录拿到一个递增的 offset,永不改写</div>
+
+  <nav class="toc">
+    <a href="#why">为什么出现</a><a href="#model">日志模型</a><a href="#sandbox">分区沙盘</a>
+    <a href="#group">消费组</a><a href="#fast">为什么快</a><a href="#reliable">副本与 acks</a>
+    <a href="#miss">误区与边界</a><a href="#lab">命令行上手</a>
+  </nav>
+</header>
+
+<!-- ============ WHY ============ -->
+<h2 id="why">它为什么出现:N×M 的数据管道灾难</h2>
+<p>Kafka 诞生于 2010 年的 LinkedIn。当时的问题不是"发消息",而是<strong>数据搬运</strong>:页面点击、日志、指标等十几个数据源,要送进搜索、监控、数仓、推荐等十几个下游系统。点对点地接,就是 N×M 条各自为政的管道:</p>
+<div class="flow">改造前:每对系统一条专线,N 个源 × M 个下游 = 几十条脆弱管道
+  点击流 ──┬──▶ 数仓        改造后:所有系统只对接一条"中央日志"
+  应用日志 ─┼──▶ 监控
+  订单事件 ─┼──▶ 搜索          源们 ──▶ <i>┃K a f k a 日志┃</i> ──▶ 下游们
+  ......  ─┴──▶ 推荐          (写一次)   (各自按需读、互不干扰)</div>
+<p>要当好这根"中央数据总管",必须同时满足三个当时的消息队列给不了的条件:<strong>①吞吐够大</strong>(每秒百万条事件);<strong>②数据可保留可重放</strong>(新上线的下游要能从头补数据);<strong>③下游互不影响</strong>(数仓读得慢,不能拖累监控)。Kafka 的答案是回到一个古老的结构——<strong>追加日志(append-only log)</strong>,数据库 WAL 用了几十年的东西,把它拆分、复制、暴露成服务。</p>
+
+<!-- ============ MODEL ============ -->
+<h2 id="model">核心模型:Topic = 分成几段的日志</h2>
+<div class="flow">Topic "orders"(逻辑名)= 3 个 partition(物理日志,可分布在不同机器)
+
+ partition-0  │ 0 │ 1 │ 2 │ 3 │ 4 │ 5 │◀─ 追加      ── 同一 partition 内<b>严格有序</b>
+ partition-1  │ 0 │ 1 │ 2 │ 3 │◀─ 追加              ── partition 之间<b>没有顺序保证</b>
+ partition-2  │ 0 │ 1 │ 2 │ 3 │ 4 │◀─ 追加          ── 消息按 <i>key 哈希</i>选 partition
+                        ▲
+              消费者的 offset(书签)只前进不删数据;数据按时间/大小策略过期(如保留 7 天)</div>
+<p>四个概念一次立稳:</p>
+<table>
+<tr><th>概念</th><th>它是什么</th><th>关键推论</th></tr>
+<tr><td><strong>Partition</strong></td><td>真正的日志文件,只能追加</td><td>并行度的单位:分区越多,能同时读写的"车道"越多</td></tr>
+<tr><td><strong>Offset</strong></td><td>消息在分区内的序号,也是消费者的书签</td><td>消费 = 移书签。书签归你管,所以<strong>重放 = 把书签拨回去</strong></td></tr>
+<tr><td><strong>Key</strong></td><td>可选的消息键,同 key 必进同分区</td><td>用 <code>user_id</code> 做 key,同一用户的事件天然有序</td></tr>
+<tr><td><strong>Retention</strong></td><td>数据按时间/大小过期,与消费无关</td><td>"被消费了"和"被删除了"彻底解耦,一份数据服务无数下游</td></tr>
+</table>
+
+<!-- ============ SANDBOX ============ -->
+<h2 id="sandbox">动手玩:分区日志沙盘</h2>
+<p class="sub">下面是一个 3 分区的 topic 和两个独立的消费组。生产几条消息(注意 key 决定分区),再分别推进两组的书签——最后试试"重放":这是队列做不到、而日志天然免费的能力。</p>
+
+<div class="sandbox">
+  <div class="lbl">① 生产消息(选 key)</div>
+  <div class="ctr">
+    <button class="btn" data-key="user-A">发送 key=user-A</button>
+    <button class="btn" data-key="user-B">发送 key=user-B</button>
+    <button class="btn" data-key="user-C">发送 key=user-C</button>
+    <button class="btn ghost" data-key="">无 key(轮询)</button>
+  </div>
+  <div id="parts"></div>
+  <div class="lbl">② 两个消费组独立移动书签(▲ 黄=组A 实时监控,▲ 蓝=组B 离线数仓)</div>
+  <div class="ctr">
+    <button class="btn amber" id="cA">组A 消费一轮</button>
+    <button class="btn blue" id="cB">组B 消费一轮</button>
+    <button class="btn ghost" id="replayB">⏪ 组B 重放:offset 归零</button>
+    <button class="btn ghost" id="resetAll">清空重来</button>
+  </div>
+  <div class="slog" id="slog">提示:先用不同 key 发几条消息,观察 <b>同 key 永远落在同一分区</b>。</div>
+</div>
+
+<div class="note">刚才你验证了三件事:<strong>①同 key 同分区</strong>(分区内有序的来源);<strong>②两个消费组的书签互不干扰</strong>(下游隔离的来源);<strong>③重放只是拨回书签</strong>,数据一直都在(新系统补历史数据、修 bug 后重算,都靠它)。</div>
+
+<!-- ============ GROUP ============ -->
+<h2 id="group">消费组:分区怎么分给消费者</h2>
+<p>组内扩容的规则只有一条:<strong>一个分区同一时刻只属于组内一个消费者</strong>(独占),一个消费者可以负责多个分区。拖动下面的人数,看分配如何变化:</p>
+<div class="card">
+  <div class="ctr" style="margin-bottom:6px">
+    <span style="font-size:14px">消费组内的消费者数量:</span>
+    <button class="btn ghost" id="cMinus">−</button>
+    <b id="cNum" style="font-family:var(--mono);color:var(--green)">2</b>
+    <button class="btn ghost" id="cPlus">+</button>
+    <span style="font-size:13px;color:var(--mut)">(topic 固定 3 个分区)</span>
+  </div>
+  <div class="rb" id="rb"></div>
+  <p id="rbMsg" style="font-size:14px;color:var(--mut);margin:4px 0 0"></p>
+</div>
+<div class="note bad"><strong>重要推论:分区数是消费并行度的天花板。</strong>3 个分区的 topic,组里挂 10 个消费者,7 个只能干瞪眼。所以分区数要按目标吞吐预估、宁多勿少——分区数只能加不能减,且改分区数会打乱 key 的哈希分布。另外,消费者加入/退出会触发<strong>重平衡(rebalance)</strong>,期间整组短暂停止消费,频繁重启消费者是生产常见的性能坑。</div>
+
+<!-- ============ FAST ============ -->
+<h2 id="fast">为什么快:把随机 IO 变成顺序 IO</h2>
+<p>Kafka 数据落磁盘却能跑出百万级 QPS,不靠魔法,靠四个"顺着硬件脾气来"的决定:</p>
+<table>
+<tr><th>手段</th><th>原理</th></tr>
+<tr><td><strong>顺序写</strong></td><td>日志只追加不改写。磁盘顺序写的速度(数百 MB/s)接近内存,慢的从来是<em>随机</em> IO,不是磁盘本身。</td></tr>
+<tr><td><strong>页缓存</strong></td><td>读写都走操作系统 Page Cache,不自建进程内缓存。热数据的读基本命中内存,还免了 GC 压力。</td></tr>
+<tr><td><strong>零拷贝</strong></td><td>消费时用 <code>sendfile</code> 让数据从页缓存直达网卡,跳过"内核→用户态→内核"的两次搬运。</td></tr>
+<tr><td><strong>批量 + 压缩</strong></td><td>生产者攒一批一起发,整批压缩;consumer 也整批拉。摊薄每条消息的网络与系统调用成本。</td></tr>
+</table>
+<p>反过来读这张表更有收获:Kafka 快,是因为它<strong>放弃了逐条消息的花活</strong>——没有逐条路由、没有逐条删除、没有优先级插队。简单的数据结构换来了极端的吞吐,这正是它与 RabbitMQ 分道扬镳的地方。</p>
+
+<!-- ============ RELIABLE ============ -->
+<h2 id="reliable">不丢数据:副本、ISR 与 acks</h2>
+<p>每个分区有多个副本(replica)分布在不同 broker 上:一个 <strong>leader</strong> 负责读写,其余 <strong>follower</strong> 拉取同步。追得上 leader 的副本集合叫 <strong>ISR</strong>(In-Sync Replicas)。leader 挂了,从 ISR 里选新 leader——这是高可用的基础。</p>
+<p>生产者通过 <code>acks</code> 参数选择"发出去之后等到什么程度才算成功",点击对比三档取舍:</p>
+<div class="ackrow">
+  <button class="btn ghost" data-ack="0">acks=0 发出即忘</button>
+  <button class="btn ghost" data-ack="1">acks=1 leader 落盘</button>
+  <button class="btn ghost" data-ack="all">acks=all ISR 全同步</button>
+</div>
+<div class="card" id="ackCard" style="margin-top:4px">
+  <div class="flow" id="ackFlow">点击上方按钮查看每一档的数据路径与风险。</div>
+  <p id="ackMsg" style="font-size:14.5px;margin:6px 0 0;color:#C3CEC7"></p>
+</div>
+<div class="note">交付语义速记:默认配置是 <strong>at-least-once</strong>(至少一次,可能重复)→ 消费端要幂等;<code>acks=0</code> 滑向 at-most-once(可能丢);开启幂等生产者 + 事务才能到 exactly-once(限 Kafka 内部流转)。和 RabbitMQ 一样,那个等式仍然成立:<strong>可靠 = 至少一次 + 消费幂等</strong>。</div>
+
+<!-- ============ MISCONCEPTIONS ============ -->
+<h2 id="miss">误区、反例与边界</h2>
+<details>
+<summary>误区①:"Kafka 消息是有序的"</summary>
+<div class="body">只在<strong>单个 partition 内</strong>有序。跨分区没有任何顺序保证。需要"同一订单的事件有序",就用订单 ID 做 key;需要全局有序,只能单分区——同时也就放弃了并行,吞吐退化,这种需求要先质疑自己。</div>
+</details>
+<details>
+<summary>误区②:"消费过的消息就没了 / 堆积了要赶紧扩队列"</summary>
+<div class="body">消息按 retention 过期,与消费无关。所谓"堆积"在 Kafka 里叫 <strong>lag</strong>(书签落后最新 offset 的距离),数据本来就躺在磁盘上,lag 大不会压垮 broker——但意味着下游处理不过来,该扩的是消费者(以及提前留够的分区数)。</div>
+</details>
+<details>
+<summary>误区③:"Kafka 更先进,所以任何 MQ 场景都该用它"</summary>
+<div class="body">Kafka 缺少任务队列的精细工具:没有逐条 ack(只有 offset 提交,跳过失败消息很别扭)、没有原生死信/延迟/优先级、消费并行度被分区数锁死。"给每个订单发一封邮件、失败重试三次进死信"这种<strong>任务分发</strong>场景,RabbitMQ 顺手得多。Kafka 的主场是<strong>事件流</strong>:日志管道、埋点、CDC、流计算源头、事件溯源。</div>
+</details>
+<details>
+<summary>误区④:"随便什么规模都值得上 Kafka"</summary>
+<div class="body">Kafka 是分布式系统,分区规划、副本、rebalance、监控 lag,运维成本实打实。每秒几百条消息的业务,一个 RabbitMQ 甚至一张数据库表就够了。选型的第一问永远是:<strong>我真的有"流"吗,还是只有几个异步任务?</strong></div>
+</details>
+<details>
+<summary>一张表收尾:Kafka vs RabbitMQ 心智对照</summary>
+<div class="body"><table style="margin:8px 0">
+<tr><th></th><th>Kafka</th><th>RabbitMQ</th></tr>
+<tr><td>本质</td><td>分布式日志(留存+重放)</td><td>消息分拣站(路由+确认)</td></tr>
+<tr><td>消息生命周期</td><td>按时间过期,消费不删</td><td>消费确认即删</td></tr>
+<tr><td>消费单位</td><td>分区独占 + offset 书签</td><td>队列内竞争 + 逐条 ack</td></tr>
+<tr><td>擅长</td><td>高吞吐事件流、重放、多下游</td><td>任务分发、灵活路由、死信/延迟</td></tr>
+<tr><td>一句话</td><td>"发生过什么"的事实账本</td><td>"要去办什么"的待办派发</td></tr>
+</table></div>
+</details>
+
+<!-- ============ LAB ============ -->
+<h2 id="lab">命令行上手:5 分钟验证日志模型</h2>
+<pre><code><span class="c"># 起一个单机 Kafka(KRaft 模式,无需 ZooKeeper)</span>
+<span class="k">docker</span> run -d --name kafka -p 9092:9092 apache/kafka:latest
+
+<span class="c"># 1. 建一个 3 分区的 topic —— 对应沙盘里的三条日志</span>
+kafka-topics.sh --create --topic orders --partitions <span class="v">3</span> \
+  --bootstrap-server localhost:9092
+
+<span class="c"># 2. 带 key 生产:同 key 必进同分区(验证沙盘结论①)</span>
+kafka-console-producer.sh --topic orders --bootstrap-server localhost:9092 \
+  --property parse.key=true --property key.separator=:
+<span class="v">&gt; user-A:下单</span>
+<span class="v">&gt; user-A:支付</span>
+<span class="v">&gt; user-B:下单</span>
+
+<span class="c"># 3. 用消费组 g1 消费,然后 Ctrl-C 再重跑 —— 从书签处继续,不重复</span>
+kafka-console-consumer.sh --topic orders --group g1 \
+  --bootstrap-server localhost:9092
+
+<span class="c"># 4. 换个组名 g2 并 --from-beginning —— 同一份数据完整再读一遍(结论②③)</span>
+kafka-console-consumer.sh --topic orders --group g2 --from-beginning \
+  --bootstrap-server localhost:9092
+
+<span class="c"># 5. 看两组各自的书签(offset)和落后量(lag)</span>
+kafka-consumer-groups.sh --describe --group g1 --bootstrap-server localhost:9092</code></pre>
+
+<div class="card">
+  <strong>迁移清单:接手任何用 Kafka 的系统,先问这 5 个问题</strong>
+  <p style="font-size:14.5px;margin-bottom:0">① 每个 topic 的分区数、key 策略是什么(有序性靠什么保证)?② retention 设多久,谁依赖重放?③ 有哪几个消费组,各自 lag 多少?④ 生产端 <code>acks</code>/幂等开没开,消费端怎么做幂等?⑤ 副本因子和 <code>min.insync.replicas</code> 配了几?——答完这五问,这套事件流的可靠性边界就清楚了。</p>
+</div>
+
+<footer>一文读懂 · Kafka — 单文件离线版 · 交互沙盘为教学示意</footer>
+</div>
+
+<script>
+/* ---------- hero tape ---------- */
+(function(){
+  const strip=document.getElementById("strip");
+  let html="";
+  const evts=["click","view","order","pay","login","search","cart","ship"];
+  for(let r=0;r<2;r++)for(let i=0;i<24;i++)
+    html+=`<span class="cell"><b>offset ${i}</b> · <i>${evts[i%evts.length]}</i></span>`;
+  strip.innerHTML=html;
+})();
+
+/* ---------- partition sandbox ---------- */
+(function(){
+  const P=3, partsEl=document.getElementById("parts"), slog=document.getElementById("slog");
+  const logs=[[],[],[]];           // messages per partition
+  const off={A:[0,0,0],B:[0,0,0]}; // group offsets
+  let rr=0, seq=0;
+  const KEYCOLOR={"user-A":"var(--amber)","user-B":"var(--blue)","user-C":"var(--red)","":"var(--mut)"};
+  function hashKey(k){ if(!k){rr=(rr+1)%P;return rr;} let h=0;for(const c of k)h=(h*31+c.charCodeAt(0))>>>0; return h%P; }
+  function render(){
+    partsEl.innerHTML="";
+    for(let p=0;p<P;p++){
+      const d=document.createElement("div");d.className="part";
+      d.innerHTML=`<div class="pname">partition-${p} <span style="color:var(--mut)">(${logs[p].length} 条)</span></div>`;
+      const c=document.createElement("div");c.className="cells";c.id="cells-"+p;
+      logs[p].forEach((m,i)=>{
+        const cell=document.createElement("div");cell.className="cell2"+(m.fresh?" new":"");m.fresh=false;
+        cell.innerHTML=`<span class="off">off ${i}</span><span style="color:${KEYCOLOR[m.key]||'var(--text)'}">${m.key||"no-key"}</span>`;
+        cell.title=`offset ${i} · key=${m.key||"(无)"} · ${m.body}`;
+        c.appendChild(cell);
+      });
+      ["A","B"].forEach(g=>{
+        const cur=document.createElement("div");cur.className="cur g"+g;
+        cur.textContent=`组${g} off=${off[g][p]}`;
+        cur.style.left=(off[g][p]*56+(g==="B"?6:0))+"px";
+        cur.style.bottom=g==="A"?"14px":"0px";
+        c.appendChild(cur);
+      });
+      d.appendChild(c);partsEl.appendChild(d);
+    }
+  }
+  document.querySelectorAll("[data-key]").forEach(b=>b.addEventListener("click",()=>{
+    const k=b.dataset.key, p=hashKey(k);
+    logs[p].push({key:k,body:"event#"+(seq++),fresh:true});
+    slog.innerHTML=k
+      ?`<em>append</em> key=<b>${k}</b> → hash(key) % 3 = <b>partition-${p}</b>,offset=${logs[p].length-1}。同 key 永远进同一分区。`
+      :`<em>append</em> 无 key → 轮询到 <b>partition-${p}</b>。无 key 的消息在分区间打散,追求均衡但放弃了 key 级有序。`;
+    render();
+  }));
+  function consume(g){
+    let taken=[];
+    for(let p=0;p<P;p++){
+      if(off[g][p]<logs[p].length){ taken.push(`p${p} 读到 off ${off[g][p]}(${logs[p][off[g][p]].key||"no-key"})`); off[g][p]++; }
+    }
+    slog.innerHTML=taken.length
+      ?`组${g==="A"?"<b>A</b>":"<i>B</i>"} 消费一轮:${taken.join(" · ")} —— 数据没有删除,只是书签前移。另一组毫无感知。`
+      :`组${g==="A"?"<b>A</b>":"<i>B</i>"} 已追平所有分区(lag=0),没有新消息可读。`;
+    render();
+  }
+  document.getElementById("cA").addEventListener("click",()=>consume("A"));
+  document.getElementById("cB").addEventListener("click",()=>consume("B"));
+  document.getElementById("replayB").addEventListener("click",()=>{
+    off.B=[0,0,0];
+    slog.innerHTML=`⏪ 组<i>B</i> 的 offset 重置为 0 —— <em>全部历史消息将被重新读到</em>,而组A 完全不受影响。这就是"重放":队列模型做不到,日志模型免费赠送。`;
+    render();
+  });
+  document.getElementById("resetAll").addEventListener("click",()=>{
+    logs.forEach(l=>l.length=0);off.A=[0,0,0];off.B=[0,0,0];seq=0;rr=0;
+    slog.textContent="已清空。重新生产几条试试不同的 key。";render();
+  });
+  render();
+})();
+
+/* ---------- consumer group rebalance ---------- */
+(function(){
+  const rb=document.getElementById("rb"),msg=document.getElementById("rbMsg"),num=document.getElementById("cNum");
+  let n=2;
+  function render(){
+    num.textContent=n;rb.innerHTML="";
+    const assign=[...Array(n)].map(()=>[]);
+    for(let p=0;p<3;p++)assign[p%n].push(p);
+    for(let c=0;c<n;c++){
+      const d=document.createElement("div");d.className="cons"+(assign[c].length?"":" idle");
+      d.innerHTML=`<div class="cname">consumer-${c}${assign[c].length?"":" (空闲)"}</div>`+
+        (assign[c].length?assign[c].map(p=>`<span class="p">partition-${p}</span>`).join(""):`<span style="font-size:11.5px;color:var(--mut)">无分区可分</span>`);
+      rb.appendChild(d);
+    }
+    msg.textContent = n===1 ? "1 个消费者包揽 3 个分区:能跑,但吞吐上限最低。"
+      : n===2 ? "2 个消费者:一人 2 个分区、一人 1 个,负载不均是常态。"
+      : n===3 ? "3 个消费者:一人一个分区,完美并行——这是这个 topic 的最优配置。"
+      : `⚠ ${n} 个消费者 > 3 个分区:多出来的 ${n-3} 个永远空闲。分区数是并行度的天花板。`;
+  }
+  document.getElementById("cPlus").addEventListener("click",()=>{if(n<5)n++;render();});
+  document.getElementById("cMinus").addEventListener("click",()=>{if(n>1)n--;render();});
+  render();
+})();
+
+/* ---------- acks ---------- */
+(function(){
+  const flows={
+    "0":{f:`producer ──发送──▶(不等任何回执,立刻发下一条)
+        broker 收没收到?<b>不知道,也不问。</b>`,
+     m:"延迟最低、吞吐最高;网络抖动或 leader 切换时消息静默丢失。适用:指标、埋点这类丢一点无所谓的数据。语义滑向 at-most-once。"},
+    "1":{f:`producer ──发送──▶ <i>leader 写入本地日志</i> ──ack──▶ producer ✔
+        follower 还没同步 ──── 若此刻 leader 宕机 → <b>这条消息随它陪葬</b>`,
+     m:"默认档。延迟和可靠的折中;丢消息窗口 = leader 已确认但 follower 未同步的瞬间。多数业务的起点。"},
+    "all":{f:`producer ──发送──▶ <i>leader 写入</i> ──▶ 等 <i>ISR 内所有副本同步完成</i> ──ack──▶ ✔
+        任何一台机器宕机,数据仍在其余副本上`,
+     m:"最可靠,延迟最高。须配合 min.insync.replicas ≥ 2 才有意义(否则 ISR 收缩到只剩 leader 时,all 退化成 1)。交易类数据的标配,再叠加幂等生产者防重复。"}
+  };
+  const f=document.getElementById("ackFlow"),m=document.getElementById("ackMsg");
+  document.querySelectorAll("[data-ack]").forEach(b=>b.addEventListener("click",()=>{
+    document.querySelectorAll("[data-ack]").forEach(x=>{x.style.borderColor="";x.style.color="";});
+    b.style.borderColor="var(--green)";b.style.color="var(--green)";
+    f.innerHTML=flows[b.dataset.ack].f;m.textContent=flows[b.dataset.ack].m;
+  }));
+})();
+</script>
+</body>
+</html>

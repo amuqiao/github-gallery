@@ -7,5 +7,7 @@ navigation:
     href: /halls/github/
   - label: 模型展馆
     href: /halls/models/
+  - label: 实验室
+    href: /halls/lab/
   - label: 专题
     href: /halls/github/collections/

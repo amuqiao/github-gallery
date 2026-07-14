@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 RabbitMQ:给系统之间装一个分拣站</title>
+<style>
+:root{
+  --paper:#F3F5F7; --card:#FFFFFF; --ink:#1C2B3A; --sub:#5C6B7A; --line:#DCE2E8;
+  --orange:#E8590C; --orange-soft:#FDEEE3; --navy:#22456E; --green:#2F9E63; --redx:#C92A2A;
+  --mono:"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.75;font-size:16px}
+.wrap{max-width:900px;margin:0 auto;padding:0 20px}
+h1,h2,h3{line-height:1.3;font-weight:800;letter-spacing:.01em}
+h2{font-size:27px;margin:70px 0 8px}
+h2::before{content:"▤ ";color:var(--orange);font-size:.8em}
+h3{font-size:18px;margin:28px 0 8px}
+p{margin:13px 0;color:#33414F}
+strong{color:var(--ink)}
+code{font-family:var(--mono);font-size:.87em;background:#EDF0F3;border:1px solid var(--line);padding:1px 6px;border-radius:4px;color:var(--navy)}
+pre{background:#101820;border-radius:10px;padding:16px 18px;overflow-x:auto;margin:16px 0;line-height:1.6}
+pre code{background:none;border:none;padding:0;color:#D6DEE7;font-size:13.5px}
+pre .c{color:#5F7285}pre .k{color:#FFA657}pre .s{color:#7EE787}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--orange);margin-bottom:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:18px 0;box-shadow:0 1px 3px rgba(28,43,58,.05)}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px;background:var(--card)}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:#EDF0F3;font-weight:700;white-space:nowrap}
+td{color:#33414F}
+.tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--sub);margin-left:6px}
+.tag.hot{border-color:var(--orange);color:var(--orange);background:var(--orange-soft)}
+button{font-family:var(--sans);cursor:pointer}
+.btn{background:var(--orange);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:700;transition:transform .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn:disabled{opacity:.4;cursor:default;transform:none}
+.btn.ghost{background:var(--card);border:1.5px solid var(--line);color:var(--ink);font-weight:600}
+.btn.ghost:hover{border-color:var(--orange);color:var(--orange)}
+.btn.ghost.on{border-color:var(--orange);color:var(--orange);background:var(--orange-soft)}
+.note{border-left:3px solid var(--orange);background:var(--orange-soft);padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;font-size:14.5px}
+.note.bad{border-left-color:var(--redx);background:#FBEBEB}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden}
+details summary{padding:13px 18px;cursor:pointer;font-weight:700;list-style:none;position:relative;font-size:15px}
+details summary::after{content:"+";position:absolute;right:18px;color:var(--sub);font-family:var(--mono)}
+details[open] summary::after{content:"–"}
+details .body{padding:0 18px 15px;font-size:14.5px;color:#33414F}
+footer{margin:90px 0 40px;color:var(--sub);font-size:13px;text-align:center}
+.flow{font-family:var(--mono);font-size:12.5px;background:#101820;color:#9FB3C8;border-radius:8px;padding:12px 16px;margin:12px 0;white-space:pre;overflow-x:auto;line-height:1.75}
+.flow b{color:#FFA657;font-weight:400}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:26px 0 4px}
+.toc a{font-size:12.5px;font-family:var(--mono);color:var(--sub);text-decoration:none;border:1px solid var(--line);border-radius:16px;padding:4px 12px;background:var(--card)}
+.toc a:hover{color:var(--orange);border-color:var(--orange)}
+/* hero */
+.hero{padding:60px 0 30px;border-bottom:2px solid var(--ink)}
+.hero h1{font-size:clamp(30px,5.2vw,46px);margin:10px 0 8px}
+.hero h1 em{font-style:normal;color:var(--orange)}
+.hero .lead{font-size:17px;color:#445362;max-width:660px}
+/* domino demo */
+.domino{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:26px 0 8px}
+.chain{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin:14px 0}
+.svc{border:2px solid var(--line);border-radius:10px;padding:8px 14px;font-size:13.5px;font-weight:700;background:#fff;transition:all .3s;white-space:nowrap}
+.svc small{display:block;font-weight:400;color:var(--sub);font-size:11px;font-family:var(--mono)}
+.svc.ok{border-color:var(--green);color:var(--green)}
+.svc.dead{border-color:var(--redx);color:var(--redx);background:#FBEBEB}
+.svc.wait{border-color:var(--orange);color:var(--orange)}
+.arrow{font-family:var(--mono);color:var(--sub);padding:0 8px;font-size:15px}
+.dstat{font-size:13.5px;color:var(--sub);min-height:44px;margin-top:8px}
+/* AMQP diagram (svg) */
+svg text{font-family:var(--sans)}
+svg .mono{font-family:var(--mono)}
+/* simulator */
+.sim{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:20px 22px;margin:20px 0;box-shadow:4px 4px 0 rgba(28,43,58,.12)}
+.sim .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.sim .lbl{font-size:12.5px;font-family:var(--mono);color:var(--sub);width:100%;letter-spacing:.08em}
+.simlog{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:#EDF0F3;border-radius:8px;padding:10px 14px;margin-top:12px;min-height:44px;line-height:1.7}
+.simlog b{color:var(--orange)}
+.simlog .drop{color:var(--redx)}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="eyebrow">一文读懂 · RABBITMQ</div>
+  <h1>给系统之间<br>装一个<em>分拣站</em></h1>
+  <p class="lead">RabbitMQ 是一台消息分拣机:上游只管把消息投进来,它按规则分发到该去的队列,下游各自按自己的节奏取走。它解决的不是"传数据",而是<strong>系统之间的耦合、速度差和可靠交付</strong>。</p>
+
+  <div class="domino">
+    <strong>先看没有它的世界:同步调用的多米诺</strong>
+    <p style="font-size:14px;color:var(--sub);margin:6px 0 0">用户下单后,订单服务要挨个同步调用三个下游。点击按钮,让积分服务宕机试试:</p>
+    <div class="chain" id="chain">
+      <div class="svc" id="s0">用户下单<small>POST /order</small></div><span class="arrow">─▶</span>
+      <div class="svc" id="s1">订单服务<small>写库 20ms</small></div><span class="arrow">─▶</span>
+      <div class="svc" id="s2">邮件服务<small>发信 200ms</small></div><span class="arrow">─▶</span>
+      <div class="svc" id="s3">库存服务<small>扣减 30ms</small></div><span class="arrow">─▶</span>
+      <div class="svc" id="s4">积分服务<small>加分 50ms</small></div>
+    </div>
+    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="dOk">▶ 正常下一单</button>
+      <button class="btn ghost" id="dKill">💥 让积分服务宕机再下单</button>
+    </div>
+    <div class="dstat" id="dstat">用户必须等全链路 300ms;任何一环挂掉,整个下单失败——尽管"加积分"根本不该阻塞下单。</div>
+  </div>
+
+  <nav class="toc">
+    <a href="#why">三大动机</a><a href="#model">AMQP 模型</a><a href="#sim">路由模拟器</a>
+    <a href="#reliable">可靠性三关</a><a href="#dlx">死信与延迟</a><a href="#miss">误区与边界</a><a href="#lab">10 行代码上手</a>
+  </nav>
+</header>
+
+<!-- ============ WHY ============ -->
+<h2 id="why">它为什么出现:解耦、异步、削峰</h2>
+<p>上面那条链的病根是:<strong>下单的"核心事实"(订单+库存)和"后续动作"(邮件、积分)被绑在了一次同步调用里</strong>。消息队列的做法是,订单服务只做一件事——把"订单已创建"这个事件投进 RabbitMQ,然后立刻返回:</p>
+<div class="flow">同步版:  下单 ──等──邮件──等──库存──等──积分──▶ 300ms 后返回,一损俱损
+消息版:  下单 ──▶ 写库 ──▶ 投递 "order.created" ──▶ <b>25ms 返回 ✔</b>
+                                   │
+                     RabbitMQ ─┬─▶ 邮件服务(自己慢慢发)
+                               ├─▶ 库存服务
+                               └─▶ 积分服务(宕机?消息在队列里等它活过来)</div>
+<p>这一个动作同时买到三样东西:</p>
+<table>
+<tr><th>能力</th><th>含义</th><th>典型场景</th></tr>
+<tr><td><strong>解耦</strong></td><td>上游不认识下游。明天新增"风控服务"也要监听下单事件?加个队列绑定即可,订单服务一行代码不改。</td><td>一个事件,N 个消费方</td></tr>
+<tr><td><strong>异步</strong></td><td>非核心步骤移出主链路,响应时间只剩核心部分。</td><td>发邮件/短信、生成报表</td></tr>
+<tr><td><strong>削峰</strong></td><td>秒杀瞬间 10 万请求进队列排队,下游按每秒 2000 的消化能力匀速处理,数据库不被打死。</td><td>秒杀、抢票、突发流量</td></tr>
+</table>
+<div class="note"><strong>代价也要先讲清:</strong>引入 MQ 后,系统从"强一致的同步调用"变成"最终一致的异步事件"。你需要面对消息丢失、重复消费、顺序错乱、以及"多一个要运维的中间件"。它是交换,不是免费午餐——流量小、链路短的系统,直接同步调用往往更好。</div>
+
+<!-- ============ MODEL ============ -->
+<h2 id="model">核心模型:消息从不直接进队列</h2>
+<p>RabbitMQ 实现 AMQP 协议,它和"简单队列"的最大区别是中间多了一层<strong>交换机(Exchange)</strong>。记住一条铁律:<strong>生产者永远把消息发给 Exchange,Exchange 按绑定规则(Binding)决定投进哪些队列(Queue)</strong>。生产者根本不知道队列的存在。</p>
+
+<svg viewBox="0 0 860 300" style="width:100%;height:auto;background:var(--card);border:1px solid var(--line);border-radius:12px" role="img" aria-label="AMQP 模型:生产者、交换机、绑定、队列、消费者">
+  <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#5C6B7A"/></marker></defs>
+  <!-- producer -->
+  <rect x="30" y="115" width="130" height="66" rx="10" fill="#fff" stroke="#22456E" stroke-width="2"/>
+  <text x="95" y="143" text-anchor="middle" font-size="15" font-weight="700" fill="#22456E">Producer</text>
+  <text x="95" y="164" text-anchor="middle" font-size="11" fill="#5C6B7A">订单服务</text>
+  <!-- exchange -->
+  <g>
+    <path d="M320 110 L390 148 L320 186 L250 148 Z" fill="#FDEEE3" stroke="#E8590C" stroke-width="2.5"/>
+    <text x="320" y="144" text-anchor="middle" font-size="14" font-weight="800" fill="#E8590C">Exchange</text>
+    <text x="320" y="162" text-anchor="middle" font-size="10.5" fill="#B14A10" class="mono">type=topic</text>
+  </g>
+  <line x1="160" y1="148" x2="245" y2="148" stroke="#5C6B7A" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="202" y="138" text-anchor="middle" font-size="10.5" fill="#5C6B7A" class="mono">routing key</text>
+  <text x="202" y="166" text-anchor="middle" font-size="10.5" fill="#E8590C" class="mono">"order.created"</text>
+  <!-- queues -->
+  <g>
+    <rect x="520" y="38" width="160" height="48" rx="8" fill="#fff" stroke="#1C2B3A" stroke-width="2"/>
+    <text x="600" y="58" text-anchor="middle" font-size="13" font-weight="700">q.email</text>
+    <text x="600" y="76" text-anchor="middle" font-size="10.5" fill="#5C6B7A" class="mono">▤▤▤ 消息排队</text>
+    <rect x="520" y="126" width="160" height="48" rx="8" fill="#fff" stroke="#1C2B3A" stroke-width="2"/>
+    <text x="600" y="146" text-anchor="middle" font-size="13" font-weight="700">q.stock</text>
+    <text x="600" y="164" text-anchor="middle" font-size="10.5" fill="#5C6B7A" class="mono">▤ 消息排队</text>
+    <rect x="520" y="214" width="160" height="48" rx="8" fill="#fff" stroke="#1C2B3A" stroke-width="2"/>
+    <text x="600" y="234" text-anchor="middle" font-size="13" font-weight="700">q.points</text>
+    <text x="600" y="252" text-anchor="middle" font-size="10.5" fill="#5C6B7A" class="mono">▤▤ 消息排队</text>
+  </g>
+  <!-- bindings -->
+  <line x1="392" y1="140" x2="515" y2="66" stroke="#E8590C" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+  <line x1="395" y1="150" x2="515" y2="150" stroke="#E8590C" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+  <line x1="392" y1="158" x2="515" y2="234" stroke="#E8590C" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+  <text x="452" y="90" font-size="10.5" fill="#B14A10" class="mono">binding: order.*</text>
+  <text x="452" y="143" font-size="10.5" fill="#B14A10" class="mono">binding: order.created</text>
+  <text x="452" y="215" font-size="10.5" fill="#B14A10" class="mono">binding: order.#</text>
+  <!-- consumers -->
+  <g font-size="11.5" fill="#2F9E63" font-weight="700">
+    <line x1="682" y1="62" x2="740" y2="62" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#ar)"/>
+    <text x="750" y="66">邮件消费者</text>
+    <line x1="682" y1="150" x2="740" y2="150" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#ar)"/>
+    <text x="750" y="154">库存消费者</text>
+    <line x1="682" y1="238" x2="740" y2="238" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#ar)"/>
+    <text x="750" y="242">积分消费者</text>
+  </g>
+</svg>
+
+<p>五个名词一次记全:<strong>Producer</strong> 发消息并附一个<strong>路由键(routing key,一个点分字符串)</strong>;<strong>Exchange</strong> 拿路由键去匹配<strong>Binding(队列注册的匹配规则)</strong>;命中的<strong>Queue</strong> 存下消息;<strong>Consumer</strong> 从队列取走并确认。队列才是唯一存消息的地方——Exchange 只路由不存储,<strong>没有任何队列接住的消息默认直接丢弃</strong>。</p>
+
+<!-- ============ SIMULATOR ============ -->
+<h2 id="sim">动手玩:Exchange 路由模拟器</h2>
+<p class="sub" style="color:var(--sub);font-size:15px">Exchange 有四种类型,区别只在"怎么用 routing key 匹配 binding"。选一种类型、选一个 routing key,点发送,看消息实际流向哪里。</p>
+
+<div class="sim">
+  <div class="row"><span class="lbl">EXCHANGE 类型</span>
+    <button class="btn ghost on" data-ex="direct">direct 精确匹配</button>
+    <button class="btn ghost" data-ex="topic">topic 通配匹配</button>
+    <button class="btn ghost" data-ex="fanout">fanout 广播</button>
+  </div>
+  <div class="row"><span class="lbl">ROUTING KEY(fanout 会忽略它)</span>
+    <button class="btn ghost on" data-key="order.created">order.created</button>
+    <button class="btn ghost" data-key="order.paid">order.paid</button>
+    <button class="btn ghost" data-key="user.signup">user.signup</button>
+  </div>
+  <div class="row"><button class="btn" id="send">📨 发送消息</button></div>
+
+  <svg id="simSvg" viewBox="0 0 800 260" style="width:100%;height:auto">
+    <defs><marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#B9C2CB"/></marker></defs>
+    <rect x="14" y="105" width="108" height="50" rx="9" fill="#fff" stroke="#22456E" stroke-width="2"/>
+    <text x="68" y="135" text-anchor="middle" font-size="13" font-weight="700" fill="#22456E">Producer</text>
+    <path d="M300 96 L360 130 L300 164 L240 130 Z" fill="#FDEEE3" stroke="#E8590C" stroke-width="2.5"/>
+    <text x="300" y="128" text-anchor="middle" font-size="12.5" font-weight="800" fill="#E8590C">Exchange</text>
+    <text id="exType" x="300" y="144" text-anchor="middle" font-size="10" fill="#B14A10" style="font-family:var(--mono)">direct</text>
+    <line x1="122" y1="130" x2="236" y2="130" stroke="#B9C2CB" stroke-width="1.6" marker-end="url(#ar2)"/>
+    <g id="queues"></g>
+    <g id="bindLines"></g>
+    <circle id="dot" r="7" fill="#E8590C" opacity="0"/>
+    <text id="dropTxt" x="300" y="205" text-anchor="middle" font-size="12" fill="#C92A2A" font-weight="700" opacity="0">✕ 无匹配队列 → 消息被丢弃</text>
+  </svg>
+  <div class="simlog" id="simlog">当前:direct 模式下,routing key 必须与 binding <b>完全相等</b>才投递。试试发 <b>order.created</b>。</div>
+</div>
+
+<table>
+<tr><th>类型</th><th>匹配规则</th><th>典型用途</th></tr>
+<tr><td><code>direct</code></td><td>routing key == binding key,精确相等</td><td>按明确类别分发:日志按 error/info 进不同队列</td></tr>
+<tr><td><code>topic</code></td><td>通配:<code>*</code> 匹配一个词,<code>#</code> 匹配零到多个词</td><td><strong>最常用。</strong>事件体系:<code>order.*</code> 订阅所有订单事件</td></tr>
+<tr><td><code>fanout</code></td><td>无视 routing key,复制给所有绑定队列</td><td>广播:缓存失效通知、配置刷新</td></tr>
+<tr><td><code>headers</code></td><td>按消息 header 属性匹配(少用)</td><td>路由条件不适合表达成字符串时</td></tr>
+</table>
+<div class="note">注意模拟器里的一个细节:一条消息匹配多个队列时,是<strong>复制多份、每队列一份</strong>(发布订阅);而<strong>同一个队列</strong>上挂多个消费者时,每条消息<strong>只会给其中一个</strong>(工作队列/竞争消费)。"队列间广播、队列内竞争"——这一句话就是 RabbitMQ 的分发语义。</div>
+
+<!-- ============ RELIABILITY ============ -->
+<h2 id="reliable">可靠性三关:消息在哪里丢,就在哪里堵</h2>
+<p>"消息不能丢"不是一个开关,而是三个环节各自设防。看图找到三个可能丢消息的位置:</p>
+<div class="flow">   ①发送途中丢            ②Broker 宕机丢             ③消费者处理到一半崩了
+Producer ══▶ Exchange → Queue(内存/磁盘)══▶ Consumer
+   │                        │                          │
+   └ <b>Publisher Confirm</b>      └ <b>持久化</b>                    └ <b>手动 ACK</b>
+     broker 收到后回执         队列声明 durable            处理成功才确认
+     没回执就重发              消息标记 persistent          没确认就重新投递
+                              (刷盘,重启不丢)            给其他消费者</div>
+<table>
+<tr><th>关卡</th><th>机制</th><th>不开的后果</th></tr>
+<tr><td>① 生产端</td><td><strong>Publisher Confirm</strong>:异步回执,失败/超时则重发</td><td>网络抖动时消息静默消失,生产者毫不知情</td></tr>
+<tr><td>② Broker</td><td>队列 <code>durable=true</code> + 消息 <code>persistent</code>;集群用<strong>仲裁队列(quorum queue)</strong>多副本</td><td>Broker 重启,内存里的消息全部蒸发</td></tr>
+<tr><td>③ 消费端</td><td><strong>手动 ACK</strong>:业务处理成功后才 <code>basic_ack</code>;失败 <code>nack</code> 重回队列</td><td>自动 ack 模式下,消费者取到消息即视为完成,处理崩溃 = 消息丢失</td></tr>
+</table>
+<div class="note bad"><strong>硬币的另一面:重复消费。</strong>"没收到 ack 就重发"意味着消息<strong>至少送达一次(at-least-once)</strong>——网络抖动时消费者可能收到同一条消息两次。所以可靠投递的最后一块拼图在你自己的代码里:<strong>消费逻辑必须幂等</strong>(如用消息 ID 做去重表,或用数据库唯一键兜底)。记住等式:可靠 = 至少一次 + 幂等。</div>
+
+<!-- ============ DLX ============ -->
+<h2 id="dlx">死信队列:失败消息的"退件处理区"</h2>
+<p>一条消息反复消费失败(毒消息),不能让它无限重回队列堵住后面的正常消息。RabbitMQ 的方案是<strong>死信交换机(DLX)</strong>:消息在三种情况下被判"死信",自动改投到指定的 exchange,进入死信队列由人工或补偿程序处理:</p>
+<div class="flow">成为死信的三条路:
+  1. 消费者 <b>nack/reject</b> 且不重回队列(requeue=false)
+  2. 消息 <b>TTL 过期</b>
+  3. 队列<b>长度超限</b>被挤出
+
+q.order ──死信──▶ DLX ──▶ q.order.dead ──▶ 告警 + 人工/定时补偿</div>
+<details>
+<summary>顺带一个经典技巧:用 TTL + 死信实现延迟消息</summary>
+<div class="body">RabbitMQ 原生没有"延迟 30 分钟投递"。土办法:消息发进一个<strong>没有消费者</strong>的队列,设 TTL=30min,并给它配 DLX 指向真正的业务队列——消息过期后被"死"进业务队列,恰好实现延迟。典型场景:订单 30 分钟未支付自动取消。正规做法是装官方 <code>delayed-message-exchange</code> 插件,但要理解它的原理就是这一套。</div>
+</details>
+
+<!-- ============ MISCONCEPTIONS ============ -->
+<h2 id="miss">误区、反例与边界</h2>
+<details>
+<summary>误区①:"RabbitMQ 能保证消息全局有序"</summary>
+<div class="body">单队列单消费者才有序。一旦为了吞吐挂了多个消费者,处理完成顺序就不可控;重试/死信更会打乱顺序。需要局部有序时,按业务键(如订单 ID)哈希到固定队列 + 单消费者。真正以分区有序为一等公民的是 Kafka。</div>
+</details>
+<details>
+<summary>误区②:"消息堆积没关系,队列就是用来堆的"</summary>
+<div class="body">RabbitMQ 的设计假设是队列<strong>基本为空</strong>——消息来了很快被取走。百万级堆积会触发换页到磁盘、吞吐骤降、内存告警甚至阻塞生产者。监控里最重要的一条曲线就是队列深度;需要长期堆积和回放的场景,选 Kafka。</div>
+</details>
+<details>
+<summary>误区③:"要广播用 Redis Pub/Sub 也一样"</summary>
+<div class="body">Redis Pub/Sub 不落盘、无 ack,订阅者离线期间的消息直接丢。RabbitMQ 的 fanout + 持久化队列能保证每个订阅方"离线也不漏"。丢了无所谓的通知可以用 Redis;丢了要出事的,用 MQ。</div>
+</details>
+<details>
+<summary>误区④:"上了 MQ,系统就解耦 = 更简单了"</summary>
+<div class="body">解耦的是<strong>运行时依赖</strong>,换来的是<strong>调试复杂度</strong>:调用链断开,排障要跨服务追消息(务必带 trace id);还多了幂等、堆积、死信、顺序四门必修课。小系统、短链路,同步调用 + 重试往往是更诚实的方案。</div>
+</details>
+<details>
+<summary>什么时候选 RabbitMQ,什么时候选别的?</summary>
+<div class="body"><strong>选 RabbitMQ:</strong>任务分发(每条消息是一个待办)、需要灵活路由(topic/fanout)、需要逐条 ack/重试/死信/优先级/延迟、吞吐在每秒几万以内。<strong>选 Kafka:</strong>事件流、日志管道、需要重放历史、吞吐百万级。<strong>选 Redis:</strong>已有 Redis 且消息量小、允许丢。<strong>都不选:</strong>流量小的单体应用——别为想象中的规模买单。</div>
+</details>
+
+<!-- ============ LAB ============ -->
+<h2 id="lab">10 行代码上手:最小可验证例子</h2>
+<p>用 Docker 起一个带管理界面的 RabbitMQ(<code>localhost:15672</code>,账号密码 guest/guest 可视化看队列):</p>
+<pre><code><span class="k">docker</span> run -d --name rabbit -p 5672:5672 -p 15672:15672 rabbitmq:3-management</code></pre>
+<p>生产者(Python + pika)——注意三处可靠性设置正是前文的三关:</p>
+<pre><code><span class="c"># pip install pika</span>
+<span class="k">import</span> pika
+conn = pika.BlockingConnection(pika.ConnectionParameters(<span class="s">"localhost"</span>))
+ch = conn.channel()
+ch.exchange_declare(<span class="s">"orders"</span>, exchange_type=<span class="s">"topic"</span>, durable=<span class="k">True</span>)
+ch.queue_declare(<span class="s">"q.email"</span>, durable=<span class="k">True</span>)            <span class="c"># 关② 队列持久化</span>
+ch.queue_bind(<span class="s">"q.email"</span>, <span class="s">"orders"</span>, routing_key=<span class="s">"order.*"</span>)
+ch.confirm_delivery()                                  <span class="c"># 关① publisher confirm</span>
+ch.basic_publish(<span class="s">"orders"</span>, <span class="s">"order.created"</span>, <span class="s">'{"id": 42}'</span>,
+    properties=pika.BasicProperties(delivery_mode=2))  <span class="c"># 关② 消息持久化</span></code></pre>
+<p>消费者:</p>
+<pre><code><span class="k">def</span> handle(ch, method, props, body):
+    print(<span class="s">"收到:"</span>, body)                               <span class="c"># 这里做幂等!</span>
+    ch.basic_ack(method.delivery_tag)                  <span class="c"># 关③ 处理成功才 ack</span>
+ch.basic_qos(prefetch_count=<span class="s">10</span>)     <span class="c"># 每人最多攒 10 条未 ack,防止饿死同伴</span>
+ch.basic_consume(<span class="s">"q.email"</span>, handle)
+ch.start_consuming()</code></pre>
+<p><strong>验证实验:</strong>先只跑生产者发 5 条消息,再启动消费者——5 条一条不少地被消费。这就亲手验证了"下游宕机,消息在队列里等它回来"。再把 <code>basic_ack</code> 注释掉重跑:消息会停在 unacked 状态,消费者断开后重新入队——ack 机制也验证完毕。</p>
+
+<div class="card">
+  <strong>迁移清单:接手任何用了 RabbitMQ 的系统,先问这 5 个问题</strong>
+  <p style="font-size:14.5px;margin-bottom:0">① 用了哪种 exchange、routing key 的命名约定是什么?② 三关(confirm / 持久化 / 手动 ack)开了几关?③ 消费是否幂等,靠什么去重?④ 死信队列有没有配,谁在处理死信?⑤ 队列深度的告警阈值是多少?——这五问答清,消息链路就在你掌握之中。</p>
+</div>
+
+<footer>一文读懂 · RabbitMQ — 单文件离线版 · 演示动画为教学示意</footer>
+</div>
+
+<script>
+/* ---------- domino demo ---------- */
+(function(){
+  const s=[...Array(5)].map((_,i)=>document.getElementById("s"+i));
+  const stat=document.getElementById("dstat");
+  let busy=false;
+  function reset(){s.forEach(el=>el.className="svc")}
+  function run(kill){
+    if(busy)return;busy=true;reset();
+    const steps=[[0,"用户点击下单…"],[1,"订单服务写库 ✔"],[2,"邮件服务发信 ✔(用户还在转圈等)"],[3,"库存服务扣减 ✔"],[4,kill?"积分服务无响应…超时!":"积分服务加分 ✔"]];
+    let i=0;
+    const t=setInterval(()=>{
+      const [idx,msg]=steps[i];
+      if(kill&&idx===4){
+        s[4].classList.add("dead");
+        stat.innerHTML="💥 积分服务超时 → 整个 HTTP 请求失败 → <b style='color:var(--redx)'>用户下单失败、之前扣的库存还要回滚</b>。一个边缘服务拖垮了核心流程,这就是同步链的脆弱。";
+        clearInterval(t);busy=false;return;
+      }
+      s[idx].classList.add(idx===0?"ok":"wait");
+      if(idx>0)s[idx-1].classList.replace("wait","ok")||s[idx-1].classList.add("ok");
+      stat.textContent=msg;
+      i++;
+      if(i>=steps.length){
+        s[4].classList.replace("wait","ok");
+        stat.innerHTML="✔ 成功,但用户等了全链路 <b>300ms</b>;且四个服务的可用性相乘:0.99⁴ ≈ 96%。链越长越脆。";
+        clearInterval(t);busy=false;
+      }
+    },550);
+  }
+  document.getElementById("dOk").addEventListener("click",()=>run(false));
+  document.getElementById("dKill").addEventListener("click",()=>run(true));
+})();
+
+/* ---------- routing simulator ---------- */
+(function(){
+  const QUEUES=[
+    {name:"q.email", bind:"order.created", y:40},
+    {name:"q.stock", bind:"order.*",       y:120},
+    {name:"q.audit", bind:"#",             y:200}
+  ];
+  const QX=560, QW=150, QH=44;
+  const gq=document.getElementById("queues"), gb=document.getElementById("bindLines");
+  const svgNS="http://www.w3.org/2000/svg";
+  QUEUES.forEach(q=>{
+    const r=document.createElementNS(svgNS,"rect");
+    Object.entries({x:QX,y:q.y,width:QW,height:QH,rx:8,fill:"#fff",stroke:"#1C2B3A","stroke-width":2}).forEach(([k,v])=>r.setAttribute(k,v));
+    r.id="rect-"+q.name;gq.appendChild(r);
+    const t=document.createElementNS(svgNS,"text");
+    Object.entries({x:QX+QW/2,y:q.y+19,"text-anchor":"middle","font-size":12.5,"font-weight":700,fill:"#1C2B3A"}).forEach(([k,v])=>t.setAttribute(k,v));
+    t.textContent=q.name;gq.appendChild(t);
+    const bt=document.createElementNS(svgNS,"text");
+    Object.entries({x:QX+QW/2,y:q.y+35,"text-anchor":"middle","font-size":10,fill:"#B14A10"}).forEach(([k,v])=>bt.setAttribute(k,v));
+    bt.style.fontFamily="var(--mono)";bt.id="bind-"+q.name;bt.textContent='binding: "'+q.bind+'"';gq.appendChild(bt);
+    const l=document.createElementNS(svgNS,"line");
+    Object.entries({x1:362,y1:130,x2:QX-6,y2:q.y+QH/2,stroke:"#E8590C","stroke-width":1.4,"stroke-dasharray":"5 4"}).forEach(([k,v])=>l.setAttribute(k,v));
+    gb.appendChild(l);
+  });
+
+  let ex="direct", key="order.created", animating=false;
+  const exTxt=document.getElementById("exType"), log=document.getElementById("simlog"),
+        dot=document.getElementById("dot"), dropTxt=document.getElementById("dropTxt");
+  const exDesc={
+    direct:"direct 模式:routing key 必须与 binding <b>完全相等</b>。注意 <b>order.*</b> 和 <b>#</b> 在 direct 下只是普通字符串,不是通配符。",
+    topic:"topic 模式:<b>*</b> 匹配一个词,<b>#</b> 匹配任意多个词。这是最常用的类型。",
+    fanout:"fanout 模式:无视 routing key,<b>复制</b>给每一个绑定的队列。"
+  };
+  document.querySelectorAll("[data-ex]").forEach(b=>b.addEventListener("click",()=>{
+    ex=b.dataset.ex;
+    document.querySelectorAll("[data-ex]").forEach(x=>x.classList.toggle("on",x===b));
+    exTxt.textContent=ex;log.innerHTML=exDesc[ex];
+  }));
+  document.querySelectorAll("[data-key]").forEach(b=>b.addEventListener("click",()=>{
+    key=b.dataset.key;
+    document.querySelectorAll("[data-key]").forEach(x=>x.classList.toggle("on",x===b));
+  }));
+
+  function topicMatch(pattern,k){
+    const p=pattern.split("."),w=k.split(".");
+    function m(i,j){
+      if(i===p.length)return j===w.length;
+      if(p[i]==="#"){for(let x=j;x<=w.length;x++)if(m(i+1,x))return true;return false;}
+      if(j>=w.length)return false;
+      if(p[i]==="*"||p[i]===w[j])return m(i+1,j+1);
+      return false;
+    }
+    return m(0,0);
+  }
+  function matched(){
+    if(ex==="fanout")return QUEUES;
+    if(ex==="direct")return QUEUES.filter(q=>q.bind===key);
+    return QUEUES.filter(q=>topicMatch(q.bind,key));
+  }
+  function flyTo(x1,y1,x2,y2,dur){
+    return new Promise(res=>{
+      dot.setAttribute("opacity",1);
+      const t0=performance.now();
+      function f(now){
+        const p=Math.min((now-t0)/dur,1);
+        dot.setAttribute("cx",x1+(x2-x1)*p);dot.setAttribute("cy",y1+(y2-y1)*p);
+        if(p<1)requestAnimationFrame(f);else res();
+      }
+      requestAnimationFrame(f);
+    });
+  }
+  document.getElementById("send").addEventListener("click",async()=>{
+    if(animating)return;animating=true;
+    dropTxt.setAttribute("opacity",0);
+    QUEUES.forEach(q=>document.getElementById("rect-"+q.name).setAttribute("fill","#fff"));
+    const hits=matched();
+    log.innerHTML=`发送:routing key = <b>"${key}"</b>(${ex} 模式)…`;
+    await flyTo(122,130,300,130,650);
+    if(hits.length===0){
+      dot.setAttribute("opacity",0);dropTxt.setAttribute("opacity",1);
+      log.innerHTML=`routing key <b>"${key}"</b> 没有匹配任何 binding → <span class="drop">消息被 Exchange 直接丢弃</span>(生产者若开启 mandatory/confirm 可感知)。这就是"Exchange 不存消息"的含义。`;
+      animating=false;return;
+    }
+    for(const q of hits){
+      dot.setAttribute("cx",300);dot.setAttribute("cy",130);
+      await flyTo(360,130,QX+8,q.y+QH/2,520);
+      document.getElementById("rect-"+q.name).setAttribute("fill","#FDEEE3");
+    }
+    dot.setAttribute("opacity",0);
+    const names=hits.map(q=>"<b>"+q.name+"</b> (binding "+q.bind+")").join("、");
+    log.innerHTML=`✔ 投递到 ${hits.length} 个队列:${names}。`+(hits.length>1?" 注意:是<b>复制了 "+hits.length+" 份</b>,每个队列独立一份。":"");
+    animating=false;
+  });
+})();
+</script>
+</body>
+</html>

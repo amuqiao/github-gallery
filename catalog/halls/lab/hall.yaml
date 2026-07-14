@@ -1,0 +1,6 @@
+schema_version: 1
+id: lab
+title: 实验室
+summary: 临时收纳尚未形成稳定分类的项目、技术笔记和工程资料。
+availability: active
+order: 3

@@ -1,0 +1,44 @@
+schema_version: 2
+id: rabbitmq
+hall: lab
+kind: github_project
+title: RabbitMQ
+summary: 基于 AMQP 的消息代理，使用交换机、队列和路由键连接服务间异步通信。
+source:
+  type: github
+  url: https://github.com/rabbitmq/rabbitmq-server
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/rabbitmq/rabbitmq-server
+  category: infrastructure
+  tags:
+    - toolkit
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - Erlang
+notes:
+  - id: rabbitmq-explainer
+    title: 一文读懂 RabbitMQ · 给系统之间装一个分拣站
+    type: html
+    path: ./notes/rabbitmq-explainer.html
+    summary: 从 exchange、queue、routing key、ack 和死信队列理解 RabbitMQ 的消息分发模型。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/rabbitmq/rabbitmq-server
+  - type: highlights
+    items:
+      - Message broker centered on exchanges, queues, bindings, and routing keys.
+      - Supports acknowledgement, retry, dead-letter, and flexible routing patterns.
+      - Commonly used for async task dispatch and service decoupling.
+  - type: use-cases
+    items:
+      - Learning message routing and broker-based async communication.
+      - Comparing RabbitMQ with Kafka and task queues.
+      - Designing reliable background job and service integration flows.

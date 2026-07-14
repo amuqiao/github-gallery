@@ -91,7 +91,7 @@ html[data-layout="bento-editorial"][data-theme="editorial-paper"]
 | `Breadcrumbs` | link props | 层级导航。 |
 | `BlockRenderer` | adapted typed blocks | block 渲染分发。 |
 
-平台首页、GitHub 展馆页和模型展馆页由对应 page 直接编排，保持入口页职责。
+平台首页、GitHub 展馆页、模型展馆页和实验室页由对应 page 直接编排，保持入口页职责。
 
 ## Verification
 

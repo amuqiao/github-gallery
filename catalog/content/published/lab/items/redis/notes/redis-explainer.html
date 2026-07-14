@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Redis:把热数据放进内存</title>
+<style>
+:root{
+  --bg:#0F1216; --panel:#171C23; --panel2:#1E242E; --line:#2A323E;
+  --text:#EDEAE4; --mut:#8A93A6; --red:#E5484D; --amber:#F5A524; --cool:#5CB8D6;
+  --mono:"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+  --serif:"Noto Serif SC","Songti SC","STSong",SimSun,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.75;font-size:16px}
+a{color:var(--cool)}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+h1,h2,h3{font-family:var(--serif);font-weight:700;line-height:1.3}
+h2{font-size:28px;margin:72px 0 8px;letter-spacing:.02em}
+h3{font-size:19px;margin:32px 0 10px}
+p{margin:14px 0;color:#C9CDD6}
+strong{color:var(--text)}
+code{font-family:var(--mono);font-size:.88em;background:var(--panel2);padding:2px 6px;border-radius:4px;color:var(--amber)}
+pre{background:#0B0E12;border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto;margin:16px 0;line-height:1.6}
+pre code{background:none;padding:0;color:#D8DEE9;font-size:13.5px}
+pre .c{color:#5A6473}pre .k{color:var(--red)}pre .v{color:var(--amber)}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--red);text-transform:uppercase;margin-bottom:6px}
+.sub{color:var(--mut);font-size:15px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:18px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-weight:600;color:var(--text);white-space:nowrap}
+td{color:#C9CDD6}
+.tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--mut);margin-right:6px}
+.tag.hot{border-color:var(--red);color:var(--red)}
+.tag.ok{border-color:#4CAF7D;color:#5FD49A}
+.tag.warn{border-color:var(--amber);color:var(--amber)}
+button{font-family:var(--sans);cursor:pointer}
+.btn{background:var(--red);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;transition:transform .15s,opacity .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn:disabled{opacity:.45;transform:none;cursor:default}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:#C9CDD6}
+.btn.ghost:hover{border-color:var(--mut)}
+.note{border-left:3px solid var(--amber);background:rgba(245,165,36,.06);padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;font-size:14.5px;color:#D5CFC2}
+.danger{border-left-color:var(--red);background:rgba(229,72,77,.07)}
+details{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden}
+details summary{padding:14px 18px;cursor:pointer;font-weight:600;list-style:none;position:relative}
+details summary::after{content:"+";position:absolute;right:18px;color:var(--mut);font-family:var(--mono)}
+details[open] summary::after{content:"–"}
+details .body{padding:0 18px 16px;font-size:14.5px}
+footer{margin:90px 0 40px;color:var(--mut);font-size:13px;text-align:center}
+/* ---------- hero ---------- */
+.hero{padding:64px 0 30px;border-bottom:1px solid var(--line)}
+.hero h1{font-size:clamp(30px,5.4vw,46px);margin:10px 0 6px}
+.hero h1 em{font-style:normal;color:var(--red)}
+.hero .lead{font-size:17px;color:#B9BFCA;max-width:640px}
+/* latency ruler */
+.ruler{margin:34px 0 8px;position:relative;height:118px}
+.ruler .track{position:absolute;left:0;right:0;top:52px;height:2px;background:linear-gradient(90deg,var(--red),var(--amber),var(--cool))}
+.tick{position:absolute;top:0;transform:translateX(-50%);text-align:center;width:110px}
+.tick .dot{width:10px;height:10px;border-radius:50%;margin:47px auto 0;border:2px solid var(--bg)}
+.tick .name{font-size:12px;color:var(--text);font-weight:600;margin-top:6px}
+.tick .val{font-family:var(--mono);font-size:11px;color:var(--mut)}
+.tick .top{font-family:var(--mono);font-size:10px;color:var(--mut);height:40px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px}
+.ruler-cap{font-size:12.5px;color:var(--mut);font-family:var(--mono);text-align:center;margin-bottom:26px}
+/* race */
+.race{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:8px 0 4px}
+.lane{margin:14px 0}
+.lane .label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+.lane .label .who{font-weight:600}
+.lane .bar{height:14px;background:var(--panel2);border-radius:7px;overflow:hidden}
+.lane .fill{height:100%;width:0%;border-radius:7px;transition:none}
+.lane.mem .fill{background:linear-gradient(90deg,var(--red),var(--amber))}
+.lane.disk .fill{background:#3B4656}
+.race .stat{font-family:var(--mono);color:var(--mut)}
+/* struct picker */
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+.tabs button{background:var(--panel2);border:1px solid var(--line);color:#C9CDD6;border-radius:8px 8px 0 0;padding:8px 16px;font-family:var(--mono);font-size:13px}
+.tabs button.on{background:var(--panel);border-bottom-color:var(--panel);color:var(--red);font-weight:700}
+.tabpanel{border:1px solid var(--line);border-radius:0 10px 10px 10px;background:var(--panel);padding:20px 22px;margin-top:-1px}
+.shape{font-family:var(--mono);font-size:13px;background:#0B0E12;border:1px dashed var(--line);border-radius:8px;padding:12px 16px;margin:10px 0;color:var(--cool);white-space:pre;overflow-x:auto;line-height:1.55}
+/* cache problems */
+.prob{cursor:pointer;transition:border-color .2s}
+.prob:hover{border-color:var(--red)}
+.prob h3{margin-top:0}
+.prob .more{display:none;border-top:1px dashed var(--line);margin-top:12px;padding-top:12px;font-size:14.5px}
+.prob.open .more{display:block}
+.prob .hint{font-size:12px;color:var(--mut);font-family:var(--mono)}
+.flow{font-family:var(--mono);font-size:12.5px;color:var(--cool);background:#0B0E12;border-radius:8px;padding:10px 14px;margin:10px 0;white-space:pre;overflow-x:auto;line-height:1.7}
+/* persist demo */
+.pers{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.pers{grid-template-columns:1fr}}
+.pers .card{margin:0}
+.timeline{position:relative;height:56px;background:#0B0E12;border-radius:8px;margin:12px 0;overflow:hidden}
+.timeline .w{position:absolute;top:0;bottom:0;background:rgba(229,72,77,.25);border-left:1px solid var(--red)}
+.timeline .snap{position:absolute;top:6px;bottom:6px;width:3px;background:var(--cool);border-radius:2px}
+.timeline .now{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:11px;color:var(--red)}
+.timeline .lbl{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:11px;color:var(--mut)}
+.loss{font-family:var(--mono);font-size:13px;margin-top:8px}
+.loss b{color:var(--red)}
+input[type=range]{width:100%;accent-color:var(--red)}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:26px 0 4px}
+.toc a{font-size:12.5px;font-family:var(--mono);color:var(--mut);text-decoration:none;border:1px solid var(--line);border-radius:16px;padding:4px 12px}
+.toc a:hover{color:var(--red);border-color:var(--red)}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="eyebrow">一文读懂 · REDIS</div>
+  <h1>把热数据放进<em>内存</em>,<br>让读写快一万倍</h1>
+  <p class="lead">Redis 不是"更快的 MySQL",而是一个用内存换速度、用数据结构换表达力的存储。理解它的第一步,是先感受内存和磁盘之间那道<strong>数量级的鸿沟</strong>。</p>
+
+  <div class="ruler" id="ruler">
+    <div class="track"></div>
+  </div>
+  <div class="ruler-cap">↑ 延迟标尺(对数刻度):每向右一格,慢 10 倍以上 — 悬停查看换算</div>
+
+  <div class="race">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <strong>亲手跑一次:1000 个请求,内存 vs 磁盘数据库</strong>
+      <button class="btn" id="raceBtn">▶ 开始赛跑</button>
+    </div>
+    <div class="lane mem">
+      <div class="label"><span class="who" style="color:var(--red)">Redis(内存,~0.1ms/次)</span><span class="stat" id="memStat">0 / 1000</span></div>
+      <div class="bar"><div class="fill" id="memFill"></div></div>
+    </div>
+    <div class="lane disk">
+      <div class="label"><span class="who">MySQL 磁盘随机查询(~5ms/次)</span><span class="stat" id="diskStat">0 / 1000</span></div>
+      <div class="bar"><div class="fill" id="diskFill"></div></div>
+    </div>
+    <p style="font-size:13px;color:var(--mut);margin:8px 0 0" id="raceMsg">同样的 1000 次点查,差距不是"快一点",是差两个数量级。这就是缓存存在的全部理由。</p>
+  </div>
+
+  <nav class="toc">
+    <a href="#why">为什么出现</a><a href="#model">心智模型</a><a href="#single">单线程为什么快</a>
+    <a href="#ds">数据结构选择器</a><a href="#persist">持久化</a><a href="#three">缓存三大事故</a>
+    <a href="#evict">内存满了怎么办</a><a href="#miss">误区与边界</a><a href="#lab">5 分钟上手</a>
+  </nav>
+</header>
+
+<!-- ============ WHY ============ -->
+<h2 id="why">它为什么出现:数据库扛不住"读"</h2>
+<p>一个真实场景:电商首页要展示商品详情,每秒 5 万次读请求。MySQL 单机撑死几千 QPS——不是 MySQL 不行,而是它每次查询都要走 <strong>B+ 树索引 → 可能触发磁盘 IO → 加锁 → 解析 SQL</strong> 这一整套为"可靠持久存储"设计的流程。</p>
+<p>但这 5 万次请求里,99% 在反复读<strong>同一批热门商品</strong>。为一份几乎不变的数据反复付出磁盘级的代价,是纯粹的浪费。于是自然的想法是:<strong>把这批热数据整个放进内存,请求先问内存,问不到再去数据库</strong>。Redis 就是把这个想法产品化:一个通过网络访问的、共享的、带丰富数据结构的内存。</p>
+
+<div class="card">
+  <strong>一句话定位</strong>
+  <p style="margin-bottom:0">Redis = <strong>Re</strong>mote <strong>Di</strong>ctionary <strong>S</strong>erver,远程字典服务。本质是一张巨大的 <code>key → 数据结构</code> 哈希表,整张表住在内存里,通过 TCP 提供给所有服务进程共享。</p>
+</div>
+
+<div class="note">
+<strong>边界先立好:</strong>Redis 用内存换速度,代价是①容量贵且有限(内存价格是磁盘的几十倍);②默认可靠性弱于数据库(宕机可能丢最近的写)。所以它的主战场是<strong>可以重建的热数据</strong>——缓存、会话、计数、排行——而不是唯一存储业务事实的地方。
+</div>
+
+<!-- ============ MODEL ============ -->
+<h2 id="model">心智模型:一张会过期的共享哈希表</h2>
+<p>读 Redis 文档时,把一切映射回这张图,就不会迷路:</p>
+<div class="shape">          ┌──────────────── Redis 进程(内存)────────────────┐
+ 客户端A ──┤   key                value(可选 TTL)              │
+ 客户端B ──┤   "user:1001"    →   Hash {name, age, vip}          │
+ 客户端C ──┤   "rank:daily"   →   ZSet [(u3,98),(u1,95),...]     │
+   ...    │   "cart:1001"    →   Hash {sku42: 2, sku7: 1}   ⏱30m │
+          │   "page:home"    →   String "&lt;html&gt;..."        ⏱60s │
+          └──────────────────────┬───────────────────────────────┘
+                                 │ 可选:定期把内存快照/日志写到磁盘
+                                 ▼
+                              磁盘(RDB / AOF,用于重启恢复)</div>
+<p>三个要点:<strong>① key 永远是字符串</strong>,靠命名约定组织(如 <code>user:1001:cart</code>);<strong>② value 是数据结构</strong>而不只是字符串,这是 Redis 和 Memcached 的分水岭;<strong>③ 每个 key 可以设置 TTL</strong>,到点自动消失——"会过期"是缓存语义的核心。</p>
+
+<!-- ============ SINGLE THREAD ============ -->
+<h2 id="single">反直觉:单线程,为什么还这么快?</h2>
+<p>Redis 执行命令的核心是<strong>单线程</strong>的(6.0 后网络 IO 可多线程,但命令执行仍是单线程)。直觉上单线程应该慢,实际它单机能跑 10 万+ QPS。原因在于它把瓶颈换了个位置:</p>
+<table>
+<tr><th>传统数据库的开销</th><th>Redis 的对应做法</th></tr>
+<tr><td>磁盘 IO(毫秒级)</td><td>数据全在内存,操作是纳秒~微秒级</td></tr>
+<tr><td>多线程 → 锁竞争、上下文切换</td><td>单线程串行执行,<strong>零锁</strong>,天然原子性</td></tr>
+<tr><td>每连接一个线程,连接数受限</td><td>epoll 多路复用,一个线程盯着几万个连接</td></tr>
+<tr><td>SQL 解析、优化器</td><td>命令即操作,O(1)/O(log n) 直达数据结构</td></tr>
+</table>
+<p>当数据都在内存里时,CPU 根本不是瓶颈,<strong>网络往返才是</strong>。单线程反而省掉了锁和切换的税。这也带来一条重要推论:</p>
+<div class="note danger"><strong>推论:一条慢命令会卡住所有人。</strong>因为命令串行执行,一个 <code>KEYS *</code> 或对百万成员集合执行 <code>SMEMBERS</code>,会让后面所有请求排队。生产环境禁用 <code>KEYS</code>,用 <code>SCAN</code> 渐进遍历;大集合用 <code>SSCAN</code>/<code>HSCAN</code> 分批取。</div>
+
+<!-- ============ DATA STRUCTURES ============ -->
+<h2 id="ds">五种核心数据结构:按场景选,不按名字背</h2>
+<p class="sub">点击切换。每种结构记住一句话:<strong>它天然擅长什么操作</strong>——选型就是把业务动作翻译成这个操作。</p>
+
+<div class="tabs" id="dsTabs"></div>
+<div class="tabpanel" id="dsPanel"></div>
+
+<div class="note" style="margin-top:22px"><strong>选型口诀:</strong>存整段就 String;存对象且要改字段就 Hash;要顺序/队列就 List;要去重/关系运算就 Set;要排序榜单就 ZSet。如果你发现自己在用 String 存 JSON 然后整取整存地改一个字段——那是 Hash 的活。</div>
+
+<!-- ============ PERSISTENCE ============ -->
+<h2 id="persist">持久化:断电后,你丢多少数据?</h2>
+<p>内存断电即失,所以 Redis 提供两种落盘方式。理解它们的关键不是背配置,而是回答一个问题:<strong>"如果现在断电,我丢失最近多久的写入?"</strong> 拖动下面的时间轴感受两者的差异:</p>
+
+<div class="pers">
+  <div class="card">
+    <h3 style="margin-top:0">RDB:定期快照 <span class="tag">默认</span></h3>
+    <p style="font-size:14px">每隔一段时间(如 5 分钟)把整个内存 fork 出来写成一个紧凑的二进制文件。恢复快、文件小,但<strong>两次快照之间的写全部会丢</strong>。</p>
+    <div class="timeline" id="tlRdb"><span class="lbl">时间 →</span><span class="now">断电!</span></div>
+    <div class="loss">丢失窗口:<b id="lossRdb">—</b></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">AOF:追加日志 <span class="tag ok">更安全</span></h3>
+    <p style="font-size:14px">把每条写命令追加到日志文件,重启时重放。<code>appendfsync everysec</code>(推荐)下每秒刷盘一次,<strong>最多丢 1 秒</strong>。文件更大、恢复更慢。</p>
+    <div class="timeline" id="tlAof"><span class="lbl">时间 →</span><span class="now">断电!</span></div>
+    <div class="loss">丢失窗口:<b id="lossAof">≤ 1 秒</b></div>
+  </div>
+</div>
+<div class="card">
+  <label style="font-size:13.5px;color:var(--mut)">拖动:断电发生在上次 RDB 快照之后的第 <b id="tVal" style="color:var(--text)">150</b> 秒(快照间隔 300 秒)</label>
+  <input type="range" id="tSlider" min="1" max="299" value="150">
+  <p style="font-size:13.5px;color:var(--mut);margin-bottom:0">生产常见组合:<strong>RDB + AOF 同时开</strong>(重启优先用 AOF 恢复),或 4.0+ 的混合持久化。但记住:即便如此,Redis 的持久化保证仍弱于数据库的事务日志——<strong>不要把它当唯一数据源</strong>。</p>
+</div>
+
+<!-- ============ CACHE PATTERN ============ -->
+<h2>标准用法:Cache-Aside 读写模式</h2>
+<p>最常用的缓存姿势只有一套,先把它焊在脑子里:</p>
+<div class="flow">读:  查 Redis ──命中──▶ 直接返回(99% 的请求止步于此)
+         │未命中
+         ▼
+      查 MySQL ──▶ 写回 Redis(带 TTL)──▶ 返回
+
+写:  先更新 MySQL ──▶ 再删除 Redis 里的对应 key
+      (下次读会自然回填新值;"删缓存"优于"改缓存",避免并发写导致脏数据)</div>
+<p>这套模式下,数据库始终是<strong>事实源</strong>,Redis 只是它的热数据投影。缓存和库之间允许短暂不一致,靠 TTL 兜底最终收敛——接受这一点,90% 的"缓存一致性焦虑"就消失了。</p>
+
+<!-- ============ THREE PROBLEMS ============ -->
+<h2 id="three">缓存三大事故:穿透、击穿、雪崩</h2>
+<p class="sub">名字很像,病因完全不同。点击卡片展开"事故现场 + 解法"。判别关键:<strong>问不存在的数据?一个热 key 过期?一批 key 同时过期?</strong></p>
+
+<div class="card prob" id="p1">
+  <h3>缓存穿透 <span class="tag hot">查"不存在"的数据</span></h3>
+  <p style="font-size:14.5px;margin:6px 0">请求的 key 在缓存和数据库里<strong>都不存在</strong>(如恶意请求 <code>id=-1</code>),缓存永远无法命中,每次都打穿到数据库。</p>
+  <span class="hint">点击展开 ▾</span>
+  <div class="more">
+    <div class="flow">请求 id=-1 ─▶ Redis(没有)─▶ MySQL(也没有)─▶ 返回空
+攻击者循环这个请求 ─▶ 缓存形同虚设,DB 被打死</div>
+    <strong>解法:</strong>① <strong>缓存空值</strong>:查无此数据也写入 <code>SET key "" EX 60</code>,短 TTL;② <strong>布隆过滤器</strong>:把全量合法 id 装进布隆过滤器,不在其中的请求直接拒绝,连 Redis 都不用问。
+  </div>
+</div>
+
+<div class="card prob" id="p2">
+  <h3>缓存击穿 <span class="tag hot">一个热 key 过期</span></h3>
+  <p style="font-size:14.5px;margin:6px 0">某个<strong>超高并发的热 key</strong>(如秒杀商品)恰好过期,瞬间成千上万请求同时未命中,一起涌向数据库——单点被"击穿"。</p>
+  <span class="hint">点击展开 ▾</span>
+  <div class="more">
+    <div class="flow">t=0  热key过期 ─▶ 10000 个并发同时 miss ─▶ 10000 个相同 SQL 砸向 DB</div>
+    <strong>解法:</strong>① <strong>互斥锁重建</strong>:未命中时先 <code>SET lock:key 1 NX EX 3</code> 抢锁,只有抢到的那个请求去查库回填,其余等待重试;② <strong>逻辑过期</strong>:key 永不过期,值里带过期时间字段,发现"逻辑过期"就返回旧值并异步刷新。
+  </div>
+</div>
+
+<div class="card prob" id="p3">
+  <h3>缓存雪崩 <span class="tag hot">一大批 key 同时失效</span></h3>
+  <p style="font-size:14.5px;margin:6px 0">大量 key 设置了<strong>相同的 TTL</strong>(比如凌晨批量预热,统一 1 小时),到点集体过期;或 Redis 实例整个宕机。海量请求同时落到数据库,连锁崩溃。</p>
+  <span class="hint">点击展开 ▾</span>
+  <div class="more">
+    <div class="flow">00:00 预热 10 万个 key,TTL 全部 3600s
+01:00 十万个 key 同一秒过期 ─▶ 未命中率从 1% 跳到 100% ─▶ DB 雪崩</div>
+    <strong>解法:</strong>① TTL 加<strong>随机抖动</strong>:<code>3600 + rand(0,600)</code>,把过期时刻打散;② 服务层<strong>限流/熔断</strong>兜底;③ Redis 侧做高可用(主从 + 哨兵 / 集群),防止实例级雪崩。
+  </div>
+</div>
+
+<!-- ============ EVICTION ============ -->
+<h2 id="evict">内存满了怎么办:过期与淘汰</h2>
+<p>两件事常被混为一谈:<strong>过期(expiration)</strong>是你主动给 key 设的寿命;<strong>淘汰(eviction)</strong>是内存到达 <code>maxmemory</code> 上限后 Redis 被迫删 key 的策略。</p>
+<table>
+<tr><th>策略</th><th>行为</th><th>适用</th></tr>
+<tr><td><code>noeviction</code></td><td>内存满后写入直接报错(默认)</td><td>Redis 当存储用、绝不能默默丢数据时</td></tr>
+<tr><td><code>allkeys-lru</code></td><td>在所有 key 里淘汰最久未使用的</td><td><strong>纯缓存场景的标准答案</strong></td></tr>
+<tr><td><code>volatile-lru</code></td><td>只在设了 TTL 的 key 里做 LRU</td><td>缓存与"常驻数据"混用同一实例时</td></tr>
+<tr><td><code>allkeys-lfu</code></td><td>淘汰访问频率最低的(4.0+)</td><td>存在"偶尔被扫一遍"的冷数据污染 LRU 时</td></tr>
+</table>
+<div class="note">过期删除本身是<strong>惰性 + 定期抽样</strong>的:key 到期不会立刻消失,而是在被访问时或后台抽查时删除。所以"已过期但仍占内存"是正常现象,别惊讶。</div>
+
+<!-- ============ MISCONCEPTIONS ============ -->
+<h2 id="miss">误区与边界:什么时候不该用 Redis</h2>
+<details>
+<summary>误区①:"Redis 有持久化,所以能当主数据库"</summary>
+<div class="body">AOF everysec 仍可能丢 1 秒写入;主从复制是异步的,故障切换可能丢更多。涉及钱、订单等业务事实,主数据库必须是 MySQL/PostgreSQL 这类有事务日志与强持久保证的系统。Redis 里放的应该是<strong>丢了可以重建</strong>的数据。</div>
+</details>
+<details>
+<summary>误区②:"用 Redis 的 List / Pub-Sub 就够当消息队列了"</summary>
+<div class="body">Pub/Sub 不落盘、消费者离线消息直接丢;List 没有 ack 与重试语义。轻量通知可以凑合,但订单、支付类不能丢的消息应该交给 RabbitMQ/Kafka。Redis 5.0 的 Stream 补上了消费组和 ack,是折中方案,可靠性仍受制于 Redis 自身的持久化等级。</div>
+</details>
+<details>
+<summary>误区③:"命中率低,加大内存就好"</summary>
+<div class="body">先看访问模式:如果请求分布极度分散(长尾)、几乎没有重复读,缓存天然无效,加内存只是烧钱。缓存的前提是<strong>热点存在</strong>——二八定律成立时它才值回票价。</div>
+</details>
+<details>
+<summary>误区④:"大 key、热 key 无所谓"</summary>
+<div class="body">单个 value 几 MB 的"大 key"会造成网络阻塞与删除卡顿(用 <code>UNLINK</code> 异步删);单个 key 扛全站流量的"热 key"会打爆单个节点(集群下尤甚),需要本地缓存或 key 分片(<code>key:{1..N}</code> 随机读)分摊。</div>
+</details>
+<details>
+<summary>什么场景干脆别用 Redis?</summary>
+<div class="body">① 数据量远超内存预算且无明显热点(直接读库+好索引);② 需要复杂查询/多条件过滤(那是数据库和 ES 的活);③ 强一致要求高于性能要求(缓存必然引入不一致窗口);④ 单机低并发的小项目——先别加中间件,复杂度也是成本。</div>
+</details>
+
+<!-- ============ LAB ============ -->
+<h2 id="lab">5 分钟上手:最小可验证例子</h2>
+<p>装好后逐条敲进 <code>redis-cli</code>,每一条都在验证前文的一个概念:</p>
+<pre><code><span class="c"># 1. 字符串 + TTL:缓存的最小单元</span>
+<span class="k">SET</span> page:home <span class="v">"&lt;html&gt;...&lt;/html&gt;"</span> <span class="k">EX</span> 60
+<span class="k">TTL</span> page:home          <span class="c"># → 剩余秒数,倒数到 -2 表示已消失</span>
+
+<span class="c"># 2. Hash 存对象:只改一个字段,不用整存整取</span>
+<span class="k">HSET</span> user:1001 name <span class="v">"Alice"</span> vip <span class="v">1</span>
+<span class="k">HINCRBY</span> user:1001 login_count 1
+
+<span class="c"># 3. ZSet 排行榜:写入即排序</span>
+<span class="k">ZINCRBY</span> rank:daily 10 <span class="v">"user:1001"</span>
+<span class="k">ZREVRANGE</span> rank:daily 0 2 <span class="k">WITHSCORES</span>   <span class="c"># 前三名</span>
+
+<span class="c"># 4. 原子计数:单线程 = 天然无锁安全</span>
+<span class="k">INCR</span> stock:sku42       <span class="c"># 并发调用也绝不会算错</span>
+
+<span class="c"># 5. 分布式锁的原型:NX = 不存在才能设置</span>
+<span class="k">SET</span> lock:order:9 <span class="v">"me"</span> <span class="k">NX EX</span> 3   <span class="c"># 返回 OK 才算抢到锁</span></code></pre>
+
+<div class="card">
+  <strong>迁移清单:接手任何用了 Redis 的系统,先问这 5 个问题</strong>
+  <p style="font-size:14.5px;margin-bottom:0">① 这里存的数据丢了能不能重建?(不能→设计有问题)② 每类 key 的 TTL 和命名约定是什么?③ <code>maxmemory</code> 和淘汰策略配的什么?④ 持久化开的 RDB 还是 AOF,能接受丢多少?⑤ 有没有大 key / 热 key / <code>KEYS</code> 这类慢命令?——答完这五问,你对这套缓存的理解就超过多数使用者了。</p>
+</div>
+
+<footer>一文读懂 · Redis — 单文件离线版 · 交互演示为教学示意,数值为典型量级而非精确基准</footer>
+</div>
+
+<script>
+/* ---------- latency ruler ---------- */
+(function(){
+  const ticks=[
+    {name:"CPU L1",val:"~1ns",top:"作为参照",x:4,c:"#5CB8D6"},
+    {name:"内存读取",val:"~100ns",top:"Redis 数据住这里",x:26,c:"#F5A524"},
+    {name:"Redis 一次请求",val:"~0.1ms",top:"含网络往返",x:52,c:"#E5484D"},
+    {name:"SSD 随机 IO",val:"~0.1~1ms",top:"数据库常在这层等",x:72,c:"#8A93A6"},
+    {name:"DB 磁盘查询",val:"~1~10ms",top:"解析+索引+IO",x:93,c:"#5A6473"}
+  ];
+  const r=document.getElementById("ruler");
+  ticks.forEach(t=>{
+    const d=document.createElement("div");d.className="tick";d.style.left=t.x+"%";
+    d.innerHTML=`<div class="top">${t.top}</div><div class="dot" style="background:${t.c}"></div><div class="name">${t.name}</div><div class="val">${t.val}</div>`;
+    d.title=t.name+" ≈ "+t.val;
+    r.appendChild(d);
+  });
+})();
+
+/* ---------- race ---------- */
+(function(){
+  const btn=document.getElementById("raceBtn"),mf=document.getElementById("memFill"),df=document.getElementById("diskFill"),
+        ms=document.getElementById("memStat"),ds=document.getElementById("diskStat"),msg=document.getElementById("raceMsg");
+  const TOTAL=1000, MEM_MS=1000, DISK_MS=20000; // 演示压缩:内存1s跑完,磁盘20s
+  let raf=null;
+  btn.addEventListener("click",()=>{
+    if(raf)cancelAnimationFrame(raf);
+    btn.disabled=true;const t0=performance.now();let memDone=false;
+    function step(now){
+      const el=now-t0;
+      const m=Math.min(el/MEM_MS,1), d=Math.min(el/DISK_MS,1);
+      mf.style.width=(m*100)+"%";df.style.width=(d*100)+"%";
+      ms.textContent=Math.round(m*TOTAL)+" / 1000";ds.textContent=Math.round(d*TOTAL)+" / 1000";
+      if(m>=1&&!memDone){memDone=true;msg.innerHTML="Redis 已完成 ✔ —— 磁盘查询还剩 <b style='color:var(--red)'>"+Math.round((1-d)*TOTAL)+"</b> 次没跑完。真实差距(0.1ms vs 5ms)比演示动画还要夸张 50 倍。";}
+      if(d<1){raf=requestAnimationFrame(step);}else{btn.disabled=false;btn.textContent="↻ 再跑一次";msg.innerHTML="全部完成。同一批请求,内存路径的总耗时只有磁盘路径的 <b style='color:var(--red)'>1/50</b>(演示比例)——这就是把热数据搬进内存的意义。";}
+    }
+    raf=requestAnimationFrame(step);
+  });
+})();
+
+/* ---------- data structure picker ---------- */
+(function(){
+  const DS=[
+   {k:"String",shape:'key ─▶ "任意字节:文本 / JSON / 数字 / 二进制"',
+    good:"整存整取的值、计数器、分布式锁、验证码",
+    ops:'SET / GET / INCR / SETNX / SETEX',
+    scene:"<strong>页面缓存:</strong><code>SET page:home html EX 60</code>;<strong>库存计数:</strong><code>INCR</code> 原子加减,天然并发安全;<strong>手机验证码:</strong><code>SET code:138.. 4821 EX 300</code>。",
+    anti:"反例:用 String 存 JSON 对象却频繁只改其中一个字段——每次都要整取、反序列化、改、序列化、整存。那是 Hash 的活。"},
+   {k:"Hash",shape:'key ─▶ { field1: v1, field2: v2, ... }   (一个小字典)',
+    good:"对象/结构体,需要按字段读写",
+    ops:'HSET / HGET / HGETALL / HINCRBY',
+    scene:"<strong>用户资料:</strong><code>HSET user:1001 name Alice vip 1</code>,改昵称只动一个 field;<strong>购物车:</strong><code>HINCRBY cart:1001 sku42 1</code>,field 是商品、value 是数量。",
+    anti:"反例:对象整存整取、从不单独改字段——那 String 存 JSON 更简单。Hash 的价值就在字段级操作。"},
+   {k:"List",shape:'key ─▶ [ a, b, c, d ]   (双端链表,两头进出 O(1))',
+    good:"有序、可重复、队列/栈/最新N条",
+    ops:'LPUSH / RPOP / LRANGE / BRPOP',
+    scene:"<strong>最新动态:</strong><code>LPUSH feed:1001 msg</code> + <code>LTRIM feed:1001 0 99</code> 只留最近 100 条;<strong>轻量任务队列:</strong>生产者 <code>LPUSH</code>,消费者 <code>BRPOP</code> 阻塞等待。",
+    anti:"反例:按下标随机访问中间元素(O(n));或当可靠消息队列用——没有 ack,消费者崩了消息就没了。"},
+   {k:"Set",shape:'key ─▶ { a, b, c }   (无序、自动去重)',
+    good:"去重、成员判断、交并差集",
+    ops:'SADD / SISMEMBER / SINTER / SCARD',
+    scene:"<strong>点赞去重:</strong><code>SADD like:post9 uid</code>,重复点赞自动无效,<code>SCARD</code> 得总数;<strong>共同关注:</strong><code>SINTER follow:A follow:B</code> 一条命令算交集;<strong>抽奖:</strong><code>SRANDMEMBER</code>。",
+    anti:"反例:需要保持插入顺序或需要排序——Set 无序,请看 List / ZSet。"},
+   {k:"ZSet",shape:'key ─▶ { (member, score) ... }   (按 score 实时排序)',
+    good:"排行榜、Top-N、按分数范围取",
+    ops:'ZADD / ZINCRBY / ZREVRANGE / ZRANGEBYSCORE',
+    scene:"<strong>排行榜:</strong><code>ZINCRBY rank:daily 10 user:1</code> 写入即排好序,<code>ZREVRANGE 0 9</code> 取前十,O(log n);<strong>延迟任务:</strong>score 存执行时间戳,轮询 <code>ZRANGEBYSCORE key 0 now</code>。",
+    anti:"反例:不需要排序只需要去重(用 Set 更省);或榜单千万级还要求全量精确名次——考虑分桶或近似算法。"},
+   {k:"Stream+",shape:'Stream: 追加日志+消费组 | Bitmap: 位数组 | HyperLogLog: 基数估算',
+    good:"补充类型,遇到再学即可",
+    ops:'XADD / SETBIT / PFADD ...',
+    scene:"<strong>Stream</strong>(5.0+):带 ack 和消费组的消息流,Redis 里最接近 Kafka 模型的东西;<strong>Bitmap</strong>:一亿用户签到只占 ~12MB;<strong>HyperLogLog</strong>:12KB 估算亿级 UV,误差 <1%。",
+    anti:"这三个是特定场景的利器,不是日常主力。先把前五种用熟。"}
+  ];
+  const tabs=document.getElementById("dsTabs"),panel=document.getElementById("dsPanel");
+  DS.forEach((d,i)=>{
+    const b=document.createElement("button");b.textContent=d.k;
+    b.addEventListener("click",()=>show(i));tabs.appendChild(b);
+  });
+  function show(i){
+    [...tabs.children].forEach((b,j)=>b.classList.toggle("on",i===j));
+    const d=DS[i];
+    panel.innerHTML=`<div class="shape">${d.shape}</div>
+      <p style="font-size:14px;margin:8px 0"><span class="tag ok">擅长</span>${d.good} &nbsp; <span class="tag">核心命令</span><code style="background:none;padding:0">${d.ops}</code></p>
+      <p style="font-size:14.5px">${d.scene}</p>
+      <div class="note danger" style="margin:12px 0 4px;font-size:13.5px">${d.anti}</div>`;
+  }
+  show(0);
+})();
+
+/* ---------- persistence slider ---------- */
+(function(){
+  const s=document.getElementById("tSlider"),tv=document.getElementById("tVal"),
+        lr=document.getElementById("lossRdb"),tlR=document.getElementById("tlRdb"),tlA=document.getElementById("tlAof");
+  const snapR=document.createElement("div");snapR.className="snap";snapR.style.left="4%";snapR.title="上次 RDB 快照";tlR.appendChild(snapR);
+  const wR=document.createElement("div");wR.className="w";tlR.appendChild(wR);
+  const wA=document.createElement("div");wA.className="w";tlA.appendChild(wA);
+  function upd(){
+    const t=+s.value;tv.textContent=t;
+    const pct=4+(t/300)*90;
+    wR.style.left="4%";wR.style.width=(pct-4)+"%";
+    lr.textContent=t+" 秒的全部写入";
+    wA.style.left=(pct-1.5)+"%";wA.style.width="1.5%";
+  }
+  s.addEventListener("input",upd);upd();
+})();
+
+/* ---------- problem cards ---------- */
+document.querySelectorAll(".prob").forEach(c=>{
+  c.addEventListener("click",e=>{
+    if(e.target.closest("a"))return;
+    c.classList.toggle("open");
+    c.querySelector(".hint").textContent=c.classList.contains("open")?"收起 ▴":"点击展开 ▾";
+  });
+});
+</script>
+</body>
+</html>

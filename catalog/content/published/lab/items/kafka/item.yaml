@@ -1,0 +1,45 @@
+schema_version: 2
+id: kafka
+hall: lab
+kind: github_project
+title: Apache Kafka
+summary: 分布式事件流平台，用追加日志、分区和消费组支撑高吞吐消息、日志与流处理链路。
+source:
+  type: github
+  url: https://github.com/apache/kafka
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/apache/kafka
+  category: infrastructure
+  tags:
+    - toolkit
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - Java
+    - Scala
+notes:
+  - id: kafka-explainer
+    title: 一文读懂 Kafka · 它不是队列，是一盘日志磁带
+    type: html
+    path: ./notes/kafka-explainer.html
+    summary: 从追加日志、topic、partition、consumer group 和保留策略理解 Kafka 的事件流模型。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/apache/kafka
+  - type: highlights
+    items:
+      - Distributed event streaming platform built around append-only logs.
+      - Uses topics, partitions, offsets, and consumer groups for scalable consumption.
+      - Useful when events need retention, replay, and multiple independent consumers.
+  - type: use-cases
+    items:
+      - Learning event streaming and log-based messaging.
+      - Comparing Kafka with task queues and message brokers.
+      - Designing high-throughput data pipelines and event-driven systems.

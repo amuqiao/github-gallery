@@ -42,6 +42,7 @@ catalog/content/{drafts,published,archived}/<hall>/items/<id>/item.yaml
   -> src/pages/index.astro
   -> src/pages/halls/github/index.astro
   -> src/pages/halls/models/index.astro
+  -> src/pages/halls/lab/index.astro
   -> src/pages/halls/[hall]/items/[id].astro
   -> src/pages/halls/[hall]/items/[id]/notes/[note].astro
   -> static HTML output for published only
@@ -53,6 +54,7 @@ catalog/content/{drafts,published,archived}/<hall>/collections/<id>/collection.y
   -> src/lib/catalog/details.ts
   -> src/pages/index.astro
   -> src/pages/halls/github/index.astro
+  -> src/pages/halls/lab/index.astro
   -> src/pages/halls/[hall]/collections/index.astro
   -> src/pages/halls/[hall]/collections/[id].astro
   -> static HTML output for published only
@@ -91,6 +93,7 @@ scripts/verify.sh release
 | `/` | published content, halls, site config |
 | `/halls/github/` | published `github_project` content and GitHub hall collections |
 | `/halls/models/` | published `ai_model` content |
+| `/halls/lab/` | published content and collections for temporary lab curation |
 | `/halls/music/` | planned hall config |
 | `/halls/movies/` | planned hall config |
 | `/halls/<hall>/items/<id>/` | published content item |

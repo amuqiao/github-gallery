@@ -1,0 +1,78 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import ContentCollectionCard from "@/components/ContentCollectionCard.astro";
+import ContentItemCard from "@/components/ContentItemCard.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import Button from "@/components/ui/Button.astro";
+import EmptyState from "@/components/ui/EmptyState.astro";
+import { getPublishedContentCollectionsByHall, getPublishedContentItemsByHall } from "@/lib/catalog/content";
+import { getHallById } from "@/lib/catalog/halls";
+import { getSiteConfig } from "@/lib/catalog/site";
+
+const [site, hall, items, collections] = await Promise.all([
+  getSiteConfig(),
+  getHallById("lab"),
+  getPublishedContentItemsByHall("lab"),
+  getPublishedContentCollectionsByHall("lab")
+]);
+---
+
+<BaseLayout title={`${hall.title} - Gallery Platform`} site={site} description={hall.summary}>
+  <article class="grid gap-6">
+    <Breadcrumbs
+      items={[
+        { label: "展馆入口", href: "/" },
+        { label: hall.title }
+      ]}
+    />
+    <PageHeader
+      eyebrow="Hall / Lab"
+      title={hall.title}
+      description={hall.summary}
+      stats={[
+        { label: "条目", value: items.length },
+        { label: "专题", value: collections.length },
+        { label: "状态", value: "已开放" }
+      ]}
+    >
+      <Fragment slot="actions">
+        <Button href="/" variant="outline">返回入口</Button>
+      </Fragment>
+    </PageHeader>
+
+    <section class="gallery-section" aria-labelledby="lab-collections-title">
+      <div class="editorial-section-head">
+        <span class="editorial-section-head__index">01</span>
+        <h2 class="editorial-section-head__title" id="lab-collections-title">馆内专题</h2>
+        <span class="editorial-section-head__hint">{collections.length} 个专题</span>
+      </div>
+      {
+        collections.length > 0 ? (
+          <div class="collection-grid__grid collection-grid__grid--standard">
+            {collections.map((collection) => <ContentCollectionCard collection={collection} />)}
+          </div>
+        ) : (
+          <EmptyState message="当前没有已发布专题。" />
+        )
+      }
+    </section>
+
+    <section class="gallery-section" aria-labelledby="lab-items-title">
+      <div class="editorial-section-head">
+        <span class="editorial-section-head__index">02</span>
+        <h2 class="editorial-section-head__title" id="lab-items-title">已发布条目</h2>
+        <span class="editorial-section-head__hint">{items.length} 个条目</span>
+      </div>
+      {
+        items.length > 0 ? (
+          <div class="project-collection__grid project-collection__grid--standard">
+            {items.map((item) => <ContentItemCard item={item} />)}
+          </div>
+        ) : (
+          <EmptyState message="当前没有已发布条目。" />
+        )
+      }
+    </section>
+  </article>
+</BaseLayout>
