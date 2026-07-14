@@ -1,0 +1,21 @@
+---
+import type { ContentNote } from "@/lib/catalog/content";
+
+interface Props {
+  note: ContentNote;
+}
+
+const { note } = Astro.props;
+const opensStandaloneDocument = note.display === "standalone";
+---
+
+<a
+  class="model-note-card"
+  href={note.route}
+  target={opensStandaloneDocument ? "_blank" : undefined}
+  rel={opensStandaloneDocument ? "noopener noreferrer" : undefined}
+>
+  <span>{note.type === "markdown" ? "Markdown" : "HTML"}</span>
+  <strong>{note.title}</strong>
+  <p>{note.summary}</p>
+</a>
