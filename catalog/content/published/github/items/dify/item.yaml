@@ -1,0 +1,49 @@
+schema_version: 2
+id: dify
+hall: github
+kind: github_project
+title: Dify
+summary: 开源 LLM 应用开发平台，用可视化工作流、RAG、Agent 和 API 发布连接模型应用落地链路。
+source:
+  type: github
+  url: https://github.com/langgenius/dify
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/langgenius/dify
+  category: ai
+  tags:
+    - machine-learning
+    - workflow
+    - webui
+    - toolkit
+  maintenance_status: unknown
+  languages:
+    - Python
+    - TypeScript
+notes:
+  - id: dify-explainer
+    title: 一文读懂 Dify · 开源 LLM 应用开发平台
+    type: html
+    path: ./notes/dify-explainer.html
+    summary: 从画布编排、RAG、Agent、工作流、API 发布和 Docker Compose 部署理解 Dify 的平台边界。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/langgenius/dify
+      - label: Documentation
+        url: https://docs.dify.ai
+  - type: highlights
+    items:
+      - 用可视化工作流构建 LLM 应用的开源平台。
+      - 串联提示词、RAG、Agent、工具调用、观测和 API 发布。
+      - 支持自托管部署，适合需要平台控制权的团队评估。
+  - type: use-cases
+    items:
+      - 把一次性 LLM Demo 推进到可运营的应用原型。
+      - 评估工作流、RAG 和 Agent 平台的能力边界。
+      - 理解 LLM 应用平台如何连接模型、数据、工具和 API。

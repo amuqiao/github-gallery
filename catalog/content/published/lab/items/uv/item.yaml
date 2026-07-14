@@ -1,0 +1,46 @@
+schema_version: 2
+id: uv
+hall: lab
+kind: github_project
+title: uv
+summary: Python 一体化包和项目管理工具，用高速解析、锁文件、虚拟环境和工具运行统一工程工作流。
+source:
+  type: github
+  url: https://github.com/astral-sh/uv
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/astral-sh/uv
+  category: developer-tools
+  tags:
+    - toolkit
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - Rust
+notes:
+  - id: uv-explainer
+    title: 一文读懂 uv · Python 的一体化包管理器
+    type: html
+    path: ./notes/uv-explainer.html
+    summary: 从 pyproject.toml、uv.lock、虚拟环境、全局缓存、uv run 和 uvx 理解 uv 的工程工作流。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/astral-sh/uv
+      - label: Documentation
+        url: https://docs.astral.sh/uv/
+  - type: highlights
+    items:
+      - 用 Rust 实现的高速 Python 包、项目和工具管理器。
+      - 以 pyproject.toml、uv.lock、虚拟环境和全局缓存组织工程。
+      - 统一 pip、venv、pip-tools、pipx 和 Python 版本管理等常见工作流。
+  - type: use-cases
+    items:
+      - 用可复现锁文件启动和维护 Python 项目。
+      - 通过 uv run 或 uvx 运行脚本、项目命令和 CLI 工具。
+      - 对比 uv、Poetry、pip、conda 等现代 Python 环境工作流。

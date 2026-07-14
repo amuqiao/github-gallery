@@ -1,0 +1,53 @@
+schema_version: 2
+id: kubernetes
+hall: lab
+kind: github_project
+title: Kubernetes
+summary: 容器编排系统，用声明式 API、控制循环、调度和服务发现管理多节点应用运行状态。
+source:
+  type: github
+  url: https://github.com/kubernetes/kubernetes
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/kubernetes/kubernetes
+  category: infrastructure
+  tags:
+    - toolkit
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - Go
+notes:
+  - id: kubernetes-control-loop
+    title: 一文读懂 Kubernetes · 声明式 API 与控制循环
+    type: html
+    path: ./notes/kubernetes-control-loop.html
+    summary: 从声明式 API、期望状态、实际状态、调谐循环、调度和 Service 理解 Kubernetes 的编排模型。
+    display: standalone
+    html_mode: document
+  - id: kubernetes-explainer
+    title: 一文读懂 Kubernetes · 期望状态与调和机器
+    type: html
+    path: ./notes/kubernetes-explainer.html
+    summary: 从期望状态、API Server、etcd、Scheduler、Controller、kubelet、Pod 和 Service 理解 K8s。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/kubernetes/kubernetes
+      - label: Documentation
+        url: https://kubernetes.io/docs/
+  - type: highlights
+    items:
+      - 用声明式 API 描述集群和应用的期望状态。
+      - 通过控制器持续把实际状态调谐回期望状态。
+      - 调度、Pod、Service 和工作负载构成核心编排模型。
+  - type: use-cases
+    items:
+      - 学习超出单机 Docker 工作流的容器编排模型。
+      - 理解调度、自愈、滚动发布等平台工程概念。
+      - 对比 Kubernetes、Docker Compose 和托管应用平台的边界。

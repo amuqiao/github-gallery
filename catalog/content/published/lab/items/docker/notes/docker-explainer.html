@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Docker：把「在我机器上能跑」变成「在哪都能跑」</title>
+<style>
+:root{
+  --ocean-950:#041826;
+  --ocean-900:#062033;
+  --ocean-800:#0A3049;
+  --ocean-700:#0F4463;
+  --paper:#EEF4F8;
+  --card:#FFFFFF;
+  --ink:#122B3E;
+  --muted:#5B7285;
+  --blue:#1D63ED;
+  --blue-soft:#E3ECFD;
+  --cyan:#22B8CF;
+  --orange:#F2762E;
+  --orange-soft:#FDEBDD;
+  --green:#2FA36B;
+  --green-soft:#E2F3EA;
+  --red:#D64545;
+  --red-soft:#FBE7E7;
+  --line:#D3E1EA;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Source Han Sans SC",system-ui,sans-serif;
+  --serif:"Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;
+  --radius:12px;
+  --shadow:0 2px 10px rgba(9,42,66,.08);
+  --maxw:980px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-height:1.75;font-size:16px}
+::selection{background:var(--cyan);color:#fff}
+
+/* ============ 通用 ============ */
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+section{padding:64px 0 20px}
+h2{font-family:var(--serif);font-size:30px;line-height:1.35;margin-bottom:6px;letter-spacing:.5px}
+h3{font-size:19px;margin:26px 0 10px}
+p{margin:10px 0}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:2.5px;color:var(--blue);text-transform:uppercase;margin-bottom:8px}
+.lede{color:var(--muted);font-size:16.5px;max-width:760px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px}
+code{font-family:var(--mono);font-size:.9em;background:#E4EDF3;padding:1px 6px;border-radius:5px;white-space:nowrap}
+strong{color:var(--ocean-800)}
+.note{font-size:14px;color:var(--muted);margin-top:8px}
+a{color:var(--blue)}
+
+/* 终端块 */
+.term{background:var(--ocean-950);border-radius:12px;padding:16px 18px;font-family:var(--mono);font-size:13.5px;line-height:1.85;color:#CBE3EF;overflow-x:auto;border:1px solid #12405C}
+.term .p{color:var(--cyan)}
+.term .c{color:#5E86A0}
+.term .g{color:#63D69A}
+.term .o{color:#F5A661}
+.term .w{color:#EDF4F8}
+.term-bar{display:flex;gap:6px;margin-bottom:10px}
+.term-bar i{width:10px;height:10px;border-radius:50%;background:#1D5A7E;display:block}
+.term-bar i:first-child{background:var(--red)}
+.term-bar i:nth-child(2){background:var(--orange)}
+.term-bar i:nth-child(3){background:var(--green)}
+
+/* 徽章 */
+.tag{display:inline-block;font-family:var(--mono);font-size:11.5px;padding:2px 10px;border-radius:99px;border:1px solid var(--line);background:#fff;color:var(--muted);letter-spacing:.5px}
+.tag.b{background:var(--blue-soft);border-color:#BCD2F9;color:var(--blue)}
+.tag.o{background:var(--orange-soft);border-color:#F6CBA6;color:#C25A17}
+.tag.g{background:var(--green-soft);border-color:#BBDFCC;color:var(--green)}
+
+/* ============ HERO ============ */
+.hero{background:linear-gradient(180deg,var(--ocean-950) 0%,var(--ocean-900) 55%,var(--ocean-800) 100%);color:#E8F2F8;padding:56px 0 0;position:relative;overflow:hidden}
+.hero .wrap{position:relative;z-index:2}
+.hero-eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:3px;color:var(--cyan);margin-bottom:14px}
+.hero h1{font-family:var(--serif);font-size:clamp(30px,5.2vw,48px);line-height:1.3;font-weight:700;max-width:720px}
+.hero h1 em{font-style:normal;color:var(--cyan);border-bottom:3px solid var(--orange)}
+.hero-sub{margin-top:16px;max-width:640px;color:#A9C4D4;font-size:16.5px}
+.hero-hint{font-family:var(--mono);font-size:12px;color:#6E93A9;margin-top:26px;letter-spacing:1px}
+.hero-hint b{color:var(--orange);font-weight:600}
+
+/* 鲸鱼 + 货柜（署名元素：可交互的分层货柜） */
+.dock{position:relative;margin:10px auto -6px;max-width:860px;padding:0 22px}
+.whale-svg{width:100%;height:auto;display:block}
+.crate{cursor:pointer;transition:transform .25s ease,filter .25s ease;transform-box:fill-box;transform-origin:center bottom}
+.crate:hover,.crate.on{filter:brightness(1.18)}
+.crate:hover{transform:translateY(-5px)}
+.crate:focus{outline:none}
+.crate:focus-visible rect{stroke:#fff;stroke-width:2}
+.crate-tip{background:var(--ocean-800);border:1px solid #1B5B80;color:#DCEDF6;border-radius:10px;padding:12px 16px;font-size:14px;max-width:860px;margin:0 auto;display:flex;gap:10px;align-items:baseline;min-height:52px}
+.crate-tip b{color:var(--cyan);font-family:var(--mono);font-size:12.5px;white-space:nowrap;letter-spacing:1px}
+.waves{display:block;width:100%;height:70px;margin-top:-8px}
+
+/* ============ 场景：在我机器上能跑 ============ */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:22px 0}
+.machine{border-radius:var(--radius);border:1px solid var(--line);background:#fff;overflow:hidden}
+.machine header{padding:10px 16px;font-family:var(--mono);font-size:12.5px;letter-spacing:1px;display:flex;justify-content:space-between;align-items:center}
+.machine.dev header{background:var(--green-soft);color:var(--green)}
+.machine.prod header{background:var(--red-soft);color:var(--red)}
+.machine ul{list-style:none;padding:14px 16px;font-size:14px}
+.machine li{padding:6px 4px;border-bottom:1px dashed var(--line);display:flex;justify-content:space-between;gap:8px}
+.machine li:last-child{border-bottom:0}
+.machine li span{font-family:var(--mono);font-size:12.5px}
+.ok{color:var(--green)} .bad{color:var(--red);font-weight:600}
+.verdict{text-align:center;font-size:14px;padding:10px;font-family:var(--mono)}
+.machine.dev .verdict{color:var(--green)} .machine.prod .verdict{color:var(--red)}
+
+/* 问题→方案 三格 */
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px}
+.trio .card{padding:18px}
+.trio h4{font-size:15.5px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.trio p{font-size:14px;color:var(--muted);margin:0}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+/* ============ 心智模型：镜像 vs 容器 ============ */
+.model{display:grid;grid-template-columns:1.1fr 1fr;gap:24px;align-items:start;margin-top:20px}
+.layers{display:flex;flex-direction:column-reverse;gap:6px}
+.layer{border-radius:9px;padding:11px 16px;font-family:var(--mono);font-size:13px;cursor:pointer;border:2px solid transparent;transition:transform .2s,border-color .2s;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.layer small{font-family:var(--sans);opacity:.85;font-size:12px}
+.layer:hover{transform:translateX(6px)}
+.layer.sel{border-color:var(--ink);transform:translateX(6px)}
+.layer.ro1{background:#CFE0F4}.layer.ro2{background:#BCD4F0}.layer.ro3{background:#A8C7EC}.layer.ro4{background:#93BAE8}
+.layer.rw{background:var(--orange);color:#fff}
+.layer .lock{font-size:11px;opacity:.7}
+.layer-info{min-height:170px}
+.layer-info h4{font-size:16px;margin-bottom:8px;font-family:var(--mono)}
+.layer-info p{font-size:14.5px;color:var(--ink)}
+.layer-info .note{margin-top:10px}
+.share-demo{margin-top:18px;font-size:14px;background:var(--blue-soft);border:1px solid #BCD2F9;border-radius:10px;padding:14px 16px}
+
+/* ============ 原理 tabs ============ */
+.tabs{display:flex;gap:8px;margin:20px 0 0;flex-wrap:wrap}
+.tab-btn{font-family:var(--mono);font-size:13px;padding:9px 18px;border-radius:99px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;transition:.2s}
+.tab-btn:hover{border-color:var(--blue);color:var(--blue)}
+.tab-btn.on{background:var(--ocean-900);color:#fff;border-color:var(--ocean-900)}
+.tab-pane{display:none;margin-top:16px}
+.tab-pane.on{display:block;animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* VM vs Container 对比图 */
+.vs-toggle{display:inline-flex;border:1px solid var(--line);border-radius:99px;overflow:hidden;margin:18px 0 14px;background:#fff}
+.vs-toggle button{border:0;background:none;padding:10px 22px;font-family:var(--mono);font-size:13.5px;cursor:pointer;color:var(--muted)}
+.vs-toggle button.on{background:var(--blue);color:#fff}
+.stack-fig{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.stack-col{display:flex;flex-direction:column-reverse;gap:5px}
+.brick{border-radius:8px;text-align:center;padding:10px 8px;font-size:13.5px;font-family:var(--mono);border:1px solid rgba(0,0,0,.06)}
+.brick.hw{background:var(--ocean-900);color:#BFD9E8}
+.brick.os{background:#2A6A93;color:#fff}
+.brick.hv{background:#7A5FC7;color:#fff}
+.brick.guest{background:#A18BE0;color:#fff}
+.brick.engine{background:var(--cyan);color:#063A44}
+.brick.app{background:var(--orange);color:#fff}
+.brick.libs{background:#F8B57E;color:#6B3A10}
+.brick.dup{position:relative}
+.brick.dup::after{content:"重复!";position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10.5px;background:var(--red);color:#fff;padding:1px 7px;border-radius:99px}
+.stack-cap{text-align:center;font-size:13.5px;color:var(--muted);margin-top:8px;font-family:var(--mono)}
+.vs-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+.vs-facts .card{padding:14px 16px;font-size:13.5px}
+.vs-facts b{display:block;font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.vs-facts span{font-size:16px;font-weight:600}
+
+/* ============ docker run 步骤 ============ */
+.runner{margin-top:22px}
+.run-stage{background:var(--ocean-950);border-radius:14px;padding:24px;border:1px solid #12405C;position:relative;min-height:300px}
+.run-map{display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr;gap:12px;align-items:stretch}
+.node{border:1.5px solid #1B5B80;border-radius:10px;padding:14px 12px;text-align:center;color:#7FA6BC;font-family:var(--mono);font-size:13px;background:#08283D;transition:.3s;min-height:86px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.node small{font-size:11px;font-family:var(--sans);opacity:.8}
+.node.lit{border-color:var(--cyan);color:#E5F5FA;background:#0C3A55;box-shadow:0 0 18px rgba(34,184,207,.25)}
+.node.hot{border-color:var(--orange);color:#FFE9D6;background:#4A2A10;box-shadow:0 0 18px rgba(242,118,46,.3)}
+.run-arrow{display:flex;align-items:center;justify-content:center;color:#2E6787;font-family:var(--mono);font-size:12px;transition:.3s}
+.run-arrow.lit{color:var(--cyan)}
+.run-cmdline{font-family:var(--mono);font-size:14px;color:#CBE3EF;background:#03141F;border-radius:8px;padding:10px 14px;margin-bottom:18px;overflow-x:auto;white-space:nowrap}
+.run-cmdline .hl{color:var(--orange)}
+.run-desc{margin-top:18px;background:#0A3049;border-radius:10px;padding:14px 18px;color:#D9EAF3;font-size:14.5px;min-height:88px;border-left:3px solid var(--cyan)}
+.run-desc b{color:var(--cyan)}
+.run-ctrl{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+.btn{font-family:var(--mono);font-size:13.5px;padding:10px 22px;border-radius:99px;border:1px solid var(--line);background:#fff;cursor:pointer;transition:.2s;color:var(--ink)}
+.btn:hover{border-color:var(--blue);color:var(--blue)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.primary:hover{background:#1450C8;color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.run-dots{display:flex;gap:7px;margin-left:auto}
+.run-dots i{width:8px;height:8px;border-radius:50%;background:var(--line);transition:.2s}
+.run-dots i.on{background:var(--blue);transform:scale(1.25)}
+
+/* ============ Dockerfile ============ */
+.dfgrid{display:grid;grid-template-columns:1.25fr 1fr;gap:22px;margin-top:20px;align-items:start}
+.dfile{background:var(--ocean-950);border-radius:12px;border:1px solid #12405C;overflow:hidden}
+.dfile header{padding:9px 16px;font-family:var(--mono);font-size:12px;color:#7FA6BC;background:#03141F;letter-spacing:1px}
+.dline{display:flex;gap:14px;padding:7px 16px;font-family:var(--mono);font-size:13.5px;cursor:pointer;border-left:3px solid transparent;transition:.15s;color:#CBE3EF;white-space:nowrap;overflow-x:auto}
+.dline:hover,.dline.sel{background:#0C3A55;border-left-color:var(--cyan)}
+.dline .no{color:#3F708E;width:16px;flex:none;text-align:right;user-select:none}
+.dline .kw{color:var(--orange);font-weight:600}
+.dline .str{color:#63D69A}
+.dline .cm{color:#4E7A94}
+.dline-badge{margin-left:auto;font-size:10px;padding:1px 8px;border-radius:99px;flex:none;align-self:center}
+.dline-badge.layer{background:rgba(34,184,207,.18);color:var(--cyan)}
+.dline-badge.meta{background:rgba(255,255,255,.08);color:#7FA6BC}
+.dexp{min-height:230px}
+.dexp h4{font-family:var(--mono);font-size:15px;margin-bottom:8px;color:var(--blue)}
+.dexp p{font-size:14.5px}
+.dexp .why{margin-top:12px;background:var(--orange-soft);border-radius:8px;padding:10px 14px;font-size:13.5px;color:#8A4A15}
+
+/* ============ 生命周期 ============ */
+.lifecycle{margin-top:20px}
+.lc-svg{width:100%;height:auto}
+.lc-state{cursor:pointer}
+.lc-state rect{transition:.2s}
+.lc-state:hover rect{filter:brightness(1.06)}
+.lc-state.sel rect{stroke:var(--ink);stroke-width:2.5}
+.lc-info{margin-top:6px;min-height:74px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:13px 18px;font-size:14.5px}
+.lc-info b{font-family:var(--mono);color:var(--blue)}
+
+/* ============ 数据与网络 ============ */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:20px}
+.mini-fig{margin:14px 0;background:var(--paper);border-radius:10px;padding:14px;font-family:var(--mono);font-size:12.5px;text-align:center;color:var(--muted)}
+.mini-fig .box{display:inline-block;padding:8px 14px;border-radius:8px;margin:4px}
+.mini-fig .host{background:var(--ocean-900);color:#BFD9E8}
+.mini-fig .ctn{background:var(--cyan);color:#063A44}
+.mini-fig .vol{background:var(--orange);color:#fff}
+.mini-fig .arr{color:var(--blue);font-weight:700;margin:0 4px}
+
+/* ============ 误区翻牌 ============ */
+.myths{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px}
+.myth{perspective:1100px;min-height:200px;cursor:pointer}
+.myth-inner{position:relative;width:100%;height:100%;min-height:200px;transition:transform .5s;transform-style:preserve-3d}
+.myth.flip .myth-inner{transform:rotateY(180deg)}
+.myth-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:var(--radius);padding:18px 20px;display:flex;flex-direction:column;gap:8px}
+.myth-front{background:#fff;border:1px solid var(--line)}
+.myth-front .q{font-size:15.5px;font-weight:600}
+.myth-front .flip-hint{margin-top:auto;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.myth-back{background:var(--ocean-900);color:#DFEEF6;transform:rotateY(180deg);font-size:13.5px;line-height:1.65;overflow:auto}
+.myth-back b{color:var(--cyan)}
+.badge-myth{align-self:flex-start;font-family:var(--mono);font-size:11px;background:var(--red-soft);color:var(--red);padding:2px 10px;border-radius:99px}
+
+/* 适用场景 */
+.fit{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:20px}
+.fit .card{padding:18px 20px}
+.fit h4{font-size:15.5px;margin-bottom:10px;font-family:var(--mono)}
+.fit ul{list-style:none}
+.fit li{padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px;display:flex;gap:9px}
+.fit li:last-child{border:0}
+.fit li::before{font-weight:700;flex:none}
+.fit .yes li::before{content:"✓";color:var(--green)}
+.fit .no li::before{content:"✕";color:var(--red)}
+
+/* 三兄弟 scope */
+.scope{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+.scope .card{padding:16px 18px;font-size:13.5px}
+.scope b{font-family:var(--mono);display:block;margin-bottom:4px;font-size:14px}
+.scope .muted{color:var(--muted)}
+
+/* ============ 动手 ============ */
+.hands{counter-reset:step;margin-top:20px;display:flex;flex-direction:column;gap:14px}
+.hstep{display:grid;grid-template-columns:44px 1fr;gap:14px}
+.hstep::before{counter-increment:step;content:counter(step);width:36px;height:36px;border-radius:50%;background:var(--blue);color:#fff;font-family:var(--mono);display:flex;align-items:center;justify-content:center;font-size:15px;margin-top:4px}
+.hstep .card{padding:16px 18px}
+.hstep h4{font-size:15px;margin-bottom:6px}
+.hstep p{font-size:14px;color:var(--muted);margin:8px 0 0}
+
+/* ============ 收尾 ============ */
+.outro{background:var(--ocean-950);color:#D6E8F2;margin-top:70px;padding:56px 0 44px}
+.outro h2{color:#fff}
+.outro .kicker{color:var(--cyan)}
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}
+.recap div{background:#0A3049;border:1px solid #14496A;border-radius:10px;padding:14px 18px;font-size:14px}
+.recap b{color:var(--cyan);font-family:var(--mono);font-size:13px;display:block;margin-bottom:3px}
+.footer-note{margin-top:34px;font-family:var(--mono);font-size:12px;color:#557E97;letter-spacing:1px;text-align:center}
+
+/* ============ 响应式 ============ */
+@media (max-width:820px){
+  .split,.model,.dfgrid,.duo,.myths,.fit,.recap,.stack-fig{grid-template-columns:1fr}
+  .trio,.vs-facts,.scope{grid-template-columns:1fr}
+  .run-map{grid-template-columns:1fr}
+  .run-arrow{transform:rotate(90deg);min-height:26px}
+  h2{font-size:25px}
+  section{padding:48px 0 14px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-eyebrow">一文读懂 · DOCKER</div>
+    <h1>把「在我机器上能跑」<br>变成<em>「在哪都能跑」</em></h1>
+    <p class="hero-sub">Docker 做的事其实只有一件：把你的程序<strong style="color:#fff">连同它依赖的一切</strong>打包成一个标准「集装箱」，然后在任何装了 Docker 的机器上，以完全相同的方式运行起来。</p>
+    <p class="hero-hint">▼ 鲸鱼背上的每个货柜都可以<b>点击 / 悬停</b>，它们就是镜像的「层」</p>
+  </div>
+  <div class="dock">
+    <svg class="whale-svg" viewBox="0 0 860 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Docker 鲸鱼驮着分层货柜">
+      <!-- 货柜（层） -->
+      <g id="crates">
+        <g class="crate" data-crate="0" tabindex="0" role="button" aria-label="基础镜像层">
+          <rect x="300" y="150" width="260" height="34" rx="5" fill="#2A6A93"/>
+          <line x1="365" y1="150" x2="365" y2="184" stroke="#0A3049" stroke-width="2"/>
+          <line x1="430" y1="150" x2="430" y2="184" stroke="#0A3049" stroke-width="2"/>
+          <line x1="495" y1="150" x2="495" y2="184" stroke="#0A3049" stroke-width="2"/>
+          <text x="430" y="172" text-anchor="middle" fill="#CFE4F0" font-size="13" font-family="ui-monospace,monospace">OS 基础层 (alpine)</text>
+        </g>
+        <g class="crate" data-crate="1" tabindex="0" role="button" aria-label="运行时层">
+          <rect x="315" y="112" width="230" height="34" rx="5" fill="#22B8CF"/>
+          <line x1="372" y1="112" x2="372" y2="146" stroke="#0A3049" stroke-width="2"/>
+          <line x1="430" y1="112" x2="430" y2="146" stroke="#0A3049" stroke-width="2"/>
+          <line x1="488" y1="112" x2="488" y2="146" stroke="#0A3049" stroke-width="2"/>
+          <text x="430" y="134" text-anchor="middle" fill="#043540" font-size="13" font-family="ui-monospace,monospace">运行时 (node)</text>
+        </g>
+        <g class="crate" data-crate="2" tabindex="0" role="button" aria-label="依赖层">
+          <rect x="330" y="74" width="200" height="34" rx="5" fill="#5FC7D8"/>
+          <line x1="380" y1="74" x2="380" y2="108" stroke="#0A3049" stroke-width="2"/>
+          <line x1="430" y1="74" x2="430" y2="108" stroke="#0A3049" stroke-width="2"/>
+          <line x1="480" y1="74" x2="480" y2="108" stroke="#0A3049" stroke-width="2"/>
+          <text x="430" y="96" text-anchor="middle" fill="#043540" font-size="13" font-family="ui-monospace,monospace">依赖 (node_modules)</text>
+        </g>
+        <g class="crate" data-crate="3" tabindex="0" role="button" aria-label="应用代码层">
+          <rect x="345" y="36" width="170" height="34" rx="5" fill="#F2762E"/>
+          <line x1="388" y1="36" x2="388" y2="70" stroke="#7A3208" stroke-width="2"/>
+          <line x1="430" y1="36" x2="430" y2="70" stroke="#7A3208" stroke-width="2"/>
+          <line x1="472" y1="36" x2="472" y2="70" stroke="#7A3208" stroke-width="2"/>
+          <text x="430" y="58" text-anchor="middle" fill="#fff" font-size="13" font-family="ui-monospace,monospace">你的代码 (app)</text>
+        </g>
+      </g>
+      <!-- 鲸鱼 -->
+      <g>
+        <!-- 身体 -->
+        <path d="M 205 200 Q 200 186 218 186 L 640 186 Q 668 186 660 212 Q 646 258 590 258 L 300 258 Q 240 258 218 224 Q 208 210 205 200 Z" fill="#1D63ED"/>
+        <!-- 尾巴 -->
+        <path d="M 660 205 Q 700 190 712 165 Q 722 186 712 206 Q 726 210 742 204 Q 730 232 700 232 Q 676 232 662 220 Z" fill="#1D63ED"/>
+        <!-- 肚皮线 -->
+        <path d="M 250 246 Q 420 268 580 246" stroke="#4C85F2" stroke-width="4" fill="none" opacity=".55"/>
+        <!-- 眼睛 -->
+        <circle cx="248" cy="207" r="5.5" fill="#062033"/>
+        <!-- 喷水 -->
+        <g opacity=".9">
+          <path d="M 226 182 Q 220 160 230 146" stroke="#5FC7D8" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <circle cx="233" cy="138" r="4" fill="#5FC7D8"/>
+          <circle cx="222" cy="150" r="2.6" fill="#5FC7D8" opacity=".7"/>
+        </g>
+      </g>
+      <!-- 水面 -->
+      <path d="M 40 262 Q 90 252 140 262 T 240 262 T 340 262 T 440 262 T 540 262 T 640 262 T 740 262 T 840 262 L 840 330 L 40 330 Z" fill="#0A3049" opacity=".85"/>
+      <path d="M 0 276 Q 60 266 120 276 T 240 276 T 360 276 T 480 276 T 600 276 T 720 276 T 860 276 L 860 330 L 0 330 Z" fill="#062033"/>
+    </svg>
+    <div class="crate-tip" id="crateTip">
+      <b>提示</b><span>点一个货柜看看：一个 Docker 镜像不是一整块，而是像集装箱一样，一层一层码起来的。</span>
+    </div>
+  </div>
+  <svg class="waves" viewBox="0 0 1440 70" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><path d="M0,40 C240,70 480,10 720,40 C960,70 1200,10 1440,40 L1440,70 L0,70 Z" fill="#EEF4F8"/></svg>
+</header>
+
+<!-- ================= 1. 它为什么出现 ================= -->
+<section id="why">
+  <div class="wrap">
+    <div class="kicker">01 · WHY</div>
+    <h2>它为什么出现：一次经典的部署事故</h2>
+    <p class="lede">你在自己电脑上写好了一个服务，测试全绿。部署到服务器上——启动失败。你没改一行代码，变的是「环境」。</p>
+
+    <div class="split">
+      <div class="machine dev">
+        <header><span>💻 你的开发机</span><span>macOS</span></header>
+        <ul>
+          <li>Python <span class="ok">3.12</span></li>
+          <li>libssl <span class="ok">3.x</span></li>
+          <li>requests <span class="ok">2.31（虚拟环境里）</span></li>
+          <li>环境变量 <span class="ok">TZ=Asia/Shanghai</span></li>
+        </ul>
+        <div class="verdict">✓ 测试全部通过</div>
+      </div>
+      <div class="machine prod">
+        <header><span>🖥 生产服务器</span><span>CentOS 7</span></header>
+        <ul>
+          <li>Python <span class="bad">3.6（系统自带）</span></li>
+          <li>libssl <span class="bad">1.0（太旧）</span></li>
+          <li>requests <span class="bad">另一个项目装的 2.18</span></li>
+          <li>环境变量 <span class="bad">没配</span></li>
+        </ul>
+        <div class="verdict">✕ ImportError / SSL 握手失败</div>
+      </div>
+    </div>
+
+    <p>问题的本质：<strong>程序从来不是独立运行的</strong>，它依赖解释器版本、系统库、配置文件、环境变量……这些东西在每台机器上都可能不一样。传统做法是写一份部署文档、一台台机器手工对齐——慢、易错、还会互相污染（A 项目要 libssl 1.0，B 项目要 3.x，装在同一台机器上就打架，这就是「依赖地狱」）。</p>
+
+    <div class="trio">
+      <div class="card">
+        <h4><span class="dot" style="background:var(--red)"></span>问题</h4>
+        <p>「程序」和「它运行所需的环境」是分离的，环境靠人肉复现，必然漂移。</p>
+      </div>
+      <div class="card">
+        <h4><span class="dot" style="background:var(--blue)"></span>Docker 的答案</h4>
+        <p>把程序 + 依赖 + 配置整体打包成<strong>镜像</strong>，运行时用<strong>容器</strong>把它和宿主机隔离开。环境跟着程序走。</p>
+      </div>
+      <div class="card">
+        <h4><span class="dot" style="background:var(--orange)"></span>边界</h4>
+        <p>容器共享宿主机的<strong>内核</strong>——它隔离的是文件、进程、网络的「视图」，不是一台完整的虚拟电脑。这是理解后面一切的钥匙。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2. 心智模型 ================= -->
+<section id="model">
+  <div class="wrap">
+    <div class="kicker">02 · MENTAL MODEL</div>
+    <h2>两个词就够：镜像 是模板，容器 是实例</h2>
+    <p class="lede">如果你写过面向对象的代码，这个类比一步到位：<strong>镜像（image）是类，容器（container）是对象</strong>。一个镜像可以 <code>run</code> 出任意多个互不干扰的容器。</p>
+
+    <div class="model">
+      <div>
+        <h3 style="margin-top:0">镜像是一摞只读的「层」<span class="tag b" style="margin-left:8px">点击每一层</span></h3>
+        <div class="layers" id="layerStack">
+          <div class="layer ro1" data-l="0" tabindex="0">OS 基础层 <small>alpine 的文件系统</small><span class="lock">🔒 只读</span></div>
+          <div class="layer ro2" data-l="1" tabindex="0">运行时层 <small>node 20</small><span class="lock">🔒 只读</span></div>
+          <div class="layer ro3" data-l="2" tabindex="0">依赖层 <small>npm ci 的产物</small><span class="lock">🔒 只读</span></div>
+          <div class="layer ro4" data-l="3" tabindex="0">代码层 <small>COPY 进来的源码</small><span class="lock">🔒 只读</span></div>
+          <div class="layer rw" data-l="4" tabindex="0">容器可写层 <small>运行时才有</small><span class="lock">✏️ 可写</span></div>
+        </div>
+      </div>
+      <div class="card layer-info" id="layerInfo">
+        <h4>↖ 点左边任意一层</h4>
+        <p>镜像 = 下面四层只读层叠加后的结果。启动容器时，Docker 在最上面「盖」一层薄薄的可写层——容器里所有的修改都只发生在这一层。</p>
+        <p class="note">所以：删掉容器 = 扔掉可写层，镜像毫发无损；同一镜像跑 100 个容器，只读层只存一份。</p>
+      </div>
+    </div>
+
+    <div class="share-demo">
+      💡 <strong>分层带来两个实惠：</strong>① <strong>省空间</strong>——10 个基于 <code>node:20-alpine</code> 的镜像共享同一份基础层，不会存 10 遍；② <strong>省时间</strong>——重新构建 / 拉取时，没变的层直接用缓存，只传输变了的层。
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3. 底层机制 ================= -->
+<section id="how">
+  <div class="wrap">
+    <div class="kicker">03 · HOW IT WORKS</div>
+    <h2>拆开看：容器其实是「戴着 VR 眼镜的普通进程」</h2>
+    <p class="lede">Docker 没有发明黑魔法。容器就是宿主机上的一个<strong>普通 Linux 进程</strong>，只是内核用三样现成的技术骗了它，让它「以为」自己独占一台机器。</p>
+
+    <div class="tabs" id="mechTabs">
+      <button class="tab-btn on" data-t="0">Namespaces · 看不见别人</button>
+      <button class="tab-btn" data-t="1">Cgroups · 用不了太多</button>
+      <button class="tab-btn" data-t="2">UnionFS · 层叠出文件系统</button>
+    </div>
+    <div class="tab-pane on card" data-p="0">
+      <p><strong>命名空间（namespaces）负责「隔离视野」。</strong>内核给容器进程发了一副 VR 眼镜：<code>pid</code> 命名空间让它只能看到自己的进程（自己就是 1 号进程）；<code>net</code> 命名空间给它独立的网卡和 IP；<code>mnt</code> 命名空间给它独立的文件系统视图；还有主机名、用户、进程间通信等，各管一摊。</p>
+      <p class="note">验证：在容器里执行 <code>ps aux</code>，只能看到寥寥几个进程；而在宿主机上执行 <code>ps aux</code>，能直接看到容器里的进程——因为它本来就是宿主机的进程之一。</p>
+    </div>
+    <div class="tab-pane card" data-p="1">
+      <p><strong>控制组（cgroups）负责「限制用量」。</strong>光隔离视野还不够——一个失控的容器可能吃光整机的 CPU 和内存。cgroups 给每个容器划定资源配额：<code>docker run --memory=512m --cpus=1.5</code> 就是在设置 cgroup，超过内存上限的容器会被内核直接杀掉（OOM Kill）。</p>
+      <p class="note">一句话分工：namespaces 管「能看见什么」，cgroups 管「能用多少」。</p>
+    </div>
+    <div class="tab-pane card" data-p="2">
+      <p><strong>联合文件系统（UnionFS，如 overlay2）负责「把层叠成一个整体」。</strong>上一节说的「层」如何变成容器里那个看起来完整的文件系统？UnionFS 把多个只读层 + 一个可写层「叠」在一起，向上呈现为单一目录。读文件时从上往下找，谁在上层用谁的；写文件时把原文件复制到可写层再改（copy-on-write），下面的只读层永远不动。</p>
+      <p class="note">这解释了为什么容器里 <code>rm -rf</code> 也伤不到镜像，以及为什么删容器后改动会消失。</p>
+    </div>
+
+    <h3>和虚拟机到底差在哪？</h3>
+    <div class="vs-toggle" role="tablist">
+      <button class="on" id="vsCt">容器方案</button><button id="vsVm">虚拟机方案</button>
+    </div>
+    <div class="card">
+      <div class="stack-fig">
+        <div>
+          <div class="stack-col" id="stackA"></div>
+          <div class="stack-cap" id="capA"></div>
+        </div>
+        <div>
+          <div class="stack-col" id="stackB"></div>
+          <div class="stack-cap" id="capB"></div>
+        </div>
+      </div>
+      <div class="vs-facts" id="vsFacts"></div>
+    </div>
+    <p class="note">关键差别：虚拟机为每个实例虚拟出<strong>整套硬件 + 完整客户机操作系统</strong>，隔离最彻底但笨重；容器<strong>共享宿主机内核</strong>，只隔离用户态，所以秒级启动、以 MB 计——代价是隔离强度更弱，且 Linux 容器只能跑在 Linux 内核上（Mac/Windows 上的 Docker Desktop 其实是先起了一个 Linux 虚拟机再在里面跑容器）。</p>
+  </div>
+</section>
+
+<!-- ================= 4. docker run 全过程 ================= -->
+<section id="run">
+  <div class="wrap">
+    <div class="kicker">04 · WHAT HAPPENS</div>
+    <h2>按下回车之后：<span style="font-family:var(--mono);font-size:.8em">docker run</span> 的 5 步</h2>
+    <p class="lede">这是你会敲的第一条命令。点「下一步」，看它在幕后经过了哪些角色。</p>
+
+    <div class="runner">
+      <div class="run-stage">
+        <div class="run-cmdline">$ docker run <span class="hl">-d</span> <span class="hl">-p 8080:80</span> nginx</div>
+        <div class="run-map">
+          <div class="node" id="nCli">docker CLI<small>你敲命令的地方</small></div>
+          <div class="run-arrow" id="a1">▶</div>
+          <div class="node" id="nDaemon">dockerd 守护进程<small>真正干活的后台服务</small></div>
+          <div class="run-arrow" id="a2">▶</div>
+          <div class="node" id="nReg">Registry (Docker Hub)<small>镜像仓库，像 npm / 应用商店</small></div>
+          <div class="node" id="nImg">本地镜像 nginx<small>只读的层</small></div>
+          <div class="run-arrow" id="a3">▶</div>
+          <div class="node" id="nCtn">容器<small>镜像 + 可写层 + 隔离的进程</small></div>
+          <div class="run-arrow" id="a4">▶</div>
+          <div class="node" id="nPort">端口映射 8080→80<small>外界流量的入口</small></div>
+        </div>
+        <div class="run-desc" id="runDesc"></div>
+        <div class="run-ctrl">
+          <button class="btn" id="runPrev">← 上一步</button>
+          <button class="btn primary" id="runNext">下一步 →</button>
+          <div class="run-dots" id="runDots"></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">记住分工：<strong>CLI 只是遥控器</strong>，dockerd 才是引擎；镜像不在本地就去 Registry 拉；容器 = 镜像之上盖一层可写层，再套上 namespace / cgroup 启动进程。</p>
+  </div>
+</section>
+
+<!-- ================= 5. Dockerfile ================= -->
+<section id="dockerfile">
+  <div class="wrap">
+    <div class="kicker">05 · BUILD</div>
+    <h2>镜像从哪来：Dockerfile，环境的「源代码」</h2>
+    <p class="lede">镜像不是手工捏的，而是由一份叫 <code>Dockerfile</code> 的脚本描述、用 <code>docker build</code> 构建出来的。<strong>环境从此变成可版本控制、可评审、可复现的代码。</strong>悬停 / 点击每一行看解释。</p>
+
+    <div class="dfgrid">
+      <div class="dfile">
+        <header>Dockerfile · 一个最小的 Node 服务</header>
+        <div class="dline" data-d="0"><span class="no">1</span><span><span class="kw">FROM</span> node:20-alpine</span><span class="dline-badge layer">基础层</span></div>
+        <div class="dline" data-d="1"><span class="no">2</span><span><span class="kw">WORKDIR</span> /app</span><span class="dline-badge meta">元数据</span></div>
+        <div class="dline" data-d="2"><span class="no">3</span><span><span class="kw">COPY</span> package*.json ./</span><span class="dline-badge layer">新的层</span></div>
+        <div class="dline" data-d="3"><span class="no">4</span><span><span class="kw">RUN</span> npm ci --omit=dev</span><span class="dline-badge layer">新的层</span></div>
+        <div class="dline" data-d="4"><span class="no">5</span><span><span class="kw">COPY</span> . .</span><span class="dline-badge layer">新的层</span></div>
+        <div class="dline" data-d="5"><span class="no">6</span><span><span class="kw">EXPOSE</span> 3000</span><span class="dline-badge meta">元数据</span></div>
+        <div class="dline" data-d="6"><span class="no">7</span><span><span class="kw">CMD</span> [<span class="str">"node"</span>, <span class="str">"server.js"</span>]</span><span class="dline-badge meta">元数据</span></div>
+      </div>
+      <div class="card dexp" id="dexp">
+        <h4>← 点左边任意一行</h4>
+        <p>每条 <code>FROM</code> / <code>COPY</code> / <code>RUN</code> 都会生成一个新的只读层；<code>WORKDIR</code> / <code>EXPOSE</code> / <code>CMD</code> 只是记录元数据，不产生层。</p>
+        <div class="why">🎯 想一想：为什么第 3~4 行不直接写成 <code>COPY . .</code> 然后再 <code>npm ci</code>？点第 3 行找答案。</div>
+      </div>
+    </div>
+
+    <h3>构建 → 推送 → 运行：完整闭环</h3>
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i></div>
+      <div><span class="p">$</span> docker build -t myapp:1.0 .  <span class="c"># 按 Dockerfile 逐行构建，每层都有缓存</span></div>
+      <div><span class="p">$</span> docker push registry.example.com/myapp:1.0  <span class="c"># 推到镜像仓库</span></div>
+      <div><span class="p">$</span> docker run -d -p 3000:3000 registry.example.com/myapp:1.0  <span class="c"># 任何机器，一行启动</span></div>
+    </div>
+    <p class="note">这就是 Docker 口号 <strong>Build once, run anywhere</strong> 的落点：交付物从「代码 + 部署文档」变成了「一个自带环境的镜像」。</p>
+  </div>
+</section>
+
+<!-- ================= 6. 生命周期 ================= -->
+<section id="lifecycle">
+  <div class="wrap">
+    <div class="kicker">06 · LIFECYCLE</div>
+    <h2>容器的一生：一张状态图管住所有常用命令</h2>
+    <p class="lede">与其背命令表，不如记住状态图——每条命令都只是推着容器换一个状态。点击状态看对应的命令。</p>
+
+    <div class="card lifecycle">
+      <svg class="lc-svg" viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#5B7285"/>
+          </marker>
+        </defs>
+        <!-- 边 -->
+        <g stroke="#8FA9BA" stroke-width="1.8" fill="none" marker-end="url(#arr)">
+          <line x1="150" y1="105" x2="260" y2="105"/>
+          <line x1="524" y1="95" x2="580" y2="60"/>
+          <line x1="582" y1="74" x2="528" y2="110"/>
+          <line x1="475" y1="136" x2="475" y2="176"/>
+          <line x1="443" y1="178" x2="443" y2="138" stroke-dasharray="5 4" stroke="#2FA36B"/>
+          <line x1="524" y1="203" x2="618" y2="203"/>
+        </g>
+        <g font-family="ui-monospace,monospace" font-size="12" fill="#5B7285">
+          <text x="168" y="96">create</text>
+          <text x="574" y="48" text-anchor="end">pause</text>
+          <text x="596" y="100">unpause</text>
+          <text x="484" y="162">stop / kill</text>
+          <text x="434" y="162" text-anchor="end" fill="#2FA36B">start</text>
+          <text x="556" y="194">rm</text>
+        </g>
+        <!-- 状态节点 -->
+        <g class="lc-state" data-s="0" tabindex="0"><rect x="30" y="80" width="120" height="50" rx="10" fill="#E4EDF3" stroke="#B9CCD8"/><text x="90" y="110" text-anchor="middle" font-size="14" font-family="ui-monospace,monospace" fill="#122B3E">（镜像）</text></g>
+        <g class="lc-state" data-s="1" tabindex="0"><rect x="262" y="80" width="130" height="50" rx="10" fill="#E3ECFD" stroke="#8FB2F5"/><text x="327" y="110" text-anchor="middle" font-size="14" font-family="ui-monospace,monospace" fill="#1D63ED">Created</text></g>
+        <g class="lc-state" data-s="2" tabindex="0"><rect x="394" y="80" width="130" height="56" rx="10" fill="#2FA36B" stroke="#238457"/><text x="459" y="106" text-anchor="middle" font-size="14" font-family="ui-monospace,monospace" fill="#fff">Running</text><text x="459" y="124" text-anchor="middle" font-size="10.5" fill="#D7F0E2">进程活着</text></g>
+        <g class="lc-state" data-s="3" tabindex="0"><rect x="582" y="24" width="130" height="50" rx="10" fill="#FDEBDD" stroke="#F0B583"/><text x="647" y="54" text-anchor="middle" font-size="14" font-family="ui-monospace,monospace" fill="#C25A17">Paused</text></g>
+        <g class="lc-state" data-s="4" tabindex="0"><rect x="394" y="178" width="130" height="50" rx="10" fill="#EAEFF3" stroke="#B9CCD8"/><text x="459" y="208" text-anchor="middle" font-size="14" font-family="ui-monospace,monospace" fill="#42586B">Exited</text></g>
+        <g class="lc-state" data-s="5" tabindex="0"><rect x="620" y="181" width="100" height="44" rx="10" fill="#FBE7E7" stroke="#E4A3A3"/><text x="670" y="208" text-anchor="middle" font-size="14" font-family="ui-monospace,monospace" fill="#D64545">删除</text></g>
+        <!-- run 快捷 -->
+        <path d="M 90 80 Q 200 6 440 74" stroke="#1D63ED" stroke-width="2" fill="none" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+        <text x="150" y="28" font-family="ui-monospace,monospace" font-size="12.5" fill="#1D63ED">docker run = create + start</text>
+      </svg>
+      <div class="lc-info" id="lcInfo">👆 点上面的状态节点。先记一条主干：<b>docker run</b> 直接从镜像创建并启动容器；<b>docker stop</b> 让它进入 Exited；<b>docker start</b> 能把它再次拉起；<b>docker rm</b> 彻底删除（可写层随之消失）。</div>
+    </div>
+
+    <h3>日常高频命令（对着状态图看）</h3>
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i></div>
+      <div><span class="p">$</span> docker ps <span class="o">-a</span>            <span class="c"># 列出容器（-a 包含已退出的）</span></div>
+      <div><span class="p">$</span> docker logs <span class="o">-f</span> web       <span class="c"># 看容器日志（-f 持续跟随）</span></div>
+      <div><span class="p">$</span> docker exec <span class="o">-it</span> web sh   <span class="c"># 钻进运行中的容器开个 shell</span></div>
+      <div><span class="p">$</span> docker images             <span class="c"># 列出本地镜像</span></div>
+      <div><span class="p">$</span> docker rm web · docker rmi nginx  <span class="c"># 删容器 / 删镜像（注意是两回事）</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 7. 数据与网络 ================= -->
+<section id="data">
+  <div class="wrap">
+    <div class="kicker">07 · DATA & NETWORK</div>
+    <h2>两个必踩的坑：数据放哪，端口怎么通</h2>
+    <p class="lede">容器是「用完即弃」的，但数据和流量不能跟着一起消失。两个机制各解决一半：</p>
+
+    <div class="duo">
+      <div class="card">
+        <h3 style="margin-top:0">数据卷 Volume：数据活得比容器久</h3>
+        <p style="font-size:14.5px">可写层随容器删除而消失，所以<strong>数据库这类有状态数据必须挂到容器外面</strong>。Volume 把宿主机的存储「挂载」进容器路径，容器删一百次，数据都还在。</p>
+        <div class="mini-fig">
+          <span class="box ctn">容器 /var/lib/mysql</span><span class="arr">⇄</span><span class="box vol">volume: mydata</span><br>
+          <span style="font-size:11.5px">容器可以随意重建 ↑ 数据独立存续</span>
+        </div>
+        <div class="term" style="font-size:12.5px">
+          <div><span class="p">$</span> docker run -d <span class="o">-v mydata:/var/lib/mysql</span> mysql:8</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">端口映射 -p：给隔离的网络开门</h3>
+        <p style="font-size:14.5px">容器有自己的网络命名空间，外界默认<strong>访问不到</strong>它。<code>-p 宿主机端口:容器端口</code> 在两者之间搭一座桥。</p>
+        <div class="mini-fig">
+          <span class="box host">宿主机 :8080</span><span class="arr">→</span><span class="box ctn">容器 :80 (nginx)</span><br>
+          <span style="font-size:11.5px">浏览器访问 localhost:8080 ↑ 流量被转发进容器</span>
+        </div>
+        <div class="term" style="font-size:12.5px">
+          <div><span class="p">$</span> docker run -d <span class="o">-p 8080:80</span> nginx</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 8. 误区与对比 ================= -->
+<section id="myths">
+  <div class="wrap">
+    <div class="kicker">08 · MYTHS</div>
+    <h2>五个最常见的误区（点卡片翻面）</h2>
+
+    <div class="myths">
+      <div class="myth" tabindex="0"><div class="myth-inner">
+        <div class="myth-face myth-front"><span class="badge-myth">误区 1</span><div class="q">「容器就是轻量级虚拟机」</div><div class="flip-hint">点击翻面 →</div></div>
+        <div class="myth-face myth-back"><b>不是。</b>虚拟机虚拟硬件、各带一个完整 OS；容器只是被 namespace/cgroup 包装的<b>宿主机进程</b>，共享同一个内核。这决定了容器更快更省，但隔离强度也更弱。</div>
+      </div></div>
+      <div class="myth" tabindex="0"><div class="myth-inner">
+        <div class="myth-face myth-front"><span class="badge-myth">误区 2</span><div class="q">「我在容器里改了文件，镜像就变了」</div><div class="flip-hint">点击翻面 →</div></div>
+        <div class="myth-face myth-back"><b>不会。</b>所有修改都发生在容器的<b>可写层</b>，镜像的只读层永远不变。想把改动固化下来，正确姿势是改 Dockerfile 重新 build（而不是 <b>docker commit</b>——它能用但不可复现，仅适合临时调试）。</div>
+      </div></div>
+      <div class="myth" tabindex="0"><div class="myth-inner">
+        <div class="myth-face myth-front"><span class="badge-myth">误区 3</span><div class="q">「数据放容器里就行了」</div><div class="flip-hint">点击翻面 →</div></div>
+        <div class="myth-face myth-back"><b>危险。</b><b>docker rm</b> 会连可写层一起删掉。任何需要持久化的数据（数据库、上传文件、日志）都应该挂 volume。把容器当<b>随时可丢弃的进程</b>看待，是使用 Docker 的核心纪律。</div>
+      </div></div>
+      <div class="myth" tabindex="0"><div class="myth-inner">
+        <div class="myth-face myth-front"><span class="badge-myth">误区 4</span><div class="q">「latest 标签 = 最新版，很安全」</div><div class="flip-hint">点击翻面 →</div></div>
+        <div class="myth-face myth-back"><b>latest 只是个默认标签名</b>，不保证是最新，更不保证不变——今天和下个月拉到的 <b>nginx:latest</b> 可能完全不同，构建随之不可复现。生产环境永远钉住具体版本，如 <b>nginx:1.27-alpine</b>。</div>
+      </div></div>
+      <div class="myth" tabindex="0"><div class="myth-inner">
+        <div class="myth-face myth-front"><span class="badge-myth">误区 5</span><div class="q">「学 Docker = 学 Kubernetes」</div><div class="flip-hint">点击翻面 →</div></div>
+        <div class="myth-face myth-back"><b>是两层问题。</b>Docker 解决「单机上如何打包和运行一个容器」；当容器多到要跨机器调度、扩缩容、自愈时，才轮到 Kubernetes。先把单机容器玩明白，K8s 的概念都建立在这之上。</div>
+      </div></div>
+      <div class="myth" tabindex="0"><div class="myth-inner">
+        <div class="myth-face myth-front"><span class="badge-myth">辨析</span><div class="q">「镜像」和「容器」我还是会说混</div><div class="flip-hint">点击翻面 →</div></div>
+        <div class="myth-face myth-back">一句口诀：<b>镜像是安装包，容器是运行中的程序。</b>镜像可以 push/pull/build，容器可以 start/stop/exec。<b>docker rmi</b> 删镜像，<b>docker rm</b> 删容器——命令都分成两套。</div>
+      </div></div>
+    </div>
+
+    <h3>什么时候该用，什么时候别硬用</h3>
+    <div class="fit">
+      <div class="card yes">
+        <h4 style="color:var(--green)">✓ 适合</h4>
+        <ul>
+          <li>交付 Web 服务 / API / 后台任务，保证环境一致</li>
+          <li>本地一键起依赖：数据库、Redis、消息队列，用完就删</li>
+          <li>CI/CD 流水线：构建、测试都在干净的容器里跑</li>
+          <li>微服务：每个服务独立打包、独立部署</li>
+          <li>复现别人的项目 / 论文环境</li>
+        </ul>
+      </div>
+      <div class="card no">
+        <h4 style="color:var(--red)">✕ 不适合 / 需三思</h4>
+        <ul>
+          <li>桌面 GUI 应用（技术上可行，但体验别扭）</li>
+          <li>需要不同内核的程序：Linux 容器跑不了 Windows 程序</li>
+          <li>把容器当强安全边界的多租户场景（共享内核，逃逸面比 VM 大）</li>
+          <li>对性能 / 硬件有极端要求且不接受任何抽象层的场景</li>
+          <li>数据没挂卷就跑有状态服务（不是不能，是别裸跑）</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>容易混淆的三兄弟</h3>
+    <div class="scope">
+      <div class="card"><b style="color:var(--blue)">Docker</b><span class="muted">单机上打包（build）、分发（push/pull）、运行（run）容器。本文主角。</span></div>
+      <div class="card"><b style="color:var(--cyan)">Docker Compose</b><span class="muted">还是单机，但用一个 <code>compose.yaml</code> 声明多个容器（如 web + db + cache），一条 <code>docker compose up</code> 全部拉起。</span></div>
+      <div class="card"><b style="color:var(--orange)">Kubernetes</b><span class="muted">跨一群机器编排容器：调度、扩缩容、故障自愈、滚动发布。规模上去了才需要。</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 9. 动手验证 ================= -->
+<section id="try">
+  <div class="wrap">
+    <div class="kicker">09 · TRY IT</div>
+    <h2>10 分钟最小验证：亲手跑一遍闭环</h2>
+    <p class="lede">读懂不等于会用。装好 Docker 后（docker.com 下载 Docker Desktop，或 Linux 上装 docker-ce），照抄下面四步，每一步都能亲眼验证前文的结论。</p>
+
+    <div class="hands">
+      <div class="hstep"><div class="card">
+        <h4>跑起来：体验「拉取 → 创建 → 启动」</h4>
+        <div class="term"><div><span class="p">$</span> docker run -d --name web -p 8080:80 nginx</div><div><span class="c">Unable to find image 'nginx:latest' locally  ← 本地没有，去 Registry 拉</span></div><div><span class="c">Status: Downloaded newer image ...          ← 分层下载，能看到多个进度条</span></div></div>
+        <p>浏览器打开 <code>localhost:8080</code>，看到 nginx 欢迎页 → <strong>端口映射生效</strong>。</p>
+      </div></div>
+      <div class="hstep"><div class="card">
+        <h4>钻进去：验证「容器只是被隔离的进程」</h4>
+        <div class="term"><div><span class="p">$</span> docker exec -it web sh</div><div><span class="p">/ #</span> ps aux   <span class="c"># 只看得到 nginx 自己 → pid namespace</span></div><div><span class="p">/ #</span> hostname <span class="c"># 是一串容器 ID，不是你的机器名 → uts namespace</span></div></div>
+      </div></div>
+      <div class="hstep"><div class="card">
+        <h4>改一改再删掉：验证「可写层随容器消失」</h4>
+        <div class="term"><div><span class="p">/ #</span> echo broken > /usr/share/nginx/html/index.html; exit</div><div><span class="p">$</span> docker rm -f web           <span class="c"># 删掉容器（改动一起没了）</span></div><div><span class="p">$</span> docker run -d --name web -p 8080:80 nginx</div></div>
+        <p>再刷新 <code>localhost:8080</code>——欢迎页<strong>完好如初</strong>：镜像只读层从未被动过。</p>
+      </div></div>
+      <div class="hstep"><div class="card">
+        <h4>收尾：删干净</h4>
+        <div class="term"><div><span class="p">$</span> docker rm -f web && docker rmi nginx</div></div>
+        <p>机器上不留任何痕迹——这正是 Docker 相比「直接在系统里装一堆东西」最舒服的地方。</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 收尾 ================= -->
+<footer class="outro">
+  <div class="wrap">
+    <div class="kicker">RECAP</div>
+    <h2>带走这张心智地图</h2>
+    <div class="recap">
+      <div><b>一句话定义</b>容器 = 共享宿主机内核、被 namespace 隔离视野、被 cgroup 限制用量的普通进程。</div>
+      <div><b>核心类比</b>镜像是类 / 安装包（只读、分层、可分发），容器是对象 / 运行实例（镜像 + 一层可写层）。</div>
+      <div><b>工作流</b>Dockerfile 描述环境 → build 成镜像 → push 到仓库 → 任何机器 pull + run。环境即代码。</div>
+      <div><b>两条纪律</b>容器随时可丢弃：数据必须挂 volume；版本必须钉死 tag，别依赖 latest。</div>
+      <div><b>边界</b>共享内核 ⇒ 跑不了异构系统、不是强安全边界；跨机器编排是 Kubernetes 的事。</div>
+      <div><b>下一步</b>把自己的一个小项目写成 Dockerfile 跑起来 → 用 Compose 加个数据库 → 需要集群时再学 K8s。</div>
+    </div>
+    <div class="footer-note">BUILD ONCE · SHIP ANYWHERE · RUN CONSISTENTLY</div>
+  </div>
+</footer>
+
+<script>
+/* ---------- Hero 货柜 ---------- */
+(function(){
+  const tips=[
+    ['OS 基础层','来自 FROM 指令。它不是完整操作系统，只是一套最小的系统文件（alpine 约 5MB）——内核用宿主机的。'],
+    ['运行时层','语言运行环境（如 Node、Python、JRE）。官方镜像已经帮你装好，不用再写安装文档。'],
+    ['依赖层','npm ci / pip install 的产物固化在这一层。只要依赖清单没变，重新构建时这层直接命中缓存。'],
+    ['你的代码层','COPY 进来的源码。它在最上层、也最常变——所以放最后，改代码只需重建这薄薄一层。']
+  ];
+  const tip=document.getElementById('crateTip');
+  document.querySelectorAll('.crate').forEach(c=>{
+    const show=()=>{
+      document.querySelectorAll('.crate').forEach(x=>x.classList.remove('on'));
+      c.classList.add('on');
+      const t=tips[+c.dataset.crate];
+      tip.innerHTML='<b>'+t[0]+'</b><span>'+t[1]+'</span>';
+    };
+    c.addEventListener('click',show);
+    c.addEventListener('mouseenter',show);
+    c.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show();}});
+  });
+})();
+
+/* ---------- 层堆栈 ---------- */
+(function(){
+  const info=[
+    ['OS 基础层（只读）','由 FROM alpine 之类的基础镜像提供，包含最小的文件系统和工具。注意：没有内核！内核永远用宿主机的。','成千上万个镜像共享这同一层，磁盘上只存一份。'],
+    ['运行时层（只读）','装好了 Node 20 及其依赖库。官方运行时镜像（node/python/openjdk…）替你完成了「装环境」这个最容易出错的环节。','换版本 = 改一行 FROM，而不是重装服务器。'],
+    ['依赖层（只读）','RUN npm ci 的全部产物。构建时若 package.json 没变，这层直接用缓存——这就是构建从几分钟变几秒的原因。','依赖被「冻结」在层里，服务器上不会再漂移。'],
+    ['代码层（只读）','COPY . . 把你的源码放进来。它最常变化，所以被安排在最上层：每次改代码只需重建这一层。','层的顺序 = 变化频率从低到高，这是 Dockerfile 的黄金法则。'],
+    ['容器可写层','镜像本身没有这层！docker run 时才临时盖上去。容器里所有写操作（日志、临时文件、你的改动）都落在这里。','docker rm 删掉的正是这一层——所以重要数据要挂 volume。']
+  ];
+  const box=document.getElementById('layerInfo');
+  document.querySelectorAll('#layerStack .layer').forEach(l=>{
+    const show=()=>{
+      document.querySelectorAll('#layerStack .layer').forEach(x=>x.classList.remove('sel'));
+      l.classList.add('sel');
+      const t=info[+l.dataset.l];
+      box.innerHTML='<h4>'+t[0]+'</h4><p>'+t[1]+'</p><p class="note">💡 '+t[2]+'</p>';
+    };
+    l.addEventListener('click',show);
+    l.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show();}});
+  });
+})();
+
+/* ---------- 机制 tabs ---------- */
+(function(){
+  const btns=document.querySelectorAll('#mechTabs .tab-btn');
+  btns.forEach(b=>b.addEventListener('click',()=>{
+    btns.forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('on',p.dataset.p===b.dataset.t));
+  }));
+})();
+
+/* ---------- VM vs 容器 ---------- */
+(function(){
+  const A=document.getElementById('stackA'),B=document.getElementById('stackB');
+  const capA=document.getElementById('capA'),capB=document.getElementById('capB');
+  const facts=document.getElementById('vsFacts');
+  const brick=(cls,txt)=>'<div class="brick '+cls+'">'+txt+'</div>';
+  const modes={
+    ct:{
+      a:[['hw','物理硬件'],['os','宿主机 OS（内核共享）'],['engine','Docker 引擎'],['libs','依赖 A'],['app','应用 A']],
+      b:[['hw','物理硬件'],['os','宿主机 OS（内核共享）'],['engine','Docker 引擎'],['libs','依赖 B'],['app','应用 B']],
+      ca:'容器 A ↑ 只带自己的依赖',cb:'容器 B ↑ 与 A 共享内核和引擎',
+      f:[['启动速度','秒级'],['单实例体积','几十 MB 起'],['隔离强度','进程级（共享内核）']]
+    },
+    vm:{
+      a:[['hw','物理硬件'],['hv','Hypervisor 虚拟机管理器'],['guest dup','客户机 OS A（完整）'],['libs','依赖 A'],['app','应用 A']],
+      b:[['hw','物理硬件'],['hv','Hypervisor 虚拟机管理器'],['guest dup','客户机 OS B（完整）'],['libs','依赖 B'],['app','应用 B']],
+      ca:'虚拟机 A ↑ 自带整套 OS',cb:'虚拟机 B ↑ 每台都要再装一遍 OS',
+      f:[['启动速度','分钟级'],['单实例体积','GB 级'],['隔离强度','硬件级（各有内核）']]
+    }
+  };
+  const render=m=>{
+    const d=modes[m];
+    A.innerHTML=d.a.map(x=>brick(x[0],x[1])).join('');
+    B.innerHTML=d.b.map(x=>brick(x[0],x[1])).join('');
+    capA.textContent=d.ca;capB.textContent=d.cb;
+    facts.innerHTML=d.f.map(x=>'<div class="card"><b>'+x[0]+'</b><span>'+x[1]+'</span></div>').join('');
+  };
+  render('ct');
+  const bc=document.getElementById('vsCt'),bv=document.getElementById('vsVm');
+  bc.addEventListener('click',()=>{bc.classList.add('on');bv.classList.remove('on');render('ct');});
+  bv.addEventListener('click',()=>{bv.classList.add('on');bc.classList.remove('on');render('vm');});
+})();
+
+/* ---------- docker run 步骤 ---------- */
+(function(){
+  const steps=[
+    {d:'<b>第 0 步 · 你按下回车。</b>这行命令的意思：后台运行（-d）一个 nginx 容器，并把宿主机 8080 端口的流量转给容器的 80 端口。点「下一步」开始。',lit:[],hot:[]},
+    {d:'<b>第 1 步 · CLI 只是个遥控器。</b>docker 命令本身不干活，它把请求通过 API 发给常驻后台的 <b>dockerd 守护进程</b>——后者才是真正管理镜像和容器的引擎。',lit:['nCli','a1','nDaemon'],hot:[]},
+    {d:'<b>第 2 步 · 先查本地镜像。</b>dockerd 检查本地有没有 nginx 镜像。没有？于是向 <b>Registry</b>（默认 Docker Hub）发起拉取——就像 npm install 去 npm 仓库下包。',lit:['nDaemon','a2','nReg'],hot:[]},
+    {d:'<b>第 3 步 · 分层下载。</b>镜像按<b>层</b>传输，本地已有的层直接跳过（这就是你看到多个进度条、有些显示 Already exists 的原因）。下载完，本地就有了一份只读的 nginx 镜像。',lit:['nReg'],hot:['nImg']},
+    {d:'<b>第 4 步 · 创建容器。</b>dockerd 在镜像之上盖一层<b>可写层</b>，为它创建独立的 namespace（进程/网络/文件系统视图）并设置 cgroup 资源限额——容器的「壳」准备好了。',lit:['nImg','a3'],hot:['nCtn']},
+    {d:'<b>第 5 步 · 启动进程，打通端口。</b>nginx 作为容器内的 1 号进程启动；宿主机 8080 端口被映射到容器 80 端口。命令返回一串容器 ID。现在打开 localhost:8080 就能看到页面了。',lit:['nCtn','a4'],hot:['nPort']}
+  ];
+  let i=0;
+  const desc=document.getElementById('runDesc');
+  const prev=document.getElementById('runPrev'),next=document.getElementById('runNext');
+  const dots=document.getElementById('runDots');
+  dots.innerHTML=steps.map(()=>'<i></i>').join('');
+  const ids=['nCli','nDaemon','nReg','nImg','nCtn','nPort','a1','a2','a3','a4'];
+  const render=()=>{
+    const s=steps[i];
+    desc.innerHTML=s.d;
+    ids.forEach(id=>{
+      const el=document.getElementById(id);
+      el.classList.toggle('lit',s.lit.includes(id));
+      el.classList.toggle('hot',s.hot.includes(id));
+    });
+    dots.querySelectorAll('i').forEach((d,k)=>d.classList.toggle('on',k===i));
+    prev.disabled=i===0;
+    next.textContent=i===steps.length-1?'重新开始 ↺':'下一步 →';
+  };
+  prev.addEventListener('click',()=>{if(i>0){i--;render();}});
+  next.addEventListener('click',()=>{i=i===steps.length-1?0:i+1;render();});
+  render();
+})();
+
+/* ---------- Dockerfile 行讲解 ---------- */
+(function(){
+  const exp=[
+    ['FROM node:20-alpine','一切从一个基础镜像开始。node:20-alpine = 在极小的 Alpine Linux 上预装好 Node 20。它带来了图中最底下的几层。','选带具体版本号的 tag，别用 latest——保证今天和明年构建出来的东西一样。'],
+    ['WORKDIR /app','设定后续指令的工作目录（不存在会自动创建）。它只写入镜像的元数据，不产生新的层。','相当于给后面每条命令都加了 cd /app，避免路径散落各处。'],
+    ['COPY package*.json ./','先只拷贝依赖清单，不拷贝源码。这是刻意的！','⭐ 缓存关键：Docker 逐层缓存，某层的输入没变就直接复用。依赖清单不常变、源码天天变——把它们分开，改代码时就不用重装依赖，构建从几分钟缩到几秒。'],
+    ['RUN npm ci --omit=dev','在构建时执行命令，安装生产依赖。执行结果（node_modules）固化成一个新的只读层。','npm ci 严格按 lockfile 安装，比 npm install 更可复现，正合容器「一次构建到处运行」的气质。'],
+    ['COPY . .','现在才把全部源码拷进来。它是变化最频繁的内容，所以放在最靠后的层。','配合 .dockerignore 排除 node_modules、.git 等，镜像更小、构建更快。'],
+    ['EXPOSE 3000','声明「这个服务监听 3000 端口」。注意：它只是文档性质的元数据，并不会真的开放端口——真正开门的是运行时的 -p 参数。','写上它，接手的人一眼知道该映射哪个端口。'],
+    ['CMD ["node", "server.js"]','指定容器启动时默认执行的命令——它就是容器里的 1 号进程；这个进程退出，容器也就结束（Exited）。','一个容器一个主进程，是容器化的基本设计哲学。']
+  ];
+  const box=document.getElementById('dexp');
+  document.querySelectorAll('.dline').forEach(l=>{
+    const show=()=>{
+      document.querySelectorAll('.dline').forEach(x=>x.classList.remove('sel'));
+      l.classList.add('sel');
+      const t=exp[+l.dataset.d];
+      box.innerHTML='<h4>'+t[0]+'</h4><p>'+t[1]+'</p><div class="why">'+t[2]+'</div>';
+    };
+    l.addEventListener('click',show);
+    l.addEventListener('mouseenter',show);
+  });
+})();
+
+/* ---------- 生命周期 ---------- */
+(function(){
+  const info=[
+    ['（镜像）','一切的起点：只读模板。<b>docker create</b> 从它创建容器（不启动），<b>docker run</b> 一步到位（create + start）。'],
+    ['Created','容器已建好（可写层、配置就绪）但进程还没启动。<b>docker start</b> 让它进入 Running。'],
+    ['Running','主进程正在运行。这时可以 <b>docker logs</b> 看输出、<b>docker exec</b> 钻进去调试、<b>docker stop</b> 优雅停止（先发 SIGTERM，超时再 SIGKILL）。'],
+    ['Paused','进程被冻结（cgroup freezer），内存状态还在，但不消耗 CPU。<b>docker unpause</b> 恢复。用得不多，了解即可。'],
+    ['Exited','主进程退出了——可能是被 stop，也可能是程序崩了（<b>docker ps -a</b> 能看到退出码）。可写层还在，<b>docker start</b> 可原地复活，<b>docker logs</b> 仍能查日志。'],
+    ['删除','<b>docker rm</b> 彻底移除容器，可写层随之销毁（volume 里的数据不受影响）。镜像要另用 <b>docker rmi</b> 删。']
+  ];
+  const box=document.getElementById('lcInfo');
+  document.querySelectorAll('.lc-state').forEach(s=>{
+    const show=()=>{
+      document.querySelectorAll('.lc-state').forEach(x=>x.classList.remove('sel'));
+      s.classList.add('sel');
+      const t=info[+s.dataset.s];
+      box.innerHTML='<b>'+t[0]+'</b> — '+t[1];
+    };
+    s.addEventListener('click',show);
+    s.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show();}});
+  });
+})();
+
+/* ---------- 误区翻牌 ---------- */
+document.querySelectorAll('.myth').forEach(m=>{
+  m.addEventListener('click',()=>m.classList.toggle('flip'));
+  m.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();m.classList.toggle('flip');}});
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Kubernetes:声明式与控制循环</title>
+<style>
+:root{
+  --paper:#EFF3F6;
+  --card:#FFFFFF;
+  --ink:#16293A;
+  --ink2:#51687A;
+  --line:#CBD8E0;
+  --line-soft:#DEE7EC;
+  --helm:#2E6BDB;
+  --helm-deep:#1E4FAE;
+  --helm-soft:#E4ECFA;
+  --buoy:#E0611C;
+  --buoy-soft:#FBEADD;
+  --ok:#1E8A5A;
+  --ok-soft:#DEF0E7;
+  --bad:#C4381F;
+  --bad-soft:#F9E3DE;
+  --amber:#B97A0F;
+  --amber-soft:#F8EDD7;
+  --console:#0F1E2C;
+  --console-ink:#BFD4E4;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,Menlo,monospace;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --disp:"Avenir Next Condensed","Arial Narrow","PingFang SC","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.75;
+  background-image:radial-gradient(var(--line-soft) 1px,transparent 1px);background-size:26px 26px;}
+.wrap{max-width:1060px;margin:0 auto;padding:0 22px}
+a{color:var(--helm)}
+code{font-family:var(--mono);font-size:.88em;background:var(--helm-soft);padding:.1em .38em;border-radius:4px;color:var(--helm-deep)}
+strong{color:var(--ink)}
+::selection{background:var(--helm-soft)}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 44px;position:relative}
+.hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:36px;align-items:center}
+.stencil{font-family:var(--mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--buoy);font-weight:700}
+.stencil::before{content:"▮▮ ";letter-spacing:.05em;color:var(--helm)}
+h1{font-family:var(--disp);font-weight:800;font-size:clamp(34px,5.4vw,58px);line-height:1.14;margin:14px 0 18px;letter-spacing:.01em}
+h1 .em{color:var(--helm)}
+.hero-lead{font-size:17.5px;color:var(--ink2);max-width:34em}
+.hero-lead b{color:var(--ink)}
+.hero-meta{margin-top:26px;display:flex;gap:10px;flex-wrap:wrap}
+.tag{font-family:var(--mono);font-size:12px;border:1.5px solid var(--line);border-radius:999px;padding:4px 12px;color:var(--ink2);background:var(--card)}
+.hero-fig{position:relative}
+.hero-fig svg{width:100%;height:auto;display:block}
+
+/* ---------- sticky nav ---------- */
+.navbar{position:sticky;top:0;z-index:50;background:rgba(239,243,246,.92);backdrop-filter:blur(8px);border-bottom:1.5px solid var(--line)}
+.navbar .wrap{display:flex;gap:6px;overflow-x:auto;padding-top:9px;padding-bottom:9px;scrollbar-width:none}
+.navbar .wrap::-webkit-scrollbar{display:none}
+.nav-chip{flex:0 0 auto;font-size:13.5px;padding:5px 13px;border-radius:999px;border:1.5px solid transparent;color:var(--ink2);text-decoration:none;white-space:nowrap;font-family:var(--mono)}
+.nav-chip:hover{border-color:var(--line);background:var(--card)}
+.nav-chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* ---------- sections ---------- */
+section{padding:74px 0 10px}
+.sec-head{margin-bottom:30px}
+.sec-head h2{font-family:var(--disp);font-size:clamp(25px,3.4vw,36px);font-weight:800;margin:10px 0 12px;line-height:1.2}
+.lead{color:var(--ink2);max-width:46em;font-size:16.5px}
+h3{font-size:18.5px;margin:0 0 10px;font-weight:700}
+p+p{margin-top:12px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:22px 24px;box-shadow:0 1px 0 rgba(22,41,58,.04)}
+.card+.card{margin-top:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.mt{margin-top:16px}.mt2{margin-top:26px}
+.note{font-size:14px;color:var(--ink2)}
+.callout{border-left:4px solid var(--helm);background:var(--helm-soft);border-radius:0 12px 12px 0;padding:14px 18px;margin-top:18px}
+.callout.orange{border-color:var(--buoy);background:var(--buoy-soft)}
+.callout .t{font-weight:700;font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px;color:var(--helm-deep)}
+.callout.orange .t{color:var(--buoy)}
+
+/* pain cards */
+.pain{position:relative;padding-top:18px}
+.pain .k{font-family:var(--mono);font-size:12px;color:var(--buoy);letter-spacing:.15em;font-weight:700}
+.pain h3{margin-top:6px}
+.pain p{font-size:14.5px;color:var(--ink2);margin-top:6px}
+
+/* ---------- reconcile demo ---------- */
+.demo{border:1.5px solid var(--ink);border-radius:16px;overflow:hidden;background:var(--card);margin-top:24px}
+.demo-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 18px;border-bottom:1.5px solid var(--line);background:linear-gradient(0deg,var(--paper),var(--card))}
+.demo-bar .lbl{font-family:var(--mono);font-size:12.5px;color:var(--ink2);letter-spacing:.08em}
+.counter{display:flex;align-items:center;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden;background:var(--card)}
+.counter button{width:36px;height:34px;border:none;background:var(--card);font-size:18px;cursor:pointer;color:var(--ink);font-weight:700}
+.counter button:hover{background:var(--helm-soft)}
+.counter .num{width:44px;text-align:center;font-family:var(--mono);font-weight:700;font-size:17px;border-left:1.5px solid var(--line);border-right:1.5px solid var(--line);color:var(--helm-deep)}
+.btn{border:1.5px solid var(--ink);background:var(--card);border-radius:10px;padding:7px 14px;font-size:14px;cursor:pointer;font-family:var(--sans);color:var(--ink);font-weight:600}
+.btn:hover{background:var(--helm-soft)}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn.danger:hover{background:var(--bad-soft)}
+.switch{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:14px;font-weight:600}
+.switch .sw{width:40px;height:22px;border-radius:999px;background:var(--ok);position:relative;transition:background .2s;flex:0 0 auto}
+.switch .sw::after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:3px;left:21px;transition:left .2s}
+.switch.off .sw{background:#9AACB9}
+.switch.off .sw::after{left:3px}
+.demo-body{display:grid;grid-template-columns:1.5fr 1fr;gap:0}
+.demo-cluster{padding:18px;border-right:1.5px solid var(--line)}
+.loop-strip{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.loop-step{font-family:var(--mono);font-size:12.5px;padding:4px 12px;border-radius:999px;border:1.5px solid var(--line);color:var(--ink2);transition:all .15s}
+.loop-step.hot{background:var(--ink);color:#fff;border-color:var(--ink)}
+.loop-arrow{color:var(--line);font-size:13px}
+.diff-line{font-family:var(--mono);font-size:13.5px;margin-bottom:12px;padding:8px 12px;border-radius:8px;background:var(--paper);border:1px dashed var(--line)}
+.diff-line .dn{color:var(--helm-deep);font-weight:700}
+.diff-line .da{font-weight:700}
+.diff-line.match .da{color:var(--ok)}
+.diff-line.miss .da{color:var(--bad)}
+.nodes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.knode{border:1.5px solid var(--line);border-radius:12px;background:var(--paper);min-height:150px;padding:8px}
+.knode .nh{font-family:var(--mono);font-size:11.5px;color:var(--ink2);letter-spacing:.1em;margin-bottom:8px;display:flex;justify-content:space-between}
+.pod{border-radius:9px;padding:6px 9px;margin-bottom:7px;font-family:var(--mono);font-size:11.5px;cursor:pointer;border:1.5px solid;display:flex;align-items:center;gap:7px;background:var(--card);transition:opacity .4s,transform .2s;line-height:1.35}
+.pod:hover{transform:translateY(-1px)}
+.pod .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.pod.running{border-color:var(--ok)}
+.pod.running .dot{background:var(--ok)}
+.pod.starting{border-color:var(--amber)}
+.pod.starting .dot{background:var(--amber);animation:blink 1s infinite}
+.pod.terminating{border-color:var(--bad);opacity:.45}
+.pod.terminating .dot{background:var(--bad)}
+.pod .st{margin-left:auto;font-size:10px;color:var(--ink2)}
+@keyframes blink{50%{opacity:.25}}
+.demo-log{background:var(--console);color:var(--console-ink);padding:16px 16px 12px;display:flex;flex-direction:column;min-height:280px}
+.demo-log .lh{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;color:#6C8AA3;margin-bottom:10px}
+.loglines{font-family:var(--mono);font-size:12px;line-height:1.85;overflow-y:auto;flex:1;max-height:300px}
+.loglines .src{color:#69A6E8}
+.loglines .ok{color:#63C797}
+.loglines .bad{color:#F09070}
+.loglines .dim{color:#5F7A92}
+.demo-hint{padding:10px 18px;border-top:1.5px solid var(--line);font-size:13.5px;color:var(--ink2);background:var(--paper)}
+
+/* ---------- 命令式 vs 声明式 ---------- */
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+.vs .card h3{display:flex;align-items:center;gap:8px}
+.chip{font-family:var(--mono);font-size:11px;padding:2px 9px;border-radius:999px;letter-spacing:.08em}
+.chip.o{background:var(--buoy-soft);color:var(--buoy)}
+.chip.b{background:var(--helm-soft);color:var(--helm-deep)}
+.shell{background:var(--console);color:var(--console-ink);border-radius:10px;padding:13px 15px;font-family:var(--mono);font-size:12.5px;line-height:1.8;margin-top:12px;overflow-x:auto}
+.shell .c{color:#5F7A92}
+.shell .p{color:#69A6E8}
+.shell .s{color:#E8B75F}
+.shell .g{color:#63C797}
+
+/* ---------- 架构板 ---------- */
+.board{border:1.5px solid var(--ink);border-radius:16px;background:var(--card);padding:18px;margin-top:22px}
+.board-row{display:grid;grid-template-columns:120px 1fr;gap:14px;align-items:stretch}
+.board-you{display:flex;flex-direction:column;justify-content:center;gap:8px}
+.plane{border:1.5px dashed var(--helm);border-radius:12px;padding:12px;background:var(--helm-soft)}
+.plane-title,.node-title{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;color:var(--helm-deep);margin-bottom:10px;font-weight:700}
+.node-title{color:var(--ink2)}
+.plane-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.comp{border:1.5px solid var(--line);border-radius:10px;background:var(--card);padding:9px 10px;font-size:13px;cursor:pointer;text-align:left;font-family:var(--sans);transition:all .15s;line-height:1.4;position:relative}
+.comp .cn{font-family:var(--mono);font-size:12px;font-weight:700;display:block;color:var(--ink)}
+.comp .cr{font-size:11.5px;color:var(--ink2);display:block;margin-top:2px}
+.comp:hover{border-color:var(--helm);transform:translateY(-1px)}
+.comp.sel{border-color:var(--helm);box-shadow:0 0 0 2.5px var(--helm-soft), 0 0 0 1.5px var(--helm)}
+.comp.hot{border-color:var(--buoy);background:var(--buoy-soft);box-shadow:0 0 0 2.5px var(--buoy-soft)}
+.workers{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.wnode{border:1.5px solid var(--line);border-radius:12px;padding:12px;background:var(--paper)}
+.wnode .plane-grid{grid-template-columns:repeat(3,1fr)}
+.board-detail{margin-top:14px;border-top:1.5px dashed var(--line);padding-top:14px;min-height:76px}
+.board-detail .dn{font-family:var(--mono);font-weight:700;color:var(--helm-deep);font-size:14px}
+.board-detail p{font-size:14.5px;color:var(--ink2);margin-top:4px}
+
+/* ---------- journey ---------- */
+.journey-ctl{display:flex;align-items:center;gap:12px;margin-top:20px;flex-wrap:wrap}
+.jsteps{display:flex;gap:6px;flex-wrap:wrap}
+.jdot{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--line);background:var(--card);font-family:var(--mono);font-weight:700;font-size:13px;cursor:pointer;color:var(--ink2)}
+.jdot.on{background:var(--buoy);border-color:var(--buoy);color:#fff}
+.jdot.done{border-color:var(--buoy);color:var(--buoy)}
+.jpanel{margin-top:16px}
+.jpanel .jt{font-weight:700;font-size:17px}
+.jpanel .jt .no{font-family:var(--mono);color:var(--buoy);margin-right:8px}
+.jpanel p{color:var(--ink2);font-size:15px;margin-top:6px;max-width:52em}
+.jkey{margin-top:8px;font-size:13.5px;background:var(--amber-soft);color:var(--amber);display:inline-block;padding:3px 10px;border-radius:8px;font-weight:600}
+
+/* ---------- 分层 ---------- */
+.layer{border:1.5px solid;border-radius:14px;padding:14px 16px;cursor:pointer;transition:box-shadow .15s;background:var(--card)}
+.layer:hover{box-shadow:0 3px 10px rgba(22,41,58,.08)}
+.layer .lh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.layer .ln{font-family:var(--mono);font-weight:700;font-size:14.5px}
+.layer .lq{font-size:13px;color:var(--ink2)}
+.layer .lwhy{display:none;font-size:14px;color:var(--ink2);margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+.layer.open .lwhy{display:block}
+.layer .inner{margin-top:12px;display:grid;gap:10px}
+.l-dep{border-color:var(--helm)}
+.l-rs{border-color:var(--buoy)}
+.l-pod{border-color:var(--ok)}
+.l-c{border-color:var(--line);background:var(--paper);cursor:default}
+.l-pods-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.hintline{font-size:13px;color:var(--ink2);margin-top:10px}
+
+/* ---------- yaml ---------- */
+.yamlbox{display:grid;grid-template-columns:1.25fr .75fr;gap:0;border:1.5px solid var(--ink);border-radius:14px;overflow:hidden;margin-top:20px}
+.yaml{background:var(--console);padding:16px 6px 16px 0;font-family:var(--mono);font-size:12.8px;line-height:1.5;overflow-x:auto}
+.yl{display:block;padding:2.5px 14px 2.5px 18px;color:var(--console-ink);white-space:pre;cursor:default;border-left:3px solid transparent}
+.yl.hasnote{cursor:pointer}
+.yl.hasnote:hover{background:#1B3247}
+.yl.on{background:#1B3247;border-left-color:var(--buoy)}
+.yl .yk{color:#69A6E8}
+.yl .yv{color:#E8B75F}
+.yl .yc{color:#5F7A92}
+.yaml-note{background:var(--card);padding:18px;border-left:1.5px solid var(--line)}
+.yaml-note .nt{font-family:var(--mono);font-size:12px;letter-spacing:.15em;color:var(--buoy);font-weight:700;margin-bottom:8px}
+.yaml-note h4{font-family:var(--mono);font-size:14px;margin-bottom:6px;color:var(--helm-deep)}
+.yaml-note p{font-size:14px;color:var(--ink2)}
+
+/* ---------- tables ---------- */
+.tblwrap{overflow-x:auto;margin-top:16px}
+table{border-collapse:collapse;width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+th{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-align:left;color:var(--ink2);background:var(--paper);padding:10px 14px;border-bottom:1.5px solid var(--line);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top;color:var(--ink)}
+tr:last-child td{border-bottom:none}
+td .sub{display:block;font-size:12.5px;color:var(--ink2)}
+.good{color:var(--ok);font-weight:700}
+.meh{color:var(--amber);font-weight:700}
+.nope{color:var(--bad);font-weight:700}
+
+/* ---------- accordion ---------- */
+details{border:1.5px solid var(--line);border-radius:12px;background:var(--card);margin-top:10px;overflow:hidden}
+summary{cursor:pointer;padding:14px 18px;font-weight:700;list-style:none;display:flex;gap:10px;align-items:baseline}
+summary::-webkit-details-marker{display:none}
+summary .x{font-family:var(--mono);color:var(--bad);font-size:13px;flex:0 0 auto}
+summary::after{content:"+";margin-left:auto;font-family:var(--mono);color:var(--ink2);font-size:17px}
+details[open] summary::after{content:"−"}
+details .body{padding:0 18px 16px;color:var(--ink2);font-size:14.5px}
+details .body b{color:var(--ink)}
+details[open]{border-color:var(--helm)}
+
+/* ---------- footer / transfer ---------- */
+.final{border:1.5px solid var(--ink);border-radius:16px;background:var(--console);color:var(--console-ink);padding:30px;margin-top:24px}
+.final h3{color:#fff;font-size:20px}
+.final p{color:#9FB8CB;font-size:15px}
+.final .stencil{color:var(--buoy)}
+footer{padding:56px 0 40px;color:var(--ink2);font-size:13px;text-align:center}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+@media (max-width:880px){
+  .hero-grid,.grid3,.grid2,.vs,.demo-body,.yamlbox{grid-template-columns:1fr}
+  .demo-cluster{border-right:none;border-bottom:1.5px solid var(--line)}
+  .plane-grid{grid-template-columns:1fr 1fr}
+  .workers{grid-template-columns:1fr}
+  .board-row{grid-template-columns:1fr}
+  .board-you{flex-direction:row}
+  .nodes{grid-template-columns:1fr 1fr}
+  .l-pods-row{grid-template-columns:1fr}
+  .yaml-note{border-left:none;border-top:1.5px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="stencil">KUBERNETES · 一文读懂</div>
+      <h1>你不是在指挥容器,<br>而是在<span class="em">声明世界应有的样子</span></h1>
+      <p class="hero-lead">半夜三点,一台服务器宕机,上面 12 个容器全灭。<b>谁去发现?谁决定在哪台机器上重启?谁把流量切过去?</b>Kubernetes 的回答是:没有"谁",只有一群永不停歇的控制循环。读完这一篇,你会带走它最核心的心智模型——<b>声明式 API + 调谐循环(reconcile)</b>,并且知道它的边界在哪。</p>
+      <div class="hero-meta">
+        <span class="tag">阅读 ≈ 20 min</span>
+        <span class="tag">前置:会 docker run</span>
+        <span class="tag">3 个可动手的交互演示</span>
+      </div>
+    </div>
+    <div class="hero-fig">
+      <svg viewBox="0 0 380 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="控制循环示意图:观测、比对、行动围成一个环,中间是期望状态与实际状态">
+        <defs>
+          <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2E6BDB"/></marker>
+        </defs>
+        <circle cx="190" cy="165" r="118" fill="none" stroke="#CBD8E0" stroke-width="2"/>
+        <circle cx="190" cy="165" r="118" fill="none" stroke="#2E6BDB" stroke-width="3" stroke-dasharray="40 700" stroke-linecap="round">
+          <animateTransform attributeName="transform" type="rotate" from="0 190 165" to="360 190 165" dur="6s" repeatCount="indefinite"/>
+        </circle>
+        <!-- 中心:期望 vs 实际 -->
+        <rect x="118" y="118" width="144" height="42" rx="9" fill="#E4ECFA" stroke="#2E6BDB" stroke-width="1.5"/>
+        <text x="190" y="136" text-anchor="middle" font-family="monospace" font-size="12" fill="#1E4FAE">期望 replicas: 3</text>
+        <text x="190" y="152" text-anchor="middle" font-family="monospace" font-size="11" fill="#51687A">你写进 YAML 的世界</text>
+        <rect x="118" y="172" width="144" height="42" rx="9" fill="#FBEADD" stroke="#E0611C" stroke-width="1.5"/>
+        <text x="190" y="190" text-anchor="middle" font-family="monospace" font-size="12" fill="#E0611C">实际 running: 2</text>
+        <text x="190" y="206" text-anchor="middle" font-family="monospace" font-size="11" fill="#51687A">集群此刻的世界</text>
+        <!-- 环上三站 -->
+        <g font-family="monospace" font-size="12.5" font-weight="bold">
+          <rect x="152" y="26" width="76" height="28" rx="14" fill="#16293A"/>
+          <text x="190" y="45" text-anchor="middle" fill="#fff">① 观测</text>
+          <rect x="288" y="222" width="76" height="28" rx="14" fill="#16293A"/>
+          <text x="326" y="241" text-anchor="middle" fill="#fff">② 比对</text>
+          <rect x="16" y="222" width="76" height="28" rx="14" fill="#16293A"/>
+          <text x="54" y="241" text-anchor="middle" fill="#fff">③ 行动</text>
+        </g>
+        <path d="M300 165 Q296 200 276 226" fill="none" stroke="#2E6BDB" stroke-width="2" marker-end="url(#ah)"/>
+        <path d="M290 260 Q190 305 92 258" fill="none" stroke="#2E6BDB" stroke-width="2" marker-end="url(#ah)"/>
+        <path d="M76 220 Q84 190 84 165 Q86 110 140 62" fill="none" stroke="#2E6BDB" stroke-width="2" marker-end="url(#ah)"/>
+        <text x="190" y="290" text-anchor="middle" font-family="monospace" font-size="11.5" fill="#51687A">差 1 个 → 创建 1 个 Pod → 继续循环</text>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<!-- ================= NAV ================= -->
+<nav class="navbar" aria-label="章节导航">
+  <div class="wrap">
+    <a class="nav-chip" href="#why">01 为什么出现</a>
+    <a class="nav-chip" href="#model">02 心智模型</a>
+    <a class="nav-chip" href="#arch">03 架构</a>
+    <a class="nav-chip" href="#journey">04 一次 apply</a>
+    <a class="nav-chip" href="#objects">05 对象分层</a>
+    <a class="nav-chip" href="#network">06 流量入口</a>
+    <a class="nav-chip" href="#hands">07 动手验证</a>
+    <a class="nav-chip" href="#pitfalls">08 误区与边界</a>
+    <a class="nav-chip" href="#transfer">09 带走什么</a>
+  </div>
+</nav>
+
+<!-- ================= 01 WHY ================= -->
+<section id="why">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="stencil">CARGO 01 · 它为什么出现</div>
+      <h2>一台机器时岁月静好,二十台机器时问题爆炸</h2>
+      <p class="lead">Docker 解决了"应用怎么打包、在一台机器上怎么跑"。但真实业务很快越过一台机器的边界——于是一批全新的问题冒出来,而且每一个都不是容器本身能回答的。</p>
+    </div>
+    <div class="grid3">
+      <div class="card pain">
+        <div class="k">调度 SCHEDULING</div>
+        <h3>50 个容器,20 台机器</h3>
+        <p>哪个容器放哪台机器?要看剩余 CPU / 内存、亲和性、是否同一服务要分散防单点。人肉 Excel 排布,改一次崩溃一次。</p>
+      </div>
+      <div class="card pain">
+        <div class="k">自愈 SELF-HEALING</div>
+        <h3>半夜挂了谁来救</h3>
+        <p>进程崩了、机器宕了,得有人发现、有人在别处重启、有人把流量摘掉再挂回来。靠告警短信叫醒工程师,不可持续。</p>
+      </div>
+      <div class="card pain">
+        <div class="k">发布 ROLLOUT</div>
+        <h3>更新 30 个实例不停机</h3>
+        <p>逐台替换、失败回滚、新旧版本并存时流量怎么分。手写发布脚本,每家公司都写一遍,每遍都有坑。</p>
+      </div>
+      <div class="card pain">
+        <div class="k">扩缩容 SCALING</div>
+        <h3>流量高峰 10 倍</h3>
+        <p>大促前手动加机器、加实例、改负载均衡配置;凌晨再缩回去省钱。慢、易错、没人愿意值这个班。</p>
+      </div>
+      <div class="card pain">
+        <div class="k">服务发现 DISCOVERY</div>
+        <h3>IP 一直在变</h3>
+        <p>容器重启换 IP、换机器更换 IP。调用方写死 IP 列表必然过期,配置中心又是一套自建系统。</p>
+      </div>
+      <div class="card pain">
+        <div class="k">资源利用 BIN-PACKING</div>
+        <h3>机器一半在空转</h3>
+        <p>为了隔离,一个服务一组机器,利用率 15%。混部又怕互相打架——需要有资源配额与限制的统一裁判。</p>
+      </div>
+    </div>
+    <div class="callout">
+      <div class="t">本质定位</div>
+      这些问题的共性是:<strong>它们都发生在"多台机器 + 多个副本 + 持续变化"的场景里</strong>。Kubernetes 就是把这一整层问题打包解决的<strong>容器编排系统</strong>——它把一堆机器抽象成一台"大电脑",你只描述要跑什么,它负责放哪、挂了怎么办、流量怎么进来。它源自 Google 内部系统 Borg 十几年的实践,2014 年开源,如今是事实标准。
+    </div>
+    <div class="callout orange">
+      <div class="t">边界预告</div>
+      反过来说:如果你只有一台服务器、三五个容器,上面这些问题你根本没有——那 <code>docker compose</code> 就够了,k8s 的复杂度是纯支出。边界问题我们在 <a href="#pitfalls">第 08 节</a>细算。
+    </div>
+  </div>
+</section>
+
+<!-- ================= 02 MODEL ================= -->
+<section id="model">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="stencil">CARGO 02 · 核心心智模型</div>
+      <h2>声明式 API + 调谐循环:整个 k8s 只有这一招</h2>
+      <p class="lead">先对比两种思路。命令式是"告诉系统<strong>做什么动作</strong>",声明式是"告诉系统<strong>我要什么结果</strong>"。这不是语法风格差异,而是故障恢复能力的分水岭。</p>
+    </div>
+
+    <div class="vs">
+      <div class="card">
+        <h3>命令式 <span class="chip o">imperative</span></h3>
+        <p class="note">你下发动作序列,系统执行完就结束。执行过程中环境变了、执行后进程挂了,<strong>没有任何东西负责善后</strong>——因为你的意图没有被记录下来,系统不知道"应该有 3 个"。</p>
+        <div class="shell"><span class="c"># 在机器 A、B 上各启动一个,再来一个放 A</span>
+ssh a <span class="p">docker run</span> -d web:v1
+ssh b <span class="p">docker run</span> -d web:v1
+ssh a <span class="p">docker run</span> -d web:v1
+<span class="c"># 半夜容器挂了?机器 b 宕了?——无事发生</span></div>
+      </div>
+      <div class="card">
+        <h3>声明式 <span class="chip b">declarative</span></h3>
+        <p class="note">你提交一份"期望状态"的描述并存进集群。它是<strong>持续有效的合同</strong>,而不是一次性命令:任何时刻实际状态偏离它,控制器都会自动把世界修回来。</p>
+        <div class="shell"><span class="c"># deploy.yaml:我要 3 个 web:v1 的副本,一直要</span>
+<span class="p">kubectl apply</span> -f deploy.yaml
+<span class="c"># 容器挂了 → 自动补;机器宕了 → 挪到别处重建</span>
+<span class="c"># 改成 replicas: 5 再 apply → 自动补 2 个</span>
+<span class="g"># 你维护的是"目标",不是"过程"</span></div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <div class="t">一句话版本</div>
+      k8s = 一个存放期望状态的数据库(通过 API Server 读写)+ 一群各管一摊的<strong>控制器(controller)</strong>。每个控制器死循环地做三件事:<strong>观测</strong>实际状态 → <strong>比对</strong>期望状态 → 用最小动作<strong>消除差异</strong>。这个循环叫 <strong>reconcile(调谐)</strong>。副本数、调度、发布、扩缩容、DNS……全部是这一个模式的不同实例。
+    </div>
+
+    <h3 class="mt2">亲手试试:一个活的调谐循环</h3>
+    <p class="note">下面是一个微缩集群:你声明期望副本数,ReplicaSet 控制器负责让现实跟上。<strong>点击任何一个 Pod 可以"弄死"它</strong>,看看会发生什么;再试试<strong>关掉控制器</strong>之后弄死一个——你会立刻明白控制循环的价值。</p>
+
+    <div class="demo">
+      <div class="demo-bar">
+        <span class="lbl">期望副本数 spec.replicas</span>
+        <div class="counter">
+          <button id="dec" aria-label="减少副本">−</button>
+          <div class="num" id="desiredNum">3</div>
+          <button id="inc" aria-label="增加副本">＋</button>
+        </div>
+        <button class="btn danger" id="killBtn">💥 随机弄死一个 Pod</button>
+        <label class="switch" id="ctrlSwitch"><span class="sw"></span><span id="ctrlLabel">控制器:运行中</span></label>
+      </div>
+      <div class="demo-body">
+        <div class="demo-cluster">
+          <div class="loop-strip">
+            <span class="loop-step" id="ls0">观测</span><span class="loop-arrow">→</span>
+            <span class="loop-step" id="ls1">比对</span><span class="loop-arrow">→</span>
+            <span class="loop-step" id="ls2">行动</span>
+          </div>
+          <div class="diff-line" id="diffLine"></div>
+          <div class="nodes" id="nodesBox"></div>
+        </div>
+        <div class="demo-log">
+          <div class="lh">EVENTS · kubectl get events -w</div>
+          <div class="loglines" id="logBox"></div>
+        </div>
+      </div>
+      <div class="demo-hint" id="demoHint">💡 试试:① 点死一个 Pod,看它多快被补回来 ② 把副本从 3 调到 5 再调回 1 ③ 关掉控制器再点死一个——没人来救,这就是"命令式"的世界。</div>
+    </div>
+
+    <div class="callout orange mt2">
+      <div class="t">为什么这个设计能扛住混乱</div>
+      控制器不记"我上次做了什么",每一轮都<strong>重新看世界、重新算差异</strong>(level-triggered,基于状态而非事件)。所以丢一条消息、控制器自己重启、动作执行到一半失败,都不要紧——下一轮循环会兜底。这是 k8s 在不可靠的分布式环境里保持稳健的根本原因,也是你读懂一切 k8s 组件的钥匙:<strong>看到任何组件,先问"它调谐的是什么差异"</strong>。
+    </div>
+  </div>
+</section>
+<!-- ================= 03 ARCH ================= -->
+<section id="arch">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="stencil">CARGO 03 · 架构</div>
+      <h2>架构 = 一个中枢 + 一群循环</h2>
+      <p class="lead">有了心智模型,架构图就不再是零件清单:<strong>控制平面(control plane)</strong>负责存放期望状态并运行各种控制器,<strong>工作节点(node)</strong>负责真正跑容器。所有组件只跟 API Server 说话,彼此从不直连。<strong>点击任意组件</strong>查看它调谐什么。</p>
+    </div>
+    <div class="board" id="archBoard"></div>
+    <div class="grid2 mt2">
+      <div class="card">
+        <h3>为什么一切都绕经 API Server?</h3>
+        <p class="note">单一入口意味着统一的<strong>认证、鉴权、准入校验、审计</strong>,以及最重要的:所有人看到同一份真相(etcd 里的状态)。组件间解耦为"都盯着同一块黑板",谁挂了重启后接着看黑板即可,不存在丢失的会话。</p>
+      </div>
+      <div class="card">
+        <h3>控制平面挂了,业务会挂吗?</h3>
+        <p class="note">不会立刻挂。节点上的 kubelet 和容器照常运行、流量照常转发——只是集群<strong>暂时失去"变更与自愈"能力</strong>:不能发布、Pod 挂了没人补。这正好印证:控制平面是"大脑",数据平面是"手脚",大脑短暂离线,手脚还在动。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 04 JOURNEY ================= -->
+<section id="journey">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="stencil">CARGO 04 · 运行过程</div>
+      <h2>一次 <code>kubectl apply</code> 的完整旅程</h2>
+      <p class="lead">把架构串起来的最好方式,是跟踪一份 YAML 从提交到容器起飞的全过程。注意一个关键事实:<strong>没有任何组件"指挥"另一个组件</strong>,每一步都是某个控制器看到黑板上出现了自己该管的差异,然后行动。逐步点击 ▸ 观察谁在动。</p>
+    </div>
+    <div class="journey-ctl">
+      <button class="btn" id="jPrev">◂ 上一步</button>
+      <div class="jsteps" id="jSteps"></div>
+      <button class="btn" id="jNext">下一步 ▸</button>
+    </div>
+    <div class="board" id="jrBoard"></div>
+    <div class="jpanel card" id="jPanel"></div>
+  </div>
+</section>
+
+<!-- ================= 05 OBJECTS ================= -->
+<section id="objects">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="stencil">CARGO 05 · 关键概念</div>
+      <h2>对象为什么要分这么多层?</h2>
+      <p class="lead">初学最劝退的就是:明明只想跑个容器,却冒出 Pod、ReplicaSet、Deployment、Service 四五个名词。其实每一层只回答一个问题,<strong>点击每一层</strong>看它存在的理由——理解了"为什么",名词就不用背了。</p>
+    </div>
+
+    <div class="layer l-dep" data-open>
+      <div class="lh"><span class="ln" style="color:var(--helm-deep)">Deployment</span><span class="lq">回答:怎么"换版本"?</span></div>
+      <div class="lwhy"><strong>管理版本与发布。</strong>你改了镜像版本再 apply,Deployment 不会粗暴地杀旧建新,而是创建一个<strong>新的 ReplicaSet</strong>,新的逐步扩、旧的逐步缩(滚动更新);出问题一条命令回滚——本质是把旧 ReplicaSet 的副本数再调回来。这就是为什么它不直接管 Pod:<strong>每个版本一个 ReplicaSet,版本历史被完整保留</strong>。日常工作里你 95% 的时间只跟 Deployment 打交道。</div>
+      <div class="inner">
+        <div class="layer l-rs">
+          <div class="lh"><span class="ln" style="color:var(--buoy)">ReplicaSet</span><span class="lq">回答:怎么"保持 N 个"?</span></div>
+          <div class="lwhy"><strong>管理副本数量。</strong>就是你在上面玩过的那个控制循环:通过 label selector 认领 Pod,少了补、多了删。它只认"数量",不懂"版本",所以发布逻辑放在它上面一层。你几乎不会手写 ReplicaSet——它是 Deployment 的实现细节,但理解它才能看懂 <code>kubectl get rs</code> 里那些名字带哈希的家伙。</div>
+          <div class="inner l-pods-row">
+            <div class="layer l-pod">
+              <div class="lh"><span class="ln" style="color:var(--ok)">Pod</span><span class="lq">回答:什么是"一个实例"?</span></div>
+              <div class="lwhy"><strong>最小调度单位:一个或多个必须同生共死的容器</strong>,共享同一个 IP、localhost 和存储卷。为什么不用容器当最小单位?因为很多场景需要"贴身伙伴":主容器 + 日志收集 sidecar、主容器 + 代理。它们必须在同一台机器、同一网络里。Pod 是<strong>易逝的</strong>:重建后名字、IP 全变——所以别对着 Pod 编程。</div>
+              <div class="inner">
+                <div class="layer l-c"><div class="lh"><span class="ln">container: web</span><span class="lq">你的镜像</span></div></div>
+                <div class="layer l-c"><div class="lh"><span class="ln">container: log-agent</span><span class="lq">sidecar(可选)</span></div></div>
+              </div>
+            </div>
+            <div class="layer l-pod"><div class="lh"><span class="ln" style="color:var(--ok)">Pod</span><span class="lq">副本 2</span></div><div class="lwhy">同模板复制出来的副本,分散在不同节点上抗单点故障。</div></div>
+            <div class="layer l-pod"><div class="lh"><span class="ln" style="color:var(--ok)">Pod</span><span class="lq">副本 3</span></div><div class="lwhy">同模板复制出来的副本。名字里的随机后缀说明:它们是牲畜(cattle),不是宠物(pet)。</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="hintline">▲ 记忆法:<strong>Deployment 管版本,ReplicaSet 管数量,Pod 管运行</strong>。同族亲戚:有状态应用用 StatefulSet(稳定的名字与存储),每节点一个的守护进程用 DaemonSet,一次性任务用 Job / CronJob——都是"某种控制器 + Pod 模板"这一个配方。</p>
+
+    <div class="callout mt2">
+      <div class="t">粘合剂:label 与 selector</div>
+      层与层之间不是硬引用,而是<strong>标签匹配</strong>:Pod 身上贴 <code>app: web</code>,ReplicaSet 用 <code>selector: app=web</code> 认领它们,下一节的 Service 也用同样的方式挑选流量后端。松耦合意味着你可以给 Pod 打个新标签把它"摘出"排查问题,控制器会自动补一个新的顶上。
+    </div>
+  </div>
+</section>
+
+<!-- ================= 06 NETWORK ================= -->
+<section id="network">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="stencil">CARGO 06 · 流量入口</div>
+      <h2>Pod 会死会换 IP,那请求发给谁?</h2>
+      <p class="lead">上一节的结论是"别对着 Pod 编程"——它的 IP 随时会变。于是需要一个<strong>稳定的门牌</strong>:Service。它有一个不变的虚拟 IP 和 DNS 名字,用 label selector 实时圈定一批健康的 Pod,把到达的流量分发过去。</p>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Service 流量示意:调用方访问固定的 Service 名字,由 Service 转发到带有 app=web 标签的多个 Pod" style="width:100%;height:auto">
+        <defs><marker id="ah2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2E6BDB"/></marker></defs>
+        <rect x="12" y="80" width="130" height="52" rx="10" fill="#fff" stroke="#CBD8E0" stroke-width="1.5"/>
+        <text x="77" y="102" text-anchor="middle" font-size="13" fill="#16293A" font-weight="bold">调用方</text>
+        <text x="77" y="120" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#51687A">http://web:80</text>
+        <rect x="230" y="70" width="170" height="72" rx="10" fill="#E4ECFA" stroke="#2E6BDB" stroke-width="2"/>
+        <text x="315" y="95" text-anchor="middle" font-family="monospace" font-size="12.5" fill="#1E4FAE" font-weight="bold">Service: web</text>
+        <text x="315" y="112" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#51687A">ClusterIP 10.96.0.7(不变)</text>
+        <text x="315" y="128" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#E0611C">selector: app=web</text>
+        <g font-family="monospace" font-size="10.5">
+          <rect x="540" y="14" width="180" height="44" rx="9" fill="#fff" stroke="#1E8A5A" stroke-width="1.5"/>
+          <text x="630" y="32" text-anchor="middle" fill="#16293A">pod web-7d4f-a1 ✓ 就绪</text>
+          <text x="630" y="47" text-anchor="middle" fill="#51687A">10.244.1.5 · app=web</text>
+          <rect x="540" y="82" width="180" height="44" rx="9" fill="#fff" stroke="#1E8A5A" stroke-width="1.5"/>
+          <text x="630" y="100" text-anchor="middle" fill="#16293A">pod web-7d4f-b2 ✓ 就绪</text>
+          <text x="630" y="115" text-anchor="middle" fill="#51687A">10.244.2.8 · app=web</text>
+          <rect x="540" y="150" width="180" height="44" rx="9" fill="#F6F9FA" stroke="#B97A0F" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="630" y="168" text-anchor="middle" fill="#B97A0F">pod web-7d4f-c3 ✗ 未就绪</text>
+          <text x="630" y="183" text-anchor="middle" fill="#51687A">readiness 探针未通过 → 摘除</text>
+        </g>
+        <path d="M144 106 L226 106" stroke="#2E6BDB" stroke-width="2" marker-end="url(#ah2)"/>
+        <path d="M402 90 Q470 60 536 38" stroke="#2E6BDB" stroke-width="2" fill="none" marker-end="url(#ah2)"/>
+        <path d="M402 112 Q470 108 536 104" stroke="#2E6BDB" stroke-width="2" fill="none" marker-end="url(#ah2)"/>
+        <path d="M402 130 Q470 158 536 170" stroke="#CBD8E0" stroke-width="2" fill="none" stroke-dasharray="5 4"/>
+      </svg>
+      <p class="note">Service 同样是一个调谐循环:Endpoint 控制器持续把"selector 命中且 <strong>readiness 探针通过</strong>的 Pod IP"写入端点列表;每台节点上的 kube-proxy 再把这份列表变成本机的转发规则。Pod 生生死死,调用方始终只认 <code>http://web</code> 这个 DNS 名字。</p>
+    </div>
+
+    <h3 class="mt2">从集群外进来:四种暴露方式</h3>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>方式</th><th>它是什么</th><th>可从哪访问</th><th>典型用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>ClusterIP</code><span class="sub">Service 默认类型</span></td><td>集群内部虚拟 IP + DNS 名</td><td>仅集群内</td><td>服务间调用(绝大多数)</td></tr>
+          <tr><td><code>NodePort</code><span class="sub">Service 类型</span></td><td>在每台节点开同一个高位端口(30000+)转发进来</td><td>能连到任一节点 IP 的地方</td><td>开发调试、简易暴露</td></tr>
+          <tr><td><code>LoadBalancer</code><span class="sub">Service 类型</span></td><td>找云厂商申请一个真实负载均衡器和公网 IP</td><td>公网</td><td>云上暴露单个服务,一个服务一个 LB,费钱</td></tr>
+          <tr><td><code>Ingress</code><span class="sub">独立对象,不是 Service 类型</span></td><td>七层路由规则:按域名/路径把 HTTP 流量分发给不同 Service,需装 Ingress Controller(如 nginx)</td><td>公网</td><td>生产常态:一个入口托管 N 个服务</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <div class="t">常见混淆</div>
+      Service 的"负载均衡"只是每台机器上的<strong>转发规则</strong>(iptables/IPVS),不是一台中心化的 LB 设备;<strong>Ingress 不是 Service 的第四种类型</strong>,而是叠在 Service 之上的 HTTP 路由层。生产里最常见的组合:外部 LB → Ingress → 各服务的 ClusterIP → Pod。
+    </div>
+  </div>
+</section>
+<!-- ================= 07 HANDS ================= -->
+<section id="hands">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="stencil">CARGO 07 · 最小可验证例子</div>
+      <h2>25 行 YAML,把前面所有概念落地</h2>
+      <p class="lead">这份文件声明了一个 3 副本的 nginx 加一个 Service。<strong>点击左侧任意高亮行</strong>,右侧解释它对应前文的哪个概念。装个 <a href="https://minikube.sigs.k8s.io" target="_blank" rel="noopener">minikube</a> 或 <a href="https://kind.sigs.k8s.io" target="_blank" rel="noopener">kind</a> 就能在笔记本上完整跑通。</p>
+    </div>
+    <div class="yamlbox">
+      <div class="yaml" id="yamlPane" role="list"></div>
+      <div class="yaml-note" id="yamlNote">
+        <div class="nt">LINE NOTES</div>
+        <h4>点击左侧带下划线的行</h4>
+        <p>每一行注释都会告诉你:它是给哪个控制器看的、对应第几节讲过的机制。</p>
+      </div>
+    </div>
+
+    <h3 class="mt2">然后,亲手复现本文的三个断言</h3>
+    <div class="card">
+      <div class="shell"><span class="c"># ① 声明式:提交期望状态,然后看现实追上来</span>
+<span class="p">kubectl apply</span> -f web.yaml
+<span class="p">kubectl get</span> pods -w        <span class="c"># Pending → ContainerCreating → Running ×3</span>
+
+<span class="c"># ② 自愈:手动杀一个 Pod,数秒内一个新 Pod 顶上(名字后缀变了)</span>
+<span class="p">kubectl delete</span> pod -l app=web --wait=false <span class="s">$(kubectl get pod -l app=web -o name | head -1)</span>
+<span class="p">kubectl get</span> pods -w
+
+<span class="c"># ③ 扩缩容与访问:改期望 → 现实跟随;经 Service 的稳定名字访问</span>
+<span class="p">kubectl scale</span> deployment web --replicas=5
+<span class="p">kubectl port-forward</span> svc/web 8080:80
+<span class="g">curl http://localhost:8080   # Welcome to nginx!</span>
+
+<span class="c"># 排查铁三角:describe 看事件,logs 看输出,exec 进容器</span>
+<span class="p">kubectl describe</span> pod &lt;name&gt; · <span class="p">kubectl logs</span> &lt;name&gt; · <span class="p">kubectl exec</span> -it &lt;name&gt; -- sh</div>
+      <p class="note mt">如果第 ② 步的行为让你会心一笑——恭喜,你已经拥有了 k8s 的心智模型:<strong>你删的是实际状态,没动期望状态,所以控制器必然把它补回来</strong>。真想下线要删 Deployment(期望本身)。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 08 PITFALLS ================= -->
+<section id="pitfalls">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="stencil">CARGO 08 · 误区与边界</div>
+      <h2>相近概念、常见误区与"什么时候别用它"</h2>
+      <p class="lead">先横向对比一次定位,再逐个拆穿新手最容易踩的认知陷阱,最后把适用边界说清楚——工具的边界感,和工具本身一样重要。</p>
+    </div>
+
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>维度</th><th>docker run</th><th>docker compose</th><th>Kubernetes</th></tr></thead>
+        <tbody>
+          <tr><td>作用域</td><td>单容器</td><td>单机、多容器</td><td><span class="good">多机集群</span></td></tr>
+          <tr><td>机器挂了</td><td><span class="nope">全灭</span></td><td><span class="nope">全灭</span></td><td><span class="good">Pod 在别的节点重建</span></td></tr>
+          <tr><td>进程挂了</td><td><span class="meh">restart 策略可拉起</span></td><td><span class="meh">同左,仅限本机</span></td><td><span class="good">调谐循环持续补齐副本</span></td></tr>
+          <tr><td>滚动发布 / 回滚</td><td><span class="nope">手工</span></td><td><span class="nope">基本靠脚本</span></td><td><span class="good">内建,一条命令</span></td></tr>
+          <tr><td>服务发现</td><td>—</td><td><span class="meh">单机内网络别名</span></td><td><span class="good">集群级 DNS + Service VIP</span></td></tr>
+          <tr><td>心智负担 / 运维成本</td><td><span class="good">极低</span></td><td><span class="good">低</span></td><td><span class="nope">高,需要专门投入</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note mt">一句话:compose 和 k8s 不是竞品,而是<strong>不同规模问题的答案</strong>。很多团队本地开发用 compose,生产用 k8s。</p>
+
+    <h3 class="mt2">六个最常见的误区</h3>
+    <details>
+      <summary><span class="x">误区 01</span>“Pod 就是容器的别名”</summary>
+      <div class="body">Pod 是<b>一组共享网络与存储的容器</b> + 最小调度单位。多数 Pod 确实只有一个容器,但"共享 localhost 的贴身伙伴"(sidecar)模式依赖这个抽象。推论:同一 Pod 里的容器不能各自伸缩、必然同机同生死。</div>
+    </details>
+    <details>
+      <summary><span class="x">误区 02</span>“kubectl delete pod 可以下线服务”</summary>
+      <div class="body">你删的是<b>实际状态</b>,期望状态(Deployment)还写着 replicas: 3,控制器几秒内就补一个新的。这不是 bug,这正是系统在履行合同。想下线,改的是期望:<code>kubectl delete deployment web</code> 或把副本数调为 0。</div>
+    </details>
+    <details>
+      <summary><span class="x">误区 03</span>“k8s 会自动帮我扩容”</summary>
+      <div class="body">默认<b>不会</b>。自动扩容是独立的控制器 HPA(HorizontalPodAutoscaler),而且它依赖你给容器声明了 <code>resources.requests</code>、装了 metrics 采集。没有这些前提,流量再大副本数也纹丝不动。同理,"资源隔离"也依赖你写 requests/limits——k8s 只裁判你声明过的东西。</div>
+    </details>
+    <details>
+      <summary><span class="x">误区 04</span>“流量会自动避开有问题的实例”</summary>
+      <div class="body">Service 只摘除 <b>readiness 探针失败</b>的 Pod。你不配 readinessProbe,进程假死、还在启动预热,流量照样打过来。存活性(liveness,失败则重启容器)和就绪性(readiness,失败则摘流量)是两个探针、两种后果,生产必配。</div>
+    </details>
+    <details>
+      <summary><span class="x">误区 05</span>“Pod 里写的文件,重启后还在”</summary>
+      <div class="body">Pod 是易逝的,容器文件系统随容器消失,<code>emptyDir</code> 卷随 Pod 消失。持久数据必须显式声明 PersistentVolumeClaim 挂载外部存储。心法:<b>把 Pod 当牲畜,不当宠物</b>——任何"这个 Pod 有点特殊"的念头都是架构隐患。</div>
+    </details>
+    <details>
+      <summary><span class="x">误区 06</span>“组件之间互相调用,像微服务一样”</summary>
+      <div class="body">恰恰相反:scheduler 不调用 kubelet,controller 不调用 scheduler,<b>它们只读写 API Server 上的状态</b>,通过 watch 各自认领差异。理解这一点,你才能解释为什么组件可以任意重启而集群不乱——状态在黑板上,不在谁的内存里。</div>
+    </details>
+
+    <h3 class="mt2">适用边界:先自检,再上船</h3>
+    <div class="grid2">
+      <div class="card" style="border-color:var(--ok)">
+        <h3 style="color:var(--ok)">✓ 适合上 k8s</h3>
+        <p class="note">· 多台机器、多个服务、副本数 ≥ 两位数<br>· 需要频繁不停机发布、快速回滚<br>· 需要故障自愈与弹性伸缩,SLA 有要求<br>· 团队有(或愿意培养)专门的平台运维投入<br>· 想要一套跨云厂商的统一部署语言</p>
+      </div>
+      <div class="card" style="border-color:var(--bad)">
+        <h3 style="color:var(--bad)">✗ 先别上 k8s</h3>
+        <p class="note">· 单机能扛的个人项目、内部小工具 → <code>docker compose</code><br>· 不想管任何基础设施 → PaaS / Serverless(如 Cloud Run、Fly.io)<br>· 团队没人能值守集群本身——k8s 把"运维应用"变成了"运维平台",这层成本不会消失,只会转移<br>· 强单机性能、极简依赖的场景(如嵌入式、桌面软件)</p>
+      </div>
+    </div>
+    <div class="callout orange mt2">
+      <div class="t">取舍的实话</div>
+      k8s 用<strong>前期复杂度</strong>换<strong>后期确定性</strong>:YAML 多、概念多、排障链路长,但换来的是"任何公司、任何云、任何规模,部署语言一致,故障处理自动化"。规模不到,这笔交换是亏的;规模到了,它几乎是唯一标准答案。托管服务(EKS / GKE / ACK)能帮你抹掉控制平面的运维,但抹不掉概念本身的学习成本——所以才有这篇文章。
+    </div>
+  </div>
+</section>
+
+<!-- ================= 09 TRANSFER ================= -->
+<section id="transfer">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="stencil">CARGO 09 · 迁移与下一步</div>
+      <h2>把这个模型带走,它比 k8s 本身更值钱</h2>
+      <p class="lead">"声明期望 + 循环调谐"不只是 k8s 的实现细节,它是驯服复杂分布式系统的一种通用范式,你会在越来越多的地方认出它。</p>
+    </div>
+    <div class="grid3">
+      <div class="card"><h3>k8s 内部的复用</h3><p class="note">HPA 调谐"负载 vs 副本数",cluster-autoscaler 调谐"待调度 Pod vs 节点数",证书轮转、DNS 记录……全是同一个循环换了比对对象。看到新组件,先问:<strong>它调谐什么差异?</strong></p></div>
+      <div class="card"><h3>Operator 模式</h3><p class="note">你可以自定义资源(CRD)+ 自写控制器,把"运维一个数据库集群"的专家经验写成调谐循环——声明 <code>kind: PostgresCluster</code>,控制器负责建库、备份、故障切换。这是 k8s 从"跑容器"进化成"平台的平台"的原因。</p></div>
+      <div class="card"><h3>GitOps</h3><p class="note">把"期望状态"再往外推一层:YAML 全部进 Git,集群里的 Argo CD / Flux 调谐"Git 里的声明 vs 集群现状"。发布 = 提交 PR,回滚 = git revert,审计 = git log。同一个模型,套娃使用。</p></div>
+    </div>
+    <div class="final">
+      <div class="stencil">MANIFEST · 出港清单</div>
+      <h3 style="margin-top:10px">此刻你应该能不假思索地回答:</h3>
+      <p style="margin-top:10px">① k8s 解决的是哪一层的问题,和 docker compose 的边界在哪;<br>② 为什么删 Pod 它会复活,删 Deployment 才是真下线;<br>③ 一次 apply 之后,五个组件各自"看见"了什么、做了什么;<br>④ Deployment / ReplicaSet / Pod / Service 各回答哪个问题;<br>⑤ 什么规模下不该用 k8s。</p>
+      <p style="margin-top:14px">下一步路线:本地 minikube 跑通第 07 节 → 给容器加上 probes 与 resources → 学 ConfigMap / Secret 管配置 → 学 Ingress 管入口 → 有状态再碰 StatefulSet 与 PVC。遇到任何新对象,回到那句咒语:<b style="color:#fff">它调谐的是什么差异?</b></p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">一文读懂 · Kubernetes — 单文件离线版 · 交互演示为教学简化模型,时序与真实集群略有差异</div>
+</footer>
+<script>
+(function(){
+"use strict";
+/* ============ 01 调谐循环演示 ============ */
+const NODES=[{id:"node-a",cap:4},{id:"node-b",cap:4},{id:"node-c",cap:4}];
+let desired=3, pods=[], ctrlOn=true, seq=0, phase=0;
+const $=id=>document.getElementById(id);
+const rid=()=>Math.random().toString(36).slice(2,7);
+function now(){const d=new Date();return d.toTimeString().slice(0,8);}
+function log(src,msg,cls){
+  const box=$("logBox");
+  const el=document.createElement("div");
+  el.innerHTML='<span class="dim">'+now()+'</span> <span class="src">'+src+'</span> <span class="'+(cls||"")+'">'+msg+'</span>';
+  box.appendChild(el);
+  while(box.children.length>40)box.removeChild(box.firstChild);
+  box.scrollTop=box.scrollHeight;
+}
+function pickNode(){
+  const load={};NODES.forEach(n=>load[n.id]=0);
+  pods.forEach(p=>{if(p.status!=="terminating")load[p.node]++;});
+  return NODES.slice().sort((a,b)=>load[a.id]-load[b.id])[0].id; // 最空的节点,微缩版打分
+}
+function createPod(){
+  const p={id:"web-7d4f-"+rid(),status:"starting",node:pickNode()};
+  pods.push(p);seq++;
+  log("scheduler","已将 "+p.id+" 调度到 "+p.node);
+  setTimeout(()=>{if(p.status==="starting"){p.status="running";log("kubelet","已启动 "+p.id,"ok");render();}},900+Math.random()*900);
+  return p;
+}
+function killPod(p,by){
+  if(!p||p.status==="terminating")return;
+  p.status="terminating";
+  log(by||"you","💥 "+p.id+" 已被杀死","bad");
+  setTimeout(()=>{pods=pods.filter(x=>x!==p);render();},650);
+  render();
+}
+function alive(){return pods.filter(p=>p.status!=="terminating");}
+function reconcile(){
+  // 三阶段小灯
+  [0,1,2].forEach(i=>$("ls"+i).classList.toggle("hot",ctrlOn&&i===phase));
+  if(!ctrlOn){render(true);return;}
+  if(phase===2){ // 行动阶段
+    const a=alive();
+    if(a.length<desired){const p=createPod();log("replicaset-ctrl","期望 "+desired+" 实际 "+a.length+" → 创建 "+p.id,"ok");}
+    else if(a.length>desired){const victim=a[a.length-1];log("replicaset-ctrl","期望 "+desired+" 实际 "+a.length+" → 缩容","bad");killPod(victim,"replicaset-ctrl");}
+  }
+  phase=(phase+1)%3;
+  render();
+}
+function render(dead){
+  $("desiredNum").textContent=desired;
+  const a=alive().length;
+  const dl=$("diffLine");
+  dl.className="diff-line "+(a===desired?"match":"miss");
+  dl.innerHTML='比对:期望 <span class="dn">'+desired+'</span> — 实际 <span class="da">'+a+'</span>'+(a===desired?' → 无差异,继续观测':(ctrlOn?' → 差 '+(desired-a)+',行动!':' → 有差异,但控制器已停,<b>没人行动</b>'));
+  const nb=$("nodesBox");nb.innerHTML="";
+  NODES.forEach(n=>{
+    const div=document.createElement("div");div.className="knode";
+    const mine=pods.filter(p=>p.node===n.id);
+    div.innerHTML='<div class="nh"><span>'+n.id+'</span><span>'+mine.filter(p=>p.status!=="terminating").length+' pod</span></div>';
+    mine.forEach(p=>{
+      const pd=document.createElement("div");pd.className="pod "+p.status;
+      pd.title="点击弄死这个 Pod";
+      pd.innerHTML='<span class="dot"></span>'+p.id+'<span class="st">'+({running:"Running",starting:"Creating",terminating:"Terminating"})[p.status]+'</span>';
+      pd.onclick=()=>killPod(p);
+      div.appendChild(pd);
+    });
+    nb.appendChild(div);
+  });
+}
+$("inc").onclick=()=>{if(desired<8){desired++;log("you","kubectl scale --replicas="+desired);render();}};
+$("dec").onclick=()=>{if(desired>0){desired--;log("you","kubectl scale --replicas="+desired);render();}};
+$("killBtn").onclick=()=>{const a=alive();if(a.length)killPod(a[Math.floor(Math.random()*a.length)]);};
+$("ctrlSwitch").onclick=()=>{
+  ctrlOn=!ctrlOn;
+  $("ctrlSwitch").classList.toggle("off",!ctrlOn);
+  $("ctrlLabel").textContent=ctrlOn?"控制器:运行中":"控制器:已停止";
+  log("controller-manager",ctrlOn?"▶ 调谐循环恢复,重新观测世界":"⏸ 调谐循环已停止(现在是命令式世界)",ctrlOn?"ok":"bad");
+  if(!ctrlOn)[0,1,2].forEach(i=>$("ls"+i).classList.remove("hot"));
+  render();
+};
+log("you","kubectl apply -f deploy.yaml (replicas: 3)");
+for(let i=0;i<3;i++)createPod();
+render();
+setInterval(reconcile,760);
+
+/* ============ 03/04 架构板(渲染两份实例) ============ */
+const COMPS={
+  kubectl:{n:"kubectl",r:"你的命令行",d:"把 YAML/命令翻译成对 API Server 的 REST 请求。它没有任何特权——和集群内组件走同一扇门。"},
+  apiserver:{n:"API Server",r:"唯一入口 · 黑板",d:"集群的唯一读写入口:认证、鉴权、校验后把状态存入 etcd;并向所有 watch 它的组件推送变化。所有组件只与它通信,彼此不直连。"},
+  etcd:{n:"etcd",r:"状态数据库",d:"高可用键值存储,保存整个集群的期望状态与实际状态。它是唯一需要备份的东西——丢了 etcd 才算丢了集群。"},
+  scheduler:{n:"Scheduler",r:"控制器:选节点",d:"调谐的差异:「已创建但还没绑定节点的 Pod」。先过滤(资源够不够、亲和性),再打分,把选中的节点名写回 Pod 对象。注意:它只写字,不去启动容器。"},
+  cm:{n:"Controller Manager",r:"控制器合集",d:"跑着几十个调谐循环:Deployment 控制器、ReplicaSet 控制器、Node 控制器(发现节点失联,把上面的 Pod 标记重建)、Endpoint 控制器……你在第 02 节玩的就是其中一个。"},
+  kubelet:{n:"kubelet",r:"节点管家",d:"每台节点一个。watch「分给我这台机器的 Pod」,调用容器运行时拉镜像、启动容器、执行探针,并把实际状态汇报回 API Server。"},
+  proxy:{n:"kube-proxy",r:"流量规则",d:"每台节点一个。watch Service 与 Endpoint,把「访问 Service IP → 转发到某个 Pod」落成本机 iptables/IPVS 规则。见第 06 节。"},
+  runtime:{n:"容器运行时",r:"containerd 等",d:"真正创建容器的组件(通过 CRI 接口对接)。Docker 时代的守护进程在这里被 containerd 取代,但你构建的镜像完全通用。"},
+  pods:{n:"Pods",r:"你的应用",d:"最终跑起来的业务容器们——前面所有组件存在的唯一目的。"}
+};
+function boardHTML(prefix){
+  const c=k=>'<button class="comp" id="'+prefix+k+'" data-k="'+k+'"><span class="cn">'+COMPS[k].n+'</span><span class="cr">'+COMPS[k].r+'</span></button>';
+  return '<div class="board-row">'
+    +'<div class="board-you">'+c("kubectl")+'</div>'
+    +'<div class="plane"><div class="plane-title">CONTROL PLANE · 控制平面(大脑)</div><div class="plane-grid">'
+    +c("apiserver")+c("etcd")+c("scheduler")+c("cm")+'</div></div></div>'
+    +'<div class="workers">'
+    +'<div class="wnode"><div class="node-title">NODE 1 · 工作节点(手脚)</div><div class="plane-grid">'+["kubelet","proxy","runtime"].map(k=>'<button class="comp" id="'+prefix+k+'" data-k="'+k+'"><span class="cn">'+COMPS[k].n+'</span><span class="cr">'+COMPS[k].r+'</span></button>').join("")+'</div><div style="margin-top:10px">'+c("pods")+'</div></div>'
+    +'<div class="wnode"><div class="node-title">NODE 2 · 工作节点</div><div class="plane-grid">'
+    +'<div class="comp" style="cursor:default"><span class="cn">kubelet</span><span class="cr">同左</span></div>'
+    +'<div class="comp" style="cursor:default"><span class="cn">kube-proxy</span><span class="cr">同左</span></div>'
+    +'<div class="comp" style="cursor:default"><span class="cn">运行时 + Pods</span><span class="cr">同左</span></div>'
+    +'</div></div></div>'
+    +'<div class="board-detail" id="'+prefix+'detail"><span class="dn">▲ 点击组件查看它"调谐什么差异"</span><p>组件之间没有指挥链:全部通过 watch API Server 认领自己的活。</p></div>';
+}
+$("archBoard").innerHTML=boardHTML("a_");
+$("archBoard").querySelectorAll(".comp[data-k]").forEach(b=>{
+  b.onclick=()=>{
+    $("archBoard").querySelectorAll(".comp").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel");
+    const c=COMPS[b.dataset.k];
+    $("a_detail").innerHTML='<span class="dn">'+c.n+' — '+c.r+'</span><p>'+c.d+'</p>';
+  };
+});
+
+/* ============ 04 apply 旅程 ============ */
+$("jrBoard").innerHTML=boardHTML("j_");
+$("j_detail").style.display="none";
+const STEPS=[
+ {hot:["kubectl"],t:"你提交期望状态",d:"kubectl apply -f web.yaml —— 客户端把 YAML 转成一个 REST 请求发给 API Server。注意你提交的只是「愿望」,此刻集群里什么都还没发生。",k:"人只出现在这一步,后面全是循环在接力"},
+ {hot:["apiserver","etcd"],t:"写上黑板",d:"API Server 完成认证、鉴权、准入校验,把这个 Deployment 对象持久化进 etcd,然后向所有 watch 相关资源的组件广播:黑板上有新内容了。",k:"此刻:有 Deployment 对象,0 个 Pod"},
+ {hot:["cm","apiserver"],t:"Deployment 控制器接棒",d:"它 watch 到一个新 Deployment,而世上还没有对应的 ReplicaSet ——这就是差异。行动:创建一个 ReplicaSet 对象(名字带模板哈希),写回 API Server。",k:"差异:该有 RS 而没有 → 建 RS"},
+ {hot:["cm","apiserver"],t:"ReplicaSet 控制器接棒",d:"它发现这个 RS 期望 3 副本,而 selector 能认领到的 Pod 是 0 个。行动:创建 3 个 Pod 对象。注意这些 Pod 还只是黑板上的记录,没有绑定任何机器。",k:"差异:期望 3,实际 0 → 建 3 个 Pod 对象"},
+ {hot:["scheduler","apiserver"],t:"Scheduler 接棒",d:"它专盯「没写 nodeName 的 Pod」。对每个 Pod 先过滤掉资源不足/不满足约束的节点,再给剩下的打分,把胜出节点的名字写回 Pod 对象。它的工作到此为止——只写字,不碰容器。",k:"差异:Pod 没归属 → 写上 nodeName"},
+ {hot:["kubelet","runtime","pods"],t:"kubelet 接棒",d:"被选中节点上的 kubelet watch 到「分给我的 Pod」,调用容器运行时拉镜像、创建容器、执行探针,再把 Pod 的实际状态(Running、IP 等)汇报回黑板。",k:"愿望在这一步第一次变成真实的进程"},
+ {hot:["cm","proxy","apiserver"],t:"流量接入,循环永续",d:"Endpoint 控制器把就绪 Pod 的 IP 写入 Service 的端点列表,各节点 kube-proxy 更新转发规则——服务可访问。而所有循环并不退出:从现在起任何偏离(Pod 死、节点失联、你改 YAML)都会被同样的机制修正。",k:"apply 不是流程的结束,而是合同的生效"}
+];
+let js=0;
+const jSteps=$("jSteps");
+STEPS.forEach((s,i)=>{
+  const b=document.createElement("button");b.className="jdot";b.textContent=i+1;b.onclick=()=>go(i);jSteps.appendChild(b);
+});
+function go(i){
+  js=Math.max(0,Math.min(STEPS.length-1,i));
+  const s=STEPS[js];
+  jSteps.querySelectorAll(".jdot").forEach((b,k)=>{b.className="jdot"+(k===js?" on":k<js?" done":"");});
+  $("jrBoard").querySelectorAll(".comp").forEach(x=>x.classList.remove("hot"));
+  s.hot.forEach(k=>{const el=$("j_"+k);if(el)el.classList.add("hot");});
+  $("jPanel").innerHTML='<div class="jt"><span class="no">STEP '+(js+1)+'/7</span>'+s.t+'</div><p>'+s.d+'</p><div class="jkey">☞ '+s.k+'</div>';
+}
+$("jPrev").onclick=()=>go(js-1);
+$("jNext").onclick=()=>go(js+1);
+go(0);
+
+/* ============ 05 分层点击 ============ */
+document.querySelectorAll(".layer").forEach(l=>{
+  if(!l.querySelector(":scope > .lwhy"))return;
+  l.addEventListener("click",e=>{
+    if(e.target.closest(".layer")!==l)return;
+    l.classList.toggle("open");
+  });
+});
+document.querySelector(".l-dep").classList.add("open");
+
+/* ============ 07 YAML 注解 ============ */
+const Y=[
+ ["apiVersion: apps/v1",null],
+ ["kind: Deployment","声明对象类型。选 Deployment 而不是直接写 Pod,就是把「保持副本数 + 滚动发布」外包给控制器(第 05 节)。"],
+ ["metadata:",null],
+ ["  name: web",null],
+ ["spec:",null],
+ ["  replicas: 3","期望状态的核心数字。你在第 02 节的演示里调的就是它——改了它再 apply,调谐循环负责让现实跟上。"],
+ ["  selector:",null],
+ ["    matchLabels:",null],
+ ["      app: web","ReplicaSet 用这个标签「认领」Pod。它必须与下面模板里的 labels 匹配——这就是层与层之间的粘合剂(第 05 节)。"],
+ ["  template:","Pod 模板:控制器每次补副本,都按这份图纸造一个新 Pod。"],
+ ["    metadata:",null],
+ ["      labels:",null],
+ ["        app: web","造出来的每个 Pod 都贴上这个标签,供 ReplicaSet 与 Service 挑选。"],
+ ["    spec:",null],
+ ["      containers:",null],
+ ["      - name: web",null],
+ ["        image: nginx:1.27","跑什么镜像。发布新版本 = 改这里再 apply,Deployment 会新建一个 ReplicaSet 做滚动更新。"],
+ ["        ports:",null],
+ ["        - containerPort: 80",null],
+ ["        readinessProbe:","就绪探针:失败则从 Service 摘除流量(第 06 节那台虚线 Pod)。不配它,启动中/假死的实例照样接流量。"],
+ ["          httpGet: {path: /, port: 80}",null],
+ ["        resources:","资源声明:requests 供调度器打分与 HPA 计算,limits 防止一个容器吃垮整机。不写 = 放弃 k8s 的资源裁判能力(误区 03)。"],
+ ["          requests: {cpu: 100m, memory: 64Mi}",null],
+ ["---",null],
+ ["kind: Service","稳定门牌:固定的 ClusterIP + DNS 名 web,把流量分给下面 selector 命中的就绪 Pod(第 06 节)。"],
+ ["apiVersion: v1",null],
+ ["metadata: {name: web}",null],
+ ["spec:",null],
+ ["  selector: {app: web}","和 Deployment 无直接引用关系——纯靠标签匹配同一批 Pod。"],
+ ["  ports: [{port: 80, targetPort: 80}]",null]
+];
+const yp=$("yamlPane");
+Y.forEach((row,i)=>{
+  const el=document.createElement("span");
+  el.className="yl"+(row[1]?" hasnote":"");
+  el.textContent=row[0];
+  // 简单着色
+  el.innerHTML=el.innerHTML.replace(/^(\s*-?\s*)([\w.]+)(:)/,'$1<span class="yk">$2</span>$3')
+                           .replace(/: ([^&<][^<]*)$/,': <span class="yv">$1</span>');
+  if(row[1]){
+    el.onclick=()=>{
+      yp.querySelectorAll(".yl").forEach(x=>x.classList.remove("on"));
+      el.classList.add("on");
+      $("yamlNote").innerHTML='<div class="nt">LINE NOTES</div><h4>'+row[0].trim()+'</h4><p>'+row[1]+'</p>';
+    };
+  }
+  yp.appendChild(el);
+});
+
+/* ============ 导航高亮 ============ */
+const chips=[...document.querySelectorAll(".nav-chip")];
+const secs=chips.map(c=>document.querySelector(c.getAttribute("href")));
+if(window.IntersectionObserver){
+const io=new IntersectionObserver(es=>{
+  es.forEach(e=>{
+    if(e.isIntersecting){
+      chips.forEach(c=>c.classList.toggle("on",c.getAttribute("href")==="#"+e.target.id));
+    }
+  });
+},{rootMargin:"-25% 0px -65% 0px"});
+secs.forEach(s=>s&&io.observe(s));
+}
+})();
+</script>
+</body>
+</html>

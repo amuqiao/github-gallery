@@ -1,0 +1,46 @@
+schema_version: 2
+id: docker
+hall: lab
+kind: github_project
+title: Docker
+summary: 容器打包与运行平台，用镜像、容器、网络和卷把应用环境变成可复现的交付物。
+source:
+  type: github
+  url: https://github.com/moby/moby
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/moby/moby
+  category: infrastructure
+  tags:
+    - toolkit
+    - workflow
+  maintenance_status: unknown
+  languages:
+    - Go
+notes:
+  - id: docker-explainer
+    title: 一文读懂 Docker · 把环境打包成可运行的集装箱
+    type: html
+    path: ./notes/docker-explainer.html
+    summary: 从 Dockerfile、镜像分层、容器进程、volume、network 和单机运行边界理解 Docker。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/moby/moby
+      - label: Documentation
+        url: https://docs.docker.com
+  - type: highlights
+    items:
+      - 把应用和运行时依赖打包成可复用、可分发的镜像。
+      - 以 Dockerfile 分层、容器、卷和网络组成核心工作流。
+      - 是理解 Docker Compose 和 Kubernetes 之前的单机容器基础。
+  - type: use-cases
+    items:
+      - 学习容器镜像、容器进程和可复现运行环境。
+      - 统一本地开发、测试和部署依赖的打包方式。
+      - 理解 Docker、Docker Compose 和 Kubernetes 的能力边界。

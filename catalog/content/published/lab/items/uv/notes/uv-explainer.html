@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 uv — Python 的一体化包管理器</title>
+<style>
+:root{
+  --bg:#F5F6FA;
+  --panel:#FFFFFF;
+  --ink:#1A1C30;
+  --muted:#5C6079;
+  --line:#E3E5EF;
+  --brand:#6D5BE8;
+  --brand-deep:#4B3ACF;
+  --brand-soft:#EEEBFD;
+  --grad:linear-gradient(90deg,#6D5BE8,#B44FE0);
+  --term-bg:#16172B;
+  --term-ink:#D8DAF0;
+  --term-dim:#7A7E9E;
+  --ok:#2E9E6B;
+  --warn:#C2621C;
+  --code-bg:#EDEEF6;
+  --radius:14px;
+  --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  font-size:16px;line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:920px;margin:0 auto;padding:0 22px}
+a{color:var(--brand-deep)}
+code{font-family:var(--mono);font-size:.88em;background:var(--code-bg);padding:.12em .4em;border-radius:5px;white-space:nowrap}
+strong{font-weight:650}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,[tabindex]:focus-visible,summary:focus-visible,a:focus-visible{outline:2.5px solid var(--brand);outline-offset:2px;border-radius:4px}
+
+/* ---------- 顶栏 ---------- */
+.topnav{position:sticky;top:0;z-index:50;background:rgba(245,246,250,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.topnav .wrap{display:flex;align-items:center;gap:6px;height:52px;overflow-x:auto;scrollbar-width:none}
+.topnav .wrap::-webkit-scrollbar{display:none}
+.navlogo{font-family:var(--mono);font-weight:700;font-size:17px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;margin-right:10px;flex-shrink:0}
+.topnav a{color:var(--muted);text-decoration:none;font-size:13.5px;padding:5px 10px;border-radius:8px;white-space:nowrap;flex-shrink:0}
+.topnav a:hover{color:var(--ink);background:var(--brand-soft)}
+
+/* ---------- Hero ---------- */
+.hero{padding:64px 0 56px;background:
+  radial-gradient(900px 420px at 78% -10%,rgba(180,79,224,.12),transparent 60%),
+  radial-gradient(700px 380px at 12% 0%,rgba(109,91,232,.13),transparent 60%);
+  border-bottom:1px solid var(--line)}
+.eyebrow{font-size:13px;letter-spacing:.14em;font-weight:600;color:var(--brand-deep);text-transform:uppercase}
+.hero h1{font-size:clamp(56px,9vw,88px);line-height:1.02;font-family:var(--mono);font-weight:700;letter-spacing:-.03em;margin:10px 0 4px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .sub{font-size:clamp(17px,2.4vw,20px);max-width:640px;color:var(--ink);margin-top:8px}
+.hero .sub em{font-style:normal;background:linear-gradient(transparent 62%,rgba(180,79,224,.28) 62%)}
+.hero .note{color:var(--muted);font-size:14px;margin-top:14px;max-width:620px}
+
+/* 竞速演示 */
+.race{margin-top:34px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;box-shadow:0 10px 30px rgba(26,28,48,.06)}
+.race-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.race-head h2{font-size:16px;font-weight:650}
+.race-head p{font-size:13px;color:var(--muted)}
+.btn{border:none;background:var(--grad);color:#fff;font-weight:600;font-size:14.5px;padding:10px 20px;border-radius:10px;transition:transform .12s,box-shadow .12s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(109,91,232,.35)}
+.btn:disabled{opacity:.55;cursor:default;transform:none;box-shadow:none}
+.btn.ghost{background:var(--panel);color:var(--brand-deep);border:1.5px solid var(--brand);box-shadow:none}
+.lane{display:grid;grid-template-columns:150px 1fr 84px;align-items:center;gap:14px;padding:11px 0;border-top:1px dashed var(--line)}
+.lane:first-of-type{border-top:none}
+.lane .name{font-family:var(--mono);font-size:13.5px}
+.lane .name small{display:block;color:var(--muted);font-family:inherit;font-size:11.5px}
+.track{height:14px;background:var(--code-bg);border-radius:99px;overflow:hidden}
+.fill{height:100%;width:0%;border-radius:99px;background:#B9BCD2;transition:width .1s linear}
+.lane.uv .fill{background:var(--grad)}
+.lane .time{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:right}
+.lane .time.done{color:var(--ok);font-weight:700}
+
+/* ---------- 通用版式 ---------- */
+section.block{padding:60px 0 8px}
+.kicker{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.kicker .no{font-family:var(--mono);font-size:13px;color:var(--brand);font-weight:700}
+.kicker h2{font-size:clamp(24px,3.6vw,30px);font-weight:700;letter-spacing:-.01em}
+.lead{color:var(--muted);max-width:700px;margin-bottom:26px}
+.prose{max-width:760px}
+.prose p{margin-bottom:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+.callout{border-left:4px solid var(--brand);background:var(--brand-soft);border-radius:0 10px 10px 0;padding:14px 18px;margin:20px 0;font-size:15px;max-width:760px}
+.callout.warn{border-color:var(--warn);background:#FBF1E7}
+
+/* 术语提示 */
+.tip{border-bottom:1.5px dotted var(--brand);cursor:help;position:relative}
+.tip::after{
+  content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%) translateY(4px);
+  width:max-content;max-width:280px;background:var(--ink);color:#fff;font-size:12.5px;line-height:1.55;
+  padding:8px 12px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;z-index:30;white-space:normal}
+.tip:hover::after,.tip:focus::after{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- 工具地图 ---------- */
+.toolmap{margin-top:8px}
+.toolmap-stage{position:relative;min-height:300px}
+.toolgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;transition:opacity .4s,transform .4s}
+.toolcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.toolcard b{font-family:var(--mono);font-size:14px;display:block}
+.toolcard span{font-size:13px;color:var(--muted)}
+.toolcard .pain{display:block;font-size:12px;color:var(--warn);margin-top:4px}
+.unified{position:absolute;inset:0;display:flex;align-items:stretch;opacity:0;pointer-events:none;transform:scale(.96);transition:opacity .4s,transform .4s}
+.toolmap.merged .toolgrid{opacity:0;transform:scale(.96);pointer-events:none}
+.toolmap.merged .unified{opacity:1;pointer-events:auto;transform:scale(1)}
+.unified .panel{width:100%;border:1.5px solid var(--brand);box-shadow:0 14px 40px rgba(109,91,232,.16)}
+.unified h3{font-family:var(--mono);font-size:20px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:10px}
+.maplist{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:6px 22px;font-size:14px}
+.maplist li{list-style:none;display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line);padding:7px 0}
+.maplist li span{color:var(--muted)}
+.maplist li code{background:transparent;color:var(--brand-deep);font-weight:600;padding:0}
+.toolmap-actions{margin-top:16px;display:flex;gap:10px}
+
+/* ---------- 三件套 ---------- */
+.trio{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:0;align-items:stretch;margin:10px 0 6px}
+.trio .tcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+.trio .tcard h3{font-family:var(--mono);font-size:15px;margin-bottom:4px}
+.trio .tcard .role{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brand-deep)}
+.trio .tcard p{font-size:13.5px;color:var(--muted);margin-top:6px}
+.trio .arrow{display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0 10px;color:var(--brand);font-family:var(--mono);font-size:12px;gap:2px}
+.trio .arrow svg{width:34px;height:16px}
+@media (max-width:760px){
+  .trio{grid-template-columns:1fr}
+  .trio .arrow{flex-direction:row;padding:6px 0;transform:rotate(90deg) scale(.9);height:40px}
+}
+
+/* ---------- Stepper ---------- */
+.stepper{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-top:8px}
+.step-tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.step-tabs::-webkit-scrollbar{display:none}
+.step-tabs button{flex:1;min-width:120px;background:none;border:none;border-bottom:3px solid transparent;padding:13px 10px 11px;font-size:13.5px;color:var(--muted);white-space:nowrap}
+.step-tabs button b{display:block;font-family:var(--mono);font-size:12px;color:var(--brand);margin-bottom:1px}
+.step-tabs button.active{color:var(--ink);border-bottom-color:var(--brand);background:var(--brand-soft)}
+.step-body{display:none;grid-template-columns:1.15fr .85fr;gap:0}
+.step-body.active{display:grid}
+.step-left{padding:22px 24px;border-right:1px solid var(--line)}
+.step-left h3{font-size:16.5px;margin-bottom:8px}
+.step-left p{font-size:14.5px;color:var(--muted);margin-bottom:10px}
+.step-left .verify{font-size:13.5px;background:#EAF6F0;border:1px solid #CDE9DB;color:#1F6B49;border-radius:8px;padding:8px 12px;margin-top:8px}
+.step-right{padding:22px 24px;background:#FBFBFE}
+.step-right h4{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+@media (max-width:760px){.step-body.active{grid-template-columns:1fr}.step-left{border-right:none;border-bottom:1px solid var(--line)}}
+
+/* 终端 & 文件树 */
+.term{background:var(--term-bg);color:var(--term-ink);border-radius:10px;padding:14px 16px;font-family:var(--mono);font-size:13px;line-height:1.7;overflow-x:auto;margin:10px 0}
+.term .p{color:#8F86F5}
+.term .c{color:var(--term-dim)}
+.term .o{color:#9BD0A9}
+.term b{color:#fff;font-weight:600}
+.filetree{font-family:var(--mono);font-size:13px;line-height:1.9;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+.filetree .dir{color:var(--brand-deep);font-weight:600}
+.filetree .new{background:linear-gradient(transparent 15%,rgba(46,158,107,.16) 15%);border-radius:3px}
+.filetree .dim{color:var(--muted)}
+
+/* ---------- 缓存示意 ---------- */
+.cachefig{margin-top:10px}
+.cachefig svg{width:100%;height:auto;display:block}
+.whyfast{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;margin:8px 0 22px}
+.whyfast .panel{padding:16px 18px}
+.whyfast h3{font-size:15px;margin-bottom:4px}
+.whyfast p{font-size:13.5px;color:var(--muted)}
+.whyfast .idx{font-family:var(--mono);font-size:12px;color:var(--brand);font-weight:700}
+
+/* ---------- 能力 tabs ---------- */
+.cap-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:-1px;position:relative;z-index:1}
+.cap-tabs button{background:var(--panel);border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;padding:9px 16px;font-size:14px;color:var(--muted)}
+.cap-tabs button.active{color:var(--brand-deep);font-weight:650;border-color:var(--brand);box-shadow:inset 0 3px 0 var(--brand)}
+.cap-body{display:none;background:var(--panel);border:1px solid var(--line);border-radius:0 var(--radius) var(--radius) var(--radius);padding:24px}
+.cap-body.active{display:block}
+.cap-body h3{font-size:16px;margin-bottom:6px}
+.cap-body p{font-size:14.5px;color:var(--muted);max-width:700px;margin-bottom:10px}
+
+/* ---------- 对比表 ---------- */
+.cmp{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:14px}
+th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{font-size:13px;background:#FBFBFE;position:sticky;top:52px}
+th:first-child,td:first-child{font-weight:600;white-space:nowrap}
+td .y{color:var(--ok);font-weight:700}
+td .n{color:#B23A3A;font-weight:700}
+td .p2{color:var(--warn);font-weight:700}
+th.uvcol,td.uvcol{background:var(--brand-soft)}
+
+/* ---------- 误区 ---------- */
+.myth details{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.myth summary{list-style:none;cursor:pointer;padding:15px 18px;font-weight:600;font-size:15px;display:flex;gap:12px;align-items:baseline}
+.myth summary::-webkit-details-marker{display:none}
+.myth summary .tag{flex-shrink:0;font-size:11.5px;font-weight:700;color:#B23A3A;border:1.5px solid #E4B9B9;border-radius:6px;padding:1px 7px;background:#FDF4F4}
+.myth summary::after{content:"+";margin-left:auto;font-family:var(--mono);color:var(--brand);font-size:18px}
+.myth details[open] summary::after{content:"−"}
+.myth .ans{padding:0 18px 16px;font-size:14.5px;color:var(--muted)}
+.myth .ans b.truth{color:var(--ok)}
+
+/* ---------- 速查 ---------- */
+.cheat{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.cheat .panel{padding:16px 18px}
+.cheat h3{font-size:14px;margin-bottom:8px;color:var(--brand-deep)}
+.cheat ul{list-style:none}
+.cheat li{display:flex;flex-direction:column;padding:6px 0;border-top:1px dashed var(--line);font-size:13px}
+.cheat li:first-child{border-top:none}
+.cheat li span{color:var(--muted)}
+.cheat li code{background:transparent;padding:2px 0 0;font-size:12.5px;color:var(--ink);white-space:normal}
+
+footer{margin-top:64px;border-top:1px solid var(--line);padding:28px 0 44px;color:var(--muted);font-size:13.5px}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<nav class="topnav" aria-label="页内导航">
+  <div class="wrap">
+    <span class="navlogo">uv</span>
+    <a href="#why">为什么出现</a>
+    <a href="#model">心智模型</a>
+    <a href="#hands">五步上手</a>
+    <a href="#fast">为什么快</a>
+    <a href="#more">更多能力</a>
+    <a href="#compare">对比与取舍</a>
+    <a href="#myths">常见误区</a>
+    <a href="#cheat">速查表</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">一文读懂 · Python 工具链</div>
+    <h1>uv</h1>
+    <p class="sub">一个用 Rust 写的 Python 包与项目管理器：把 <code>pip</code>、<code>venv</code>、<code>pyenv</code>、<code>pipx</code>、<code>poetry</code> 的活儿收进<em>一个二进制、一套命令</em>，并且快一到两个数量级。</p>
+    <p class="note">由 Astral（<code>ruff</code> 的作者）开发，2024 年发布，开源（MIT/Apache-2.0）。下面这个演示先给你一个直观感受——</p>
+
+    <div class="race" id="race">
+      <div class="race-head">
+        <div>
+          <h2>重装一次中型项目的依赖，谁先跑完？</h2>
+          <p>按官方基准的量级示意（依赖已在本机缓存过的常见场景），动画按比例加速播放。</p>
+        </div>
+        <button class="btn" id="raceBtn">▶ 开始安装</button>
+      </div>
+      <div class="lane" data-secs="27">
+        <div class="name">pip + venv<small>逐个下载、解压、拷贝</small></div>
+        <div class="track"><div class="fill"></div></div>
+        <div class="time">27 s</div>
+      </div>
+      <div class="lane" data-secs="17">
+        <div class="name">poetry<small>自带解析器，仍是 Python 实现</small></div>
+        <div class="track"><div class="fill"></div></div>
+        <div class="time">17 s</div>
+      </div>
+      <div class="lane uv" data-secs="0.4">
+        <div class="name">uv<small>命中全局缓存，硬链接落盘</small></div>
+        <div class="track"><div class="fill"></div></div>
+        <div class="time">0.4 s</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ================= 1 为什么出现 ================= -->
+<section class="block" id="why">
+  <div class="wrap">
+    <div class="kicker"><span class="no">01</span><h2>它为什么出现：一个新人的第一天</h2></div>
+    <p class="lead">想理解 uv，先回忆一下没有它的世界。</p>
+    <div class="prose">
+      <p>你入职第一天，克隆了项目仓库，README 写着：</p>
+    </div>
+    <div class="term" style="max-width:760px">
+<span class="c"># 1. 先安装 pyenv，然后装对 Python 版本</span><br>
+pyenv install 3.11.9 && pyenv local 3.11.9<br>
+<span class="c"># 2. 创建虚拟环境并记得激活（每次开终端都要记得！）</span><br>
+python -m venv .venv && source .venv/bin/activate<br>
+<span class="c"># 3. 装依赖……哦对，还有 dev 依赖是另一个文件</span><br>
+pip install -r requirements.txt -r requirements-dev.txt</div>
+    <div class="prose">
+      <p>每一步都有翻车点：系统里装了三个 Python 不知道用哪个；忘了 <code>activate</code> 把包装进了全局环境；<code>requirements.txt</code> 和同事机器上实际装的版本<span class="tip" tabindex="0" data-tip="requirements.txt 通常只写宽松的版本范围（如 requests>=2.0），不同时间安装会解析出不同版本，导致「在我机器上是好的」。">早就漂移</span>了。</p>
+      <p><strong>问题的本质：</strong>Python 官方只提供了两块底层积木——<code>pip</code> 负责装包、<code>venv</code> 负责隔离。而「一个工程从创建到复现」的完整闭环，长期靠社区工具东拼西凑，每个工具解决一小块，彼此还要互相配合：</p>
+    </div>
+
+    <div class="toolmap" id="toolmap">
+      <div class="toolmap-stage">
+        <div class="toolgrid" aria-hidden="false">
+          <div class="toolcard"><b>pip</b><span>安装包</span><span class="pain">慢；本身没有锁文件概念</span></div>
+          <div class="toolcard"><b>venv / virtualenv</b><span>隔离环境</span><span class="pain">要手动创建、手动激活</span></div>
+          <div class="toolcard"><b>pyenv</b><span>管理多个 Python 版本</span><span class="pain">编译安装慢，shim 机制易出玄学问题</span></div>
+          <div class="toolcard"><b>pip-tools</b><span>把宽松依赖编译成精确锁定</span><span class="pain">又一个要学的工具，且只锁单平台</span></div>
+          <div class="toolcard"><b>pipx</b><span>隔离安装命令行工具</span><span class="pain">只管工具，不管项目</span></div>
+          <div class="toolcard"><b>poetry / PDM</b><span>项目管理 + 锁文件</span><span class="pain">不管 Python 版本本身；解析速度一般</span></div>
+        </div>
+        <div class="unified">
+          <div class="panel">
+            <h3>uv —— 一个二进制，全部接管</h3>
+            <ul class="maplist">
+              <li><span>装包（兼容接口）</span><code>uv pip install</code></li>
+              <li><span>隔离环境</span><code>自动创建 .venv</code></li>
+              <li><span>Python 版本</span><code>uv python install</code></li>
+              <li><span>锁定依赖</span><code>uv.lock（自动维护）</code></li>
+              <li><span>命令行工具</span><code>uvx / uv tool</code></li>
+              <li><span>项目管理</span><code>uv init / add / run / sync</code></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="toolmap-actions">
+        <button class="btn" id="mergeBtn">把它们收进一个工具 →</button>
+        <button class="btn ghost" id="splitBtn" hidden>← 回到旧世界看看</button>
+      </div>
+    </div>
+
+    <div class="callout"><strong>边界先说清：</strong>uv 统一的是 <em>Python 生态内</em>的工程工作流。它不做两件事：① 不替代 <span class="tip" tabindex="0" data-tip="conda 分发的是跨语言的二进制生态（C/Fortran 库、CUDA 等），不只是 Python 包。这类需求可看 conda 或新一代的 pixi。">conda 的跨语言二进制分发</span>；② 它默认也不是<span class="tip" tabindex="0" data-tip="build backend 负责把你的源码打成 wheel 发布。uv 提供了 uv_build，但你也可以继续用 hatchling、setuptools 等，uv 只负责调用它。">构建后端</span>——打包发布时它调用标准后端，而不是取而代之。</div>
+  </div>
+</section>
+
+<!-- ================= 2 心智模型 ================= -->
+<section class="block" id="model">
+  <div class="wrap">
+    <div class="kicker"><span class="no">02</span><h2>心智模型：三个文件，一条单行道</h2></div>
+    <p class="lead">记住这张图，uv 的所有命令都只是在这条流水线上推动数据。</p>
+
+    <div class="trio">
+      <div class="tcard">
+        <div class="role">意图 · 手写</div>
+        <h3>pyproject.toml</h3>
+        <p>你想要什么。只写直接依赖和宽松范围，例如 <code>requests&gt;=2.31</code>。这是<strong>唯一需要人来编辑</strong>的文件（通常也由 <code>uv add</code> 代劳）。</p>
+      </div>
+      <div class="arrow" aria-hidden="true">
+        <svg viewBox="0 0 34 16"><path d="M0 8h28m0 0-6-5m6 5-6 5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <span>resolve</span>
+      </div>
+      <div class="tcard">
+        <div class="role">事实 · 机器生成</div>
+        <h3>uv.lock</h3>
+        <p>解析后的精确答案：每个包（含<span class="tip" tabindex="0" data-tip="你依赖 requests，requests 又依赖 urllib3、certifi 等——这些「依赖的依赖」也全部被锁定。">传递依赖</span>）的确切版本与哈希。<strong>跨平台通用</strong>，提交进 git，团队人人复现同一环境。</p>
+      </div>
+      <div class="arrow" aria-hidden="true">
+        <svg viewBox="0 0 34 16"><path d="M0 8h28m0 0-6-5m6 5-6 5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <span>sync</span>
+      </div>
+      <div class="tcard">
+        <div class="role">落地 · 可丢弃</div>
+        <h3>.venv/</h3>
+        <p>按 lock 真正装好的包。它只是<strong>缓存产物</strong>：删掉随时能秒级重建，永远不进 git。</p>
+      </div>
+    </div>
+
+    <div class="prose" style="margin-top:18px">
+      <p>数据只朝一个方向流：<strong>意图 → 事实 → 落地</strong>。你改了 <code>pyproject.toml</code>，uv 就重新解析出 <code>uv.lock</code>，再把 <code>.venv</code> 对齐到 lock。反过来永远不会发生——环境里手动装的东西不会「回写」到声明里，所以环境永远可解释、可复现。</p>
+      <p>更妙的是这条流水线是<strong>自动的</strong>：每次 <code>uv run</code> 之前，uv 会闪电般检查三者是否一致，不一致就先对齐再运行。所以在 uv 的世界里，「忘了装依赖」「忘了激活环境」这两类事故在结构上消失了。</p>
+    </div>
+    <div class="callout">一句话心法：<strong><code>pyproject.toml</code> 是你写给机器的愿望清单，<code>uv.lock</code> 是机器给出的精确答卷，<code>.venv</code> 只是答卷的一份打印件。</strong>打印件脏了就撕掉重印，没人会心疼。</div>
+  </div>
+</section>
+<!-- ================= 3 五步上手 ================= -->
+<section class="block" id="hands">
+  <div class="wrap">
+    <div class="kicker"><span class="no">03</span><h2>五步上手：一个最小可验证的项目</h2></div>
+    <p class="lead">点击步骤切换，左边是你敲的命令，右边是磁盘上真实发生的事。全程<strong>没有一次</strong> <code>source activate</code>。</p>
+
+    <div class="stepper" id="stepper">
+      <div class="step-tabs" role="tablist">
+        <button class="active" role="tab" aria-selected="true"><b>Step 1</b>uv init</button>
+        <button role="tab" aria-selected="false"><b>Step 2</b>uv add</button>
+        <button role="tab" aria-selected="false"><b>Step 3</b>uv run</button>
+        <button role="tab" aria-selected="false"><b>Step 4</b>队友复现</button>
+        <button role="tab" aria-selected="false"><b>Step 5</b>日常维护</button>
+      </div>
+
+      <div class="step-body active">
+        <div class="step-left">
+          <h3>创建项目骨架</h3>
+          <div class="term"><span class="p">$</span> uv init hello && cd hello</div>
+          <p>一条命令生成标准项目：<code>pyproject.toml</code> 声明元信息，<code>.python-version</code> 钉住解释器版本（本例为 3.13）。注意此刻<strong>还没有</strong>虚拟环境——uv 按需才创建。</p>
+          <div class="verify">✓ 验证：打开 <code>pyproject.toml</code>，能看到 <code>[project]</code> 段和空的 <code>dependencies = []</code>。</div>
+        </div>
+        <div class="step-right">
+          <h4>磁盘上</h4>
+          <div class="filetree">
+<span class="dir">hello/</span><br>
+├── <span class="new">pyproject.toml</span><br>
+├── <span class="new">.python-version</span><br>
+├── <span class="new">main.py</span><br>
+└── <span class="new">README.md</span></div>
+        </div>
+      </div>
+
+      <div class="step-body">
+        <div class="step-left">
+          <h3>添加第一个依赖</h3>
+          <div class="term"><span class="p">$</span> uv add requests<br><span class="o">Creating virtual environment at: .venv</span><br><span class="o">Resolved 6 packages in 121ms</span><br><span class="o">Installed 5 packages in 18ms</span></div>
+          <p>一条命令连做四件事：写入 <code>pyproject.toml</code> → 解析全部依赖生成 <code>uv.lock</code> → 自动创建 <code>.venv</code> → 安装。18ms 装完，是因为包来自全局缓存的硬链接。</p>
+          <div class="verify">✓ 验证：<code>pyproject.toml</code> 里多了 <code>"requests&gt;=2.32.4"</code>，且出现了 <code>uv.lock</code>。</div>
+        </div>
+        <div class="step-right">
+          <h4>磁盘上</h4>
+          <div class="filetree">
+<span class="dir">hello/</span><br>
+├── pyproject.toml <span class="dim">← 依赖 +1</span><br>
+├── <span class="new">uv.lock</span> <span class="dim">← 精确锁定 6 个包</span><br>
+├── <span class="new dir">.venv/</span> <span class="dim">← 自动创建</span><br>
+├── .python-version<br>
+├── main.py<br>
+└── README.md</div>
+        </div>
+      </div>
+
+      <div class="step-body">
+        <div class="step-left">
+          <h3>运行代码，无需激活</h3>
+          <div class="term"><span class="c"># main.py 里写：import requests; print(requests.get("https://httpbin.org/ip").json())</span><br><span class="p">$</span> uv run main.py<br><span class="o">{'origin': '203.0.113.7'}</span></div>
+          <p><code>uv run</code> 是「在本项目环境里执行」的统一入口。它运行前会自动校验 lock 和 <code>.venv</code> 是否最新，不新就先对齐——所以它<strong>永远不会用错环境</strong>。</p>
+          <div class="verify">✓ 验证：直接运行 <code>python main.py</code>（不带 uv）会报 <code>ModuleNotFoundError</code>，因为你的全局 Python 依然干净——隔离生效了。</div>
+        </div>
+        <div class="step-right">
+          <h4>uv run 背后</h4>
+          <div class="filetree">
+① 读 .python-version → 需要 3.13？<br><span class="dim">　 没有就自动下载</span><br>② uv.lock 和 pyproject 一致？<br><span class="dim">　 不一致就重新 resolve</span><br>③ .venv 和 uv.lock 一致？<br><span class="dim">　 不一致就增量 sync</span><br>④ 在 .venv 里执行命令 ✓</div>
+        </div>
+      </div>
+
+      <div class="step-body">
+        <div class="step-left">
+          <h3>队友一条命令复现</h3>
+          <div class="term"><span class="p">$</span> git clone …/hello && cd hello<br><span class="p">$</span> uv sync<br><span class="o">Using CPython 3.13.5</span><br><span class="o">Creating virtual environment at: .venv</span><br><span class="o">Installed 5 packages in 22ms</span></div>
+          <p>队友机器上哪怕<strong>连 Python 3.13 都没有</strong>也不要紧：uv 会自动下载一个独立的解释器，再按 <code>uv.lock</code> 里的精确版本还原环境。README 里那五行祈祷文，变成了一行。</p>
+          <div class="verify">✓ 验证：两台机器上 <code>uv pip list</code> 输出逐字节相同。</div>
+        </div>
+        <div class="step-right">
+          <h4>复现三要素（都在 git 里）</h4>
+          <div class="filetree">
+.python-version <span class="dim">→ 解释器版本</span><br>
+pyproject.toml <span class="dim">→ 依赖意图</span><br>
+uv.lock <span class="dim">→ 精确事实</span><br><br><span class="dim">.venv/ 不进 git，
+本地按需重建</span></div>
+        </div>
+      </div>
+
+      <div class="step-body">
+        <div class="step-left">
+          <h3>日常维护的三板斧</h3>
+          <div class="term"><span class="p">$</span> uv add --dev pytest <span class="c"># 开发依赖，进 dev 分组</span><br><span class="p">$</span> uv lock --upgrade <span class="c"># 升级锁文件到范围内最新</span><br><span class="p">$</span> uv remove requests <span class="c"># 卸载并同步清理</span></div>
+          <p>开发依赖（测试、格式化工具）用 <code>--dev</code> 与生产依赖分组管理；升级不是散弹枪式的 <code>pip install -U</code>，而是先改 lock、再同步，每次变更都留在 git diff 里可审查。</p>
+          <div class="verify">✓ 验证：<code>uv tree</code> 一眼看清整棵依赖树是谁引入了谁。</div>
+        </div>
+        <div class="step-right">
+          <h4>常见搭配</h4>
+          <div class="filetree">
+uv run pytest <span class="dim">→ 跑测试</span><br>
+uv tree <span class="dim">→ 查依赖来源</span><br>
+uv export &gt; requirements.txt<br><span class="dim">　 → 给旧系统一个台阶</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4 为什么快 ================= -->
+<section class="block" id="fast">
+  <div class="wrap">
+    <div class="kicker"><span class="no">04</span><h2>为什么这么快：不是魔法，是四个工程决定</h2></div>
+    <p class="lead">「快 10~100 倍」听起来像营销话术，拆开看其实每一条都很朴素。</p>
+
+    <div class="whyfast">
+      <div class="panel"><span class="idx">①</span><h3>Rust 编译产物</h3><p>pip 每次启动都要先拉起一个 Python 解释器再解释执行自己；uv 是原生二进制，敲下回车的瞬间已经在干活。</p></div>
+      <div class="panel"><span class="idx">②</span><h3>全局缓存 + 硬链接</h3><p>每个包全机只存一份，「安装」退化为创建<span class="tip" tabindex="0" data-tip="hardlink / CoW（写时复制）：让 .venv 里的文件与缓存指向同一份磁盘数据，不发生真实拷贝，因此近乎零耗时、零额外空间。">硬链接</span>。这是热缓存下 0.x 秒的最大功臣。</p></div>
+      <div class="panel"><span class="idx">③</span><h3>激进并行 + 按需元数据</h3><p>下载、解压全并行；解析时用 HTTP Range 只抓 wheel 里几 KB 的 METADATA 文件，而不是把整个包拖下来看一眼。</p></div>
+      <div class="panel"><span class="idx">④</span><h3>PubGrub 解析器</h3><p>现代<span class="tip" tabindex="0" data-tip="版本解析是 NP-hard 问题。PubGrub 源自 Dart 的 pub，冲突时能快速收敛并给出人话级别的错误解释，而不是回溯到天荒地老。">版本解析算法</span>：冲突时快速定位根因，报错信息直接告诉你「谁和谁打架」。</p></div>
+    </div>
+
+    <div class="panel cachefig">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+        <h3 style="font-size:16px">图解全局缓存：第二个项目装 numpy 时发生了什么</h3>
+        <button class="btn ghost" id="cacheBtn" style="padding:7px 14px;font-size:13px">▶ 新项目也要装 numpy</button>
+      </div>
+      <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" aria-label="全局缓存示意图" id="cacheSvg" style="font-family:var(--mono)">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#6D5BE8"/><stop offset="1" stop-color="#B44FE0"/>
+          </linearGradient>
+        </defs>
+        <!-- cache -->
+        <rect x="30" y="70" width="200" height="110" rx="12" fill="#16172B"/>
+        <text x="130" y="98" fill="#8F86F5" font-size="12" text-anchor="middle">~/.cache/uv</text>
+        <text x="130" y="122" fill="#fff" font-size="13" text-anchor="middle">numpy-2.3.1 ▪ 全机唯一一份</text>
+        <text x="130" y="144" fill="#7A7E9E" font-size="11" text-anchor="middle">requests ▪ pandas ▪ torch …</text>
+        <text x="130" y="164" fill="#7A7E9E" font-size="11" text-anchor="middle">（真实文件都在这）</text>
+        <!-- project A -->
+        <rect x="470" y="30" width="220" height="72" rx="12" fill="#fff" stroke="#E3E5EF"/>
+        <text x="580" y="58" fill="#1A1C30" font-size="13" text-anchor="middle">项目 A / .venv</text>
+        <text x="580" y="80" fill="#5C6079" font-size="11" text-anchor="middle">numpy → 硬链接，0 拷贝</text>
+        <path d="M232 108 C 340 100, 380 70, 466 64" fill="none" stroke="url(#g1)" stroke-width="2.5" stroke-dasharray="6 5"/>
+        <!-- project B -->
+        <g id="projB" opacity="0.25">
+          <rect x="470" y="150" width="220" height="72" rx="12" fill="#fff" stroke="#E3E5EF"/>
+          <text x="580" y="178" fill="#1A1C30" font-size="13" text-anchor="middle">项目 B / .venv（新）</text>
+          <text x="580" y="200" fill="#5C6079" font-size="11" text-anchor="middle" id="projBLabel">uv add numpy …</text>
+        </g>
+        <path id="linkB" d="M232 145 C 340 155, 380 182, 466 186" fill="none" stroke="url(#g1)" stroke-width="2.5" stroke-dasharray="6 5" opacity="0"/>
+        <text id="linkBText" x="350" y="205" fill="#2E9E6B" font-size="12" text-anchor="middle" opacity="0">硬链接建立，~0 ms，不占新空间 ✓</text>
+      </svg>
+      <p style="font-size:13px;color:var(--muted);margin-top:8px">对比：pip 会把包完整<strong>拷贝</strong>进每个 venv——10 个项目就是 10 份 torch，磁盘和时间双输。uv 的缓存偶尔清理用 <code>uv cache clean</code> 即可。</p>
+    </div>
+  </div>
+</section>
+<!-- ================= 5 更多能力 ================= -->
+<section class="block" id="more">
+  <div class="wrap">
+    <div class="kicker"><span class="no">05</span><h2>项目之外：另外四个高频场景</h2></div>
+    <p class="lead">uv 的野心不止于「更快的 poetry」。这四个能力各自替掉了一个老工具。</p>
+
+    <div class="cap-tabs" role="tablist">
+      <button class="active">uvx 临时跑工具</button>
+      <button>管理 Python 本身</button>
+      <button>单文件脚本</button>
+      <button>uv pip 兼容层</button>
+    </div>
+
+    <div class="cap-body active">
+      <h3>不安装，直接用 —— 替代 pipx</h3>
+      <p>想用 <code>ruff</code> 检查一下代码、用 <code>httpie</code> 发个请求，但不想让它们污染任何环境？<code>uvx</code> 在临时隔离环境里跑完即走（有缓存，第二次几乎瞬时）：</p>
+      <div class="term"><span class="p">$</span> uvx ruff check . <span class="c"># 用完即弃</span><br><span class="p">$</span> uvx --from httpie http GET httpbin.org/ip<br><span class="p">$</span> uv tool install ruff <span class="c"># 常用的就常驻安装，全局可用且互相隔离</span></div>
+      <p>心智区分：<strong>依赖用 <code>uv add</code>（进项目），工具用 <code>uvx / uv tool</code>（不进项目）。</strong></p>
+    </div>
+
+    <div class="cap-body">
+      <h3>连解释器也归它管 —— 替代 pyenv</h3>
+      <p>uv 直接下载<span class="tip" tabindex="0" data-tip="来自 python-build-standalone 项目的预编译独立解释器，秒级下载解压，无需本机编译，也不碰系统 Python。">预编译的独立 Python</span>，不用等本机编译半小时，也永远不会弄坏系统自带的 Python：</p>
+      <div class="term"><span class="p">$</span> uv python install 3.12 3.13 <span class="c"># 并排安装多个版本</span><br><span class="p">$</span> uv python pin 3.12 <span class="c"># 写入 .python-version，钉住本项目</span><br><span class="p">$</span> uv run --python 3.13 main.py <span class="c"># 临时换个版本试试</span></div>
+      <p>配合 Step 4 看到的行为：队友没装对应版本时，<code>uv sync</code> 会自动补齐——「装 Python」从入职仪式变成了透明细节。</p>
+    </div>
+
+    <div class="cap-body">
+      <h3>一个 .py 文件就是一个完整应用 —— PEP 723</h3>
+      <p>写个抓数据的小脚本要发给同事，以前得附一份「先建 venv 再装这三个包」的说明。现在把依赖<strong>声明在脚本头部注释里</strong>（标准语法，非 uv 私有）：</p>
+      <div class="term"><span class="c"># fetch.py</span><br><span class="c"># /// script</span><br><span class="c"># requires-python = "&gt;=3.12"</span><br><span class="c"># dependencies = ["requests", "rich"]</span><br><span class="c"># ///</span><br><b>import</b> requests<br>…</div>
+      <div class="term"><span class="p">$</span> uv run fetch.py <span class="c"># uv 读到声明，自动建临时环境并运行</span><br><span class="p">$</span> uv add --script fetch.py polars <span class="c"># 给脚本加依赖也有专门命令</span></div>
+      <p>收到文件的人只需要装了 uv——<strong>脚本自己会解释自己需要什么</strong>。这是「把脚本发给别人」体验上最大的一次进步。</p>
+    </div>
+
+    <div class="cap-body">
+      <h3>不想改工作流？只换引擎 —— uv pip</h3>
+      <p>老项目、CI 脚本、教程照抄的命令,可以原样保留,只在前面加 <code>uv</code> 两个字母,立刻获得同样的速度:</p>
+      <div class="term"><span class="p">$</span> uv venv <span class="c"># 代替 python -m venv .venv</span><br><span class="p">$</span> uv pip install -r requirements.txt <span class="c"># 接口兼容 pip</span><br><span class="p">$</span> uv pip compile requirements.in -o requirements.txt <span class="c"># 代替 pip-tools</span></div>
+      <p>这是给存量世界的<strong>渐进迁移通道</strong>：先当快版 pip 用，尝到甜头再整体切到 <code>uv add / run / sync</code> 的项目模式。注意两套接口别混用管理同一件事（见下面的误区 ③）。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6 对比与取舍 ================= -->
+<section class="block" id="compare">
+  <div class="wrap">
+    <div class="kicker"><span class="no">06</span><h2>对比与取舍：它不是所有问题的答案</h2></div>
+    <p class="lead">✓ 原生支持　◐ 部分/需插件　✗ 不支持。横向滑动查看完整表格。</p>
+    <div class="cmp">
+      <table>
+        <thead><tr><th>能力</th><th class="uvcol">uv</th><th>pip + venv</th><th>Poetry</th><th>conda</th></tr></thead>
+        <tbody>
+          <tr><td>安装速度（热缓存）</td><td class="uvcol"><span class="y">✓</span> 毫秒~秒级</td><td><span class="n">✗</span> 数十秒起</td><td><span class="p2">◐</span> 中等</td><td><span class="p2">◐</span> 较慢</td></tr>
+          <tr><td>跨平台锁文件</td><td class="uvcol"><span class="y">✓</span> uv.lock 通用</td><td><span class="n">✗</span> 无原生概念</td><td><span class="y">✓</span> poetry.lock</td><td><span class="p2">◐</span> 需 conda-lock</td></tr>
+          <tr><td>管理 Python 解释器</td><td class="uvcol"><span class="y">✓</span> 内置</td><td><span class="n">✗</span> 靠 pyenv</td><td><span class="n">✗</span> 靠外部</td><td><span class="y">✓</span> 内置</td></tr>
+          <tr><td>隔离运行 CLI 工具</td><td class="uvcol"><span class="y">✓</span> uvx</td><td><span class="n">✗</span> 靠 pipx</td><td><span class="n">✗</span></td><td><span class="p2">◐</span> 手动建环境</td></tr>
+          <tr><td>非 Python 原生依赖（CUDA、GDAL…）</td><td class="uvcol"><span class="p2">◐</span> 仅限有 wheel 的</td><td><span class="p2">◐</span> 同左</td><td><span class="p2">◐</span> 同左</td><td><span class="y">✓</span> 核心强项</td></tr>
+          <tr><td>遵循 PEP 标准（621/723…）</td><td class="uvcol"><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p2">◐</span> 曾自成一派，2.0 起趋标准</td><td><span class="n">✗</span> 自有体系</td></tr>
+          <tr><td>单文件脚本依赖</td><td class="uvcol"><span class="y">✓</span> PEP 723</td><td><span class="n">✗</span></td><td><span class="n">✗</span></td><td><span class="n">✗</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn" style="margin-top:22px"><strong>什么时候不选 uv？</strong>① 重度依赖 conda 二进制生态的领域（地理信息、部分科学计算/HPC）——原生库没有 wheel 时 conda/pixi 仍是正解；② 团队已在 Poetry 上稳定运转且无性能痛点——迁移是有成本的，收益要够大再动；③ 极端保守的生产环境——uv 迭代很快（截至 2026 年仍在 0.x 版本号），语义虽已相当稳定，但求稳者可以再等等。另外 uv 由商业公司 Astral 主导（VC 支持），代码虽是宽松开源协议，在意长期治理结构的团队可以把这点纳入评估。</div>
+  </div>
+</section>
+<!-- ================= 7 误区 ================= -->
+<section class="block" id="myths">
+  <div class="wrap">
+    <div class="kicker"><span class="no">07</span><h2>五个最常见的误区</h2></div>
+    <p class="lead">点开每一条。它们几乎覆盖了新手前两周会踩的所有坑。</p>
+    <div class="myth">
+      <details>
+        <summary><span class="tag">误区 ①</span>「uv 是一套新的包格式 / 新的软件源吧？」</summary>
+        <div class="ans"><b class="truth">事实：</b>uv 用的仍是 PyPI、仍是标准的 wheel 和 sdist，私有源、镜像源照常配置。它换掉的是<strong>客户端工具</strong>，不是生态本身——所以任何能用 pip 装的包，uv 都能装，反之亦然。这也是它能被快速采用的关键：迁移没有生态风险。</div>
+      </details>
+      <details>
+        <summary><span class="tag">误区 ②</span>「那我还要不要 source .venv/bin/activate？」</summary>
+        <div class="ans"><b class="truth">事实：</b>不需要。<code>uv run xxx</code> 已经等价于「激活 → 执行 → 退出」。<code>.venv</code> 还在老地方，你<strong>想</strong>手动激活也完全可以（IDE 选解释器时就指向它），但日常心智可以简化为：项目里的一切命令都加 <code>uv run</code> 前缀。</div>
+      </details>
+      <details>
+        <summary><span class="tag">误区 ③</span>「uv add 和 uv pip install 差不多吧，随便用哪个？」</summary>
+        <div class="ans"><b class="truth">事实：</b>层级完全不同。<code>uv add</code> 走项目流水线：写 <code>pyproject.toml</code> → 更新 <code>uv.lock</code> → 同步环境，变更可追溯；<code>uv pip install</code> 是底层兼容接口,<strong>只把包塞进当前环境</strong>,声明和锁文件毫不知情——下次 <code>uv sync</code>（默认精确对齐）还可能把它清掉。管理项目请始终用 <code>uv add/remove</code>,把 <code>uv pip</code> 留给临时实验和旧流程。</div>
+      </details>
+      <details>
+        <summary><span class="tag">误区 ④</span>「lock 文件是生成的，就不用提交 git 了」</summary>
+        <div class="ans"><b class="truth">事实：</b>恰恰相反——<strong>应用项目必须提交 <code>uv.lock</code></strong>,这是「所有人、CI、生产环境装到完全相同版本」的唯一凭证。例外是发布到 PyPI 的<strong>库</strong>:库的版本约束应该宽松（由使用者的项目去锁定）,此时 lock 只对库自己的 CI 有意义,提交与否团队自定。</div>
+      </details>
+      <details>
+        <summary><span class="tag">误区 ⑤</span>「requirements.txt 可以进博物馆了」</summary>
+        <div class="ans"><b class="truth">事实：</b>在你的团队内部,是的;但世界上还有大量部署平台、Docker 基础镜像、安全扫描器只认 <code>requirements.txt</code>。所以 uv 提供 <code>uv export --format requirements.txt</code>:内部用现代工作流,对外随时导出一份兼容格式。新旧世界不冲突。</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 8 速查 ================= -->
+<section class="block" id="cheat">
+  <div class="wrap">
+    <div class="kicker"><span class="no">08</span><h2>带走这张速查表</h2></div>
+    <p class="lead">按场景分组。前两组覆盖 90% 的日常。</p>
+    <div class="cheat">
+      <div class="panel">
+        <h3>▸ 项目起步</h3>
+        <ul>
+          <li><span>新建项目</span><code>uv init myapp</code></li>
+          <li><span>加依赖 / 开发依赖</span><code>uv add requests · uv add --dev pytest</code></li>
+          <li><span>克隆后复现环境</span><code>uv sync</code></li>
+          <li><span>运行任何命令</span><code>uv run main.py · uv run pytest</code></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>▸ 日常维护</h3>
+        <ul>
+          <li><span>看依赖树（谁引入的谁）</span><code>uv tree</code></li>
+          <li><span>升级全部 / 单个依赖</span><code>uv lock --upgrade · uv lock --upgrade-package requests</code></li>
+          <li><span>移除依赖</span><code>uv remove requests</code></li>
+          <li><span>导出兼容格式</span><code>uv export --format requirements.txt</code></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>▸ 工具与脚本</h3>
+        <ul>
+          <li><span>临时跑一个 CLI 工具</span><code>uvx ruff check .</code></li>
+          <li><span>常驻安装工具</span><code>uv tool install ruff</code></li>
+          <li><span>跑带内联依赖的脚本</span><code>uv run script.py</code></li>
+          <li><span>给脚本加依赖</span><code>uv add --script script.py rich</code></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>▸ Python 版本与救火</h3>
+        <ul>
+          <li><span>安装 / 钉住 Python</span><code>uv python install 3.13 · uv python pin 3.13</code></li>
+          <li><span>看有哪些解释器</span><code>uv python list</code></li>
+          <li><span>缓存占用 / 清理</span><code>uv cache dir · uv cache clean</code></li>
+          <li><span>环境彻底坏了</span><code>rm -rf .venv && uv sync（放心删，秒级重建）</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:26px"><strong>迁移心法（收尾）：</strong>存量项目先用 <code>uv pip</code> 换引擎尝甜头 → 新项目直接 <code>uv init</code> 走三件套 → 团队约定「一切命令过 <code>uv run</code>」。当你发现自己已经一个月没输入过 <code>source activate</code>,迁移就完成了。</div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>一文读懂 uv · 单文件离线版 · 内容基于 uv 官方文档整理（截至 2026 年中）</span>
+    <span>深入阅读：docs.astral.sh/uv</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---- Hero 竞速 ---- */
+  var raceBtn = document.getElementById("raceBtn");
+  var lanes = Array.prototype.slice.call(document.querySelectorAll("#race .lane"));
+  var SPEEDUP = 6; // 动画按 1/6 时间播放
+  function resetRace(){
+    lanes.forEach(function(l){
+      l.querySelector(".fill").style.width = "0%";
+      var t = l.querySelector(".time");
+      t.classList.remove("done");
+      t.textContent = l.dataset.secs + " s";
+    });
+  }
+  raceBtn.addEventListener("click", function(){
+    resetRace();
+    if (reduced){ // 无动画:直接给结果
+      lanes.forEach(function(l){
+        l.querySelector(".fill").style.width = "100%";
+        var t = l.querySelector(".time");
+        t.classList.add("done");
+        t.textContent = l.dataset.secs + " s ✓";
+      });
+      return;
+    }
+    raceBtn.disabled = true;
+    raceBtn.textContent = "安装中…";
+    var maxSecs = Math.max.apply(null, lanes.map(function(l){return +l.dataset.secs;}));
+    var start = performance.now();
+    function frame(now){
+      var elapsed = (now - start) / 1000 * SPEEDUP;
+      var allDone = true;
+      lanes.forEach(function(l){
+        var total = +l.dataset.secs;
+        var ratio = Math.min(elapsed / total, 1);
+        l.querySelector(".fill").style.width = (ratio * 100) + "%";
+        var t = l.querySelector(".time");
+        if (ratio >= 1){
+          if (!t.classList.contains("done")){
+            t.classList.add("done");
+            t.textContent = total + " s ✓";
+          }
+        } else {
+          allDone = false;
+          t.textContent = Math.min(elapsed, total).toFixed(1) + " s";
+        }
+      });
+      if (!allDone && elapsed < maxSecs + 1){
+        requestAnimationFrame(frame);
+      } else {
+        raceBtn.disabled = false;
+        raceBtn.textContent = "↻ 再跑一次";
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+
+  /* ---- 工具地图合并 ---- */
+  var toolmap = document.getElementById("toolmap");
+  var mergeBtn = document.getElementById("mergeBtn");
+  var splitBtn = document.getElementById("splitBtn");
+  mergeBtn.addEventListener("click", function(){
+    toolmap.classList.add("merged");
+    mergeBtn.hidden = true; splitBtn.hidden = false; splitBtn.focus();
+  });
+  splitBtn.addEventListener("click", function(){
+    toolmap.classList.remove("merged");
+    splitBtn.hidden = true; mergeBtn.hidden = false; mergeBtn.focus();
+  });
+
+  /* ---- 通用 tab 切换(步骤器 + 能力) ---- */
+  function bindTabs(tabSel, bodySel){
+    var tabs = Array.prototype.slice.call(document.querySelectorAll(tabSel));
+    var bodies = Array.prototype.slice.call(document.querySelectorAll(bodySel));
+    tabs.forEach(function(tab, i){
+      tab.addEventListener("click", function(){
+        tabs.forEach(function(t,j){
+          t.classList.toggle("active", i===j);
+          t.setAttribute("aria-selected", i===j ? "true" : "false");
+        });
+        bodies.forEach(function(b,j){ b.classList.toggle("active", i===j); });
+      });
+    });
+  }
+  bindTabs("#stepper .step-tabs button", "#stepper .step-body");
+  bindTabs("#more .cap-tabs button", "#more .cap-body");
+
+  /* ---- 缓存示意动画 ---- */
+  var cacheBtn = document.getElementById("cacheBtn");
+  var projB = document.getElementById("projB");
+  var linkB = document.getElementById("linkB");
+  var linkBText = document.getElementById("linkBText");
+  var projBLabel = document.getElementById("projBLabel");
+  var cacheDone = false;
+  cacheBtn.addEventListener("click", function(){
+    if (cacheDone){ // 重置
+      projB.style.opacity = "0.25";
+      linkB.style.opacity = "0"; linkBText.style.opacity = "0";
+      projBLabel.textContent = "uv add numpy …";
+      cacheBtn.textContent = "▶ 新项目也要装 numpy";
+      cacheDone = false;
+      return;
+    }
+    projB.style.transition = linkB.style.transition = linkBText.style.transition = reduced ? "none" : "opacity .5s";
+    projB.style.opacity = "1";
+    setTimeout(function(){
+      linkB.style.opacity = "1";
+      linkBText.style.opacity = "1";
+      projBLabel.textContent = "numpy ✓（指向缓存那一份）";
+      cacheBtn.textContent = "↻ 重置演示";
+      cacheDone = true;
+    }, reduced ? 0 : 450);
+  });
+})();
+</script>
+</body>
+</html>
