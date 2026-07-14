@@ -43,6 +43,20 @@ notes:
     summary: 讲解 HTDemucs-FT ONNX 模型原理、运行方式和阿里云部署路径。
     display: standalone
     html_mode: document
+  - id: triton-server-image-deploy
+    title: 一文读懂 Triton Server 镜像部署（PAI-EAS）
+    type: html
+    path: ./notes/triton-server-image-deploy.html
+    summary: 从请求链路、模型仓库、EAS 镜像部署、KServe v2 调用和 Triton 进阶特性理解 Triton Server 部署。
+    display: standalone
+    html_mode: document
+  - id: triton-pai-eas-image-deploy
+    title: 一文读懂 Triton Inference Server 镜像部署（PAI-EAS）
+    type: html
+    path: ./notes/triton-pai-eas-image-deploy.html
+    summary: 围绕模型仓库结构、config.pbtxt、EAS 挂载配置、服务调用和动态批处理理解 Triton 镜像部署。
+    display: standalone
+    html_mode: document
 blocks:
   - type: links
     items:

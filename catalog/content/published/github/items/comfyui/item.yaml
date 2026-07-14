@@ -1,0 +1,53 @@
+schema_version: 2
+id: comfyui
+hall: github
+kind: github_project
+title: ComfyUI
+summary: 节点式 AI 生成工作流引擎，用可复现的图形化流程编排扩散模型推理。
+source:
+  type: github
+  url: https://github.com/comfyanonymous/ComfyUI
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/comfyanonymous/ComfyUI
+  category: ai
+  tags:
+    - machine-learning
+    - workflow
+    - webui
+    - inference
+    - toolkit
+    - pytorch
+    - research
+  maintenance_status: unknown
+  languages:
+    - Python
+notes:
+  - id: comfyui-explainer
+    title: 一文读懂 ComfyUI · 节点式 AI 生成工作流引擎
+    type: html
+    path: ./notes/comfyui-explainer.html
+    summary: 从节点图、DAG 执行、扩散模型运行时和典型使用路径理解 ComfyUI 的项目结构与能力边界。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/comfyanonymous/ComfyUI
+      - label: Documentation
+        url: https://docs.comfy.org
+      - label: Comfy Org
+        url: https://github.com/Comfy-Org
+  - type: highlights
+    items:
+      - Node-based graph UI for composing generative AI workflows.
+      - Saves workflows as reusable JSON assets or embedded image metadata.
+      - Supports custom nodes, model management, and API-driven execution.
+  - type: use-cases
+    items:
+      - Building reproducible image, video, and audio generation workflows.
+      - Learning the execution stages of diffusion model pipelines.
+      - Using a local WebUI or backend service for generation experiments.
