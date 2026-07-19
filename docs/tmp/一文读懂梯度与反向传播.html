@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂梯度与反向传播</title>
+<style>
+:root{
+  --paper:#F1F4F6;
+  --panel:#FFFFFF;
+  --ink:#17232E;
+  --muted:#5C6D7C;
+  --line:#CBD6DE;
+  --grid:#E2E9EE;
+  --fwd:#0B7A53;        /* 前向值：绿 */
+  --fwd-bg:#E3F2EA;
+  --fwd-line:#22986E;
+  --bwd:#C0362C;        /* 梯度：红 */
+  --bwd-bg:#FAE7E4;
+  --bwd-line:#D4574C;
+  --param:#2455B8;      /* 参数与更新：蓝 */
+  --param-bg:#E7EEFB;
+  --warn:#8F6400;
+  --warn-bg:#FFF3D1;
+  --node-fill:#FDFEFE;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"JetBrains Mono",Menlo,"Courier New",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --radius:10px;
+  --shadow:0 1px 2px rgba(23,35,46,.06),0 4px 14px rgba(23,35,46,.05);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+body{
+  margin:0;color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.85;
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:26px 26px;
+}
+::selection{background:#CFE3D9}
+a{color:var(--param);text-decoration:none;border-bottom:1px dashed rgba(36,85,184,.4)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+code{background:#EBF0F3;border:1px solid var(--grid);border-radius:4px;padding:.05em .35em;white-space:nowrap}
+pre code{background:none;border:none;padding:0;white-space:pre}
+h1,h2,h3,h4{line-height:1.35;font-weight:700}
+h2{font-size:1.5rem;margin:.2rem 0 .4rem}
+h3{font-size:1.12rem;margin:1.6rem 0 .5rem}
+p{margin:.7rem 0}
+strong{font-weight:700}
+ul,ol{padding-left:1.4em}
+li{margin:.3rem 0}
+
+/* ---------- 语义色标记 ---------- */
+.fwd{color:var(--fwd);font-family:var(--mono);font-weight:700}
+.bwd{color:var(--bwd);font-family:var(--mono);font-weight:700}
+.prm{color:var(--param);font-family:var(--mono);font-weight:700}
+.tag{display:inline-block;font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;
+  padding:.1em .55em;border-radius:99px;border:1px solid;vertical-align:middle}
+.tag.f{color:var(--fwd);background:var(--fwd-bg);border-color:#BFE0D0}
+.tag.b{color:var(--bwd);background:var(--bwd-bg);border-color:#F0C7C1}
+.tag.p{color:var(--param);background:var(--param-bg);border-color:#C4D4F2}
+
+/* ---------- 顶部导航 ---------- */
+.topnav{
+  position:sticky;top:0;z-index:50;background:rgba(241,244,246,.92);
+  backdrop-filter:blur(6px);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;padding:8px 16px;overflow-x:auto;white-space:nowrap;
+  scrollbar-width:thin;
+}
+.topnav .brand{font-family:var(--mono);font-weight:700;font-size:.85rem;color:var(--ink);flex:0 0 auto;border:none}
+.topnav a.chip{
+  flex:0 0 auto;font-family:var(--mono);font-size:.74rem;color:var(--muted);
+  border:1px solid var(--line);border-radius:99px;padding:.15em .7em;background:var(--panel)}
+.topnav a.chip:hover{color:var(--ink);border-color:var(--muted)}
+
+.wrap{max-width:1020px;margin:0 auto;padding:0 20px 80px}
+
+/* ---------- 首屏 ---------- */
+.hero{padding:44px 0 8px}
+.hero .kicker{font-family:var(--mono);font-size:.78rem;letter-spacing:.18em;color:var(--muted);margin:0 0 10px}
+.hero h1{font-size:clamp(1.7rem,4.5vw,2.6rem);margin:0 0 14px;letter-spacing:.01em}
+.hero .thesis{
+  font-size:1.06rem;border-left:4px solid var(--bwd-line);
+  background:linear-gradient(90deg,var(--bwd-bg),transparent 70%);
+  padding:10px 16px;border-radius:0 8px 8px 0;max-width:760px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 6px;font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:22px;height:0;border-top:3px solid;display:inline-block;border-radius:2px}
+
+/* ---------- 面板与控件 ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:18px;margin:20px 0}
+.panel-title{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;color:var(--muted);
+  text-transform:uppercase;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.panel-title::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--param);display:inline-block}
+.panel-q{margin:0 0 12px;font-size:.95rem;color:var(--ink)}
+.panel-q b{color:var(--param)}
+.controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end;margin:10px 0 6px}
+.ctrl{display:flex;flex-direction:column;gap:2px;min-width:150px;flex:1 1 150px;max-width:230px}
+.ctrl label{font-family:var(--mono);font-size:.76rem;color:var(--muted)}
+.ctrl label output{color:var(--ink);font-weight:700}
+input[type=range]{width:100%;accent-color:var(--param);cursor:pointer;height:22px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#F6F8FA}
+.seg button{border:none;background:transparent;padding:.35em .8em;font-family:var(--mono);font-size:.78rem;
+  color:var(--muted);cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--ink);color:#fff}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font-family:var(--mono);
+  font-size:.8rem;border-radius:8px;padding:.42em 1em;cursor:pointer;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--param);border-color:var(--param);color:#fff}
+.btn.primary:hover{background:#1d479c}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:var(--mono)}
+.readout{
+  font-family:var(--mono);font-size:.84rem;background:#F7F9FA;border:1px solid var(--grid);
+  border-radius:8px;padding:10px 14px;margin-top:12px;overflow-x:auto;line-height:2}
+.readout .lbl{color:var(--muted)}
+.note{background:var(--warn-bg);border:1px solid #EAD9A0;border-radius:8px;padding:8px 14px;
+  font-size:.88rem;color:var(--warn);margin-top:10px}
+.hide{display:none!important}
+
+/* ---------- 章节 = 计算图节点 ---------- */
+.sec{position:relative;padding:34px 0 10px;margin-top:14px}
+.sec-head{display:flex;gap:16px;align-items:flex-start}
+.sec-node{
+  flex:0 0 auto;width:46px;height:46px;border-radius:50%;background:var(--ink);color:#fff;
+  font-family:var(--mono);font-weight:700;font-size:.95rem;display:flex;align-items:center;justify-content:center;
+  border:3px solid var(--paper);box-shadow:0 0 0 1.5px var(--ink);position:relative;z-index:2}
+.sec-eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;color:var(--muted);margin:2px 0 2px}
+.sec-body{margin-left:62px;max-width:880px}
+@media (max-width:640px){.sec-body{margin-left:0}}
+/* 章节之间的“边”：一条纵向虚线把节点连成图 */
+.rail{position:absolute;left:22px;top:-14px;bottom:-14px;width:2px;
+  background:repeating-linear-gradient(180deg,var(--line) 0 7px,transparent 7px 13px);z-index:1}
+@media (max-width:640px){.rail{display:none}.sec-node{width:38px;height:38px;font-size:.85rem}}
+
+/* ---------- 表格 ---------- */
+.tbl{width:100%;border-collapse:collapse;font-size:.88rem;margin:14px 0;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.tblwrap{overflow-x:auto;margin:14px 0}
+.tblwrap .tbl{margin:0;min-width:680px}
+.tbl th{background:#EDF1F4;font-family:var(--mono);font-size:.76rem;letter-spacing:.05em;color:var(--ink);
+  text-align:left;padding:9px 12px;border-bottom:2px solid var(--line)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--grid);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl td:first-child{font-weight:700;white-space:nowrap}
+
+/* ---------- 代码块 ---------- */
+.codeblock{background:#101820;color:#D7E2EA;border-radius:var(--radius);margin:16px 0;overflow:hidden;box-shadow:var(--shadow)}
+.codeblock .codehead{display:flex;justify-content:space-between;align-items:center;
+  padding:7px 14px;background:#1A242E;font-family:var(--mono);font-size:.74rem;color:#8FA3B3}
+.codeblock pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;line-height:1.7}
+.codeblock .cm{color:#6D8496}      /* comment */
+.codeblock .kw{color:#7FB4E8}      /* keyword */
+.codeblock .st{color:#A8D49B}      /* string */
+.codeblock .nm{color:#E8C07F}      /* number */
+.codeblock .hl{background:rgba(212,87,76,.22);display:inline-block;width:100%}
+
+/* ---------- 误区卡片 ---------- */
+details.myth{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  margin:10px 0;box-shadow:var(--shadow);overflow:hidden}
+details.myth summary{cursor:pointer;padding:12px 16px;font-weight:700;list-style:none;display:flex;gap:10px;align-items:baseline}
+details.myth summary::-webkit-details-marker{display:none}
+details.myth summary::before{content:"✕";color:var(--bwd);font-family:var(--mono);font-weight:700;flex:0 0 auto}
+details.myth[open] summary{border-bottom:1px solid var(--grid)}
+details.myth .body{padding:10px 16px 14px;font-size:.93rem}
+details.myth .body p:first-child::before{content:"✓ ";color:var(--fwd);font-family:var(--mono);font-weight:700}
+
+/* ---------- 自检卡片 ---------- */
+.quiz{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:16px;margin:14px 0}
+.quiz .scene{font-size:.93rem;background:#F7F9FA;border-left:3px solid var(--muted);
+  padding:8px 12px;border-radius:0 6px 6px 0;font-family:var(--mono);line-height:1.7}
+.quiz .opts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.quiz .opts button{border:1px solid var(--line);background:#F6F8FA;border-radius:8px;
+  padding:.4em .9em;font-size:.85rem;cursor:pointer;font-family:var(--sans)}
+.quiz .opts button:hover{border-color:var(--muted)}
+.quiz .opts button.right{background:var(--fwd-bg);border-color:var(--fwd);color:var(--fwd);font-weight:700}
+.quiz .opts button.wrong{background:var(--bwd-bg);border-color:var(--bwd-line);color:var(--bwd)}
+.quiz .explain{font-size:.9rem;border-top:1px dashed var(--grid);margin-top:10px;padding-top:10px}
+
+/* ---------- 排错面板 ---------- */
+.diag-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+@media (max-width:760px){.diag-grid{grid-template-columns:1fr}}
+.diag-txt h4{margin:.6rem 0 .2rem;font-size:.85rem;font-family:var(--mono);color:var(--muted);letter-spacing:.08em}
+.diag-txt p{margin:.2rem 0;font-size:.92rem}
+
+/* ---------- 动画 ---------- */
+@keyframes dashf{to{stroke-dashoffset:-26}}
+@keyframes dashb{to{stroke-dashoffset:26}}
+.flow-f{stroke-dasharray:7 6;animation:dashf 1.1s linear infinite}
+.flow-b{stroke-dasharray:7 6;animation:dashb 1.1s linear infinite}
+.pulse{transition:opacity .25s}
+
+footer{margin-top:60px;border-top:1px solid var(--line);padding-top:18px;
+  font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<nav class="topnav" aria-label="目录">
+  <span class="brand">∂L/∂w</span>
+  <a class="chip" href="#hero">首屏·最小训练链路</a>
+  <a class="chip" href="#s1">01 梯度直觉</a>
+  <a class="chip" href="#s2">02 概念边界</a>
+  <a class="chip" href="#s3">03 链式法则</a>
+  <a class="chip" href="#s4">04 计算图</a>
+  <a class="chip" href="#s5">05 反向传播逐步算</a>
+  <a class="chip" href="#s6">06 梯度流</a>
+  <a class="chip" href="#s7">07 梯度消失</a>
+  <a class="chip" href="#s8">08 梯度爆炸</a>
+  <a class="chip" href="#s9">09 Autograd 边界</a>
+  <a class="chip" href="#s10">10 工程排错</a>
+  <a class="chip" href="#s11">11 常见误区</a>
+  <a class="chip" href="#s12">12 最小代码</a>
+  <a class="chip" href="#s13">速查表</a>
+</nav>
+
+<div class="wrap">
+<!-- ================= 首屏 ================= -->
+<section class="hero" id="hero">
+  <p class="kicker">GRADIENTS &amp; BACKPROPAGATION · 交互式自学文档</p>
+  <h1>一文读懂梯度与反向传播</h1>
+  <p class="thesis"><strong>反向传播不是神秘算法，而是在计算图上反复使用链式法则，把 loss 的影响传回每个参数。</strong></p>
+  <p>这篇文档只有一条主线：<b>梯度如何告诉参数往哪里改</b>。下面是一条最小的训练链路——一个输入、一个权重、一个偏置、一个激活、一个 loss。拖动滑杆、切换激活函数和 loss，图上会同时给出<span class="tag f">前向值</span>、每条边的<span class="tag b">局部导数</span>、链式相乘后的 <code>dL/dw</code>，以及<span class="tag p">参数更新方向</span>。整篇文章要做的，就是把这张小图讲透，再推广到真实的深层网络。</p>
+  <div class="legend">
+    <span><i style="border-color:var(--fwd-line)"></i>前向传播（算数值）</span>
+    <span><i style="border-color:var(--bwd-line)"></i>反向传播（算梯度）</span>
+    <span><i style="border-color:var(--param)"></i>参数与更新</span>
+  </div>
+
+  <div class="panel" id="hero-panel">
+    <p class="panel-title">最小训练链路模拟器</p>
+    <p class="panel-q">回答的问题：<b>一次训练迭代里，数值怎么向前流、梯度怎么向后流、参数为什么往那个方向改？</b></p>
+    <div class="controls">
+      <div class="ctrl"><label>输入 x = <output id="hx-o">1.5</output></label><input type="range" id="hx" min="-3" max="3" step="0.1" value="1.5"></div>
+      <div class="ctrl"><label>权重 w = <output id="hw-o">0.8</output></label><input type="range" id="hw" min="-3" max="3" step="0.1" value="0.8"></div>
+      <div class="ctrl"><label>偏置 b = <output id="hb-o">-0.2</output></label><input type="range" id="hb" min="-3" max="3" step="0.1" value="-0.2"></div>
+      <div class="ctrl"><label>目标 y = <output id="hy-o">1</output></label><input type="range" id="hy" min="-2" max="2" step="0.1" value="1"></div>
+    </div>
+    <div class="controls">
+      <div>
+        <label style="font-family:var(--mono);font-size:.76rem;color:var(--muted);display:block;margin-bottom:3px">激活函数 f</label>
+        <div class="seg" id="hact">
+          <button data-v="linear" class="on">Linear</button><button data-v="sigmoid">Sigmoid</button><button data-v="tanh">Tanh</button><button data-v="relu">ReLU</button>
+        </div>
+      </div>
+      <div>
+        <label style="font-family:var(--mono);font-size:.76rem;color:var(--muted);display:block;margin-bottom:3px">损失函数 L</label>
+        <div class="seg" id="hloss">
+          <button data-v="mse" class="on">MSE</button><button data-v="bce">Binary CE</button>
+        </div>
+      </div>
+    </div>
+
+    <svg id="hero-svg" viewBox="0 0 780 330" role="img" aria-label="最小训练链路计算图">
+      <!-- 边 -->
+      <g stroke="var(--fwd-line)" stroke-width="2" fill="none" class="flow-f">
+        <path d="M124 78 C 190 78 200 150 252 158"/>
+        <path d="M124 165 L 252 165"/>
+        <path d="M124 252 C 190 252 200 180 252 172"/>
+        <path d="M340 165 L 428 165"/>
+        <path d="M516 165 L 604 165"/>
+        <path d="M648 96 L 648 138"/>
+      </g>
+      <!-- 反向梯度边（叠加，偏移） -->
+      <g stroke="var(--bwd-line)" stroke-width="2" fill="none" class="flow-b" opacity=".9">
+        <path d="M604 178 L 516 178"/>
+        <path d="M428 178 L 340 178"/>
+        <path d="M252 176 C 205 186 192 258 130 264"/>
+        <path d="M252 171 L 130 171" stroke-width="2.6"/>
+      </g>
+      <!-- 边上的局部导数标签 -->
+      <g font-size="12" fill="var(--bwd)">
+        <text x="178" y="150" text-anchor="middle">∂z/∂w = x = <tspan id="he-x">1.5</tspan></text>
+        <text x="176" y="248" text-anchor="middle">∂z/∂b = 1</text>
+        <text x="384" y="150" text-anchor="middle">∂a/∂z = f′(z) = <tspan id="he-fp">1</tspan></text>
+        <text x="560" y="150" text-anchor="middle">∂L/∂a = <tspan id="he-dla">?</tspan></text>
+      </g>
+      <g font-size="11" fill="var(--muted)">
+        <text x="178" y="66" text-anchor="middle">∂z/∂x = w（不更新输入）</text>
+      </g>
+      <!-- 节点 -->
+      <g font-size="13">
+        <g><rect x="40" y="54" width="84" height="48" rx="9" fill="var(--node-fill)" stroke="var(--line)" stroke-width="1.5"/>
+          <text x="82" y="74" text-anchor="middle" fill="var(--muted)">x 输入</text>
+          <text x="82" y="93" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="hn-x">1.5</text></g>
+        <g><rect x="40" y="141" width="84" height="48" rx="9" fill="var(--param-bg)" stroke="var(--param)" stroke-width="1.8"/>
+          <text x="82" y="161" text-anchor="middle" fill="var(--param)">w 权重</text>
+          <text x="82" y="180" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="hn-w">0.8</text></g>
+        <g><rect x="40" y="228" width="84" height="48" rx="9" fill="var(--param-bg)" stroke="var(--param)" stroke-width="1.8"/>
+          <text x="82" y="248" text-anchor="middle" fill="var(--param)">b 偏置</text>
+          <text x="82" y="267" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="hn-b">-0.2</text></g>
+        <g><rect x="252" y="141" width="88" height="48" rx="9" fill="var(--node-fill)" stroke="var(--ink)" stroke-width="1.5"/>
+          <text x="296" y="161" text-anchor="middle">z = wx+b</text>
+          <text x="296" y="180" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="hn-z">1.0</text></g>
+        <g><rect x="428" y="141" width="88" height="48" rx="9" fill="var(--node-fill)" stroke="var(--ink)" stroke-width="1.5"/>
+          <text x="472" y="161" text-anchor="middle" id="hn-alabel">a = f(z)</text>
+          <text x="472" y="180" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="hn-a">1.0</text></g>
+        <g><rect x="604" y="141" width="88" height="48" rx="9" fill="#FFF6F5" stroke="var(--bwd)" stroke-width="1.8"/>
+          <text x="648" y="161" text-anchor="middle" fill="var(--bwd)">loss L</text>
+          <text x="648" y="180" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="hn-L">0</text></g>
+        <g><rect x="604" y="48" width="88" height="48" rx="9" fill="var(--node-fill)" stroke="var(--line)" stroke-width="1.5"/>
+          <text x="648" y="68" text-anchor="middle" fill="var(--muted)">y 目标</text>
+          <text x="648" y="87" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="hn-y">1</text></g>
+      </g>
+      <!-- 底部：梯度回传总线标注 -->
+      <g font-size="12" fill="var(--bwd)">
+        <text x="390" y="318" text-anchor="middle">反向：梯度从 L 出发，沿红色边逐段相乘，回到 w 和 b</text>
+      </g>
+    </svg>
+
+    <div class="readout" id="hero-read">
+      <div><span class="lbl">前向：</span> z = w·x + b = <span class="fwd" id="hr-z">?</span>　→　a = f(z) = <span class="fwd" id="hr-a">?</span>　→　L = <span class="fwd" id="hr-L">?</span></div>
+      <div><span class="lbl">链式法则路径：</span> dL/dw = <span class="bwd" id="hr-dla">?</span> <span class="lbl">(∂L/∂a)</span> × <span class="bwd" id="hr-fp">?</span> <span class="lbl">(∂a/∂z)</span> × <span class="bwd" id="hr-x">?</span> <span class="lbl">(∂z/∂w)</span> = <span class="bwd" id="hr-dlw">?</span></div>
+      <div><span class="lbl">同一条路径换最后一段：</span> dL/db = ∂L/∂a × ∂a/∂z × 1 = <span class="bwd" id="hr-dlb">?</span></div>
+      <div><span class="lbl">更新方向（沿负梯度）：</span> <span class="prm" id="hr-dir">?</span>　<span class="lbl">即</span> w ← w − η·(<span class="bwd" id="hr-dlw2">?</span>)</div>
+    </div>
+    <div class="note hide" id="hero-bce-warn">⚠ Binary Cross Entropy 要求预测值 a ∈ (0,1)、目标 y ∈ [0,1]。当前激活函数的输出超出了这个范围，loss 在数学上已无意义——这正是实践中 BCE 几乎总是搭配 Sigmoid 的原因。演示中已将 a 截断到 (0,1) 边缘。</div>
+    <div class="note hide" id="hero-dead-warn">⚠ 现在 z &lt; 0 且激活是 ReLU：<code>∂a/∂z = 0</code>，链式乘积整条归零，<code>dL/dw = 0</code>。无论 loss 多大，w 都收不到任何更新信号——这就是 dead ReLU 的最小版本。</div>
+  </div>
+
+  <p>注意图里的三种颜色分工：<span class="fwd">绿色数字</span>是前向传播算出的值，<span class="bwd">红色数字</span>是反向传播算出的导数，<span class="prm">蓝色</span>是参数和更新动作。后文所有可视化都沿用这套颜色语言。还要注意一个细节：<code>x</code> 到 <code>z</code> 那条边也有局部导数 <code>∂z/∂x = w</code>，只是我们不更新输入，所以梯度到它为止；在多层网络里，这条"对输入的梯度"正是继续传向更前层的通道——第 6 章会回到这一点。</p>
+</section>
+<!-- ================= 01 梯度直觉 ================= -->
+<section class="sec" id="s1">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">01</span>
+    <div><p class="sec-eyebrow">GEOMETRY / 几何直觉</p><h2>先理解：梯度到底告诉模型什么</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>把所有维度先压到一维：假设整个模型只有一个参数 <code>w</code>，loss 是关于它的函数 <code>L(w)</code>。<b>导数 <code>dL/dw</code> 回答的问题非常朴素：站在当前的 w 上，往右挪一点点，loss 会变大还是变小、变多快。</b></p>
+    <p>就这一个数字，承担了训练里的三个角色：</p>
+    <ul>
+      <li><b>衡量局部影响</b>：<code>|dL/dw|</code> 大，说明 w 附近 loss 对它很敏感；接近 0，说明动 w 几乎不影响 loss。</li>
+      <li><b>指出上升最快方向</b>：导数为正 → 向右 loss 上升；为负 → 向左 loss 上升。推广到多维，梯度向量指向 loss 上升最快的方向。</li>
+      <li><b>给出更新规则</b>：既然梯度指向上升最快方向，想让 loss 变小，就沿反方向走——<code>w ← w − η·dL/dw</code>，这就是梯度下降。</li>
+    </ul>
+
+    <div class="panel">
+      <p class="panel-title">导数切线演示器</p>
+      <p class="panel-q">回答的问题：<b>"斜率"如何变成"更新方向"？为什么梯度只保证局部下降、不保证全局最优？</b></p>
+      <div class="controls">
+        <div class="ctrl" style="max-width:280px"><label>参数 w = <output id="t-w-o">2.6</output>（也可直接在图上拖动圆点）</label><input type="range" id="t-w" min="-4" max="4" step="0.02" value="2.6"></div>
+        <div class="ctrl"><label>学习率 η = <output id="t-lr-o">0.30</output></label><input type="range" id="t-lr" min="0.02" max="2" step="0.02" value="0.3"></div>
+      </div>
+      <div class="btnrow">
+        <button class="btn primary" id="t-step">沿负梯度走一步</button>
+        <button class="btn" id="t-run">连走 20 步</button>
+        <button class="btn" id="t-reset">重置到 w = 2.6</button>
+      </div>
+      <svg id="t-svg" viewBox="0 0 720 340" style="touch-action:none;cursor:ew-resize">
+        <g id="t-axes" stroke="var(--line)" stroke-width="1">
+          <line x1="40" y1="300" x2="700" y2="300"/><line x1="40" y1="20" x2="40" y2="300"/>
+        </g>
+        <text x="700" y="318" text-anchor="end" font-size="12" fill="var(--muted)">w →</text>
+        <text x="18" y="30" font-size="12" fill="var(--muted)">L</text>
+        <path id="t-curve" fill="none" stroke="var(--ink)" stroke-width="2.2"/>
+        <line id="t-tan" stroke="var(--bwd)" stroke-width="2" stroke-dasharray="6 4"/>
+        <g id="t-arrow"><line id="t-arr-l" stroke="var(--param)" stroke-width="3"/><polygon id="t-arr-h" fill="var(--param)"/></g>
+        <circle id="t-dot" r="7" fill="var(--param)" stroke="#fff" stroke-width="2"/>
+        <text id="t-slope-txt" font-size="12.5" fill="var(--bwd)"></text>
+      </svg>
+      <div class="readout">
+        <div><span class="lbl">当前：</span> L(w) = <span class="fwd" id="t-L">?</span>　　dL/dw = <span class="bwd" id="t-g">?</span>　　<span class="lbl">负梯度方向：</span><span class="prm" id="t-dir">?</span></div>
+        <div><span class="lbl">上一步效果：</span><span id="t-delta">还没走过</span></div>
+      </div>
+      <div class="note hide" id="t-osc-warn">⚠ 学习率太大：一步跨过了谷底，loss 反而在两侧来回弹跳甚至变大。梯度只在"当前位置附近"有效，步子太大就超出了它的有效范围。</div>
+      <p style="font-size:.9rem;color:var(--muted);margin-top:10px">试三件事：① 把 w 拖到左边的谷里，连走 20 步——它会停在<b>局部</b>最低点，即使右边还有更低的谷。② 把 w 放在山顶附近，注意斜率接近 0，更新几乎不动。③ 把 η 拉到 1.5 再连走，观察震荡。这三个现象分别对应：<b>梯度是局部信息、驻点处信号消失、步长决定梯度信息的可用范围。</b></p>
+    </div>
+
+    <p>记住这一章的结论：<b>梯度不是"误差有多大"，而是"往哪边改、改动的性价比多高"。</b>它只描述当前点附近一小圈的地形，所以梯度下降是"摸着坡走"，不是"看着地图走"——不保证一步、甚至任意多步到达全局最优。</p>
+  </div>
+</section>
+
+<!-- ================= 02 概念边界 ================= -->
+<section class="sec" id="s2">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">02</span>
+    <div><p class="sec-eyebrow">DEFINITIONS / 概念边界</p><h2>导数、偏导数、梯度：别再混用</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>这三个词经常被当成同义词，但它们回答的是三个不同的问题。真实网络有百万级参数，loss 是 <code>L(w_1, w_2, ..., w_n)</code> 这样的多变量函数，边界必须画清：</p>
+    <ul>
+      <li><b>Derivative（导数）</b>：单变量函数的变化率，如一维例子里的 <code>dL/dw</code>。几何直觉就是上一章的切线斜率。</li>
+      <li><b>Partial Derivative（偏导数）</b>：多变量函数中，<b>把其它变量暂时冻结</b>，只看一个变量变化对结果的影响，记作 <code>∂L/∂w_i</code>。注意"冻结"是分析手段，不是训练手段——求 <code>∂L/∂w_1</code> 不代表只训练 <code>w_1</code>。</li>
+      <li><b>Gradient（梯度）</b>：把对每个参数的偏导数排成一个向量 <code>∇L = [∂L/∂w_1, ..., ∂L/∂w_n]</code>。<b>方向</b>是 loss 上升最快的方向，<b>长度</b>（范数）是局部变化的强度。训练日志里看的 "grad norm" 就是它的长度。</li>
+      <li><b>Jacobian（雅可比矩阵）</b>：当函数是"向量进、向量出"（比如一层网络 <code>h = Wx</code>），所有输出对所有输入的偏导数排成矩阵。反向传播里每一层传递梯度本质上是"向量乘 Jacobian"，但框架的 autograd 会隐式处理，几乎不需要手工展开。</li>
+      <li><b>Hessian（黑塞矩阵）</b>：二阶导数矩阵，描述曲率（坡是变陡还是变缓）。牛顿法等二阶优化会用到，日常训练里知道它存在、并且太大算不动，就够了。</li>
+    </ul>
+
+    <div class="tblwrap"><table class="tbl">
+      <thead><tr><th>概念</th><th>适用函数形态</th><th>输出形态</th><th>几何直觉</th><th>训练中常见位置</th><th>容易误解的点</th></tr></thead>
+      <tbody>
+        <tr><td>Derivative</td><td>ℝ → ℝ（单变量）</td><td>一个标量</td><td>切线斜率</td><td>推导单个标量路径，如 <code>dL/da</code></td><td>只在单变量语境下叫"导数"，多变量时应说偏导</td></tr>
+        <tr><td>Partial Derivative</td><td>ℝⁿ → ℝ（多变量到标量）</td><td>一个标量（对某一个变量）</td><td>沿一根坐标轴切开曲面看斜率</td><td><code>∂L/∂w_i</code>，即 <code>w_i.grad</code> 里的单个元素</td><td>"冻结其它变量"是求导视角，不是训练时真的不更新它们</td></tr>
+        <tr><td>Gradient</td><td>ℝⁿ → ℝ</td><td>n 维向量</td><td>指向上升最快方向的箭头</td><td><code>loss.backward()</code> 后每个参数的 <code>.grad</code> 合起来</td><td>它是变化率向量，不是误差值；loss 很大时梯度可能是 0</td></tr>
+        <tr><td>Jacobian</td><td>ℝⁿ → ℝᵐ（向量到向量）</td><td>m×n 矩阵</td><td>局部线性近似（每个输出对每个输入的敏感度）</td><td>层与层之间传梯度：<code>grad_in = Jᵀ · grad_out</code>，autograd 隐式完成</td><td>不需要显式构造整个矩阵，框架算的是"向量-Jacobian 乘积"</td></tr>
+        <tr><td>Hessian</td><td>ℝⁿ → ℝ</td><td>n×n 矩阵</td><td>曲率：坡度本身怎么变</td><td>二阶优化、损失景观分析（边界知识）</td><td>参数百万级时 O(n²) 存不下，实用中多用近似</td></tr>
+      </tbody>
+    </table></div>
+    <p>一句话收束：<b>训练一个网络时，我们对每个参数各求一个偏导数，拼成梯度向量，然后沿它的反方向更新。</b>"求导""偏导""梯度"说的是同一件事在不同维度下的形态，而"反向传播"是<b>高效算出这个向量的方法</b>——它是什么方法？答案是下一章的链式法则。</p>
+  </div>
+</section>
+
+<!-- ================= 03 链式法则 ================= -->
+<section class="sec" id="s3">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">03</span>
+    <div><p class="sec-eyebrow">CHAIN RULE / 链式法则</p><h2>链式法则：局部变化如何连成整体影响</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>神经网络的 loss 对某个深处参数的依赖，是一层套一层的复合函数。最简单的复合是 <code>L = g(f(w))</code>，链式法则说：</p>
+    <p style="text-align:center"><code style="font-size:1.05rem">dL/dw = dL/df · df/dw</code></p>
+    <p>为什么是<b>相乘</b>？做一个"扰动传递"的推理：w 动一点 <code>Δw</code>，f 大约动 <code>(df/dw)·Δw</code>；f 动了这么多，L 又大约动 <code>(dL/df)·(df/dw)·Δw</code>。每一段局部导数都是一个"放大倍率"，扰动穿过一段就被乘上一个倍率——<b>倍率串联，自然相乘</b>。</p>
+    <p>用一个具体的四节点链条来算，每一段都能落到数字上：</p>
+    <p style="text-align:center"><code>w → z = 2w + 1 → a = z² → L = (a − y)²</code></p>
+    <div class="panel">
+      <p class="panel-title">链式法则计算器</p>
+      <p class="panel-q">回答的问题：<b>每段局部导数各自是什么含义？为什么把它们乘起来就是总导数？</b></p>
+      <div class="controls">
+        <div class="ctrl"><label>w = <output id="c-w-o">0.5</output></label><input type="range" id="c-w" min="-3" max="3" step="0.05" value="0.5"></div>
+        <div class="ctrl"><label>目标 y = <output id="c-y-o">9</output></label><input type="range" id="c-y" min="-5" max="20" step="0.5" value="9"></div>
+        <div class="ctrl"><label>验证用微小扰动 Δw = <output id="c-eps-o">0.01</output></label><input type="range" id="c-eps" min="0.001" max="0.5" step="0.001" value="0.01"></div>
+      </div>
+      <svg id="c-svg" viewBox="0 0 760 250">
+        <g stroke="var(--fwd-line)" stroke-width="2" fill="none">
+          <line x1="128" y1="105" x2="212" y2="105"/><line x1="340" y1="105" x2="424" y2="105"/><line x1="552" y1="105" x2="636" y2="105"/>
+        </g>
+        <g stroke="var(--bwd-line)" stroke-width="2" fill="none" class="flow-b">
+          <line x1="212" y1="122" x2="128" y2="122"/><line x1="424" y1="122" x2="340" y2="122"/><line x1="636" y1="122" x2="552" y2="122"/>
+        </g>
+        <g font-size="13">
+          <g><rect x="30" y="80" width="98" height="52" rx="9" fill="var(--param-bg)" stroke="var(--param)" stroke-width="1.8"/>
+            <text x="79" y="101" text-anchor="middle" fill="var(--param)">w</text><text x="79" y="121" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="cn-w">0.5</text></g>
+          <g><rect x="212" y="80" width="128" height="52" rx="9" fill="var(--node-fill)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="276" y="101" text-anchor="middle">z = 2w + 1</text><text x="276" y="121" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="cn-z">2</text></g>
+          <g><rect x="424" y="80" width="128" height="52" rx="9" fill="var(--node-fill)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="488" y="101" text-anchor="middle">a = z²</text><text x="488" y="121" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="cn-a">4</text></g>
+          <g><rect x="636" y="80" width="104" height="52" rx="9" fill="#FFF6F5" stroke="var(--bwd)" stroke-width="1.8"/>
+            <text x="688" y="101" text-anchor="middle" fill="var(--bwd)">L = (a−y)²</text><text x="688" y="121" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="cn-L">25</text></g>
+        </g>
+        <g font-size="12" fill="var(--bwd)">
+          <text x="170" y="62" text-anchor="middle">dz/dw = 2</text>
+          <text x="382" y="62" text-anchor="middle">da/dz = 2z = <tspan id="ce-dadz">4</tspan></text>
+          <text x="594" y="62" text-anchor="middle">dL/da = 2(a−y) = <tspan id="ce-dlda">-10</tspan></text>
+        </g>
+        <g font-size="12" fill="var(--muted)">
+          <text x="170" y="160" text-anchor="middle">w 动 1 单位，z 动 2 单位</text>
+          <text x="382" y="160" text-anchor="middle">z 动 1 单位，a 动约 <tspan id="ct-2">4</tspan> 单位</text>
+          <text x="594" y="160" text-anchor="middle">a 动 1 单位，L 动约 <tspan id="ct-3">-10</tspan> 单位</text>
+        </g>
+        <g font-size="13.5" font-weight="700">
+          <text x="380" y="210" text-anchor="middle" fill="var(--bwd)">dL/dw = <tspan id="cm-1">-10</tspan> × <tspan id="cm-2">4</tspan> × 2 = <tspan id="cm-t">-80</tspan></text>
+          <text x="380" y="236" text-anchor="middle" fill="var(--muted)" font-size="12" font-weight="400">乘的顺序无所谓，反向传播习惯从 loss 端往回乘</text>
+        </g>
+      </svg>
+      <div class="readout">
+        <div><span class="lbl">链式法则预测：</span> w 增加 Δw = <span class="mono" id="cr-eps">0.01</span>，L 大约变化 dL/dw × Δw = <span class="bwd" id="cr-pred">?</span></div>
+        <div><span class="lbl">实际重算前向：</span> L(w + Δw) − L(w) = <span class="fwd" id="cr-real">?</span>　<span class="lbl">两者相差</span> <span class="mono" id="cr-diff">?</span><span class="lbl">（Δw 越小差得越少——导数本来就是极限意义下的比率）</span></div>
+      </div>
+      <p style="font-size:.9rem;color:var(--muted);margin-top:10px">注意红色一行的三个数：<code>dL/da</code> 依赖前向算出的 <code>a</code>，<code>da/dz</code> 依赖前向算出的 <code>z</code>。也就是说，<b>反向要用的局部导数，取决于前向留下的中间值</b>——这个观察是第 4 章"为什么要存中间值"的伏笔。再把 Δw 拉大到 0.5，看预测和实际的偏差如何变大：链式法则给的是切线近似，只在局部成立。</p>
+    </div>
+    <p>反向传播的全部内容，就是把这个"逐段相乘"系统化：<b>在任意复杂的计算图上，从 loss 出发，沿每条边乘上局部导数，一路乘回每个参数；公共路段只算一次、被所有参数复用。</b>它不是新的数学，是链式法则在图结构上的高效执行。</p>
+  </div>
+</section>
+
+<!-- ================= 04 计算图 ================= -->
+<section class="sec" id="s4">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">04</span>
+    <div><p class="sec-eyebrow">COMPUTATION GRAPH / 计算图</p><h2>计算图：把一次前向计算拆成可求导节点</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>要在复杂函数上系统地用链式法则，先要把计算本身画成图：</p>
+    <ul>
+      <li><b>节点</b>：变量、参数、操作产生的中间结果（首屏图里的 <code>x, w, b, z, a, L</code> 都是节点）。</li>
+      <li><b>边</b>：数据依赖关系。前向时数据沿边流动；反向时同一条边反过来用，成为梯度传播路径，每条边自带一个局部导数。</li>
+    </ul>
+    <p>两个方向的遍历规则完全对称：</p>
+    <ul>
+      <li><b>forward</b>：按依赖顺序（拓扑序）从输入算到 loss，每个节点等它的输入都就绪后计算自己的值。</li>
+      <li><b>backward</b>：从 loss 出发（<code>dL/dL = 1</code>），按<b>反向拓扑序</b>访问节点；每到一个节点，把"上游传来的梯度 × 本条边的局部导数"发给它的每个输入。</li>
+    </ul>
+    <h3>为什么训练比推理更耗显存：中间值必须留着</h3>
+    <p>回看第 3 章：<code>dL/da = 2(a − y)</code> 需要 <code>a</code>，<code>da/dz = 2z</code> 需要 <code>z</code>。<b>反向计算局部导数时，普遍需要前向的中间结果。</b>推理算完一层就可以扔掉上一层的输出，训练却必须把这些激活值留到 backward 用完为止——这就是同一个模型"训练显存 ≫ 推理显存"的主要原因，也是 gradient checkpointing（丢掉一部分中间值、反向时重算）这种"时间换显存"技巧存在的理由。</p>
+
+    <h3>fan-out：一个变量喂给多个下游，梯度要相加</h3>
+    <p>链条只是计算图的特例。真实的图里，一个节点常常同时流向多个下游（权重共享、残差连接、一个特征被多个 head 使用）。这时它收到的梯度是<b>所有路径各自贡献之和</b>——因为 w 动一点，每条路径都会独立地把这份扰动带到 loss，总影响是叠加的。</p>
+
+    <div class="panel">
+      <p class="panel-title">fan-out 与梯度累加演示</p>
+      <p class="panel-q">回答的问题：<b>当 w 同时影响两条路径时，dL/dw 为什么是两条路径梯度之和？</b></p>
+      <div class="controls">
+        <div class="ctrl"><label>w = <output id="f-w-o">1.2</output></label><input type="range" id="f-w" min="-3" max="3" step="0.05" value="1.2"></div>
+      </div>
+      <svg id="f-svg" viewBox="0 0 760 270">
+        <g stroke="var(--fwd-line)" stroke-width="2" fill="none">
+          <path d="M150 128 C 220 128 230 66 292 62"/>
+          <path d="M150 142 C 220 142 230 204 292 208"/>
+          <path d="M416 62 C 486 66 496 120 556 128"/>
+          <path d="M416 208 C 486 204 496 150 556 142"/>
+        </g>
+        <g stroke="var(--bwd-line)" stroke-width="2.2" fill="none" class="flow-b">
+          <path d="M556 122 C 500 112 490 56 420 52" opacity=".95"/>
+          <path d="M556 148 C 500 158 490 214 420 218" opacity=".95"/>
+          <path d="M292 52 C 232 56 222 116 156 122"/>
+          <path d="M292 218 C 232 214 222 154 156 148"/>
+        </g>
+        <g font-size="13">
+          <g><rect x="52" y="108" width="98" height="52" rx="9" fill="var(--param-bg)" stroke="var(--param)" stroke-width="1.8"/>
+            <text x="101" y="129" text-anchor="middle" fill="var(--param)">w（共享）</text><text x="101" y="149" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="fn-w">1.2</text></g>
+          <g><rect x="292" y="36" width="124" height="52" rx="9" fill="var(--node-fill)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="354" y="57" text-anchor="middle">p = 2w</text><text x="354" y="77" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="fn-p">2.4</text></g>
+          <g><rect x="292" y="182" width="124" height="52" rx="9" fill="var(--node-fill)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="354" y="203" text-anchor="middle">q = 3w</text><text x="354" y="223" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="fn-q">3.6</text></g>
+          <g><rect x="556" y="108" width="132" height="52" rx="9" fill="#FFF6F5" stroke="var(--bwd)" stroke-width="1.8"/>
+            <text x="622" y="129" text-anchor="middle" fill="var(--bwd)">L = p · q</text><text x="622" y="149" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="fn-L">8.64</text></g>
+        </g>
+        <g font-size="12" fill="var(--bwd)">
+          <text x="480" y="40" text-anchor="middle">∂L/∂p = q = <tspan id="fe-q">3.6</tspan></text>
+          <text x="480" y="248" text-anchor="middle">∂L/∂q = p = <tspan id="fe-p">2.4</tspan></text>
+          <text x="206" y="34" text-anchor="middle">上路贡献 = q·2 = <tspan id="fe-c1">7.2</tspan></text>
+          <text x="206" y="254" text-anchor="middle">下路贡献 = p·3 = <tspan id="fe-c2">7.2</tspan></text>
+        </g>
+      </svg>
+      <div class="readout">
+        <div><span class="lbl">上路：</span> ∂L/∂p · ∂p/∂w = <span class="bwd" id="fr-c1">?</span>　　<span class="lbl">下路：</span> ∂L/∂q · ∂q/∂w = <span class="bwd" id="fr-c2">?</span></div>
+        <div><span class="lbl">累加：</span> dL/dw = 上路 + 下路 = <span class="bwd" id="fr-t">?</span>　<span class="lbl">（验证：L = 6w²，dL/dw = 12w = </span><span class="mono" id="fr-v">?</span><span class="lbl">，完全一致）</span></div>
+      </div>
+      <p style="font-size:.9rem;color:var(--muted);margin-top:10px">这个"多条路径求和"就是框架里 <code>.grad</code> 用 <code>+=</code> 累加的数学根源：backward 沿每条到达参数的路径各送来一份梯度，参数把它们加起来。它是正确行为；但同一机制也解释了第 9 章的坑——如果<b>跨迭代</b>忘记清零，上一轮的梯度也会被加进来。</p>
+    </div>
+    <p>到这里，反向传播的三块拼图齐了：<b>计算图给出遍历顺序，链式法则给出每条边上的乘法，fan-out 规则给出汇合处的加法。</b>下一章把它们串成一次完整的、带数字的训练迭代。</p>
+  </div>
+</section>
+<!-- ================= 05 反向传播逐步算 ================= -->
+<section class="sec" id="s5">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">05</span>
+    <div><p class="sec-eyebrow">STEP BY STEP / 逐步执行</p><h2>反向传播一步步算什么</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>用一个带 ReLU 的最小神经元，走完"前向 → 反向 → 更新"的完整循环：</p>
+    <p style="text-align:center"><code>x → z = wx + b → a = ReLU(z) → L = (a − y)²</code></p>
+    <p>下面的播放器把一次迭代拆成 10 步。每一步要么在图上<b>向前算一个值</b>（绿），要么<b>向后传一段梯度</b>（红），要么<b>更新一个参数</b>（蓝）。没有第四种事情发生——这就是训练循环的全部。</p>
+
+    <div class="panel">
+      <p class="panel-title">计算图反向传播播放器</p>
+      <p class="panel-q">回答的问题：<b>backward 具体按什么顺序算了哪些数？梯度和"优化器更新"的分工线在哪里？</b></p>
+      <div class="controls">
+        <div class="ctrl"><label>x = <output id="p-x-o">1.5</output></label><input type="range" id="p-x" min="-3" max="3" step="0.1" value="1.5"></div>
+        <div class="ctrl"><label>w = <output id="p-w-o">0.8</output></label><input type="range" id="p-w" min="-3" max="3" step="0.05" value="0.8"></div>
+        <div class="ctrl"><label>b = <output id="p-b-o">-0.3</output></label><input type="range" id="p-b" min="-3" max="3" step="0.05" value="-0.3"></div>
+        <div class="ctrl"><label>y = <output id="p-y-o">2</output></label><input type="range" id="p-y" min="-3" max="3" step="0.1" value="2"></div>
+        <div class="ctrl"><label>学习率 lr = <output id="p-lr-o">0.10</output></label><input type="range" id="p-lr" min="0.01" max="1" step="0.01" value="0.1"></div>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="p-prev">← 上一步</button>
+        <button class="btn primary" id="p-next">下一步 →</button>
+        <button class="btn" id="p-auto">▶ 自动播放</button>
+        <button class="btn" id="p-reset">重置本轮</button>
+        <button class="btn" id="p-apply" disabled>把更新写回 w, b（开始下一轮）</button>
+      </div>
+      <svg id="p-svg" viewBox="0 0 780 300">
+        <g stroke="var(--fwd-line)" stroke-width="2" fill="none" opacity=".85">
+          <path id="pe-xz" d="M124 78 C 190 78 200 150 252 158"/>
+          <path id="pe-wz" d="M124 165 L 252 165"/>
+          <path id="pe-bz" d="M124 252 C 190 252 200 180 252 172"/>
+          <path id="pe-za" d="M340 165 L 428 165"/>
+          <path id="pe-aL" d="M516 165 L 604 165"/>
+          <path id="pe-yL" d="M648 96 L 648 138"/>
+        </g>
+        <g stroke="var(--bwd-line)" stroke-width="2.4" fill="none">
+          <path id="pb-La" d="M604 178 L 516 178" opacity=".12"/>
+          <path id="pb-az" d="M428 178 L 340 178" opacity=".12"/>
+          <path id="pb-zw" d="M252 171 L 130 171" opacity=".12"/>
+          <path id="pb-zb" d="M252 176 C 205 186 192 258 130 264" opacity=".12"/>
+        </g>
+        <g font-size="13">
+          <g id="pg-x"><rect x="40" y="54" width="84" height="48" rx="9" fill="var(--node-fill)" stroke="var(--line)" stroke-width="1.5"/>
+            <text x="82" y="74" text-anchor="middle" fill="var(--muted)">x</text><text x="82" y="93" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="pn-x">1.5</text></g>
+          <g id="pg-w"><rect id="pr-w" x="40" y="141" width="84" height="48" rx="9" fill="var(--param-bg)" stroke="var(--param)" stroke-width="1.8"/>
+            <text x="82" y="161" text-anchor="middle" fill="var(--param)">w</text><text x="82" y="180" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="pn-w">0.8</text></g>
+          <g id="pg-b"><rect id="pr-b" x="40" y="228" width="84" height="48" rx="9" fill="var(--param-bg)" stroke="var(--param)" stroke-width="1.8"/>
+            <text x="82" y="248" text-anchor="middle" fill="var(--param)">b</text><text x="82" y="267" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="pn-b">-0.3</text></g>
+          <g id="pg-z"><rect id="pr-z" x="252" y="141" width="88" height="48" rx="9" fill="var(--node-fill)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="296" y="161" text-anchor="middle">z = wx+b</text><text x="296" y="180" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="pn-z">?</text></g>
+          <g id="pg-a"><rect id="pr-a" x="428" y="141" width="88" height="48" rx="9" fill="var(--node-fill)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="472" y="161" text-anchor="middle">a=ReLU(z)</text><text x="472" y="180" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="pn-a">?</text></g>
+          <g id="pg-L"><rect id="pr-L" x="604" y="141" width="88" height="48" rx="9" fill="#FFF6F5" stroke="var(--bwd)" stroke-width="1.8"/>
+            <text x="648" y="161" text-anchor="middle" fill="var(--bwd)">L=(a−y)²</text><text x="648" y="180" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="pn-L">?</text></g>
+          <g><rect x="604" y="48" width="88" height="48" rx="9" fill="var(--node-fill)" stroke="var(--line)" stroke-width="1.5"/>
+            <text x="648" y="68" text-anchor="middle" fill="var(--muted)">y</text><text x="648" y="87" text-anchor="middle" fill="var(--fwd)" font-weight="700" id="pn-y">2</text></g>
+        </g>
+        <g font-size="12" fill="var(--bwd)">
+          <text x="560" y="205" text-anchor="middle" id="pt-dLda" opacity=".15">∂L/∂a = ?</text>
+          <text x="384" y="205" text-anchor="middle" id="pt-dadz" opacity=".15">∂a/∂z = ?</text>
+          <text x="190" y="150" text-anchor="middle" id="pt-dLdw" opacity=".15">dL/dw = ?</text>
+          <text x="176" y="286" text-anchor="middle" id="pt-dLdb" opacity=".15">dL/db = ?</text>
+        </g>
+      </svg>
+      <div class="readout" id="p-explain" style="min-height:5.6em">
+        <div><span class="lbl">步骤 <span id="p-stepno">0/10</span>：</span><b id="p-steptitle">准备开始</b></div>
+        <div id="p-stepdesc">点"下一步"，从前向传播开始。任何时候调整上面的滑杆，本轮会用新数值重放到当前步骤。</div>
+      </div>
+      <div class="note hide" id="p-dead-note">⚠ 当前 z ≤ 0，ReLU 输出恒为 0，<code>∂a/∂z = 0</code>。往后看：dL/dw 和 dL/db 都会是 0，这一轮 w、b 完全不更新。试着调大 w 或 b 让 z 回到正区间，对比两种情况下的第 5～8 步。</div>
+      <p style="font-size:.9rem;color:var(--muted);margin-top:10px">两个必做实验：① 调 w、b 把 <code>z</code> 在正负区间之间切换，观察 <code>∂a/∂z</code> 在 1 和 0 之间跳变时，<code>dL/dw</code> 如何被整条抹零；② 播完 10 步后调大 lr 再看第 9、10 步——<b>梯度没变，变的只是步长</b>。这正是分工线：<b>反向传播（第 4～8 步）只负责算梯度；优化器（第 9～10 步）才负责用梯度更新参数。</b>换优化器（SGD → Adam）换的是后两步的策略，前面的梯度计算一个字都不变。</p>
+    </div>
+
+    <p>把播放器里的内容写成通用清单，任何一轮训练迭代都是：</p>
+    <ol>
+      <li><b>前向</b>：按拓扑序算出 <code>z</code>、<code>a</code>、…、<code>L</code>，顺手保存反向要用的中间值；</li>
+      <li><b>反向</b>：从 <code>dL/dL = 1</code> 出发，逐边乘局部导数（<code>dL/da</code> → <code>×∂a/∂z</code> → <code>×∂z/∂w</code> 或 <code>×∂z/∂b</code>），汇合处相加，得到每个参数的梯度；</li>
+      <li><b>更新</b>：优化器拿着梯度执行 <code>w ← w − lr·dL/dw</code>（或更复杂的规则）。</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ================= 06 梯度流 ================= -->
+<section class="sec" id="s6">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">06</span>
+    <div><p class="sec-eyebrow">GRADIENT FLOW / 梯度流</p><h2>梯度流：为什么深层网络训练会变难</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>把第 5 章的单神经元叠成 n 层，第一层权重 <code>w_1</code> 的梯度是一条很长的链式乘积：</p>
+    <p style="text-align:center"><code>dL/dw_1 = dL/dh_n · dh_n/dh_{n−1} · … · dh_2/dh_1 · dh_1/dw_1</code></p>
+    <p><b>梯度流</b>指的就是：误差信号从 loss 出发、沿计算图逐层传向前层时的<b>强弱和路径</b>。链条里每个因子 <code>dh_{k+1}/dh_k</code> 是第 k 层的"局部放大倍率"（由该层权重和激活函数导数共同决定）。于是问题变成一道乘法题：</p>
+    <ul>
+      <li>倍率<b>普遍小于 1</b>：连乘后指数级衰减。<code>0.5³⁰ ≈ 10⁻⁹</code>——前层几乎收不到信号，这就是<b>梯度消失</b>。</li>
+      <li>倍率<b>普遍大于 1</b>：连乘后指数级增长。<code>1.5³⁰ ≈ 1.9×10⁵</code>——前层收到失真的巨大信号，这就是<b>梯度爆炸</b>。</li>
+      <li>倍率稳定在 1 附近：信号能大致等幅穿过所有层，训练才健康。深度学习结构设计的很大一部分，就是想办法把这些倍率钉在 1 附近。</li>
+    </ul>
+
+    <div class="panel">
+      <p class="panel-title">梯度流模拟器</p>
+      <p class="panel-q">回答的问题：<b>层数和每层平均局部导数，如何共同决定前层梯度的量级？</b></p>
+      <div class="controls">
+        <div class="ctrl"><label>网络层数 n = <output id="g-n-o">20</output></label><input type="range" id="g-n" min="2" max="60" step="1" value="20"></div>
+        <div class="ctrl"><label>每层平均局部导数 |g| = <output id="g-d-o">0.80</output></label><input type="range" id="g-d" min="0.05" max="2" step="0.01" value="0.8"></div>
+      </div>
+      <div class="btnrow">
+        <span style="font-family:var(--mono);font-size:.74rem;color:var(--muted);align-self:center">预设：</span>
+        <button class="btn" data-gpre="0.20">Sigmoid 饱和区 ≈ 0.2</button>
+        <button class="btn" data-gpre="0.95">略小于 1 ≈ 0.95</button>
+        <button class="btn" data-gpre="1.00">恰好 1.0</button>
+        <button class="btn" data-gpre="1.30">略大于 1 ≈ 1.3</button>
+      </div>
+      <svg id="g-svg" viewBox="0 0 720 320">
+        <rect x="56" y="16" width="644" height="86" fill="var(--bwd-bg)" opacity=".5"/>
+        <rect x="56" y="188" width="644" height="86" fill="var(--param-bg)" opacity=".5"/>
+        <text x="66" y="34" font-size="11" fill="var(--bwd)">爆炸区（|梯度| &gt; 10³）</text>
+        <text x="66" y="268" font-size="11" fill="var(--param)">消失区（|梯度| &lt; 10⁻³）</text>
+        <g id="g-axes" stroke="var(--line)"><line x1="56" y1="16" x2="56" y2="274"/><line x1="56" y1="145" x2="700" y2="145" stroke-dasharray="4 4"/><line x1="56" y1="274" x2="700" y2="274"/></g>
+        <g font-size="11" fill="var(--muted)" text-anchor="end">
+          <text x="50" y="20">10⁹</text><text x="50" y="106">10³</text><text x="50" y="149">10⁰</text><text x="50" y="192">10⁻³</text><text x="50" y="278">10⁻⁹</text>
+        </g>
+        <text x="380" y="308" font-size="12" fill="var(--muted)" text-anchor="middle">← 从 loss 端（第 n 层）向前数的层数 → 第 1 层</text>
+        <path id="g-line" fill="none" stroke="var(--bwd)" stroke-width="2.5"/>
+        <circle id="g-end" r="5" fill="var(--bwd)"/>
+      </svg>
+      <div class="readout">
+        <div><span class="lbl">第 1 层（离 loss 最远）的梯度量级 ≈ |g|ⁿ = </span><span class="bwd" id="g-final">?</span>　　<span class="lbl">判定：</span><b id="g-verdict">?</b></div>
+      </div>
+      <p style="font-size:.9rem;color:var(--muted);margin-top:10px">把 |g| 从 0.95 拨到 1.05——只差 0.1，60 层之后一个是 <code>0.95⁶⁰≈0.046</code>，一个是 <code>1.05⁶⁰≈18.7</code>，相差 400 倍。<b>深度是放大器：局部倍率的微小偏差，会被层数指数级放大。</b>这解释了为什么浅网络怎么搭都能训，深网络对初始化和结构极其敏感。</p>
+    </div>
+    <p>最后划清一个常被说窄的边界：<b>梯度流不只由激活函数决定。</b>每层的倍率里还乘着权重（初始化尺度、训练中的漂移）；归一化层会重整每层输出的分布从而稳定倍率；残差连接 <code>h_{k+1} = h_k + F(h_k)</code> 让局部导数变成 <code>1 + F′</code>，给梯度留了一条"倍率恒为 1 的高速路"；loss 的形状、优化器的自适应缩放、数据尺度都会改变链条两端的量级。第 7、8 章排查原因时，要把这些因素全部放进候选清单。</p>
+  </div>
+</section>
+
+<!-- ================= 07 梯度消失 ================= -->
+<section class="sec" id="s7">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">07</span>
+    <div><p class="sec-eyebrow">VANISHING / 梯度消失</p><h2>梯度消失：信号传不回前层</h2></div>
+  </header>
+  <div class="sec-body">
+    <h3>数学直觉</h3>
+    <p>链式乘积里混入太多接近 0 的因子。最经典的来源是饱和激活：Sigmoid 的导数 <code>σ′(z) = σ(z)(1−σ(z))</code> <b>最大只有 0.25</b>（在 z=0 处），|z| 稍大就掉到 0.01 以下；Tanh 好一些（导数最大 1），但饱和区同样趋 0。每过一层至多打 0.25 折，10 层 Sigmoid 就是至多 <code>0.25¹⁰ ≈ 10⁻⁶</code>——用第 6 章的模拟器把 |g| 设为 0.2 就能看到这条陡降的直线。</p>
+    <h3>典型表现</h3>
+    <ul>
+      <li>前层参数更新极慢：靠近输入的层 <code>.grad</code> 范数比末层小很多个数量级，参数几乎不动；</li>
+      <li>loss 下降缓慢或早早停滞：模型只在"调最后几层"，前层学不到特征；</li>
+      <li>逐层打印梯度范数时，呈现从后往前指数衰减的阶梯。</li>
+    </ul>
+    <h3>常见原因</h3>
+    <ul>
+      <li>饱和激活函数（Sigmoid/Tanh 用在深层主干上）；</li>
+      <li>初始化不合适：权重太小 → 每层倍率整体偏小；权重太大 → 激活被推进饱和区，导数趋 0（殊途同归）；</li>
+      <li>网络过深且没有为梯度留通路；</li>
+      <li>缺少归一化或残差路径，层间分布逐层漂移进坏区间。</li>
+    </ul>
+    <h3>缓解思路（组合拳，不是单选题）</h3>
+    <ul>
+      <li><b>换激活</b>：ReLU 正区间导数恒为 1，GELU/SiLU 平滑且不易饱和；</li>
+      <li><b>对症初始化</b>：Xavier（配 Tanh/Sigmoid）、He（配 ReLU 族），目标都是让每层倍率的期望接近 1；</li>
+      <li><b>归一化</b>：BatchNorm/LayerNorm 把每层输入拉回激活函数的敏感区；</li>
+      <li><b>残差连接</b>：给梯度一条绕过非线性的恒等通路，这是百层以上网络能训的关键；</li>
+      <li><b>合理的学习率与优化器</b>：Adam 类的逐参数缩放能部分补偿前层的小梯度，但补偿不了严格为 0 的梯度。</li>
+    </ul>
+    <p>动手感受：回到首屏，把激活切到 <b>Sigmoid</b>，再把 w 或 b 拉到让 |z| &gt; 4——看 <code>∂a/∂z</code> 掉到 0.02 以下，<code>dL/dw</code> 随之接近 0，哪怕 loss 明明还很大。<b>"loss 大"和"梯度大"是两回事</b>，饱和时误差再大也传不出去。</p>
+  </div>
+</section>
+
+<!-- ================= 08 梯度爆炸 ================= -->
+<section class="sec" id="s8">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">08</span>
+    <div><p class="sec-eyebrow">EXPLODING / 梯度爆炸</p><h2>梯度爆炸：更新被过大梯度带偏</h2></div>
+  </header>
+  <div class="sec-body">
+    <h3>数学直觉</h3>
+    <p>同一条链式乘积，这次是大于 1 的因子连乘。权重尺度偏大时每层倍率 &gt; 1，n 层就是指数增长。<b>RNN 是重灾区</b>：同一个权重矩阵在每个时间步重复参与乘积，序列长 100 就相当于 100 层共享权重的网络，倍率哪怕只有 1.1，累积后也是 <code>1.1¹⁰⁰ ≈ 1.4×10⁴</code>。</p>
+    <h3>典型表现</h3>
+    <ul>
+      <li>loss 突然变成 <code>NaN</code>/<code>inf</code>，或剧烈震荡、跳崖式反弹；</li>
+      <li>参数范数或梯度范数在某几步内异常增大（先于 NaN 出现，是最好的预警指标）；</li>
+      <li>训练对学习率极度敏感：lr 稍大就炸，稍小又慢——说明梯度量级本身不稳定。</li>
+    </ul>
+    <h3>常见原因</h3>
+    <ul>
+      <li>初始化尺度过大，或训练中权重逐渐膨胀；</li>
+      <li>学习率过大：一次过冲把参数甩进更陡的区域，梯度更大 → 步子更大，正反馈直到溢出（第 1 章的震荡实验就是它的一维版本）；</li>
+      <li>输入或目标没归一化：比如回归目标是上万量级，<code>dL/da = 2(a−y)</code> 从第一步起就巨大；</li>
+      <li>序列过长或递归结构不稳定，乘积链条太长。</li>
+    </ul>
+    <h3>缓解思路</h3>
+    <ul>
+      <li><b>gradient clipping</b>：给梯度范数设上限（如 <code>clip_grad_norm_(params, 1.0)</code>），保住方向、砍掉长度，是最直接的保险丝；</li>
+      <li><b>合理初始化 + normalization</b>：从源头把每层倍率压回 1 附近；</li>
+      <li><b>降低学习率 / warmup</b>：训练初期梯度最不稳定，先用小步试探；</li>
+      <li><b>检查数据尺度与异常样本</b>：一个数值离谱的样本就能贡献一次爆炸；标准化输入和目标常常比调模型更有效。</li>
+    </ul>
+    <p>注意消失与爆炸的不对称：<b>爆炸有"外科手术式"的止血手段（clip），消失没有</b>——梯度一旦衰减成 0，信息已经丢了，放大 0 还是 0，只能靠结构（残差、归一化、激活、初始化）预防。这也是为什么现代架构的默认配置几乎都内置了抗消失设计。</p>
+  </div>
+</section>
+<!-- ================= 09 Autograd ================= -->
+<section class="sec" id="s9">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">09</span>
+    <div><p class="sec-eyebrow">AUTOGRAD / 工程边界</p><h2>自动微分和手写反向传播的边界</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>好消息：前面几章手算的所有东西，训练时都<b>不需要你写</b>。框架的 autograd 做的正是这三件事：</p>
+    <ul>
+      <li><b>记录计算图</b>：前向执行时，每个作用在 <code>requires_grad</code> 张量上的操作都被登记到图（"tape"）里，同时保存反向要用的中间值；</li>
+      <li><b>自动执行反向传播</b>：调用 <code>loss.backward()</code> 时，按反向拓扑序，对每个操作套用<b>预先定义好的局部导数规则</b>，做的就是第 3～5 章的逐边相乘；</li>
+      <li><b>累积参数梯度</b>：沿多条路径到达同一参数的梯度用 <code>+=</code> 累加进 <code>.grad</code>（第 4 章 fan-out 的加法）。</li>
+    </ul>
+    <p>而你负责的，是 autograd 无法替你判断的部分：</p>
+    <ul>
+      <li>正确写 <b>forward</b>（模型结构本身）；正确构造 <b>loss</b>（一个标量）；</li>
+      <li>按固定节奏调用三件套：<code>optimizer.zero_grad()</code> → <code>loss.backward()</code> → <code>optimizer.step()</code>；</li>
+      <li>管理梯度的"开关"：<code>detach()</code> / <code>torch.no_grad()</code> 明确哪些计算<b>不该</b>进入图。</li>
+    </ul>
+
+    <div class="panel">
+      <p class="panel-title">Autograd 对照器：手写公式 vs 微型 tape 引擎</p>
+      <p class="panel-q">回答的问题：<b>框架"自动求导"算出来的，和第 5 章手推的链式法则是不是同一组数？</b></p>
+      <div class="controls">
+        <div class="ctrl"><label>w = <output id="a-w-o">0.8</output></label><input type="range" id="a-w" min="-3" max="3" step="0.05" value="0.8"></div>
+        <div class="ctrl"><label>b = <output id="a-b-o">-0.3</output></label><input type="range" id="a-b" min="-3" max="3" step="0.05" value="-0.3"></div>
+      </div>
+      <p style="font-size:.88rem;color:var(--muted);margin:6px 0">固定 x = 1.5、y = 2.0，函数仍是 <code>L = (ReLU(wx+b) − y)²</code>。左列按第 5 章的闭式公式手算；右列由本页内嵌的一个 40 行 JS "微型 autograd"（真实地建图、真实地反向遍历）算出。</p>
+      <div class="tblwrap"><table class="tbl" style="min-width:520px">
+        <thead><tr><th>量</th><th>手写链式法则</th><th>微型 autograd（tape 回放）</th><th>差值</th></tr></thead>
+        <tbody>
+          <tr><td>L</td><td class="mono" id="am-L">?</td><td class="mono" id="at-L">?</td><td class="mono" id="ad-L">?</td></tr>
+          <tr><td>dL/dw</td><td class="mono" id="am-w">?</td><td class="mono" id="at-w">?</td><td class="mono" id="ad-w">?</td></tr>
+          <tr><td>dL/db</td><td class="mono" id="am-b">?</td><td class="mono" id="at-b">?</td><td class="mono" id="ad-b">?</td></tr>
+        </tbody>
+      </table></div>
+      <p style="font-size:.9rem;color:var(--muted)">两列在任何取值下都逐位一致——autograd 没有额外的魔法，它只是把"每个基本操作的局部导数 + 反向拓扑遍历 + 汇合累加"机械化了。理解了第 3～5 章，就理解了 <code>loss.backward()</code> 的全部语义。</p>
+    </div>
+
+    <h3>五个必须认识的框架概念</h3>
+    <div class="tblwrap"><table class="tbl">
+      <thead><tr><th>概念</th><th>作用</th><th>忘记/误用的后果</th></tr></thead>
+      <tbody>
+        <tr><td><code>requires_grad</code></td><td>标记张量需要参与建图、接收梯度</td><td>为 False 的参数 <code>.grad</code> 恒为 None，永远不更新</td></tr>
+        <tr><td><code>loss.backward()</code></td><td>从 loss 反向遍历计算图，把梯度<b>累加</b>进各参数 <code>.grad</code></td><td>不调用则没有梯度；对非标量直接调用会报错（需先聚合成标量）</td></tr>
+        <tr><td><code>optimizer.step()</code></td><td>用 <code>.grad</code> 按优化器规则更新参数——<b>backprop 算梯度，optimizer 用梯度</b>，分工在此</td><td>只 backward 不 step：梯度算了个寂寞，参数不动</td></tr>
+        <tr><td><code>optimizer.zero_grad()</code></td><td>清空上一轮残留的 <code>.grad</code></td><td>因为 backward 是 <code>+=</code>，忘清会把历史梯度混进本轮，更新方向被污染（见第 12 章演示）</td></tr>
+        <tr><td><code>detach()</code> / <code>no_grad()</code></td><td>把张量/代码块从计算图上摘下来：目标值构造、评估、EMA 更新等场景必需</td><td>误用在主路径上 → 图被切断，上游参数梯度为 0，模型"部分瘫痪"且不报错</td></tr>
+      </tbody>
+    </table></div>
+    <p>关于<b>梯度累积</b>再强调一次：多次 <code>backward()</code> 之间不清零，<code>.grad</code> 默认一直累加。这既是 bug 来源（忘记 <code>zero_grad</code>），也是特性——大 batch 装不下显存时，故意累积 k 个小 batch 的梯度再 step 一次，等效于 k 倍 batch size。同一机制，是坑还是工具，取决于你是否知道它在发生。</p>
+    <p>边界补充：PyTorch 的<b>动态图</b>（边执行边建图，每轮可以不同）与 TensorFlow 1.x 式的<b>静态图</b>（先定义后运行，利于全局优化）只是"什么时候建图"的工程取舍，梯度的数学内容完全相同，不必展开成框架史。</p>
+  </div>
+</section>
+
+<!-- ================= 10 工程排错 ================= -->
+<section class="sec" id="s10">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">10</span>
+    <div><p class="sec-eyebrow">DEBUGGING / 工程排错</p><h2>工程排错：怎么看梯度是否正常</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>训练异常时，梯度是最有信息量的生命体征。下面的判断都是<b>经验阈值</b>而非铁律——量级会随模型、loss reduction（mean 还是 sum）、batch size 变化，重点是看<b>相对关系和趋势</b>：</p>
+    <ul>
+      <li><b>看梯度范数</b>：逐层打印 <code>p.grad.norm()</code>。是否有层接近 0（消失/断图/死激活）？是否有层异常大或 NaN（爆炸/数据异常）？前层是否比末层小很多个数量级？</li>
+      <li><b>看参数更新</b>：参数是不是完全不动（梯度为 0 或 lr 过小）？更新量 <code>|Δw|</code> 是否远大于参数本身的尺度 <code>|w|</code>（步子太大）？经验上 <code>|Δw|/|w|</code> 在 1e-3 左右比较舒适。</li>
+      <li><b>看训练曲线</b>：loss 是否下降？是否突然跳变成 NaN（爆炸）？是否锯齿状剧烈震荡（lr 大/数据脏）？是否早早平掉（消失/容量/lr 小）？</li>
+      <li><b>看数据和尺度</b>：输入归一化了吗？回归目标是不是上万量级？loss 用 sum 还是 mean（sum 会让梯度随 batch size 线性放大）？有没有个别离群样本单独引爆某一步？</li>
+    </ul>
+
+    <div class="panel">
+      <p class="panel-title">梯度排错面板</p>
+      <p class="panel-q">回答的问题：<b>不同故障在"逐层梯度范数图"上分别长什么样？看到某种形状先查什么？</b></p>
+      <div class="btnrow" id="d-btns">
+        <button class="btn on" data-d="healthy">健康基线</button>
+        <button class="btn" data-d="vanish">梯度消失</button>
+        <button class="btn" data-d="explode">梯度爆炸</button>
+        <button class="btn" data-d="nan">NaN 污染</button>
+        <button class="btn" data-d="dead">dead ReLU</button>
+        <button class="btn" data-d="nozero">忘记 zero_grad</button>
+        <button class="btn" data-d="detach">detach 误用</button>
+      </div>
+      <div class="diag-grid">
+        <div>
+          <svg id="d-svg" viewBox="0 0 360 260">
+            <g stroke="var(--line)"><line x1="46" y1="14" x2="46" y2="220"/><line x1="46" y1="220" x2="350" y2="220"/></g>
+            <g font-size="10" fill="var(--muted)" text-anchor="end">
+              <text x="42" y="20">10³</text><text x="42" y="70">10¹</text><text x="42" y="120">10⁻¹</text><text x="42" y="170">10⁻³</text><text x="42" y="220">10⁻⁵</text>
+            </g>
+            <text x="198" y="244" font-size="11" fill="var(--muted)" text-anchor="middle">layer1（近输入） … layer8（近 loss）· 柱高 = 梯度范数（对数轴）</text>
+            <g id="d-bars"></g>
+          </svg>
+          <div class="btnrow hide" id="d-steprow"><button class="btn" id="d-stepbtn">再训练一步（不清梯度）</button><span id="d-stepinfo" style="font-family:var(--mono);font-size:.76rem;color:var(--muted);align-self:center"></span></div>
+        </div>
+        <div class="diag-txt">
+          <h4>症状</h4><p id="d-sym">?</p>
+          <h4>定位线索</h4><p id="d-clue">?</p>
+          <h4>常见修复</h4><p id="d-fix">?</p>
+        </div>
+      </div>
+    </div>
+
+    <p>可视化上值得常备三件仪表：<b>逐层梯度范数条形图</b>（上面这种，一眼看形状）、<b>训练过程中的逐层梯度热力图</b>（层 × 步数，看衰减/爆炸何时开始）、<b>每层"更新量/参数量"比例</b>（直接回答"这层到底在不在学"）。TensorBoard、wandb 或十行钩子代码都能实现。</p>
+  </div>
+</section>
+
+<!-- ================= 11 常见误区 ================= -->
+<section class="sec" id="s11">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">11</span>
+    <div><p class="sec-eyebrow">MISCONCEPTIONS / 常见误区</p><h2>常见误区与反例</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>每张卡片的标题是一个流传很广的错误说法（✕），点开看正确版本（✓）和一个能当场戳破它的反例。</p>
+
+    <details class="myth"><summary>"反向传播就是梯度下降"</summary><div class="body">
+      <p>反向传播<b>算</b>梯度，梯度下降<b>用</b>梯度更新参数，是流水线上相邻的两道工序（对应第 5 章播放器的第 4～8 步和第 9～10 步）。</p>
+      <p><b>反例</b>：把 SGD 换成 Adam，backward 的每一步计算原封不动，变的只是拿到梯度之后怎么走；反过来，用数值差分（不做反向传播）算出梯度，也照样能做梯度下降，只是慢得没法用。</p></div></details>
+
+    <details class="myth"><summary>"梯度就是 loss 的大小"</summary><div class="body">
+      <p>梯度是 loss 对参数的<b>变化率</b>，不是误差值本身。loss 大不代表梯度大，loss 小也不代表梯度小。</p>
+      <p><b>反例</b>：首屏切到 Sigmoid、把 z 推到 5 以外——loss 可以很大，但 <code>∂a/∂z ≈ 0</code>，梯度几乎为零；反之在陡坡上，loss 很小也能有很大的梯度。</p></div></details>
+
+    <details class="myth"><summary>"偏导数就是只对一个参数训练"</summary><div class="body">
+      <p>"冻结其它变量"只是<b>分析</b>某一个变量局部影响的数学视角。训练时对<b>所有</b>参数各求一个偏导数、拼成梯度、<b>同时</b>更新全部参数。</p>
+      <p><b>反例</b>：<code>loss.backward()</code> 一次调用就填好了网络里每一个参数的 <code>.grad</code>，没有任何"轮流训练"发生。</p></div></details>
+
+    <details class="myth"><summary>"链式法则只是个求导公式技巧"</summary><div class="body">
+      <p>它是"深模型能分层求梯度"的<b>结构性基础</b>：因为总导数 = 局部导数之积，每层只需知道自己的局部导数和上游传来的梯度，无须理解整个网络——模块化、层可复用、autograd 可实现，全都建立在这一点上。</p>
+      <p><b>反例</b>：如果没有链式法则的分解，对一个 50 层网络求 <code>dL/dw_1</code> 就得把 50 层复合函数整体展开求导——每加一层都要重新推一遍全网公式。</p></div></details>
+
+    <details class="myth"><summary>"梯度消失只由激活函数导致"</summary><div class="body">
+      <p>激活导数只是链式乘积里的一类因子。每层倍率还乘着<b>权重</b>（初始化、深度让问题指数化），而<b>归一化、残差、数据尺度、loss 选择</b>都会改变这些倍率。</p>
+      <p><b>反例</b>：全 ReLU 网络（正区间导数恒为 1）在初始化权重过小时照样消失——倍率由权重贡献的部分小于 1，连乘依旧衰减。</p></div></details>
+
+    <details class="myth"><summary>"梯度爆炸只要调小学习率就行"</summary><div class="body">
+      <p>lr 只缩放<b>步长</b>，不解决<b>梯度量级本身不稳定</b>。该做的是 clip 兜底 + 检查初始化、数据尺度、异常样本和结构（尤其长序列）。</p>
+      <p><b>反例</b>：回归目标是 1e4 量级且没标准化时，把 lr 调小 100 倍只是把"立刻炸"变成"慢慢炸"，而对目标做个标准化就能根治。</p></div></details>
+
+    <details class="myth"><summary>"有了 autograd，理解反向传播就不重要了"</summary><div class="body">
+      <p>autograd 接管的是<b>计算</b>，不是<b>诊断</b>。梯度消失/爆炸、dead ReLU、图被 detach 切断、忘记 zero_grad——这些故障 autograd 全都"正确地"执行，不报任何错。能不能从梯度范数的形状读出病因（第 10 章），完全取决于你是否理解梯度流。</p>
+      <p><b>反例</b>：第 10 章面板里 "detach 误用" 那种前层梯度恒为 0 的形状，不懂计算图的人会去调学习率，懂的人直接去 forward 里找那行 <code>detach()</code>。</p></div></details>
+
+    <details class="myth"><summary>"梯度为 0 说明模型收敛了"</summary><div class="body">
+      <p>梯度为 0 只说明<b>局部信号消失</b>，原因可能是：真的到了（局部）极小点、激活饱和、dead ReLU、图被 detach 切断、数值下溢。收敛与否要结合 loss 水平和验证指标判断。</p>
+      <p><b>反例</b>：第 5 章播放器里把 z 调成负数——梯度精确为 0，但 loss 还大得很，模型只是"这条路走死了"，不是"学好了"。</p></div></details>
+
+    <div class="panel">
+      <p class="panel-title">自检卡片：给训练异常判个因</p>
+      <p class="panel-q">回答的问题：<b>看到一段真实的故障描述，你能不能把它归到正确的病灶？</b>（每题给出现场记录，四选一，选后有讲解）</p>
+      <div id="q-list"></div>
+      <div class="readout"><span class="lbl">得分：</span><span class="mono" id="q-score">0 / 0</span>　<button class="btn" id="q-reset" style="margin-left:10px">重做全部</button></div>
+    </div>
+  </div>
+</section>
+<!-- ================= 12 最小代码 ================= -->
+<section class="sec" id="s12">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">12</span>
+    <div><p class="sec-eyebrow">CODE / 最小代码示例</p><h2>最小代码示例：把前面的图翻译成代码</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>每段代码都对应前文的一个概念，可直接复制到本地运行（需要 NumPy / PyTorch）。</p>
+
+    <h3>12.1 NumPy 手写一个标量计算图（对应第 5 章播放器）</h3>
+    <div class="codeblock"><div class="codehead"><span>numpy · 手写 forward + backward</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code><span class="kw">import</span> numpy <span class="kw">as</span> np
+
+x, y = <span class="nm">1.5</span>, <span class="nm">2.0</span>          <span class="cm"># 数据</span>
+w, b = <span class="nm">0.8</span>, <span class="nm">-0.3</span>         <span class="cm"># 参数</span>
+lr = <span class="nm">0.1</span>
+
+<span class="kw">for</span> step <span class="kw">in</span> range(<span class="nm">50</span>):
+    <span class="cm"># ---- forward：按拓扑序算值，保存中间结果 z、a ----</span>
+    z = w * x + b
+    a = max(z, <span class="nm">0.0</span>)                  <span class="cm"># ReLU</span>
+    L = (a - y) ** <span class="nm">2</span>
+
+    <span class="cm"># ---- backward：从 loss 逐边乘局部导数（用到了保存的 a、z）----</span>
+    dL_da = <span class="nm">2</span> * (a - y)              <span class="cm"># 边 a→L</span>
+    da_dz = <span class="nm">1.0</span> <span class="kw">if</span> z &gt; <span class="nm">0</span> <span class="kw">else</span> <span class="nm">0.0</span>   <span class="cm"># 边 z→a（ReLU 的分段导数）</span>
+    dL_dz = dL_da * da_dz
+    dL_dw = dL_dz * x                 <span class="cm"># 边 w→z：∂z/∂w = x</span>
+    dL_db = dL_dz * <span class="nm">1.0</span>               <span class="cm"># 边 b→z：∂z/∂b = 1</span>
+
+    <span class="cm"># ---- update：这两行属于"优化器"，不属于反向传播 ----</span>
+    w -= lr * dL_dw
+    b -= lr * dL_db
+</code></pre></div>
+
+    <h3>12.2 PyTorch：同一件事交给 autograd（对应第 9 章）</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · requires_grad / backward / .grad</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code><span class="kw">import</span> torch
+
+x, y = torch.tensor(<span class="nm">1.5</span>), torch.tensor(<span class="nm">2.0</span>)
+w = torch.tensor(<span class="nm">0.8</span>,  requires_grad=<span class="kw">True</span>)   <span class="cm"># 声明：给我建图、算梯度</span>
+b = torch.tensor(<span class="nm">-0.3</span>, requires_grad=<span class="kw">True</span>)
+opt = torch.optim.SGD([w, b], lr=<span class="nm">0.1</span>)
+
+<span class="kw">for</span> step <span class="kw">in</span> range(<span class="nm">50</span>):
+    loss = (torch.relu(w * x + b) - y) ** <span class="nm">2</span>   <span class="cm"># forward，同时悄悄记录计算图</span>
+    opt.zero_grad()      <span class="cm"># 清掉上一轮残留（backward 是累加的！）</span>
+    loss.backward()      <span class="cm"># 反向遍历计算图 → 填 w.grad, b.grad</span>
+    opt.step()           <span class="cm"># 用梯度更新参数（优化器的职责）</span>
+
+<span class="cm"># w.grad 此刻的值 = 12.1 节手写的 dL_dw，逐位一致</span>
+</code></pre></div>
+
+    <h3>12.3 忘记 zero_grad：梯度累积现象</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · 同一个 loss 反复 backward，.grad 越滚越大</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code>w = torch.tensor(<span class="nm">1.0</span>, requires_grad=<span class="kw">True</span>)
+<span class="kw">for</span> i <span class="kw">in</span> range(<span class="nm">3</span>):
+    loss = (w * <span class="nm">2.0</span>) ** <span class="nm">2</span>        <span class="cm"># dL/dw = 8w = 8</span>
+    loss.backward()
+    print(w.grad)                <span class="cm"># 8., 16., 24. —— 一直在 +=</span>
+<span class="hl">    <span class="cm"># 缺了 w.grad.zero_()（或 opt.zero_grad()），历史梯度混进了本轮</span></span>
+
+<span class="cm"># 同一机制的正确用法：显存不够时故意累积 k 个小 batch 再 step 一次，</span>
+<span class="cm"># 等效于 k 倍 batch size —— 是坑还是工具，取决于是否有意为之。</span>
+</code></pre></div>
+
+    <h3>12.4 detach()：从图上剪断一条边</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · detach 切断梯度</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code>w = torch.tensor(<span class="nm">1.0</span>, requires_grad=<span class="kw">True</span>)
+
+h = w * <span class="nm">3.0</span>
+loss = (h - <span class="nm">1.0</span>) ** <span class="nm">2</span>
+loss.backward()
+print(w.grad)          <span class="cm"># tensor(12.) —— 图连通：L → h → w</span>
+
+w.grad = <span class="kw">None</span>
+h = (w * <span class="nm">3.0</span>).detach() <span class="cm"># h 被摘下计算图，成了普通常数</span>
+loss = (h - <span class="nm">1.0</span>) ** <span class="nm">2</span>
+loss.backward()
+print(w.grad)          <span class="cm"># None —— 梯度到 h 为止，传不回 w，且不报错</span>
+
+<span class="cm"># 正当用途：构造训练目标（如 target network / EMA / 伪标签）、</span>
+<span class="cm"># 只做统计不参与训练的分支。误用在主路径上 = 第 10 章的"detach 误用"形状。</span>
+</code></pre></div>
+
+    <h3>12.5 梯度消失现场：多层 Sigmoid 的逐层梯度范数</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · 观察范数逐层衰减</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code><span class="kw">import</span> torch, torch.nn <span class="kw">as</span> nn
+
+layers = []
+<span class="kw">for</span> _ <span class="kw">in</span> range(<span class="nm">12</span>):
+    layers += [nn.Linear(<span class="nm">64</span>, <span class="nm">64</span>), nn.Sigmoid()]   <span class="cm"># 每层导数 ≤ 0.25</span>
+net = nn.Sequential(*layers, nn.Linear(<span class="nm">64</span>, <span class="nm">1</span>))
+
+x = torch.randn(<span class="nm">32</span>, <span class="nm">64</span>)
+loss = net(x).pow(<span class="nm">2</span>).mean()
+loss.backward()
+
+<span class="kw">for</span> i, m <span class="kw">in</span> enumerate(net):
+    <span class="kw">if</span> isinstance(m, nn.Linear):
+        print(<span class="st">f"layer {i:2d}  grad norm = {m.weight.grad.norm():.3e}"</span>)
+<span class="cm"># 典型输出：靠近 loss 的层 ~1e-2，最前层 ~1e-8 —— 指数衰减的阶梯</span>
+<span class="cm"># 把 nn.Sigmoid() 换成 nn.ReLU() 再跑一遍，对比形状</span>
+</code></pre></div>
+
+    <h3>12.6 梯度爆炸现场 + clip 保险丝</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · 权重尺度过大导致爆炸，用 clip_grad_norm_ 兜底</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code>layers = []
+<span class="kw">for</span> _ <span class="kw">in</span> range(<span class="nm">12</span>):
+    lin = nn.Linear(<span class="nm">64</span>, <span class="nm">64</span>)
+    nn.init.normal_(lin.weight, std=<span class="nm">1.0</span>)   <span class="cm"># 故意把初始化调大 → 每层倍率 &gt; 1</span>
+    layers += [lin, nn.Tanh()]
+net = nn.Sequential(*layers, nn.Linear(<span class="nm">64</span>, <span class="nm">1</span>))
+
+loss = net(torch.randn(<span class="nm">32</span>, <span class="nm">64</span>)).pow(<span class="nm">2</span>).mean()
+loss.backward()
+total = torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=<span class="nm">1.0</span>)
+print(<span class="st">f"clip 前总范数 = {total:.3e}"</span>)   <span class="cm"># 常见 1e3 ~ 1e6 量级</span>
+<span class="cm"># clip_grad_norm_ 在 backward 之后、optimizer.step() 之前调用：</span>
+<span class="cm"># 若总范数超过 max_norm，就整体等比例缩小 —— 保方向、砍长度</span>
+</code></pre></div>
+  </div>
+</section>
+
+<!-- ================= 13 速查表 ================= -->
+<section class="sec" id="s13">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">∑</span>
+    <div><p class="sec-eyebrow">CHEAT SHEET / 速查表</p><h2>梯度与反向传播速查表</h2></div>
+  </header>
+  <div class="sec-body">
+    <div class="tblwrap"><table class="tbl">
+      <thead><tr><th>概念</th><th>一句话定义</th><th>在计算图上的位置</th><th>训练中的角色</th><th>异常时的信号</th></tr></thead>
+      <tbody>
+        <tr><td>导数 dL/dw</td><td>w 动一点，L 变多快</td><td>一条完整路径的总放大倍率</td><td>单参数视角的更新依据</td><td>≈0：驻点/饱和/断图；巨大：陡坡/尺度问题</td></tr>
+        <tr><td>偏导数 ∂L/∂w_i</td><td>冻结其它变量，看单个变量的影响</td><td>到达节点 w_i 的所有路径之和</td><td><code>.grad</code> 里的一个元素</td><td>某些参数恒为 0 → 查 requires_grad / detach / 死激活</td></tr>
+        <tr><td>梯度 ∇L</td><td>所有偏导数拼成的向量；指向上升最快方向</td><td>整张图 backward 的最终产物</td><td>负梯度方向 = 更新方向；范数 = 信号强度</td><td>grad norm 过小/过大/NaN 是三大警报</td></tr>
+        <tr><td>链式法则</td><td>复合函数导数 = 各段局部导数相乘</td><td>沿边逐段相乘的规则</td><td>backward 每一步的数学内容</td><td>连乘因子偏离 1 → 消失或爆炸</td></tr>
+        <tr><td>计算图</td><td>把计算拆成节点（值）和边（依赖）</td><td>—</td><td>forward 按拓扑序算值并存中间量；backward 按反序传梯度</td><td>图被 detach/no_grad 切断 → 上游梯度全 0 且不报错</td></tr>
+        <tr><td>fan-out 累加</td><td>一个变量喂多个下游，梯度相加</td><td>多条边汇入同一节点</td><td><code>.grad</code> 用 += 的数学根源</td><td>跨迭代忘 zero_grad → 历史梯度混入</td></tr>
+        <tr><td>反向传播</td><td>在计算图上高效复用链式法则求全部梯度</td><td>从 L 出发的一次反向遍历</td><td><b>只算梯度，不更新参数</b></td><td>训练显存高于推理：中间值要留给 backward</td></tr>
+        <tr><td>优化器</td><td>拿梯度按某种规则更新参数</td><td>图外：读 <code>.grad</code>，写参数</td><td><code>w ← w − lr·g</code> 及其变体（Adam 等）</td><td>|Δw|/|w| 过大 → lr 问题；恒为 0 → 上游梯度问题</td></tr>
+        <tr><td>梯度消失</td><td>小于 1 的倍率连乘 → 前层信号趋 0</td><td>长路径上的连乘衰减</td><td>前层学不动、loss 早停滞</td><td>逐层范数从后往前指数下降</td></tr>
+        <tr><td>梯度爆炸</td><td>大于 1 的倍率连乘 → 信号指数增长</td><td>长路径上的连乘增长（RNN 尤甚）</td><td>loss 震荡/NaN、对 lr 极敏感</td><td>范数骤增先于 NaN 出现；clip 是保险丝</td></tr>
+      </tbody>
+    </table></div>
+    <p>四条随身法则：</p>
+    <ol>
+      <li><b>梯度是变化率，不是误差</b>——loss 大 ≠ 梯度大，梯度 0 ≠ 收敛。</li>
+      <li><b>backward 乘、汇合加、跨轮清零</b>——链式法则、fan-out、zero_grad 三件事对应三种运算。</li>
+      <li><b>深度是放大器</b>——每层倍率对 1 的偏差被层数指数放大；结构设计（激活、初始化、归一化、残差）都是在把倍率钉回 1。</li>
+      <li><b>先看逐层梯度范数再动手</b>——形状会直接告诉你该查激活、初始化、数据尺度、lr 还是那行 detach。</li>
+    </ol>
+    <footer>《一文读懂梯度与反向传播》 · 单文件离线交互文档 · 绿=前向值 / 红=梯度 / 蓝=参数更新</footer>
+  </div>
+</section>
+
+</div><!-- /wrap -->
+<script>
+"use strict";
+/* ---------- 公共工具 ---------- */
+const $ = id => document.getElementById(id);
+function fmt(v, p=3){
+  if (typeof v !== "number" || Number.isNaN(v)) return "NaN";
+  if (!isFinite(v)) return v > 0 ? "+∞" : "−∞";
+  if (Math.abs(v) < 1e-12) return "0";
+  const a = Math.abs(v);
+  if (a >= 10000 || a < 0.001) return v.toExponential(2).replace("e+","e");
+  let s = (Math.round(v * 1000) / 1000).toString();
+  return s;
+}
+function segInit(segId, onChange){
+  const seg = $(segId);
+  seg.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      seg.querySelectorAll("button").forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+      onChange(btn.dataset.v);
+    });
+  });
+  return () => seg.querySelector("button.on").dataset.v;
+}
+function bindRange(id, outId, fn, prec){
+  const el = $(id), out = $(outId);
+  const h = () => { out.textContent = Number(el.value).toFixed(prec===undefined?1:prec); fn(); };
+  el.addEventListener("input", h);
+  return h;
+}
+function copyCode(btn){
+  const pre = btn.closest(".codeblock").querySelector("pre");
+  const txt = pre.innerText;
+  const done = ok => { btn.textContent = ok ? "已复制" : "复制失败"; setTimeout(()=>btn.textContent="复制", 1400); };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>done(true), ()=>fallback());
+  } else fallback();
+  function fallback(){
+    const ta = document.createElement("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { done(document.execCommand("copy")); } catch(e){ done(false); }
+    document.body.removeChild(ta);
+  }
+}
+/* 激活函数库 */
+const ACT = {
+  linear:  { f: z => z,                 df: (z,a) => 1 },
+  sigmoid: { f: z => 1/(1+Math.exp(-z)), df: (z,a) => a*(1-a) },
+  tanh:    { f: z => Math.tanh(z),       df: (z,a) => 1-a*a },
+  relu:    { f: z => Math.max(0,z),      df: (z,a) => z > 0 ? 1 : 0 }
+};
+
+/* ================= 首屏模拟器 ================= */
+let heroAct = "linear", heroLoss = "mse";
+function heroUpdate(){
+  const x = +$("hx").value, w = +$("hw").value, b = +$("hb").value, y = +$("hy").value;
+  const z = w*x + b;
+  let a = ACT[heroAct].f(z);
+  const fp = ACT[heroAct].df(z, a);
+  let L, dLda, bceWarn = false;
+  if (heroLoss === "mse"){
+    L = (a-y)*(a-y); dLda = 2*(a-y);
+  } else {
+    if (a <= 0 || a >= 1 || y < 0 || y > 1) bceWarn = true;
+    const ac = Math.min(1-1e-6, Math.max(1e-6, a));
+    const yc = Math.min(1, Math.max(0, y));
+    L = -(yc*Math.log(ac) + (1-yc)*Math.log(1-ac));
+    dLda = (ac-yc)/(ac*(1-ac));
+  }
+  const dLdw = dLda * fp * x, dLdb = dLda * fp;
+  $("hn-x").textContent = fmt(x); $("hn-w").textContent = fmt(w);
+  $("hn-b").textContent = fmt(b); $("hn-y").textContent = fmt(y);
+  $("hn-z").textContent = fmt(z); $("hn-a").textContent = fmt(a); $("hn-L").textContent = fmt(L);
+  $("he-x").textContent = fmt(x); $("he-fp").textContent = fmt(fp); $("he-dla").textContent = fmt(dLda);
+  $("hr-z").textContent = fmt(z); $("hr-a").textContent = fmt(a); $("hr-L").textContent = fmt(L);
+  $("hr-dla").textContent = fmt(dLda); $("hr-fp").textContent = fmt(fp); $("hr-x").textContent = fmt(x);
+  $("hr-dlw").textContent = fmt(dLdw); $("hr-dlw2").textContent = fmt(dLdw); $("hr-dlb").textContent = fmt(dLdb);
+  let dir;
+  if (Math.abs(dLdw) < 1e-9) dir = "dL/dw ≈ 0，w 原地不动（没有更新信号）";
+  else if (dLdw > 0) dir = "dL/dw > 0 → 增大 w 会让 loss 上升 → w 应当【减小 ↓】";
+  else dir = "dL/dw < 0 → 增大 w 会让 loss 下降 → w 应当【增大 ↑】";
+  $("hr-dir").textContent = dir;
+  $("hero-bce-warn").classList.toggle("hide", !bceWarn);
+  $("hero-dead-warn").classList.toggle("hide", !(heroAct === "relu" && z <= 0));
+}
+["hx","hw","hb","hy"].forEach(id => bindRange(id, id+"-o", heroUpdate));
+segInit("hact", v => { heroAct = v; heroUpdate(); });
+segInit("hloss", v => { heroLoss = v; heroUpdate(); });
+
+/* ================= 01 切线演示器 ================= */
+const T = { f: w => 0.05*w**4 - 0.4*w*w + 0.15*w + 2,
+            g: w => 0.2*w**3 - 0.8*w + 0.15,
+            x: w => 40 + (w+4)/8*660,
+            y: L => 300 - (L/10)*280,
+            lastL: null };
+(function tInit(){
+  let d = "";
+  for (let w=-4; w<=4.001; w+=0.05) d += (d?"L":"M") + T.x(w).toFixed(1) + " " + T.y(T.f(w)).toFixed(1) + " ";
+  $("t-curve").setAttribute("d", d);
+})();
+function tUpdate(fromStep){
+  const w = +$("t-w").value, lr = +$("t-lr").value;
+  const L = T.f(w), g = T.g(w);
+  const px = T.x(w), py = T.y(L);
+  $("t-dot").setAttribute("cx", px); $("t-dot").setAttribute("cy", py);
+  const dw = 0.9, sx = T.x(w-dw), sy = T.y(L - g*dw), ex = T.x(w+dw), ey = T.y(L + g*dw);
+  const tan = $("t-tan"); tan.setAttribute("x1",sx); tan.setAttribute("y1",sy); tan.setAttribute("x2",ex); tan.setAttribute("y2",ey);
+  const st = $("t-slope-txt");
+  st.setAttribute("x", Math.min(600, Math.max(50, px+14))); st.setAttribute("y", Math.max(34, py-16));
+  st.textContent = "斜率 dL/dw = " + fmt(g);
+  const stepW = -lr*g;
+  const len = Math.min(90, Math.abs(stepW)/8*660);
+  const dirS = Math.sign(stepW) || 0;
+  const ay = py + 26;
+  $("t-arr-l").setAttribute("x1",px); $("t-arr-l").setAttribute("y1",ay);
+  $("t-arr-l").setAttribute("x2",px + dirS*len); $("t-arr-l").setAttribute("y2",ay);
+  const hx2 = px + dirS*(len+9);
+  $("t-arr-h").setAttribute("points", dirS===0 ? "" :
+    `${hx2},${ay} ${px+dirS*len},${ay-5} ${px+dirS*len},${ay+5}`);
+  $("t-L").textContent = fmt(L); $("t-g").textContent = fmt(g);
+  $("t-dir").textContent = Math.abs(g)<1e-4 ? "斜率≈0，几乎没有更新信号" : (g>0 ? "向左（w 减小）" : "向右（w 增大）");
+  if (!fromStep){ $("t-delta").textContent = "还没走过"; T.lastL = null; $("t-osc-warn").classList.add("hide"); }
+}
+function tStep(){
+  const w = +$("t-w").value, lr = +$("t-lr").value;
+  const L0 = T.f(w), g = T.g(w);
+  let nw = Math.max(-4, Math.min(4, w - lr*g));
+  $("t-w").value = nw; $("t-w-o").textContent = nw.toFixed(2);
+  const L1 = T.f(nw);
+  tUpdate(true);
+  $("t-delta").innerHTML = `w: ${fmt(w)} → ${fmt(nw)}（步长 −η·g = ${fmt(-lr*g)}），loss: ${fmt(L0)} → <b class="${L1<=L0?'fwd':'bwd'}">${fmt(L1)}</b>（Δ${fmt(L1-L0)}）`;
+  $("t-osc-warn").classList.toggle("hide", !(L1 > L0 + 1e-9));
+}
+bindRange("t-w", "t-w-o", () => tUpdate(false), 2);
+bindRange("t-lr", "t-lr-o", () => tUpdate(false), 2);
+$("t-step").addEventListener("click", tStep);
+$("t-reset").addEventListener("click", () => { $("t-w").value = 2.6; $("t-w-o").textContent = "2.60"; tUpdate(false); });
+$("t-run").addEventListener("click", () => {
+  let i = 0; const iv = setInterval(() => { tStep(); if (++i >= 20) clearInterval(iv); }, 80);
+});
+(function tDrag(){
+  const svg = $("t-svg"); let dragging = false;
+  const toW = ev => {
+    const r = svg.getBoundingClientRect();
+    const vx = (ev.clientX - r.left) / r.width * 720;
+    return Math.max(-4, Math.min(4, (vx-40)/660*8 - 4));
+  };
+  svg.addEventListener("pointerdown", ev => { dragging = true; svg.setPointerCapture(ev.pointerId);
+    const w = toW(ev); $("t-w").value = w; $("t-w-o").textContent = w.toFixed(2); tUpdate(false); });
+  svg.addEventListener("pointermove", ev => { if(!dragging) return;
+    const w = toW(ev); $("t-w").value = w; $("t-w-o").textContent = w.toFixed(2); tUpdate(false); });
+  svg.addEventListener("pointerup", () => dragging = false);
+})();
+
+/* ================= 03 链式法则计算器 ================= */
+function cUpdate(){
+  const w = +$("c-w").value, y = +$("c-y").value, eps = +$("c-eps").value;
+  const z = 2*w+1, a = z*z, L = (a-y)*(a-y);
+  const dadz = 2*z, dlda = 2*(a-y), total = dlda*dadz*2;
+  $("cn-w").textContent = fmt(w); $("cn-z").textContent = fmt(z);
+  $("cn-a").textContent = fmt(a); $("cn-L").textContent = fmt(L);
+  $("ce-dadz").textContent = fmt(dadz); $("ce-dlda").textContent = fmt(dlda);
+  $("ct-2").textContent = fmt(dadz); $("ct-3").textContent = fmt(dlda);
+  $("cm-1").textContent = fmt(dlda); $("cm-2").textContent = fmt(dadz); $("cm-t").textContent = fmt(total);
+  const w2 = w+eps, z2 = 2*w2+1, a2 = z2*z2, L2 = (a2-y)*(a2-y);
+  $("cr-eps").textContent = fmt(eps); $("cr-pred").textContent = fmt(total*eps);
+  $("cr-real").textContent = fmt(L2-L); $("cr-diff").textContent = fmt(Math.abs(L2-L-total*eps));
+}
+bindRange("c-w","c-w-o",cUpdate,2); bindRange("c-y","c-y-o",cUpdate,1); bindRange("c-eps","c-eps-o",cUpdate,3);
+
+/* ================= 04 fan-out 演示 ================= */
+function fUpdate(){
+  const w = +$("f-w").value;
+  const p = 2*w, q = 3*w, L = p*q;
+  const c1 = q*2, c2 = p*3;
+  $("fn-w").textContent = fmt(w); $("fn-p").textContent = fmt(p);
+  $("fn-q").textContent = fmt(q); $("fn-L").textContent = fmt(L);
+  $("fe-q").textContent = fmt(q); $("fe-p").textContent = fmt(p);
+  $("fe-c1").textContent = fmt(c1); $("fe-c2").textContent = fmt(c2);
+  $("fr-c1").textContent = fmt(c1); $("fr-c2").textContent = fmt(c2);
+  $("fr-t").textContent = fmt(c1+c2); $("fr-v").textContent = fmt(12*w);
+}
+bindRange("f-w","f-w-o",fUpdate,2);
+
+/* ================= 05 反向传播播放器 ================= */
+const P = { step: 0, timer: null };
+function pVals(){
+  const x = +$("p-x").value, w = +$("p-w").value, b = +$("p-b").value,
+        y = +$("p-y").value, lr = +$("p-lr").value;
+  const z = w*x+b, a = Math.max(0,z), L = (a-y)*(a-y);
+  const dLda = 2*(a-y), dadz = z>0?1:0, dLdz = dLda*dadz;
+  const dLdw = dLdz*x, dLdb = dLdz;
+  return { x,w,b,y,lr,z,a,L,dLda,dadz,dLdz,dLdw,dLdb, wn: w-lr*dLdw, bn: b-lr*dLdb };
+}
+function pSteps(v){
+  return [
+    ["前向 1/3：线性组合", `z = w·x + b = ${fmt(v.w)}×${fmt(v.x)} + ${fmt(v.b)} = <b class="fwd">${fmt(v.z)}</b>。绿色边把输入和参数汇聚到节点 z，同时 z 被保存下来（反向第 5 步要用它判断 ReLU 在哪个区间）。`],
+    ["前向 2/3：激活", `a = ReLU(z) = max(0, ${fmt(v.z)}) = <b class="fwd">${fmt(v.a)}</b>。a 也被保存（反向第 4 步的 dL/da 要用）。`],
+    ["前向 3/3：损失", `L = (a − y)² = (${fmt(v.a)} − ${fmt(v.y)})² = <b class="fwd">${fmt(v.L)}</b>。前向到此结束：一个标量 loss + 一串留在图上的中间值。`],
+    ["反向 1/5：dL/da", `从 dL/dL = 1 出发，走 a→L 这条边：dL/da = 2(a−y) = <b class="bwd">${fmt(v.dLda)}</b>。含义：a 每增加 1 单位，L 约变化 ${fmt(v.dLda)}。用到了保存的 a。`],
+    ["反向 2/5：∂a/∂z", `z→a 这条边的局部导数：∂a/∂z = ${v.dadz}（z ${v.z>0?"> 0，ReLU 正区间，导数为 1，信号原样通过":"≤ 0，ReLU 负区间，导数为 0，信号被拦腰截断"}）。累积梯度 dL/dz = dL/da × ∂a/∂z = <b class="bwd">${fmt(v.dLdz)}</b>。`],
+    ["反向 3/5：dL/dw", `w→z 这条边的局部导数是 ∂z/∂w = x = ${fmt(v.x)}。于是 dL/dw = dL/dz × x = <b class="bwd">${fmt(v.dLdw)}</b> —— 这就是首屏那条三段乘积 dL/da·∂a/∂z·∂z/∂w。`],
+    ["反向 4/5：dL/db", `b→z 这条边的局部导数是 ∂z/∂b = 1，前两段与 dL/dw 完全共用：dL/db = dL/dz × 1 = <b class="bwd">${fmt(v.dLdb)}</b>。注意公共路段只算了一次——这就是反向传播"高效"的含义。`],
+    ["反向 5/5：梯度就绪", `反向传播的工作到此<b>全部结束</b>：产出 dL/dw = <b class="bwd">${fmt(v.dLdw)}</b>、dL/db = <b class="bwd">${fmt(v.dLdb)}</b>（相当于框架里填好了 w.grad 和 b.grad）。它一个参数都没改。`],
+    ["更新 1/2：w", `优化器登场：w ← w − lr·dL/dw = ${fmt(v.w)} − ${fmt(v.lr)}×${fmt(v.dLdw)} = <b class="prm">${fmt(v.wn)}</b>。`],
+    ["更新 2/2：b", `b ← b − lr·dL/db = ${fmt(v.b)} − ${fmt(v.lr)}×${fmt(v.dLdb)} = <b class="prm">${fmt(v.bn)}</b>。一轮迭代完成。点"把更新写回"用新参数开始下一轮，看 loss 是否变小了。`]
+  ];
+}
+function pRender(){
+  const v = pVals(), s = P.step;
+  $("pn-x").textContent = fmt(v.x); $("pn-w").textContent = fmt(v.w);
+  $("pn-b").textContent = fmt(v.b); $("pn-y").textContent = fmt(v.y);
+  $("pn-z").textContent = s>=1 ? fmt(v.z) : "?";
+  $("pn-a").textContent = s>=2 ? fmt(v.a) : "?";
+  $("pn-L").textContent = s>=3 ? fmt(v.L) : "?";
+  const show = (id, on, txt) => { const el=$(id); el.setAttribute("opacity", on?1:.15); if(txt!==undefined) el.textContent = txt; };
+  show("pb-La", s>=4); show("pt-dLda", s>=4, "∂L/∂a = " + (s>=4?fmt(v.dLda):"?"));
+  show("pb-az", s>=5); show("pt-dadz", s>=5, "∂a/∂z = " + (s>=5?v.dadz:"?"));
+  show("pb-zw", s>=6); show("pt-dLdw", s>=6, "dL/dw = " + (s>=6?fmt(v.dLdw):"?"));
+  show("pb-zb", s>=7); show("pt-dLdb", s>=7, "dL/db = " + (s>=7?fmt(v.dLdb):"?"));
+  const glow = (rid, on, color) => { const r=$(rid); r.setAttribute("stroke-width", on?3.4:1.8); if(color) r.setAttribute("stroke", on?color:""); };
+  ["pr-z","pr-a","pr-L"].forEach(id => $(id).setAttribute("stroke-width",1.5));
+  $("pr-w").setAttribute("stroke-width",1.8); $("pr-b").setAttribute("stroke-width",1.8);
+  if (s===1) $("pr-z").setAttribute("stroke-width",3.2);
+  if (s===2) $("pr-a").setAttribute("stroke-width",3.2);
+  if (s===3||s===4) $("pr-L").setAttribute("stroke-width",3.2);
+  if (s===6||s===9) $("pr-w").setAttribute("stroke-width",3.4);
+  if (s===7||s===10) $("pr-b").setAttribute("stroke-width",3.4);
+  const steps = pSteps(v);
+  $("p-stepno").textContent = s + "/10";
+  if (s===0){ $("p-steptitle").textContent = "准备开始";
+    $("p-stepdesc").innerHTML = "点\u201C下一步\u201D，从前向传播开始。任何时候调整上面的滑杆，本轮会用新数值重放到当前步骤。"; }
+  else { $("p-steptitle").textContent = steps[s-1][0]; $("p-stepdesc").innerHTML = steps[s-1][1]; }
+  $("p-prev").disabled = s<=0; $("p-next").disabled = s>=10;
+  $("p-apply").disabled = s<10;
+  $("p-dead-note").classList.toggle("hide", !(v.z<=0 && s>=1));
+}
+["p-x","p-w","p-b","p-y","p-lr"].forEach(id => bindRange(id, id+"-o", pRender, 2));
+$("p-next").addEventListener("click", () => { if(P.step<10){P.step++; pRender();} });
+$("p-prev").addEventListener("click", () => { if(P.step>0){P.step--; pRender();} });
+$("p-reset").addEventListener("click", () => { P.step=0; pStopAuto(); pRender(); });
+function pStopAuto(){ if(P.timer){ clearInterval(P.timer); P.timer=null; $("p-auto").textContent="▶ 自动播放"; } }
+$("p-auto").addEventListener("click", () => {
+  if (P.timer){ pStopAuto(); return; }
+  if (P.step>=10) P.step=0;
+  $("p-auto").textContent = "⏸ 暂停";
+  P.timer = setInterval(() => { if(P.step<10){P.step++; pRender();} else pStopAuto(); }, 1600);
+});
+$("p-apply").addEventListener("click", () => {
+  const v = pVals();
+  const set = (id,val) => { const el=$(id); el.value = Math.max(+el.min, Math.min(+el.max, val)); $(id+"-o").textContent = Number(el.value).toFixed(2); };
+  set("p-w", v.wn); set("p-b", v.bn);
+  P.step = 0; pStopAuto(); pRender();
+  $("p-stepdesc").innerHTML = `已写回：w = <b class="prm">${fmt(v.wn)}</b>，b = <b class="prm">${fmt(v.bn)}</b>。上一轮 loss 是 <b class="fwd">${fmt(v.L)}</b>——现在点\u201C下一步\u201D重新前向，看看新的 loss。`;
+});
+
+/* ================= 06 梯度流模拟器 ================= */
+function gUpdate(){
+  const n = +$("g-n").value, d = +$("g-d").value;
+  const X0 = 56, X1 = 700;
+  const yOf = v => {
+    let lg = Math.log10(Math.max(v, 1e-300));
+    lg = Math.max(-9, Math.min(9, lg));
+    return 145 - lg/9*129;
+  };
+  let path = "", last = [0,0];
+  for (let k=0; k<=n; k++){
+    const mag = Math.pow(d, k);
+    const x = X0 + (k/n)*(X1-X0), y = yOf(mag);
+    path += (k? "L":"M") + x.toFixed(1) + " " + y.toFixed(1) + " ";
+    last = [x,y];
+  }
+  $("g-line").setAttribute("d", path);
+  $("g-end").setAttribute("cx", last[0]); $("g-end").setAttribute("cy", last[1]);
+  const fin = Math.pow(d, n);
+  $("g-final").textContent = fmt(fin);
+  let verdict;
+  if (fin < 1e-3) verdict = "梯度消失——前层几乎收不到更新信号";
+  else if (fin > 1e3) verdict = "梯度爆炸——前层收到失真的巨大信号";
+  else verdict = "量级健康——信号能大致完整地穿过所有层";
+  $("g-verdict").textContent = verdict;
+  $("g-verdict").style.color = fin<1e-3 ? "var(--param)" : (fin>1e3 ? "var(--bwd)" : "var(--fwd)");
+}
+bindRange("g-n","g-n-o",gUpdate,0); bindRange("g-d","g-d-o",gUpdate,2);
+document.querySelectorAll("[data-gpre]").forEach(b => b.addEventListener("click", () => {
+  $("g-d").value = b.dataset.gpre; $("g-d-o").textContent = Number(b.dataset.gpre).toFixed(2); gUpdate();
+}));
+
+/* ================= 09 Autograd 对照器 ================= */
+function microTape(wv, bv){
+  const tape = [];
+  const V = v => ({ v, g: 0 });
+  const mul = (a,b) => { const o = V(a.v*b.v); tape.push(() => { a.g += b.v*o.g; b.g += a.v*o.g; }); return o; };
+  const add = (a,b) => { const o = V(a.v+b.v); tape.push(() => { a.g += o.g; b.g += o.g; }); return o; };
+  const sub = (a,b) => { const o = V(a.v-b.v); tape.push(() => { a.g += o.g; b.g -= o.g; }); return o; };
+  const relu = a => { const o = V(Math.max(0,a.v)); tape.push(() => { a.g += (a.v>0?1:0)*o.g; }); return o; };
+  const sq = a => { const o = V(a.v*a.v); tape.push(() => { a.g += 2*a.v*o.g; }); return o; };
+  const x = V(1.5), y = V(2.0), w = V(wv), b = V(bv);
+  const L = sq(sub(relu(add(mul(w,x), b)), y));   // forward：建图
+  L.g = 1;                                        // dL/dL = 1
+  for (let i = tape.length-1; i >= 0; i--) tape[i](); // backward：反向拓扑序回放
+  return { L: L.v, dw: w.g, db: b.g };
+}
+function aUpdate(){
+  const w = +$("a-w").value, b = +$("a-b").value, x = 1.5, y = 2.0;
+  const z = w*x+b, a = Math.max(0,z);
+  const mL = (a-y)*(a-y), dadz = z>0?1:0;
+  const mdw = 2*(a-y)*dadz*x, mdb = 2*(a-y)*dadz;
+  const t = microTape(w, b);
+  $("am-L").textContent = fmt(mL); $("at-L").textContent = fmt(t.L); $("ad-L").textContent = fmt(Math.abs(mL-t.L));
+  $("am-w").textContent = fmt(mdw); $("at-w").textContent = fmt(t.dw); $("ad-w").textContent = fmt(Math.abs(mdw-t.dw));
+  $("am-b").textContent = fmt(mdb); $("at-b").textContent = fmt(t.db); $("ad-b").textContent = fmt(Math.abs(mdb-t.db));
+}
+bindRange("a-w","a-w-o",aUpdate,2); bindRange("a-b","a-b-o",aUpdate,2);
+
+/* ================= 10 排错面板 ================= */
+const DIAG = {
+  healthy: { norms:[0.05,0.06,0.05,0.08,0.07,0.09,0.11,0.15],
+    sym:"各层梯度范数处于相近的数量级（这里都在 10⁻²~10⁻¹），loss 平稳下降。",
+    clue:"这是基线形状。注意\u201C健康\u201D不等于\u201C每层相等\u201D，而是没有跨多个数量级的系统性阶梯或尖峰。",
+    fix:"无需修复。建议在训练早期就记录一次这样的基线，之后的异常都拿它对比。" },
+  vanish: { norms:[5e-5,3e-4,1.5e-3,8e-3,0.04,0.2,0.9,4],
+    sym:"从 loss 端到输入端，范数呈指数衰减的阶梯（每层掉约一个数量级）；前层参数几乎不动，loss 缓慢下降后早早平台。",
+    clue:"衰减是\u201C逐层平滑递减\u201D而非突然断崖 → 是连乘倍率 < 1 的累积效应，不是某一处断开。查：激活函数是否饱和（Sigmoid/Tanh）、初始化尺度是否偏小、深度、有没有归一化和残差。",
+    fix:"换 ReLU/GELU；He/Xavier 初始化；加 BatchNorm/LayerNorm；加残差连接。多管齐下，见第 7 章。" },
+  explode: { norms:[900,260,80,24,7,2.2,0.7,0.3],
+    sym:"越靠前的层范数越大，呈指数增长；loss 剧烈震荡，对学习率极度敏感，随时可能 NaN。",
+    clue:"增长同样是逐层平滑的 → 连乘倍率 > 1。查：初始化是否过大、输入/目标是否没归一化、是否是 RNN/超长序列、lr 是否过大形成正反馈。",
+    fix:"立刻加 clip_grad_norm_ 兜底；然后修根源：初始化、normalization、数据尺度、lr warmup。见第 8 章。" },
+  nan: { norms:[NaN,NaN,NaN,1200,300,40,5,0.8],
+    sym:"部分层的梯度已是 NaN，其余层范数巨大。loss 显示 nan/inf，之后所有参数被污染，训练报废。",
+    clue:"NaN 会沿计算图传播：找到\u201C第一个出现 NaN 的步数和层\u201D才是关键。常见源头：爆炸后溢出、log(0)/除零（如 BCE 收到超范围输入）、脏数据（输入本身含 NaN/inf）。",
+    fix:"回退到最近的 checkpoint；开启异常检测（torch.autograd.set_detect_anomaly）定位首个 NaN 的 op；检查数据、加 clip、给 log/除法加 eps。" },
+  dead: { norms:[0.01,0.012,8e-4,9e-4,0.09,0.1,0.12,0.15],
+    sym:"某一层（这里是 layer3/4）范数骤降两个数量级，它前面的层被连带压低；该层大量神经元前向输出恒为 0。",
+    clue:"和\u201C消失\u201D的区别：不是平滑阶梯，而是在特定层出现台阶。打印该层 ReLU 前的 z 分布——若大部分恒为负，就是 dead ReLU（常由一次过大更新把偏置打入深负区导致）。",
+    fix:"降低 lr 或加 warmup 防止大步甩飞；换 LeakyReLU/GELU 给负区间留导数；检查初始化和归一化。注意：dead 单元的梯度恒为 0，不会自己复活。" },
+  nozero: { norms:[0.05,0.06,0.05,0.08,0.07,0.09,0.11,0.15],
+    sym:"单看每一轮的 backward，梯度都正常；但 .grad 在轮与轮之间不断累加，更新方向混入历史梯度，越训越偏，loss 反常上扬或漂移。",
+    clue:"点右边\u201C再训练一步\u201D模拟不清零的累积：范数近似线性增长——这是区别于\u201C爆炸\u201D（指数增长、集中在前层）的指纹。检查训练循环里 zero_grad 的位置和是否被条件分支跳过。",
+    fix:"每轮 step 前 optimizer.zero_grad()。若是有意做梯度累积，确保按计划每 k 轮才清零并相应缩放 loss。" },
+  detach: { norms:[0,0,0,0,0.07,0.1,0.13,0.16],
+    sym:"前 4 层梯度精确为 0（不是很小，是恰好 0 或 None），后面各层完全正常；模型\u201C半身不遂\u201D但不报任何错误。",
+    clue:"\u201C精确为 0 + 边界分明\u201D是断图的指纹（消失是渐变的小量）。从梯度为 0 的第一层向后检查 forward：有没有 detach()、no_grad 块、.data 赋值、转 numpy 再转回来、或参数 requires_grad=False。",
+    fix:"移除主路径上的 detach/no_grad；确认所有该训练的参数 requires_grad=True 且真的被注册进了 optimizer。" }
+};
+const dState = { key:"healthy", accum:1 };
+function dRender(){
+  const conf = DIAG[dState.key];
+  const g = $("d-bars"); while (g.firstChild) g.removeChild(g.firstChild);
+  const X0=56, W=(350-X0)/8;
+  conf.norms.forEach((v,i) => {
+    const x = X0 + i*W + 4, bw = W-8;
+    const ns = "http://www.w3.org/2000/svg";
+    if (Number.isNaN(v)){
+      const r = document.createElementNS(ns,"rect");
+      r.setAttribute("x",x); r.setAttribute("y",14); r.setAttribute("width",bw); r.setAttribute("height",206);
+      r.setAttribute("fill","var(--bwd-bg)"); r.setAttribute("stroke","var(--bwd)"); r.setAttribute("stroke-dasharray","3 3");
+      g.appendChild(r);
+      const t = document.createElementNS(ns,"text");
+      t.setAttribute("x",x+bw/2); t.setAttribute("y",120); t.setAttribute("text-anchor","middle");
+      t.setAttribute("font-size","10"); t.setAttribute("fill","var(--bwd)"); t.textContent = "NaN";
+      g.appendChild(t);
+      return;
+    }
+    let val = v * (dState.key==="nozero" ? dState.accum : 1);
+    let y, h, zero = false;
+    if (val <= 0){ zero = true; y = 216; h = 4; }
+    else {
+      let lg = Math.max(-5, Math.min(3, Math.log10(val)));
+      y = 220 - (lg+5)/8*206; h = 220-y; if (h<2){h=2;y=218;}
+    }
+    const r = document.createElementNS(ns,"rect");
+    r.setAttribute("x",x); r.setAttribute("y",y); r.setAttribute("width",bw); r.setAttribute("height",h);
+    r.setAttribute("rx",2);
+    r.setAttribute("fill", zero ? "var(--line)" : (val>100 ? "var(--bwd)" : (val<1e-3 ? "var(--param)" : "var(--fwd)")));
+    g.appendChild(r);
+    if (zero){
+      const t = document.createElementNS(ns,"text");
+      t.setAttribute("x",x+bw/2); t.setAttribute("y",210); t.setAttribute("text-anchor","middle");
+      t.setAttribute("font-size","10"); t.setAttribute("fill","var(--muted)"); t.textContent = "=0";
+      g.appendChild(t);
+    }
+  });
+  $("d-sym").textContent = conf.sym; $("d-clue").textContent = conf.clue; $("d-fix").textContent = conf.fix;
+  $("d-steprow").classList.toggle("hide", dState.key!=="nozero");
+  $("d-stepinfo").textContent = dState.key==="nozero" ? `已累积 ${dState.accum} 轮未清零，范数 ≈ 基线 × ${dState.accum}` : "";
+}
+document.querySelectorAll("#d-btns button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#d-btns button").forEach(x => x.classList.remove("primary"));
+  b.classList.add("primary");
+  dState.key = b.dataset.d; dState.accum = 1; dRender();
+}));
+$("d-stepbtn").addEventListener("click", () => { dState.accum++; dRender(); });
+
+/* ================= 11 自检卡片 ================= */
+const QUIZ = [
+  { scene:"12 层 MLP，激活全是 Sigmoid。训练 20 个 epoch 后 loss 只从 2.30 降到 2.21。逐层打印梯度范数：layer12 是 3e-2，layer6 是 5e-5，layer1 是 2e-8。",
+    opts:["梯度消失","梯度爆炸","学习率太小","计算图断开"], ans:0,
+    exp:"范数从后往前平滑地指数衰减（每层掉约一个数量级）是消失的指纹。如果只是 lr 太小，各层范数的相对量级应当接近；如果是断图，前层会精确为 0 而不是 2e-8。" },
+  { scene:"训练一个字符级 RNN。前 3000 步 loss 正常下降，第 3021 步 loss 从 1.4 跳到 8e6，第 3022 步变 nan。翻日志发现梯度总范数在 3018~3021 步从 5 涨到 3e5。",
+    opts:["梯度消失","梯度爆炸","dead ReLU","数据没有 shuffle"], ans:1,
+    exp:"范数在几步内指数级窜升、随后溢出为 NaN，且发生在 RNN（同一矩阵沿时间步连乘）——典型爆炸。先加 clip_grad_norm_ 兜底，再查那几步的 batch 里有没有异常长/异常值的样本。" },
+  { scene:"自蒸馏训练：teacher 分支的输出被当作 target。学生模型 loss 恒定不动，检查发现 backbone 所有参数的 .grad 都是 None，只有最后的线性头有梯度。代码里 features = backbone(x).detach()。",
+    opts:["梯度消失","学习率问题","计算图断开","忘记 zero_grad"], ans:2,
+    exp:".grad 是 None（不是小数值）且以某一层为界\u201C整齐地\u201D消失——detach 把主路径剪断了，梯度到 features 为止。detach 应该用在 target 分支上，而不是学生自己的前向主路径。" },
+  { scene:"loss 曲线整体向下，但呈剧烈锯齿状，隔几十步就向上尖刺一次。把 lr 从 3e-3 降到 3e-4 后曲线立刻平滑，最终收敛更低。各层梯度范数一直在正常量级。",
+    opts:["梯度爆炸","学习率问题","梯度消失","dead ReLU"], ans:1,
+    exp:"梯度量级本身正常、只是步长偏大导致在谷壁之间弹跳（第 1 章的震荡实验），降 lr 即愈——这是学习率问题。真正的爆炸会伴随梯度范数本身的失控增长。" },
+  { scene:"ReLU CNN 训练到第 5 个 epoch 后精度停滞。统计发现 conv3 层 61% 的通道对所有输入的激活输出恒为 0，这些通道的梯度也恒为 0；回看日志，第 4 个 epoch 初曾出现过一次 loss 尖峰。",
+    opts:["梯度消失","dead ReLU","忘记 zero_grad","计算图断开"], ans:1,
+    exp:"\u201C输出恒 0 + 梯度恒 0 + 此前有过一次大更新\u201D是 dead ReLU 的完整链条：尖峰那步的大梯度把这些通道的预激活推进深负区，ReLU 负区导数为 0，从此无法自愈。可换 LeakyReLU/GELU 并压住 lr。" },
+  { scene:"手写训练循环。单独测每个 batch 的 backward，梯度数值都正确；但连续训练时 .grad 范数一轮比一轮大（近似线性增长），参数更新方向越来越怪，loss 缓慢上漂。",
+    opts:["梯度爆炸","忘记 zero_grad","学习率问题","梯度消失"], ans:1,
+    exp:"\u201C单轮正确、跨轮线性增长\u201D是累积的指纹：backward 对 .grad 是 +=，少了 optimizer.zero_grad()，历史梯度一直叠加。爆炸是单轮内、沿层数的指数增长，两者形状不同。" }
+];
+const qState = { right:0, done:0 };
+function qRender(){
+  const list = $("q-list"); list.innerHTML = "";
+  qState.right = 0; qState.done = 0;
+  QUIZ.forEach((q,qi) => {
+    const card = document.createElement("div"); card.className = "quiz";
+    const sc = document.createElement("div"); sc.className = "scene";
+    sc.textContent = "现场记录 " + (qi+1) + " ｜ " + q.scene; card.appendChild(sc);
+    const opts = document.createElement("div"); opts.className = "opts";
+    let answered = false;
+    q.opts.forEach((o,oi) => {
+      const b = document.createElement("button"); b.textContent = o;
+      b.addEventListener("click", () => {
+        if (answered) return; answered = true;
+        qState.done++;
+        if (oi === q.ans){ b.classList.add("right"); qState.right++; }
+        else { b.classList.add("wrong"); opts.children[q.ans].classList.add("right"); }
+        const ex = document.createElement("div"); ex.className = "explain";
+        ex.innerHTML = (oi===q.ans ? "<b style='color:var(--fwd)'>判对了。</b>" : "<b style='color:var(--bwd)'>再看一眼。</b>") + q.exp;
+        card.appendChild(ex);
+        $("q-score").textContent = qState.right + " / " + qState.done;
+      });
+      opts.appendChild(b);
+    });
+    card.appendChild(opts); list.appendChild(card);
+  });
+  $("q-score").textContent = "0 / 0";
+}
+$("q-reset").addEventListener("click", qRender);
+
+/* ---------- 初始渲染 ---------- */
+heroUpdate(); tUpdate(false); cUpdate(); fUpdate(); pRender(); gUpdate(); aUpdate();
+document.querySelector('#d-btns button[data-d="healthy"]').classList.add("primary");
+dRender(); qRender();
+</script>
+</body>
+</html>

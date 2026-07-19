@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂损失函数 · 从训练信号到工程边界</title>
+<style>
+:root{
+  --paper:#F6F7F3;
+  --panel:#FFFFFF;
+  --ink:#1C2733;
+  --muted:#5E6E7C;
+  --line:#DCE2DB;
+  --gridline:rgba(28,39,51,.045);
+  --pred:#2E6FDB;      /* y_hat 预测 */
+  --target:#C27400;    /* y 真实值 */
+  --loss:#D64533;      /* loss */
+  --grad:#0E8A6C;      /* gradient */
+  --warn-bg:#FBF3E2;
+  --warn-bd:#D9A93F;
+  --key-bg:#EBF4EE;
+  --key-bd:#3D8B62;
+  --dark:#0F1B26;
+  --dark-ink:#E8EFEA;
+  --dark-line:rgba(232,239,234,.14);
+  --code-bg:#122130;
+  --code-ink:#D8E4E0;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"JetBrains Mono",Menlo,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+body{
+  font-family:var(--sans);color:var(--ink);background:var(--paper);
+  background-image:
+    linear-gradient(var(--gridline) 1px,transparent 1px),
+    linear-gradient(90deg,var(--gridline) 1px,transparent 1px);
+  background-size:28px 28px;
+  line-height:1.75;font-size:16px;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+a{color:var(--pred)}
+strong{font-weight:700}
+code{font-family:var(--mono);font-size:.88em;background:rgba(28,39,51,.07);padding:1px 5px;border-radius:4px;white-space:nowrap}
+pre code{background:none;padding:0;white-space:pre}
+h2{font-size:30px;line-height:1.3;letter-spacing:-.01em;margin:6px 0 4px}
+h3{font-size:20px;margin:34px 0 10px}
+h4{font-size:16px;margin:22px 0 8px}
+p{margin:12px 0}
+ul,ol{margin:12px 0 12px 1.4em}
+li{margin:5px 0}
+
+/* ---------- top nav ---------- */
+.topnav{position:sticky;top:0;z-index:50;background:rgba(246,247,243,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.topnav .wrap{display:flex;gap:6px;overflow-x:auto;padding:8px 20px;scrollbar-width:none}
+.topnav .wrap::-webkit-scrollbar{display:none}
+.topnav a{flex:0 0 auto;font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:4px 10px;border:1px solid transparent;border-radius:999px;white-space:nowrap}
+.topnav a:hover{color:var(--ink);border-color:var(--line);background:#fff}
+
+/* ---------- hero ---------- */
+.hero{background:var(--dark);color:var(--dark-ink);position:relative;overflow:hidden;padding:56px 0 44px}
+.hero .contours{position:absolute;inset:0;opacity:.5;pointer-events:none}
+.hero .wrap{position:relative}
+.hero .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:#7FB6A0;text-transform:uppercase}
+.hero h1{font-size:clamp(30px,5.2vw,52px);line-height:1.15;letter-spacing:-.02em;margin:14px 0 10px;font-weight:800}
+.hero h1 em{font-style:normal;color:#F0A18F}
+.hero .thesis{font-size:clamp(16px,2.2vw,19px);color:#B9C9C2;max-width:640px}
+.hero .thesis b{color:#fff;font-weight:600}
+.loop-diagram{margin:30px 0 6px}
+.loop-diagram svg{width:100%;height:auto;display:block}
+
+/* ---------- panels & controls ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:20px 0;box-shadow:0 1px 3px rgba(20,30,40,.05)}
+.panel-dark{background:#152535;border-color:#24384B;color:var(--dark-ink)}
+.panel .ptitle{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.panel .ptitle::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--grad);display:inline-block}
+.panel .pq{font-size:14px;color:var(--muted);margin:-4px 0 12px}
+.panel-dark .ptitle,.panel-dark .pq{color:#9FB4AC}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:10px 0}
+.ctl{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.ctl label{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.panel-dark .ctl label{color:#9FB4AC}
+input[type=range]{accent-color:var(--pred);width:150px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.panel-dark .seg{border-color:#33495D;background:#0F1B26}
+.seg button{border:0;background:transparent;padding:6px 12px;font-family:var(--mono);font-size:12.5px;cursor:pointer;color:var(--muted);border-right:1px solid var(--line)}
+.panel-dark .seg button{color:#93A8A0;border-right-color:#33495D}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--ink);color:#fff}
+.panel-dark .seg button.on{background:#2E6FDB;color:#fff}
+.seg button:disabled{opacity:.35;cursor:not-allowed}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 14px;font-family:var(--mono);font-size:13px;cursor:pointer;color:var(--ink)}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--grad);border-color:var(--grad);color:#fff}
+.panel-dark .btn{background:#0F1B26;border-color:#33495D;color:var(--dark-ink)}
+.readout{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chip{font-family:var(--mono);font-size:12.5px;border-radius:8px;padding:5px 10px;border:1px solid var(--line);background:#fff}
+.panel-dark .chip{background:#0F1B26;border-color:#33495D}
+.chip b{font-weight:700}
+.chip.c-loss b{color:var(--loss)}
+.chip.c-grad b{color:var(--grad)}
+.chip.c-pred b{color:var(--pred)}
+.chip.c-target b{color:var(--target)}
+.plotbox{margin:8px 0}
+.plotbox svg{width:100%;height:auto;display:block}
+.hint{font-size:13px;color:var(--muted);margin-top:8px}
+.panel-dark .hint{color:#93A8A0}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
+.legend span::before{content:"—";font-weight:800;margin-right:5px}
+.lg-mse::before{color:var(--loss)}
+.lg-mae::before{color:var(--pred)}
+.lg-huber::before{color:var(--grad)}
+.lg-ce::before{color:var(--loss)}
+.lg-msep::before{color:var(--pred)}
+
+/* ---------- sections ---------- */
+section.chapter{padding:44px 0 8px;border-top:1px solid var(--line);margin-top:36px}
+.ch-eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.18em;color:var(--grad);text-transform:uppercase}
+.ch-formula{font-family:var(--mono);font-size:13px;color:var(--muted);margin-top:4px}
+.lede{font-size:17.5px;color:#37485A}
+
+.callout{border-radius:10px;padding:13px 16px;margin:16px 0;font-size:15px}
+.callout.key{background:var(--key-bg);border-left:4px solid var(--key-bd)}
+.callout.pit{background:var(--warn-bg);border-left:4px solid var(--warn-bd)}
+.callout .tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:4px}
+.callout.key .tag{color:#2C6E4C}
+.callout.pit .tag{color:#8F6A12}
+
+.formula{font-family:var(--mono);font-size:14.5px;background:#fff;border:1px dashed var(--line);border-radius:8px;padding:10px 14px;margin:12px 0;overflow-x:auto;white-space:nowrap}
+.formula .note{color:var(--muted);font-size:12.5px;white-space:normal;display:block;margin-top:4px;font-family:var(--sans)}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:14px 0;background:#fff}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:#EFF2EC;font-family:var(--mono);font-size:12px;letter-spacing:.04em}
+.table-scroll{overflow-x:auto;margin:14px 0}
+.table-scroll table{margin:0;min-width:720px}
+td .y{color:#2C6E4C;font-weight:700}
+td .n{color:var(--loss);font-weight:700}
+td .m{color:var(--warn-bd);font-weight:700}
+
+pre.code{background:var(--code-bg);color:var(--code-ink);border-radius:10px;padding:16px 18px;font-family:var(--mono);font-size:13px;line-height:1.6;overflow-x:auto;margin:14px 0}
+pre.code .cm{color:#7C97A8}
+pre.code .kw{color:#8FBFF7}
+pre.code .st{color:#E9C284}
+pre.code .fn{color:#8FD9BE}
+
+details.mis{background:#fff;border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden}
+details.mis summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style:none;display:flex;gap:10px;align-items:baseline}
+details.mis summary::-webkit-details-marker{display:none}
+details.mis summary::before{content:"✗";color:var(--loss);font-family:var(--mono);font-weight:800}
+details.mis[open] summary{border-bottom:1px dashed var(--line)}
+details.mis .body{padding:10px 16px 14px;font-size:14.5px;color:#37485A}
+
+.quiz{background:#fff;border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:14px 16px}
+.quiz .q{font-weight:600}
+.quiz .opts{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.quiz .opts button{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:6px 12px;font-size:13.5px;cursor:pointer}
+.quiz .opts button.right{background:var(--key-bg);border-color:var(--key-bd)}
+.quiz .opts button.wrong{background:var(--warn-bg);border-color:var(--warn-bd)}
+.quiz .exp{display:none;font-size:14px;color:#37485A;border-top:1px dashed var(--line);padding-top:8px;margin-top:6px}
+.quiz.done .exp{display:block}
+
+.pair-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
+.pair-card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.pair-card .k{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;display:block}
+.pair-card .v{font-weight:600;font-family:var(--mono);font-size:13px}
+
+.bars{display:flex;align-items:flex-end;gap:10px;height:140px;margin:10px 0 4px}
+.bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;min-width:0}
+.bar .col{width:100%;max-width:64px;border-radius:5px 5px 0 0;background:var(--pred);transition:height .25s}
+.bar .lab{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;white-space:nowrap}
+.bar .val{font-family:var(--mono);font-size:11.5px}
+
+.tokrow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.tok{border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-family:var(--mono);font-size:12px;background:#fff;text-align:center;min-width:66px}
+.tok.pad{background:#F2EDE0;border-style:dashed}
+.tok.masked{opacity:.38;text-decoration:line-through}
+.tok .tl{display:block;font-size:11px;color:var(--muted)}
+
+footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 44px;font-size:13px;color:var(--muted)}
+footer .f-formula{font-family:var(--mono)}
+
+@media (max-width:640px){
+  body{font-size:15px}
+  h2{font-size:24px}
+  .panel{padding:14px}
+  input[type=range]{width:120px}
+}
+</style>
+</head>
+<body>
+
+<nav class="topnav"><div class="wrap">
+<a href="#ch1">1 训练闭环</a><a href="#ch2">2 概念边界</a><a href="#ch3">3 回归损失</a><a href="#ch4">4 分类损失</a><a href="#ch5">5 MSE vs CE</a><a href="#ch6">6 输出层配对</a><a href="#ch7">7 工程边界</a><a href="#ch8">8 优化影响</a><a href="#ch9">9 Loss≠Metric</a><a href="#ch10">10 选择规则</a><a href="#ch11">11 常见误区</a><a href="#ch12">12 最小代码</a><a href="#cheat">速查表</a><a href="#quiz">自检</a>
+</div></nav>
+
+<header class="hero">
+  <svg class="contours" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g fill="none" stroke="#2A4258" stroke-width="1">
+      <ellipse cx="880" cy="300" rx="90" ry="46" transform="rotate(-18 880 300)"/>
+      <ellipse cx="880" cy="300" rx="170" ry="92" transform="rotate(-18 880 300)"/>
+      <ellipse cx="880" cy="300" rx="260" ry="150" transform="rotate(-18 880 300)"/>
+      <ellipse cx="880" cy="300" rx="360" ry="215" transform="rotate(-18 880 300)"/>
+      <ellipse cx="880" cy="300" rx="470" ry="290" transform="rotate(-18 880 300)"/>
+      <ellipse cx="880" cy="300" rx="590" ry="375" transform="rotate(-18 880 300)"/>
+    </g>
+    <path d="M 210 90 Q 420 130 560 210 T 850 292" fill="none" stroke="#0E8A6C" stroke-width="2" stroke-dasharray="6 7" opacity=".85"/>
+    <circle cx="210" cy="90" r="5" fill="#D64533"/>
+    <circle cx="850" cy="292" r="5" fill="#0E8A6C"/>
+  </svg>
+  <div class="wrap">
+    <div class="eyebrow">Loss Functions · A Self-Study Interactive</div>
+    <h1>一文读懂损失函数<br>它不是评分表，是<em>训练信号</em></h1>
+    <p class="thesis">损失函数把「预测和真实答案的差距」变成一个<b>可求导的标量</b>，梯度顺着它流回参数——<b>它告诉模型下一步该往哪里改，以及改多狠</b>。这份文档围绕一条主线展开：损失函数如何定义训练目标、塑造优化方向。</p>
+
+    <div class="loop-diagram" aria-hidden="true">
+      <svg viewBox="0 0 960 190">
+        <defs>
+          <marker id="arrw" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#8FD9BE"/></marker>
+          <marker id="arrb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#F0A18F"/></marker>
+        </defs>
+        <style>
+          .nbox{fill:#152535;stroke:#33495D;rx:10}
+          .ntxt{fill:#E8EFEA;font-family:var(--mono);font-size:14px;text-anchor:middle}
+          .nsub{fill:#7FA396;font-family:var(--sans);font-size:11px;text-anchor:middle}
+          .flow{stroke:#8FD9BE;stroke-width:2;fill:none;stroke-dasharray:5 6;animation:dash 1.6s linear infinite}
+          .flowb{stroke:#F0A18F;stroke-width:2;fill:none;stroke-dasharray:5 6;animation:dash 1.6s linear infinite}
+          @keyframes dash{to{stroke-dashoffset:-22}}
+        </style>
+        <rect class="nbox" x="10" y="46" width="120" height="52" rx="10"/>
+        <text class="ntxt" x="70" y="68">input x</text><text class="nsub" x="70" y="86">一个样本</text>
+        <rect class="nbox" x="190" y="46" width="150" height="52" rx="10"/>
+        <text class="ntxt" x="265" y="68">model → ŷ</text><text class="nsub" x="265" y="86">前向预测</text>
+        <rect class="nbox" x="400" y="46" width="170" height="52" rx="10"/>
+        <text class="ntxt" x="485" y="68">compare with y</text><text class="nsub" x="485" y="86">差距在哪里</text>
+        <rect class="nbox" x="630" y="46" width="120" height="52" rx="10" stroke="#D64533"/>
+        <text class="ntxt" x="690" y="68" fill="#F0A18F">loss</text><text class="nsub" x="690" y="86">一个标量</text>
+        <rect class="nbox" x="810" y="46" width="140" height="52" rx="10" stroke="#0E8A6C"/>
+        <text class="ntxt" x="880" y="68" fill="#8FD9BE">gradient</text><text class="nsub" x="880" y="86">∂loss/∂θ</text>
+        <path class="flow" d="M130 72 H188" marker-end="url(#arrw)"/>
+        <path class="flow" d="M340 72 H398" marker-end="url(#arrw)"/>
+        <path class="flow" d="M570 72 H628" marker-end="url(#arrw)"/>
+        <path class="flow" d="M750 72 H808" marker-end="url(#arrw)"/>
+        <path class="flowb" d="M880 100 V150 H265 V100" marker-end="url(#arrb)"/>
+        <text x="572" y="168" fill="#F0A18F" font-family="var(--mono)" font-size="12.5" text-anchor="middle">update parameters:  θ ← θ − lr · ∂loss/∂θ　（反向传播，把误差还给模型）</text>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ============ HERO SIMULATOR ============ -->
+<div class="panel panel-dark" id="sim0" style="margin-top:-26px;position:relative;z-index:2">
+  <div class="ptitle" style="color:#9FB4AC">训练闭环模拟器 · Training Step Playground</div>
+  <div class="pq">这个组件回答一个问题：<b style="color:#E8EFEA">给定一个任务、一个预测和一个损失函数，模型会收到什么信号、往哪个方向改？</b>试着切换任务和 loss，拖动预测值，然后点「走一步梯度下降」。</div>
+
+  <div class="controls">
+    <div class="ctl"><label>任务</label>
+      <span class="seg" id="s0-task">
+        <button data-t="reg" class="on">Regression</button>
+        <button data-t="bin">Binary</button>
+        <button data-t="ml">Multi-label</button>
+        <button data-t="mc">Multi-class</button>
+      </span>
+    </div>
+    <div class="ctl"><label>loss</label>
+      <span class="seg" id="s0-loss">
+        <button data-l="mse" class="on">MSE</button>
+        <button data-l="mae">MAE</button>
+        <button data-l="huber">Huber</button>
+        <button data-l="bce" disabled>BCE</button>
+        <button data-l="ce" disabled>CrossEntropy</button>
+      </span>
+    </div>
+  </div>
+
+  <div class="controls" id="s0-ctl-reg">
+    <div class="ctl"><label>真实值 y</label><input type="range" id="s0-y" min="-3" max="3" step="0.1" value="1"><span class="chip c-target">y=<b id="s0-yv">1.0</b></span></div>
+    <div class="ctl"><label>预测 ŷ</label><input type="range" id="s0-yhat" min="-4" max="4" step="0.1" value="-1.5"><span class="chip c-pred">ŷ=<b id="s0-yhv">-1.5</b></span></div>
+  </div>
+
+  <div class="controls" id="s0-ctl-bin" style="display:none">
+    <div class="ctl"><label>标签 y</label>
+      <span class="seg" id="s0-biny"><button data-y="1" class="on">y=1 正类</button><button data-y="0">y=0 负类</button></span>
+    </div>
+    <div class="ctl"><label>logit z</label><input type="range" id="s0-z" min="-6" max="6" step="0.1" value="-2"><span class="chip c-pred">z=<b id="s0-zv">-2.0</b> → p=σ(z)=<b id="s0-pv">0.12</b></span></div>
+  </div>
+
+  <div class="controls" id="s0-ctl-ml" style="display:none;flex-direction:column;align-items:flex-start" ></div>
+
+  <div class="controls" id="s0-ctl-mc" style="display:none;flex-direction:column;align-items:flex-start"></div>
+
+  <div class="plotbox" id="s0-plot"></div>
+  <div class="readout" id="s0-read"></div>
+  <div class="controls">
+    <div class="ctl"><label>学习率 lr</label><input type="range" id="s0-lr" min="0.05" max="1" step="0.05" value="0.4"><span class="chip">lr=<b id="s0-lrv">0.40</b></span></div>
+    <button class="btn primary" id="s0-step">▶ 走一步梯度下降</button>
+    <button class="btn" id="s0-reset">重置</button>
+  </div>
+  <div class="hint" id="s0-hint"></div>
+</div>
+
+<!-- ============ CH 1 ============ -->
+<section class="chapter" id="ch1">
+  <div class="ch-eyebrow">Chapter 1 · Why Loss</div>
+  <h2>先理解：训练为什么需要损失函数</h2>
+  <div class="ch-formula">loss = f(ŷ, y) → 一个可求导的标量</div>
+
+  <p class="lede">回到一次最普通的训练 step：模型对一个 batch 做前向计算得到预测 <code>ŷ</code>，损失函数把 <code>ŷ</code> 和目标 <code>y</code> 的差距压缩成一个标量 <code>loss</code>，反向传播沿着计算图算出 <code>∂loss/∂θ</code>，优化器用它更新参数。整个深度学习的「学习」二字，机制上就是这一圈循环。</p>
+
+  <p>在这个闭环里，损失函数同时扮演三个角色：</p>
+  <ul>
+    <li><strong>把错误变成可计算的标量。</strong>「预测得不好」是一句人话，反向传播听不懂；<code>loss=2.37</code> 才是机器能求导的对象。所有类型的错误——数值偏差、分错类、概率不自信——都要先被压缩成一个数。</li>
+    <li><strong>定义模型真正优化的目标。</strong>模型不知道你想要「准确率高」「用户满意」，它只知道让 loss 变小。你写下哪个 loss，模型就学哪个目标——loss 是你和模型之间唯一的合同文本。</li>
+    <li><strong>决定不同错误挨多重的罚。</strong>loss 曲线的<em>形状</em>决定梯度的大小：MSE 对大错误二次方放大，MAE 一视同仁，Cross Entropy 对「自信但错」施以近乎无穷的惩罚。同一个错误，换一个 loss，模型收到的修正力度完全不同。</li>
+  </ul>
+
+  <div class="panel">
+    <div class="ptitle">同一个错误，不同的信号</div>
+    <div class="pq">这个组件回答：<b>预测错得一样多时，不同 loss 给模型的梯度力度差多少？</b>左边是回归视角（误差 e = ŷ − y），右边是分类视角（正确类概率 p）。拖动滑块观察 loss 和 |gradient| 的变化速度。</div>
+    <div class="controls">
+      <div class="ctl"><label>回归误差 e</label><input type="range" id="c1-e" min="-4" max="4" step="0.1" value="2.5"><span class="chip">e=<b id="c1-ev">2.5</b></span></div>
+      <div class="ctl"><label>正确类概率 p</label><input type="range" id="c1-p" min="0.02" max="0.98" step="0.01" value="0.2"><span class="chip">p=<b id="c1-pv">0.20</b></span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="c1-grid">
+      <div>
+        <div class="bars" id="c1-bars-reg"></div>
+        <div class="hint" style="text-align:center">回归：同一个 e 下的 loss（左）与 |∂L/∂ŷ|（右，斜纹）</div>
+      </div>
+      <div>
+        <div class="bars" id="c1-bars-cls"></div>
+        <div class="hint" style="text-align:center">分类（y=1）：同一个 p 下 CE 与「把 p 当数值」的 MSE</div>
+      </div>
+    </div>
+    <div class="hint" id="c1-hint"></div>
+  </div>
+
+  <div class="callout key"><span class="tag">Key Idea</span>loss 越小，通常意味着模型离<em>你写下的训练目标</em>越近——但不等于业务效果一定更好。训练目标和业务目标之间隔着评估指标、数据分布和标签质量，这条鸿沟是第 2 章和第 9 章的主题。</div>
+</section>
+
+<!-- ============ CH 2 ============ -->
+<section class="chapter" id="ch2">
+  <div class="ch-eyebrow">Chapter 2 · Loss / Objective / Metric</div>
+  <h2>损失函数、目标函数、评估指标的边界</h2>
+  <div class="ch-formula">objective = data_loss + λ · regularization ≠ metric</div>
+
+  <p class="lede">这三个词在日常交流里经常混着用，但它们出现在训练流程的不同位置、服务不同的目的。混用概念的直接后果是：看着 loss 下降却不明白为什么线上指标不动，或者试图直接「优化 F1」却发现根本没法反向传播。</p>
+
+  <h3>四个概念，四个位置</h3>
+  <ul>
+    <li><strong>Loss Function（损失函数）</strong>：对<em>单个样本或一个 batch</em> 计算误差的函数，比如 <code>MSE</code>、<code>CrossEntropy</code>。它必须可微（至少几乎处处可微），因为它<em>直接参与反向传播</em>。</li>
+    <li><strong>Training Loss（训练损失）</strong>：你在日志里看到的那条曲线。它是一个 batch 上 loss 的<em>聚合结果</em>，会受到 <code>reduction="mean"/"sum"</code>、样本权重、mask、以及分布式训练下实际 batch size 的影响。同一个模型同一批数据，聚合方式不同，打印出来的数字可以差几个数量级。</li>
+    <li><strong>Objective Function（目标函数）</strong>：训练时<em>真正被优化的整体目标</em>。它通常不只是数据损失，还包括正则项、约束项或多任务的加权和：<div class="formula">objective = data_loss + λ · regularization（+ 其他任务的 loss × 权重）</div>weight decay、L1 稀疏约束、KL 约束（比如 VAE、RLHF 里的 KL penalty）都住在这里。模型下山时走的是 objective 的坡面，不只是 data_loss 的。</li>
+    <li><strong>Evaluation Metric（评估指标）</strong>：用来<em>评价模型效果</em>的量，如 Accuracy、F1、AUC、BLEU、RMSE、MAE。它面向人和业务，<em>不一定可微</em>（Accuracy 是阶梯函数），也不一定适合直接优化。它通常在验证/测试集上计算，用于选模型、早停、汇报。</li>
+  </ul>
+
+  <h3>为什么 training loss 下降 ≠ metric 提升</h3>
+  <ul>
+    <li><strong>优化目标和评估目标本来就不是同一个函数。</strong>Cross Entropy 关心概率分布的似然，Accuracy 只关心 argmax 有没有变——概率从 0.6 提到 0.99，CE 大幅下降，Accuracy 一动不动（第 9 章有交互演示）。</li>
+    <li><strong>数据分布与类别不均衡。</strong>多数类主导了平均 loss，loss 下降可能只是多数类学得更好，少数类的 Recall 依然是 0。</li>
+    <li><strong>阈值选择。</strong>F1/Precision/Recall 依赖分类阈值，loss 优化的是概率本身，阈值一天没定，metric 一天说不准。</li>
+    <li><strong>正则化、校准与泛化。</strong>objective 里的正则项会故意让 training loss 高一点，换取验证集表现；反过来，training loss 一路走低也可能是过拟合的开场。</li>
+  </ul>
+
+  <div class="table-scroll"><table>
+    <tr><th>概念</th><th>计算对象</th><th>参与反向传播</th><th>必须可微</th><th>常见位置</th><th>典型例子</th><th>主要风险</th></tr>
+    <tr><td><b>Loss Function</b></td><td>单样本 / batch</td><td><span class="y">是</span></td><td><span class="y">是</span>（几乎处处）</td><td>训练 step 内部</td><td>MSE, BCE, CrossEntropy</td><td>和输出层 / 标签格式不匹配</td></tr>
+    <tr><td><b>Training Loss</b></td><td>batch 聚合值</td><td><span class="y">是</span>（它的梯度）</td><td>—</td><td>训练日志曲线</td><td>mean/sum 后的 CE</td><td>reduction、权重、mask 改变数值含义</td></tr>
+    <tr><td><b>Objective</b></td><td>整体训练目标</td><td><span class="y">是</span></td><td><span class="y">是</span></td><td>optimizer 看到的函数</td><td>CE + λ·L2, 多任务加权和</td><td>正则/任务权重没调好，目标被带偏</td></tr>
+    <tr><td><b>Metric</b></td><td>验证 / 测试集</td><td><span class="n">否</span></td><td><span class="n">否</span></td><td>评估、早停、选模型</td><td>Accuracy, F1, AUC, BLEU, RMSE</td><td>与 loss 脱节；阈值和分布敏感</td></tr>
+  </table></div>
+
+  <div class="callout key"><span class="tag">一句话区分</span>loss 是给<strong>反向传播</strong>看的，objective 是给<strong>优化器</strong>看的，metric 是给<strong>人</strong>看的。RMSE、MAE 这类量两边都能站——当它进 <code>backward()</code> 就是 loss，当它只出现在验证报告里就是 metric。</div>
+</section>
+
+<!-- ============ CH 3 ============ -->
+<section class="chapter" id="ch3">
+  <div class="ch-eyebrow">Chapter 3 · Regression Losses</div>
+  <h2>回归损失：预测连续数值时怎么惩罚错误</h2>
+  <div class="ch-formula">e = ŷ − y　·　问题只有一个：|e| 变大时，罚多重？</div>
+
+  <p class="lede">回归损失都围绕残差 <code>e = ŷ − y</code> 展开，区别只在于「惩罚随 |e| 增长的速度」。这个速度直接就是梯度——所以选回归损失，本质上是在选「大错误该分走多少梯度预算」。</p>
+
+  <h3>MSE / L2 Loss：二次方放大</h3>
+  <div class="formula">MSE = (ŷ − y)²　　∂L/∂ŷ = 2(ŷ − y)<span class="note">梯度与误差成正比：错 1 罚 1 份力，错 10 罚 10 份力，loss 差 100 倍。</span></div>
+  <ul>
+    <li><strong>曲线是抛物线</strong>，误差越大惩罚增长越快。好处：接近最优点时梯度自然变小，收敛平稳；坏处：<strong>对离群点极其敏感</strong>——一个错 10 的样本贡献的 loss 等于 100 个错 1 的样本，梯度会被它劫持。</li>
+    <li><strong>概率解释</strong>：假设观测噪声是高斯分布 <code>y = f(x) + ε, ε~N(0,σ²)</code>，最大化似然恰好等价于最小化 MSE。这就是「MSE 假设高斯噪声」的含义——如果你的噪声重尾（离群点多），这个假设不成立，MSE 就不是最优选择。</li>
+    <li><strong>尺度敏感</strong>：目标值单位从 km 换成 m，同样 10% 的相对误差，MSE 数值和梯度尺度会放大 10⁶ 倍。这就是回归任务常做目标标准化（standardize / log 变换）的原因之一——否则学习率要跟着单位重调。</li>
+  </ul>
+
+  <h3>MAE / L1 Loss：线性惩罚</h3>
+  <div class="formula">MAE = |ŷ − y|　　∂L/∂ŷ = sign(ŷ − y)<span class="note">梯度恒为 ±1，与误差大小无关。</span></div>
+  <ul>
+    <li><strong>对离群点稳健</strong>：错 10 的样本贡献的 loss 只是错 1 的 10 倍（而非 100 倍），梯度更是完全一样大，离群点无法劫持训练方向。MAE 的最优解是条件<em>中位数</em>（MSE 是条件均值），中位数天然抗离群点。</li>
+    <li><strong>0 点不可导</strong>：数学上 |e| 在 e=0 处没有导数。工程上不是大问题——框架用次梯度（subgradient，通常取 0）处理；真正的麻烦是<strong>接近最优时梯度仍然是 ±1</strong>，参数会在最优点附近来回跳，需要配合学习率衰减。</li>
+  </ul>
+
+  <h3>Huber Loss / Smooth L1：两头的好处各取一半</h3>
+  <div class="formula">|e| ≤ δ:  L = e²/2　　|e| > δ:  L = δ(|e| − δ/2)<span class="note">小误差走 MSE（梯度 ∝ e，收敛平稳），大误差走 MAE（梯度封顶为 ±δ，离群点被限流）。δ 是"多大算离群点"的分界线。</span></div>
+  <p>Huber 的设计意图非常直白：<strong>在最优点附近要 MSE 的平滑梯度，在离群点区域要 MAE 的梯度封顶</strong>。目标检测里的 Smooth L1 就是它的近亲。代价是多了一个超参 δ，需要按残差的量级来设。</p>
+
+  <h3>RMSE：更多时候是 metric</h3>
+  <div class="formula">RMSE = √MSE<span class="note">单位和 y 一致（MSE 的单位是 y 的平方），所以人读起来更直观。</span></div>
+  <p>RMSE 与 MSE 单调等价——最小化谁都会走到同一个最优点，所以训练时直接用 MSE（省一个开方，梯度形式也更干净），<strong>汇报时用 RMSE</strong>。这正是第 2 章「同一个量，站在 loss 侧还是 metric 侧」的实例。</p>
+
+  <h3>Quantile / Pinball Loss：当预测一个点不够用</h3>
+  <div class="formula">L_τ(e) = τ·e (e≥0 即低估时) ；(τ−1)·e (e<0 即高估时)，其中 e = y − ŷ<span class="note">τ=0.9 时低估罚 0.9、高估只罚 0.1，模型被逼着输出第 90 分位数。</span></div>
+  <p>MSE 给你条件均值，MAE 给你条件中位数——都只是分布的一个点。当业务需要「90% 情况下备货够用」「给出预测区间」时，点预测不够，就用不对称的 Pinball Loss 训练若干个分位数（τ=0.1, 0.5, 0.9），得到不确定区间。它是「回归不止预测均值」这个思路的入口，这里点到为止。</p>
+
+  <div class="panel">
+    <div class="ptitle">回归损失对比器</div>
+    <div class="pq">这个组件回答：<b>同一个误差 e，MSE / MAE / Huber 的 loss 和梯度分别长什么样？</b>拖动 e 观察三条曲线上的点；调 δ 看 Huber 的分界线移动。</div>
+    <div class="controls">
+      <div class="ctl"><label>误差 e = ŷ − y</label><input type="range" id="c3-e" min="-4" max="4" step="0.05" value="2.6"><span class="chip">e=<b id="c3-ev">2.60</b></span></div>
+      <div class="ctl"><label>Huber δ</label><input type="range" id="c3-d" min="0.3" max="2.5" step="0.1" value="1"><span class="chip">δ=<b id="c3-dv">1.0</b></span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="c3-grid">
+      <div><div class="plotbox" id="c3-plot-loss"></div><div class="hint" style="text-align:center">loss(e)</div></div>
+      <div><div class="plotbox" id="c3-plot-grad"></div><div class="hint" style="text-align:center">gradient(e) = ∂L/∂ŷ</div></div>
+    </div>
+    <div class="legend"><span class="lg-mse">MSE</span><span class="lg-mae">MAE</span><span class="lg-huber">Huber(δ)</span></div>
+    <div class="readout" id="c3-read"></div>
+    <div class="hint">注意梯度图：MSE 是一条穿过原点的斜线（无上限），MAE 是 ±1 的台阶，Huber 在 |e|≤δ 内像 MSE、之外被削平到 ±δ。<b>梯度图才是模型真正"感受"到的东西。</b></div>
+  </div>
+
+  <div class="panel">
+    <div class="ptitle">离群点如何劫持 MSE</div>
+    <div class="pq">这个组件回答：<b>一个离群点能吃掉多少比例的 loss？</b>batch 里有 6 个样本，前 5 个误差都在 ±1 以内，拖动第 6 个样本的误差观察它在总 loss 里的占比。</div>
+    <div class="controls">
+      <div class="ctl"><label>离群样本误差</label><input type="range" id="c3o-e" min="1" max="10" step="0.5" value="8"><span class="chip">e₆=<b id="c3o-ev">8.0</b></span></div>
+      <div class="ctl"><label>loss</label><span class="seg" id="c3o-loss"><button data-l="mse" class="on">MSE</button><button data-l="mae">MAE</button><button data-l="huber">Huber δ=1</button></span></div>
+    </div>
+    <div class="bars" id="c3o-bars" style="height:170px"></div>
+    <div class="readout" id="c3o-read"></div>
+    <div class="hint" id="c3o-hint"></div>
+  </div>
+
+  <div class="panel">
+    <div class="ptitle">目标尺度：同一个相对误差，不同的 loss 数值</div>
+    <div class="pq">这个组件回答：<b>为什么"MSE=2500"本身说明不了任何问题？</b>同一次预测——真实距离 3.2、预测 3.52（高估 10%）——换个单位看 MSE 和梯度。</div>
+    <div class="controls">
+      <div class="ctl"><label>单位</label><span class="seg" id="c3s-unit"><button data-u="km" class="on">千米 km</button><button data-u="m">米 m</button></span></div>
+    </div>
+    <div class="readout" id="c3s-read"></div>
+    <div class="hint">相对误差都是 10%，但以米为单位时 MSE 和梯度都放大了 10⁶ 倍——学习率如果不变，一步更新的幅度也放大 10⁶ 倍。<b>这就是回归任务先做目标标准化的原因：让 loss 数值和梯度尺度与单位解耦。</b>对比之下 MAE 只放大 10³ 倍（线性），但同样逃不掉尺度问题。</div>
+  </div>
+</section>
+
+<!-- ============ CH 4 ============ -->
+<section class="chapter" id="ch4">
+  <div class="ch-eyebrow">Chapter 4 · Classification Losses</div>
+  <h2>分类损失：预测类别时为什么常用交叉熵</h2>
+  <div class="ch-formula">CE = −log p(正确类别)　·　罚的不是"分错"，是"给正确答案的概率太低"</div>
+
+  <p class="lede">分类模型输出的不是数值而是<strong>概率（或产生概率的 logits）</strong>。交叉熵惩罚的对象是「你给正确答案分配了多少概率」：给得越少罚得越重，而且是对数级地重——p→0 时 loss→∞。这一个性质决定了它对「自信但错」零容忍。</p>
+
+  <h3>Binary Cross Entropy：二分类与多标签的基座</h3>
+  <div class="formula">BCE = −[ y·log p + (1−y)·log(1−p) ]<span class="note">y∈{0,1} 是真实标签，p∈(0,1) 是模型预测的正类概率。y=1 时只剩 −log p；y=0 时只剩 −log(1−p)。</span></div>
+  <ul>
+    <li>直觉：BCE 就是「真实标签指向哪一边，就看你给那一边多少概率，取负对数」。p 越接近正确一侧，loss 越接近 0；<strong>越自信地押错边，−log 把惩罚拉向无穷大</strong>。</li>
+    <li>用 logits 表达时有一个非常漂亮的梯度：<code>∂L/∂z = σ(z) − y</code>——梯度恰好是「预测概率 − 真实标签」。错得越多，修正信号越强，且天然有界于 (−1,1)。</li>
+    <li>多标签分类 = 每个标签各自做一次独立的二分类，对每个输出位各算一个 BCE 再平均。标签之间互不排斥，概率不需要加和为 1。</li>
+  </ul>
+
+  <h3>Cross Entropy：多分类单标签的默认答案</h3>
+  <div class="formula">p = Softmax(z)　　CE = −log p[target]<span class="note">z 是 K 个类别的 logits；Softmax 把它们归一成加和为 1 的分布；CE 只取正确类别那一格的概率求 −log。</span></div>
+  <ul>
+    <li>链条是：<strong>logits →（Softmax）→ 概率分布 →（取正确类）→ −log</strong>。它表面上只看正确类别，但因为 Softmax 是归一化的，抬高正确类概率必然压低其他类——竞争关系已经内置在 Softmax 里。</li>
+    <li>梯度同样优雅：<code>∂L/∂zᵢ = pᵢ − yᵢ</code>（y 为 one-hot）。正确类的 logit 被推高 <code>1−p_t</code> 份力，错误类各被压低 <code>pᵢ</code> 份力。预测已经很准时（p_t→1）梯度自动趋近 0。</li>
+    <li><strong>Label smoothing 与软标签</strong>：把目标从尖锐的 one-hot <code>[0,1,0]</code> 换成 <code>[0.05,0.9,0.05]</code>，改变的不是模型结构而是<em>训练目标分布</em>——阻止模型把 logit 推向无穷来追求 p=1，缓解过拟合、改善校准。蒸馏里的 teacher 概率是同一思路的一般化。</li>
+  </ul>
+
+  <h3>NLL / KL / Focal / Hinge：同一家族的四个补充</h3>
+  <ul>
+    <li><strong>Negative Log Likelihood</strong>：CE 的另一个名字侧面。PyTorch 里 <code>CrossEntropyLoss = LogSoftmax + NLLLoss</code>；数学上，最小化 CE 就是最大化正确标签的对数似然。</li>
+    <li><strong>KL Divergence</strong>：<code>KL(P‖Q) = Σ p·log(p/q)</code>，度量「目标分布 P 和预测分布 Q 的差异」。当 P 是 one-hot 时它与 CE 只差一个常数（P 的熵）；当 P 是软分布——蒸馏的 teacher 输出、label smoothing 后的目标、分布匹配——就轮到 KL 出场。</li>
+    <li><strong>Focal Loss</strong>：<code>−(1−p_t)^γ·log p_t</code>。解决的问题是<strong>类别极度不均衡 + 简单样本淹没训练</strong>：给已经预测得很好的样本乘上 <code>(1−p_t)^γ</code> 这个快速趋零的系数，把梯度预算让给难样本。出身于目标检测（前景/背景比例悬殊），思路可迁移到任何不均衡场景。</li>
+    <li><strong>Hinge Loss</strong>：<code>max(0, 1 − y·s)</code>（y∈{−1,+1}，s 为打分）。它提醒我们分类损失不止概率一条路：Hinge 不谈概率，只要求正确类的分数领先出一个 margin，超过 margin 就零惩罚。这是 SVM 与 margin-based 方法的世界观，也是第 10 章度量学习损失的思想源头。</li>
+  </ul>
+
+  <div class="panel">
+    <div class="ptitle">BCE 演示器：概率越错越自信，罚得越狠</div>
+    <div class="pq">这个组件回答：<b>p 接近 0、0.5、1 时 BCE 分别是什么量级？</b>切换真实标签、拖动 p，注意曲线右端/左端的陡峭程度。</div>
+    <div class="controls">
+      <div class="ctl"><label>真实标签</label><span class="seg" id="c4b-y"><button data-y="1" class="on">y=1</button><button data-y="0">y=0</button></span></div>
+      <div class="ctl"><label>预测概率 p</label><input type="range" id="c4b-p" min="0.01" max="0.99" step="0.01" value="0.08"><span class="chip c-pred">p=<b id="c4b-pv">0.08</b></span></div>
+    </div>
+    <div class="plotbox" id="c4b-plot"></div>
+    <div class="readout" id="c4b-read"></div>
+    <div class="hint" id="c4b-hint"></div>
+  </div>
+
+  <div class="panel">
+    <div class="ptitle">多分类 logits 编辑器：从 logits 到 Softmax 到 CE</div>
+    <div class="pq">这个组件回答：<b>CE 到底看的是什么？</b>调整四个类别的 logits，观察 Softmax 概率如何此消彼长、CE 如何只随"正确类概率"变化。点预设按钮看"自信但错"有多贵。</div>
+    <div class="controls" id="c4m-sliders" style="flex-direction:column;align-items:flex-start"></div>
+    <div class="controls">
+      <div class="ctl"><label>正确类别</label><span class="seg" id="c4m-t"><button data-t="0" class="on">A</button><button data-t="1">B</button><button data-t="2">C</button><button data-t="3">D</button></span></div>
+      <button class="btn" id="c4m-preset1">预设：谨慎且对</button>
+      <button class="btn" id="c4m-preset2">预设：自信且对</button>
+      <button class="btn" id="c4m-preset3">预设：自信但错 ⚠</button>
+    </div>
+    <div class="bars" id="c4m-bars" style="height:150px"></div>
+    <div class="readout" id="c4m-read"></div>
+    <div class="hint" id="c4m-hint"></div>
+  </div>
+</section>
+
+<!-- ============ CH 5 ============ -->
+<section class="chapter" id="ch5">
+  <div class="ch-eyebrow">Chapter 5 · MSE vs Cross Entropy</div>
+  <h2>MSE vs Cross Entropy：为什么分类任务通常不用 MSE</h2>
+  <div class="ch-formula">数值差距 vs 概率似然 —— 输出的含义不同，惩罚的逻辑就该不同</div>
+
+  <p class="lede">从输出的含义讲起：<strong>MSE 度量的是「两个数值差多远」，Cross Entropy 度量的是「一个概率分布对真实类别的解释力有多差」。</strong>回归输出是数值，所以用 MSE；分类输出是概率（或类别似然），所以用 CE。"分类标签也是 0/1 的数字，所以也能 MSE"——语法上能跑通，语义和梯度上都不合适。</p>
+
+  <p>把同一个二分类样本（y=1）交给两个 loss，对预测概率 p 求惩罚：</p>
+  <ul>
+    <li><strong>MSE = (p − 1)²</strong>：p=0.01（自信地押错）时 loss ≈ 0.98，<em>惩罚有上限 1</em>；对 p 的梯度 |2(p−1)| 最大也就 2，而且再叠加 Sigmoid 的链式项 p(1−p) 之后，恰恰在 p→0 的最错区域梯度反而趋近 0——<strong>错得最离谱的地方，修正信号最弱</strong>（饱和区问题）。</li>
+    <li><strong>CE = −log p</strong>：p=0.01 时 loss ≈ 4.6 并继续冲向无穷；对 logit 的梯度是干净的 <code>p − y</code>，错得越多信号越强、且不会在错误一侧饱和。</li>
+  </ul>
+
+  <div class="panel">
+    <div class="ptitle">同一个 p，两种惩罚（真实标签 y=1）</div>
+    <div class="pq">这个组件回答：<b>在"自信但错"的区域（p→0），两个 loss 给的修正力度差多少？</b>左图是 loss 曲线，右图是对 logit z 的梯度大小（真正决定参数更新的量）。</div>
+    <div class="controls">
+      <div class="ctl"><label>正确类概率 p</label><input type="range" id="c5-p" min="0.01" max="0.99" step="0.01" value="0.05"><span class="chip c-pred">p=<b id="c5-pv">0.05</b></span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="c5-grid">
+      <div><div class="plotbox" id="c5-plot-loss"></div><div class="hint" style="text-align:center">loss(p)</div></div>
+      <div><div class="plotbox" id="c5-plot-grad"></div><div class="hint" style="text-align:center">|∂loss/∂z|，z 为 logit（p=σ(z)）</div></div>
+    </div>
+    <div class="legend"><span class="lg-ce">Cross Entropy = −log p</span><span class="lg-msep">MSE = (p−1)²</span></div>
+    <div class="readout" id="c5-read"></div>
+    <div class="hint" id="c5-hint"></div>
+  </div>
+
+  <h3>两个常见误区，正面回应</h3>
+  <ul>
+    <li><strong>"分类也有 0/1 标签，直接 MSE 不行吗？"</strong>能算出数，但有三笔账：① 惩罚封顶，压不住自信错误；② 经过 Sigmoid/Softmax 后梯度在最需要修正的区域饱和，收敛慢且容易卡住；③ 丢掉了概率解释，输出难以当作校准的置信度使用。经典统计里这对应「用线性回归拟合 0/1 标签 vs 用 logistic 回归」的差别。</li>
+    <li><strong>"Cross Entropy 只是另一个误差公式？"</strong>不是。它有明确的概率出身：最小化 CE ≡ 最大化训练标签在模型分布下的似然（MLE），等价于最小化真实分布与预测分布之间的 KL 散度。这层身份带来了 <code>p − y</code> 的干净梯度、与 Softmax 的天作之合，以及对校准的天然关照——这些都不是"随便一个把差距变成数的公式"能免费获得的。</li>
+  </ul>
+  <div class="callout key"><span class="tag">Key Idea</span>选 loss 先问输出的<em>语义</em>：输出是连续数值 → 度量数值差距（MSE 家族）；输出是概率/似然 → 度量分布差距（CE 家族）。语义对了，梯度行为自然是对的。</div>
+</section>
+
+<!-- ============ CH 6 ============ -->
+<section class="chapter" id="ch6">
+  <div class="ch-eyebrow">Chapter 6 · Output ↔ Loss ↔ API</div>
+  <h2>输出层、loss 和框架 API 的配对</h2>
+  <div class="ch-formula">写错配对是训练代码里最常见、最难肉眼发现的 bug</div>
+
+  <p class="lede">loss 函数不是孤立的：它必须和<strong>模型最后一层的输出形式</strong>、<strong>标签的格式</strong>三方对齐。框架 API（以 PyTorch 命名为例）把激活函数吸收进 loss 的方式各不相同，配错的代码往往<em>能跑通、loss 也在降</em>，只是模型悄悄学错了目标。</p>
+
+  <div class="panel">
+    <div class="ptitle">输出层配对选择器</div>
+    <div class="pq">这个组件回答：<b>我的任务应该用什么输出、什么 loss、什么标签格式，容易踩什么坑？</b>选一个任务类型。</div>
+    <div class="controls">
+      <span class="seg" id="c6-task">
+        <button data-t="reg" class="on">回归</button>
+        <button data-t="bin">二分类</button>
+        <button data-t="ml">多标签分类</button>
+        <button data-t="mc">多分类单标签</button>
+      </span>
+    </div>
+    <div class="pair-grid" id="c6-grid"></div>
+    <div class="callout pit" id="c6-pit" style="margin-top:6px"></div>
+    <pre class="code" id="c6-code"></pre>
+  </div>
+
+  <h3>逐个说清</h3>
+  <ul>
+    <li><strong>回归：Linear output + <code>MSELoss</code> / <code>L1Loss</code> / <code>HuberLoss</code>。</strong>最后一层不加激活（或按值域加，比如非负目标可以配 <code>softplus</code>），标签是连续 float，形状与输出对齐。</li>
+    <li><strong>二分类：单个 logit + <code>BCEWithLogitsLoss</code>。</strong>也可以 Sigmoid 后接 <code>BCELoss</code>，但工程上几乎总是推荐前者：① logits 版本内部用 log-sum-exp 技巧做了数值稳定，手动 <code>log(sigmoid(z))</code> 在 |z| 很大时会下溢成 <code>log(0)</code>；② 少一层手写激活就少一个配错的机会；③ 它还提供 <code>pos_weight</code> 处理不均衡。标签是 <strong>float</strong>（不是 int），形状与输出对齐（常见坑：输出 <code>(N,1)</code> 标签 <code>(N,)</code>，广播成 N×N）。</li>
+    <li><strong>多标签：K 个独立 logits + <code>BCEWithLogitsLoss</code>。</strong>每个标签是一次独立的二分类判断，概率<em>不要求</em>加和为 1——所以绝不能用 Softmax（它强行归一，标签之间就互斥了）。标签是 multi-hot float 向量。</li>
+    <li><strong>多分类单标签：K 个 logits + <code>CrossEntropyLoss</code>。</strong>PyTorch 的 <code>CrossEntropyLoss</code> <strong>接收 raw logits</strong>，内部 = <code>LogSoftmax + NLLLoss</code>；如果你先手动 Softmax 再喂进去，相当于做了两次归一化，梯度被压扁、训练变慢且难排查。标签默认是<strong>类别索引</strong>（int64，形状 <code>(N,)</code>），不是 one-hot；新版 PyTorch（≥1.10）也支持传概率形式的软标签（形状 <code>(N,K)</code> 的 float），配合 <code>label_smoothing</code> 参数可以直接做标签平滑——软标签场景务必查所用框架的 API 支持。</li>
+    <li><strong>那 Softmax 什么时候用？</strong>推理时把 logits 变成人能读的概率、展示置信度、温度采样时用。训练时是否显式写出，取决于 loss API 是否已经把它吸收进去——PyTorch 的 CE 吸收了，Keras 的 <code>CategoricalCrossentropy(from_logits=True)</code> 用参数控制。</li>
+  </ul>
+
+  <div class="table-scroll"><table>
+    <tr><th>任务类型</th><th>模型输出</th><th>推荐 loss (PyTorch)</th><th>需要手动 Sigmoid/Softmax?</th><th>标签格式</th><th>常见坑</th></tr>
+    <tr><td>回归</td><td>线性输出，(N,) 或 (N,D)</td><td><code>MSELoss</code> / <code>HuberLoss</code> / <code>L1Loss</code></td><td><span class="n">否</span></td><td>float，与输出同 shape</td><td>目标未标准化导致梯度尺度失控</td></tr>
+    <tr><td>二分类</td><td>1 个 logit，(N,) 或 (N,1)</td><td><code>BCEWithLogitsLoss</code></td><td><span class="n">否</span>（内置 Sigmoid）</td><td>float 0./1.，与输出同 shape</td><td>标签给成 int 报错；(N,1) vs (N,) 广播</td></tr>
+    <tr><td>多标签</td><td>K 个独立 logits，(N,K)</td><td><code>BCEWithLogitsLoss</code></td><td><span class="n">否</span>；<span class="n">禁用 Softmax</span></td><td>multi-hot float，(N,K)</td><td>误用 Softmax/CE 使标签互斥</td></tr>
+    <tr><td>多分类单标签</td><td>K 个 logits，(N,K)</td><td><code>CrossEntropyLoss</code></td><td><span class="n">否</span>（内置 LogSoftmax）</td><td>class index int64，(N,)；软标签见 API</td><td>先 Softmax 再喂 CE；标签给成 one-hot float</td></tr>
+  </table></div>
+</section>
+
+<!-- ============ CH 7 ============ -->
+<section class="chapter" id="ch7">
+  <div class="ch-eyebrow">Chapter 7 · Labels · Stability · Reduction · Mask</div>
+  <h2>标签格式、数值稳定、reduction 和 mask</h2>
+  <div class="ch-formula">训练信号被污染时，loss 曲线看起来往往一切正常</div>
+
+  <p class="lede">这一章是排错边界：四类问题都不改变"用什么 loss"的大方向，却决定训练信号是干净的还是被污染的。它们的共同点是——<strong>出了错也不报错</strong>。</p>
+
+  <h3>标签格式：三种形态别混用</h3>
+  <ul>
+    <li>回归标签：连续 <strong>float</strong>，shape 与输出对齐。</li>
+    <li>BCE 系（二分类/多标签）：<strong>float</strong> 的 0./1.（或软概率），shape 与输出<em>逐元素</em>对齐。</li>
+    <li>CE 系（多分类）：默认 <strong>class index</strong>（int64，值域 0..K−1），<em>不是</em> one-hot；one-hot / 软标签是否可用要看具体 API 版本。</li>
+  </ul>
+
+  <h3>数值稳定：为什么推荐 logits 版 loss</h3>
+  <p>直接对概率取 <code>log</code>，当 p 被 Sigmoid/Softmax 压到浮点下溢时会得到 <code>log(0) = -inf</code>，一步就把梯度炸成 NaN。<code>BCEWithLogitsLoss</code>、<code>CrossEntropyLoss</code> 这类 logits 版本在内部把 <code>log</code> 与 <code>exp</code> 合并计算，核心是 <strong>log-sum-exp 技巧</strong>：先减去 logits 的最大值再做 exp，使指数运算永不溢出：</p>
+  <div class="formula">logsumexp(z) = max(z) + log Σ exp(zᵢ − max(z))　　log_softmax(z)ᵢ = zᵢ − logsumexp(z)<span class="note">数学上恒等，数值上把 exp 的输入控制在 ≤0，彻底避开上溢；log 的输入也不再经过"先算出概率"这个下溢通道。</span></div>
+
+  <h3>reduction：<code>none</code> / <code>mean</code> / <code>sum</code> 不只是显示格式</h3>
+  <ul>
+    <li><code>none</code>：返回逐样本（逐元素）loss 向量——想做样本加权、mask、难例挖掘时的原材料。</li>
+    <li><code>mean</code>：对所有元素取平均。<strong>梯度尺度与 batch size 解耦</strong>，学习率不用随 batch 调整（近似），是默认值。</li>
+    <li><code>sum</code>：全部相加。<strong>梯度尺度 ∝ batch size</strong>——batch 从 32 换到 256，等效于学习率放大 8 倍。梯度累积、分布式训练（每卡先 mean 再 all-reduce mean，等效全局 mean）都会影响"日志里这条 loss 曲线"的可比性：对比实验先对齐 reduction 和有效 batch size。</li>
+  </ul>
+
+  <h3>权重与 mask：改写"谁的错更重要"</h3>
+  <ul>
+    <li><code>class weight</code> / <code>pos_weight</code> / sample weight：把少数类或重要样本的惩罚放大——本质是直接改写目标函数中各项的系数。</li>
+    <li>序列任务（padding token）、检测任务（背景 anchor）、分割任务（ignore 区域）：无效位置必须用 <code>ignore_index</code> 或显式 mask 挡在 loss 之外。<strong>padding 不是"模型自己会学会忽略"的东西</strong>——只要它参与了 loss，它就在参与梯度，就在污染训练信号。</li>
+  </ul>
+
+  <div class="panel">
+    <div class="ptitle">Reduction / 权重演示器</div>
+    <div class="pq">这个组件回答：<b>同一批逐样本 loss，聚合方式和样本权重如何改变"训练 loss"这个数字与梯度尺度？</b>四个样本的 loss 固定为 [0.2, 1.5, 0.4, 3.0]。</div>
+    <div class="controls">
+      <div class="ctl"><label>reduction</label><span class="seg" id="c7r-red"><button data-r="none">none</button><button data-r="mean" class="on">mean</button><button data-r="sum">sum</button></span></div>
+      <div class="ctl"><label>样本 4 权重</label><input type="range" id="c7r-w" min="0" max="4" step="0.5" value="1"><span class="chip">w₄=<b id="c7r-wv">1.0</b></span></div>
+      <div class="ctl"><label>batch 复制</label><span class="seg" id="c7r-bs"><button data-b="1" class="on">×1 (N=4)</button><button data-b="8">×8 (N=32)</button></span></div>
+    </div>
+    <div class="bars" id="c7r-bars"></div>
+    <div class="readout" id="c7r-read"></div>
+    <div class="hint" id="c7r-hint"></div>
+  </div>
+
+  <div class="panel">
+    <div class="ptitle">Padding mask 演示器</div>
+    <div class="pq">这个组件回答：<b>padding token 不做 mask 时，序列 loss 被污染成什么样？</b>一条长度 8 的序列，后 3 个位置是 <code>&lt;pad&gt;</code>。模型对真实 token 学得不错（loss≈0.4），但对 pad 位置的"预测"毫无意义（loss≈2.3）。</div>
+    <div class="controls">
+      <div class="ctl"><label>mask padding</label><span class="seg" id="c7m-mask"><button data-m="off" class="on">不 mask ⚠</button><button data-m="on">mask / ignore_index</button></span></div>
+    </div>
+    <div class="tokrow" id="c7m-toks"></div>
+    <div class="readout" id="c7m-read"></div>
+    <div class="hint" id="c7m-hint"></div>
+  </div>
+
+  <div class="panel">
+    <div class="ptitle">数值稳定演示器：手动 log(σ(z)) vs 稳定 API</div>
+    <div class="pq">这个组件回答：<b>|logit| 很大时，"先算概率再取 log"在哪一步崩掉？</b>拖动 logit z（标签 y=1），对比两条计算路径（按 float32 模拟）。</div>
+    <div class="controls">
+      <div class="ctl"><label>logit z</label><input type="range" id="c7n-z" min="-40" max="40" step="1" value="-30"><span class="chip">z=<b id="c7n-zv">-30</b></span></div>
+    </div>
+    <div class="readout" id="c7n-read"></div>
+    <div class="hint" id="c7n-hint"></div>
+  </div>
+</section>
+
+<!-- ============ CH 8 ============ -->
+<section class="chapter" id="ch8">
+  <div class="ch-eyebrow">Chapter 8 · Loss Shapes Optimization</div>
+  <h2>损失函数如何影响优化过程</h2>
+  <div class="ch-formula">参数在 loss 曲面上滚动，曲面的形状就是它收到的全部指令</div>
+
+  <p class="lede">优化器很笨：它只会在当前位置摸一下坡度，然后往低处挪 lr 那么远。所以 loss 曲面的形状——哪里陡、哪里平、坑在哪——完整决定了优化路径。选 loss 时值得逐条过一遍这份清单：</p>
+  <ul>
+    <li><strong>大错误是否被强烈惩罚？</strong>MSE 是，二次方放大让远处的坡极陡——修正快，但一个离群点就能拽着所有参数跑。</li>
+    <li><strong>梯度是否稳定？</strong>MAE 的梯度恒为 ±1：远处不会爆炸，但最优点附近也不衰减，参数会绕着谷底打转；MSE 的梯度在谷底自动趋零，落地平稳。Huber 两者兼得。</li>
+    <li><strong>是否容易受离群点影响？</strong>MSE 的最优解是均值，被离群点直接拖走；MAE 的最优解是中位数，几乎不动。</li>
+    <li><strong>类别不均衡时是否被多数类主导？</strong>平均 loss 里 95% 的项来自多数类，梯度自然也是——需要 class weight / Focal / 重采样去改写权重。</li>
+    <li><strong><code>mean</code> 还是 <code>sum</code>？</strong>sum 让梯度尺度 ∝ batch size，等效学习率随 batch 变化；mean 解耦。换 batch size 时这条直接决定要不要重调 lr。</li>
+  </ul>
+
+  <div class="panel">
+    <div class="ptitle">一维优化路径模拟器</div>
+    <div class="pq">这个组件回答：<b>固定学习率下，参数在不同 loss 曲面上如何一步步移动？离群点如何搬走最优点？</b>模型只有一个参数 c（对所有样本统一预测 c），数据为 [0.8, 1.0, 1.1, 1.2, 1.4]，可选加入一个离群点 6.0。点「走一步」或「自动运行」。</div>
+    <div class="controls">
+      <div class="ctl"><label>loss</label><span class="seg" id="c8-loss"><button data-l="mse" class="on">MSE</button><button data-l="mae">MAE</button><button data-l="huber">Huber δ=1</button></span></div>
+      <div class="ctl"><label>离群点 6.0</label><span class="seg" id="c8-out"><button data-o="off" class="on">无</button><button data-o="on">加入 ⚠</button></span></div>
+      <div class="ctl"><label>lr</label><input type="range" id="c8-lr" min="0.02" max="1.2" step="0.02" value="0.3"><span class="chip">lr=<b id="c8-lrv">0.30</b></span></div>
+    </div>
+    <div class="plotbox" id="c8-plot"></div>
+    <div class="readout" id="c8-read"></div>
+    <div class="controls">
+      <button class="btn primary" id="c8-step">▶ 走一步</button>
+      <button class="btn" id="c8-run">⏵ 自动运行 15 步</button>
+      <button class="btn" id="c8-reset">重置 c = 5.5</button>
+    </div>
+    <div class="hint" id="c8-hint"></div>
+  </div>
+
+  <div class="callout key"><span class="tag">观察三件事</span>① MSE + 离群点：谷底从 ≈1.1（均值被拉到 1.92）明显右移，参数被 5 个好样本以外的那 1 个点带偏；MAE 的谷底（中位数）几乎不动。② MAE + 大 lr：谷底附近来回横跳不收敛——梯度不衰减的代价。③ 同样的 lr 在 MSE 的远端可能一步迈过头（梯度太大），在 MAE 上却稳定——loss 形状和 lr 是绑在一起调的。</div>
+</section>
+
+<!-- ============ CH 9 ============ -->
+<section class="chapter" id="ch9">
+  <div class="ch-eyebrow">Chapter 9 · Loss ≠ Metric</div>
+  <h2>损失函数和评估指标为什么经常不一致</h2>
+  <div class="ch-formula">训练用 CE，评估看 Accuracy / F1 / AUC —— 分工，而不是矛盾</div>
+
+  <p class="lede">第 2 章画了概念边界，这一章看它们在数据上如何真的分道扬镳。先给每个常见 metric 一句定性：</p>
+  <ul>
+    <li><strong>Accuracy</strong>：预测对的比例。<em>不可微</em>（argmax 是阶梯函数，几乎处处梯度为 0，没法反向传播），且对类别不均衡不敏感——95:5 的数据上"全预测多数类"就有 95% 准确率。</li>
+    <li><strong>Precision / Recall / F1</strong>：全部<em>依赖阈值</em>。关心"报出来的里面有多少真的"用 Precision，关心"真的里面抓到多少"用 Recall，F1 是两者的调和平均。适合正类稀少、误报/漏报代价不对称的场景。</li>
+    <li><strong>AUC</strong>：把所有阈值扫一遍，衡量"随机取一正一负，正样本得分更高的概率"——它度量<em>排序能力</em>，和概率是否<em>校准</em>无关：把所有概率同乘 0.5，AUC 不变，但概率作为置信度已经不可用。</li>
+    <li><strong>MAE / RMSE</strong>：既能当 loss 也能当 metric，但要说清此刻站在哪一侧：进 <code>backward()</code> 就是训练目标，只进验证报告就是评估口径（RMSE 因单位与 y 一致，报告中比 MSE 直观）。</li>
+  </ul>
+  <p>所以"训练用 Cross Entropy、评估看 Accuracy/F1/AUC"是一种<strong>分工</strong>：CE 提供处处可微、梯度良好的优化面；metric 提供业务能读懂的验收口径。分工的代价就是两者可以不同步——下面三个例子各演示一种脱节。</p>
+
+  <div class="panel">
+    <div class="ptitle">Loss vs Metric 对照器</div>
+    <div class="pq">这个组件回答：<b>同一批预测下，loss 和 metric 什么时候一起动、什么时候各走各的？</b>切换三个场景，拖动滑块。</div>
+    <div class="controls">
+      <span class="seg" id="c9-sc">
+        <button data-s="a" class="on">① loss 降，Accuracy 不动</button>
+        <button data-s="b">② Accuracy 高，校准差</button>
+        <button data-s="c">③ 不均衡下的虚假 Accuracy</button>
+      </span>
+    </div>
+    <div class="controls" id="c9-ctl"></div>
+    <div class="tokrow" id="c9-samples"></div>
+    <div class="readout" id="c9-read"></div>
+    <div class="hint" id="c9-hint"></div>
+  </div>
+
+  <div class="callout key"><span class="tag">实践姿势</span>训练循环里盯 loss（它反映优化是否在推进、有没有数值问题），验证循环里盯 metric（它反映模型是否真的变好），用 <strong>验证集 metric</strong> 做早停和选模型——metric 不可微不妨碍它做这些事，它只是不进 <code>backward()</code>。</div>
+</section>
+
+<!-- ============ CH 10 ============ -->
+<section class="chapter" id="ch10">
+  <div class="ch-eyebrow">Chapter 10 · Practical Rules</div>
+  <h2>工程实践中的选择规则</h2>
+  <div class="ch-formula">默认值 + 例外条款，而不是绝对真理</div>
+
+  <p class="lede">下面是实用但不绝对化的判断规则——每条都是"默认从这里开始，出现某个信号时再换"：</p>
+  <ul>
+    <li><strong>连续值回归</strong>：默认从 <code>MSE</code> 开始（配合目标标准化）；残差分布重尾、离群点明显时换 <code>MAE</code> 或 <code>Huber</code>；需要预测区间时上 Quantile Loss。</li>
+    <li><strong>二分类</strong>:默认单 logit + <code>BCEWithLogitsLoss</code>，别手写 Sigmoid+log。</li>
+    <li><strong>多标签分类</strong>：K 个独立 logits + <code>BCEWithLogitsLoss</code>，远离 Softmax。</li>
+    <li><strong>多分类单标签</strong>：logits + <code>CrossEntropyLoss</code>，标签用 class index。</li>
+    <li><strong>类别不均衡</strong>：按顺序考虑——class weight / <code>pos_weight</code>（最便宜）→ 重采样 → Focal Loss（难例极多时）。同时把 metric 从 Accuracy 换成 F1/AUC/PR-AUC，否则你看不见问题。</li>
+    <li><strong>多任务学习</strong>：objective 是多个 loss 的加权和，第一件事是<strong>对齐各 loss 的尺度</strong>——一个 MSE 数值 1000、一个 CE 数值 0.5，不加权就等于只训练前者。权重可手调，也可用不确定性加权等自动方案。</li>
+    <li><strong>软标签 / 蒸馏 / label smoothing</strong>：先确认目标是"分布"而不是"索引"，再确认 loss API 支持概率标签（PyTorch CE 的 <code>label_smoothing</code> 参数 / 概率 target；蒸馏常用 <code>KLDivLoss</code> + 温度）。</li>
+    <li><strong>序列建模、目标检测、分割</strong>：主 loss 通常仍是 CE/BCE 的变体，重点转移到<strong>mask、<code>ignore_index</code>、类别权重、以及在时间/空间维度上如何 reduction</strong>——按有效 token 数平均还是按序列平均，结果不同。</li>
+    <li><strong>排序 / 相似度 / 度量学习</strong>（边界补充）：当目标是"谁比谁更近/更相关"而非"是什么类"时，进入另一族损失——<code>Contrastive Loss</code>（拉近正对、推开负对到 margin 之外）、<code>Triplet Loss</code>（anchor 距正样本比距负样本近出一个 margin）、<code>MarginRankingLoss</code>（成对排序）。它们优化的是嵌入空间的几何关系，常见于检索、人脸、推荐召回。生成模型的损失（对抗损失、扩散模型的去噪 MSE、语言模型的 next-token CE）同样自成体系，本文不展开——但注意语言模型预训练的核心仍是 Cross Entropy。</li>
+    <li><strong>最后一条元规则</strong>：不要只看训练 loss。同时盯验证集 metric、训练/验证 loss 的裂口（过拟合迹象）和业务指标——loss 只是训练信号，不是验收标准。</li>
+  </ul>
+</section>
+
+<!-- ============ CH 11 ============ -->
+<section class="chapter" id="ch11">
+  <div class="ch-eyebrow">Chapter 11 · Misconceptions</div>
+  <h2>常见误区与反例</h2>
+  <div class="ch-formula">每一条都真实出现在生产代码里 · 点开看为什么错</div>
+
+  <details class="mis"><summary>"loss 就是 metric，反正都是越小越好"</summary><div class="body">loss 是可微的<b>优化目标</b>，metric 是面向业务的<b>评估口径</b>，两者函数形式、计算集合（batch vs 验证集）、用途全都不同。CE 下降 0.3 对应 Accuracy 涨多少？没有固定换算。把日志里的 training loss 当成效果汇报，是最常见的沟通事故。（见第 2、9 章）</div></details>
+  <details class="mis"><summary>"loss 越低,业务效果一定越好"</summary><div class="body">loss 度量的是你写下的训练目标。训练 loss 一路走低可能是过拟合（验证 metric 反而变差）、可能是多数类学得更好而关键少数类毫无起色、也可能业务真正在乎的是排序/校准而 loss 没有覆盖。永远用验证集 metric 和业务指标做最终裁判。</div></details>
+  <details class="mis"><summary>"多分类训练前要先手动 Softmax，再喂给 CrossEntropyLoss"</summary><div class="body">在 PyTorch 等框架里是<b>错误用法</b>：<code>CrossEntropyLoss</code> 内部已含 <code>LogSoftmax</code>，先手动 Softmax 等于归一化两次——loss 仍会下降，但梯度被系统性压扁、模型难以变得自信，坏得非常隐蔽。Keras 则用 <code>from_logits=True/False</code> 显式声明。规则：<b>查清你的 loss API 吃 logits 还是概率</b>。</div></details>
+  <details class="mis"><summary>"二分类必须输出两个类别再 Softmax"</summary><div class="body">不是必需。两类的 Softmax 数学上等价于单 logit 的 Sigmoid，工程上更常见、也更省事的是<b>单 logit + BCEWithLogitsLoss</b>（顺带获得 <code>pos_weight</code> 等不均衡工具）。双输出 + CE 也能用，但没有必要为二分类付出双倍输出。</div></details>
+  <details class="mis"><summary>"MSE 简单，所以分类也优先用 MSE"</summary><div class="body">分类输出的语义是概率。MSE 惩罚封顶（最错也就 1），配上 Sigmoid/Softmax 后在最错的区域梯度饱和趋零——最需要修正的时候信号最弱；而 CE 对"自信但错"给出趋向无穷的惩罚和干净的 <code>p − y</code> 梯度。（第 5 章有交互对比）</div></details>
+  <details class="mis"><summary>"one-hot、class index、概率分布标签可以随便替换"</summary><div class="body">必须匹配 loss API。PyTorch <code>CrossEntropyLoss</code> 默认吃 int64 的 class index；BCE 系吃与输出同 shape 的 float；软标签/one-hot 是否可用取决于框架和版本。格式错了，轻则报错（幸运），重则被广播机制悄悄吞掉、shape 对上了语义全错（不幸）。</div></details>
+  <details class="mis"><summary>"reduction 的 mean 和 sum 只是显示方式不同"</summary><div class="body">它们改变<b>梯度尺度</b>：sum 的梯度是 mean 的 N 倍，batch size 一换，等效学习率跟着换。梯度累积、多卡训练下不对齐 reduction，loss 曲线之间根本不可比。（第 7 章有交互演示）</div></details>
+  <details class="mis"><summary>"padding 位置无所谓，模型会自己学会忽略"</summary><div class="body">只要 padding 参与 loss，它就在产生梯度：模型被迫花容量去"预测 pad"，平均 loss 被无意义项稀释，学习信号被污染。必须用 <code>ignore_index</code> 或 mask 显式排除，并按<b>有效 token 数</b>做平均。（第 7 章有交互演示）</div></details>
+  <details class="mis"><summary>"评估指标不可微，所以没用"</summary><div class="body">不可微只是说它不能直接进 <code>backward()</code>。它照样承担评估、<b>早停、模型选择、超参搜索</b>的裁判角色——这些环节不需要梯度。另外也存在可微代理（soft-F1、pairwise loss 逼近 AUC），是"想优化 metric"时的进阶路线。</div></details>
+  <details class="mis"><summary>"只要换个 loss，训练问题就都能解决"</summary><div class="body">loss 只是训练系统的一个部件。指标不好还可能是：数据/标签噪声、类别分布、采样方式、模型容量与结构、正则化、学习率与调度……换 loss 之前先做误差分析——看看模型到底错在哪一类样本上。</div></details>
+</section>
+
+<!-- ============ CH 12 ============ -->
+<section class="chapter" id="ch12">
+  <div class="ch-eyebrow">Chapter 12 · Minimal Code</div>
+  <h2>最小代码示例</h2>
+  <div class="ch-formula">可以直接粘进 notebook 的骨架 · PyTorch + NumPy</div>
+
+  <h3>12.1 画出损失曲线（NumPy + Matplotlib）</h3>
+  <pre class="code"><code><span class="cm"># MSE / MAE / Huber 随 error 变化；BCE 随预测概率变化</span>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+
+e = np.linspace(-4, 4, 200)
+mse, mae = e**2, np.abs(e)
+d = 1.0
+huber = np.where(np.abs(e) <= d, 0.5*e**2, d*(np.abs(e) - 0.5*d))
+
+p = np.linspace(0.01, 0.99, 200)
+bce_y1 = -np.log(p)          <span class="cm"># y=1 时的 BCE</span>
+bce_y0 = -np.log(1 - p)      <span class="cm"># y=0 时的 BCE</span>
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 3.5))
+ax[0].plot(e, mse, label=<span class="st">"MSE"</span>); ax[0].plot(e, mae, label=<span class="st">"MAE"</span>); ax[0].plot(e, huber, label=<span class="st">"Huber"</span>)
+ax[0].set_xlabel(<span class="st">"error = y_hat - y"</span>); ax[0].legend()
+ax[1].plot(p, bce_y1, label=<span class="st">"BCE, y=1"</span>); ax[1].plot(p, bce_y0, label=<span class="st">"BCE, y=0"</span>)
+ax[1].set_xlabel(<span class="st">"predicted probability p"</span>); ax[1].legend()
+plt.show()</code></pre>
+
+  <h3>12.2 四种任务的输出层 + loss 写法</h3>
+  <pre class="code"><code><span class="kw">import</span> torch, torch.nn <span class="kw">as</span> nn
+
+N, D, K = 32, 16, 5
+x = torch.randn(N, D)
+
+<span class="cm"># ---- 回归：线性输出 + MSE（或 HuberLoss / L1Loss）----</span>
+reg_head  = nn.Linear(D, 1)
+y_reg     = torch.randn(N, 1)                     <span class="cm"># float，shape 与输出对齐</span>
+loss_reg  = nn.MSELoss()(reg_head(x), y_reg)
+
+<span class="cm"># ---- 二分类：单 logit + BCEWithLogitsLoss（内置 Sigmoid + 数值稳定）----</span>
+bin_head  = nn.Linear(D, 1)
+y_bin     = torch.randint(0, 2, (N, 1)).float()   <span class="cm"># 注意：float，不是 int</span>
+loss_bin  = nn.BCEWithLogitsLoss()(bin_head(x), y_bin)
+
+<span class="cm"># ---- 多标签：K 个独立 logits + BCEWithLogitsLoss（禁用 Softmax）----</span>
+ml_head   = nn.Linear(D, K)
+y_ml      = (torch.rand(N, K) > 0.7).float()      <span class="cm"># multi-hot float</span>
+loss_ml   = nn.BCEWithLogitsLoss()(ml_head(x), y_ml)
+
+<span class="cm"># ---- 多分类单标签：K 个 logits + CrossEntropyLoss ----</span>
+mc_head   = nn.Linear(D, K)
+y_mc      = torch.randint(0, K, (N,))             <span class="cm"># class index (int64)，不是 one-hot</span>
+logits    = mc_head(x)
+loss_mc   = nn.CrossEntropyLoss()(logits, y_mc)   <span class="cm"># 接收 raw logits：</span>
+<span class="cm"># 不要写 nn.CrossEntropyLoss()(logits.softmax(-1), y_mc) —— 双重归一化，梯度被压扁</span></code></pre>
+
+  <h3>12.3 reduction 与标签格式</h3>
+  <pre class="code"><code>ce_none = nn.CrossEntropyLoss(reduction=<span class="st">"none"</span>)(logits, y_mc)  <span class="cm"># shape (N,) 逐样本</span>
+ce_mean = nn.CrossEntropyLoss(reduction=<span class="st">"mean"</span>)(logits, y_mc)  <span class="cm"># 标量，= ce_none.mean()</span>
+ce_sum  = nn.CrossEntropyLoss(reduction=<span class="st">"sum"</span> )(logits, y_mc)  <span class="cm"># 标量，= mean × N，梯度也 × N</span>
+
+<span class="cm"># 标签三形态与 API 的匹配（PyTorch >= 1.10 的 CE 也接受概率标签）</span>
+y_idx   = torch.tensor([2, 0, 1])                       <span class="cm"># class index -> CE 默认形态</span>
+y_onehot= nn.functional.one_hot(y_idx, K).float()       <span class="cm"># one-hot   -> CE 的概率形态可用</span>
+y_soft  = torch.tensor([[.05,.05,.8,.05,.05]]*3)        <span class="cm"># soft label -> CE 概率形态 / KLDivLoss</span>
+ce_soft = nn.CrossEntropyLoss(label_smoothing=0.1)      <span class="cm"># 或者直接让 API 做 smoothing</span></code></pre>
+
+  <h3>12.4 序列任务：ignore_index / mask</h3>
+  <pre class="code"><code>PAD = 0
+<span class="cm"># logits: (N, T, V)  targets: (N, T)，padding 位置填 PAD</span>
+loss_fn = nn.CrossEntropyLoss(ignore_index=PAD)          <span class="cm"># pad 位置不产生 loss 与梯度</span>
+loss    = loss_fn(logits_seq.reshape(-1, V), targets.reshape(-1))
+
+<span class="cm"># 等价的手动 mask 写法（按"有效 token 数"平均，这一步是关键）：</span>
+raw  = nn.CrossEntropyLoss(reduction=<span class="st">"none"</span>)(logits_seq.reshape(-1, V), targets.reshape(-1))
+mask = (targets.reshape(-1) != PAD).float()
+loss = (raw * mask).sum() / mask.sum()</code></pre>
+
+  <h3>12.5 loss 下降但 Accuracy 暂时不变</h3>
+  <pre class="code"><code><span class="cm"># 三个样本，argmax 全对；把 logits 整体放大（更自信），CE 降、Accuracy 不变</span>
+y      = torch.tensor([0, 1, 1])
+logits = torch.tensor([[1.2, 0.8], [0.3, 0.9], [0.1, 0.6]])
+<span class="kw">for</span> t <span class="kw">in</span> [1.0, 2.0, 4.0]:
+    ce  = nn.CrossEntropyLoss()(logits * t, y).item()
+    acc = (logits.argmax(-1) == y).float().mean().item()
+    <span class="fn">print</span>(f<span class="st">"scale={t}: CE={ce:.3f}, Acc={acc:.0%}"</span>)
+<span class="cm"># scale=1.0: CE=0.556, Acc=100%</span>
+<span class="cm"># scale=2.0: CE=0.437, Acc=100%   <- loss 一直在降</span>
+<span class="cm"># scale=4.0: CE=0.301, Acc=100%   <- metric 一格没动</span></code></pre>
+</section>
+
+<!-- ============ CHEAT SHEET ============ -->
+<section class="chapter" id="cheat">
+  <div class="ch-eyebrow">Appendix · Cheat Sheet</div>
+  <h2>损失函数选择速查表</h2>
+  <div class="table-scroll"><table>
+    <tr><th>场景信号</th><th>输出层</th><th>推荐 loss</th><th>标签格式</th><th>常配 metric</th><th>第一个要检查的坑</th></tr>
+    <tr><td>连续值回归（干净数据）</td><td>Linear</td><td><code>MSELoss</code></td><td>float</td><td>RMSE / MAE / R²</td><td>目标没标准化，梯度尺度失控</td></tr>
+    <tr><td>回归 + 明显离群点</td><td>Linear</td><td><code>HuberLoss</code> / <code>L1Loss</code></td><td>float</td><td>MAE / 分位数误差</td><td>Huber 的 δ 没按残差量级设</td></tr>
+    <tr><td>需要预测区间</td><td>Linear × 多个 τ</td><td>Quantile / Pinball</td><td>float</td><td>分位数覆盖率</td><td>各分位数交叉（quantile crossing）</td></tr>
+    <tr><td>二分类</td><td>1 logit</td><td><code>BCEWithLogitsLoss</code></td><td>float 0./1.</td><td>F1 / AUC / PR-AUC</td><td>标签 int 或 shape 广播错位</td></tr>
+    <tr><td>多标签分类</td><td>K logits</td><td><code>BCEWithLogitsLoss</code></td><td>multi-hot float</td><td>per-label F1 / mAP</td><td>误用 Softmax 使标签互斥</td></tr>
+    <tr><td>多分类单标签</td><td>K logits</td><td><code>CrossEntropyLoss</code></td><td>class index int64</td><td>Accuracy / macro-F1</td><td>手动 Softmax 后再喂 CE</td></tr>
+    <tr><td>类别不均衡</td><td>同上</td><td>+ class weight / <code>pos_weight</code> / Focal</td><td>同上</td><td>F1 / AUC（弃 Accuracy）</td><td>metric 还在看 Accuracy</td></tr>
+    <tr><td>软标签 / 蒸馏 / smoothing</td><td>K logits</td><td>CE(概率 target) / <code>KLDivLoss</code></td><td>概率分布 float</td><td>Accuracy + 校准误差</td><td>API 不支持概率标签</td></tr>
+    <tr><td>序列生成 / 标注</td><td>(T, V) logits</td><td>CE + <code>ignore_index</code></td><td>index，pad 填 ignore 值</td><td>ppl / BLEU / F1</td><td>padding 参与了 loss</td></tr>
+    <tr><td>检索 / 相似度 / 度量学习</td><td>embedding</td><td>Contrastive / Triplet / MarginRanking</td><td>成对 / 三元组</td><td>Recall@K / mAP</td><td>负样本太容易，loss 早早为 0</td></tr>
+  </table></div>
+  <div class="callout key"><span class="tag">收尾的一句话</span>选损失函数的完整问题从来不是"哪个公式最好"，而是：<strong>输出的语义是什么 → 用哪个分布/距离度量差距 → 梯度行为是否匹配数据特点 → API、标签格式、reduction、mask 是否对齐 → 用什么 metric 验收</strong>。这条链每一环，本文都有对应章节。</div>
+</section>
+
+<!-- ============ QUIZ ============ -->
+<section class="chapter" id="quiz">
+  <div class="ch-eyebrow">Self Check · 自检卡片</div>
+  <h2>做五道题，检查心智模型</h2>
+  <div id="quizbox"></div>
+</section>
+
+</div><!-- /wrap -->
+
+<footer><div class="wrap">
+  <div class="f-formula">θ ← θ − lr · ∂loss/∂θ</div>
+  <p>《一文读懂损失函数》——单文件交互式自学文档。所有图表离线渲染，无外部依赖。拖过每一个滑块，你对损失函数的理解就闭环了。</p>
+</div></footer>
+
+<style>
+@media (max-width:700px){
+  #c1-grid,#c3-grid,#c5-grid{grid-template-columns:1fr!important}
+}
+</style>
+
+<script>
+"use strict";
+/* ============ helpers ============ */
+const $=id=>document.getElementById(id);
+const fmt=(x,d=2)=>{ if(!isFinite(x)) return x>0?"+∞":(x<0?"−∞":"NaN"); return (+x).toFixed(d); };
+const sig=z=>1/(1+Math.exp(-z));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function softmax(z){ const m=Math.max(...z); const e=z.map(v=>Math.exp(v-m)); const s=e.reduce((a,b)=>a+b,0); return e.map(v=>v/s); }
+function logsumexp(z){ const m=Math.max(...z); return m+Math.log(z.reduce((a,v)=>a+Math.exp(v-m),0)); }
+/* regression losses & grads (e = yhat - y) */
+const L={ mse:e=>e*e, mae:e=>Math.abs(e),
+  huber:(e,d=1)=>Math.abs(e)<=d?0.5*e*e:d*(Math.abs(e)-0.5*d) };
+const G={ mse:e=>2*e, mae:e=>Math.sign(e),
+  huber:(e,d=1)=>Math.abs(e)<=d?e:d*Math.sign(e) };
+/* stable BCE with logits: y in {0,1} */
+const bceZ=(z,y)=>Math.max(z,0)-z*y+Math.log(1+Math.exp(-Math.abs(z)));
+const CLR={loss:"#D64533",pred:"#2E6FDB",grad:"#0E8A6C",target:"#C27400"};
+const REDUCED=(typeof window.matchMedia==="function")&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let MKID=0;
+
+/* ============ SVG plot ============ */
+function plot(cfg){
+  const W=cfg.w||560,H=cfg.h||270,P=36;
+  const {xmin,xmax}=cfg; let {ymin,ymax}=cfg;
+  if(ymin===undefined||ymax===undefined){
+    let lo=1e9,hi=-1e9;
+    (cfg.curves||[]).forEach(c=>{ for(let i=0;i<=160;i++){const x=xmin+(xmax-xmin)*i/160;const v=c.f(x);if(isFinite(v)){lo=Math.min(lo,v);hi=Math.max(hi,v);}}});
+    if(ymin===undefined)ymin=Math.min(0,lo); if(ymax===undefined)ymax=hi*1.06+1e-9;
+  }
+  const dark=cfg.dark;
+  const gridC=dark?"rgba(232,239,234,.10)":"rgba(28,39,51,.08)";
+  const axC=dark?"#4E6A7C":"#9AA8B2", txC=dark?"#9FB4AC":"#5E6E7C";
+  const sx=x=>P+(x-xmin)/(xmax-xmin)*(W-2*P);
+  const sy=y=>H-P-(y-ymin)/(ymax-ymin)*(H-2*P);
+  const cy=v=>clamp(v,ymin,ymax);
+  const id=++MKID;
+  let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img">`;
+  s+=`<defs><marker id="ar${id}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="${CLR.grad}"/></marker></defs>`;
+  for(let i=1;i<5;i++){ const gx=P+(W-2*P)*i/5, gy=P+(H-2*P)*i/5;
+    s+=`<line x1="${gx}" y1="${P}" x2="${gx}" y2="${H-P}" stroke="${gridC}"/><line x1="${P}" y1="${gy}" x2="${W-P}" y2="${gy}" stroke="${gridC}"/>`; }
+  const x0=(0>=ymin&&0<=ymax)?sy(0):sy(ymin);
+  s+=`<line x1="${P}" y1="${x0}" x2="${W-P}" y2="${x0}" stroke="${axC}" stroke-width="1.2"/>`;
+  const yax=(0>=xmin&&0<=xmax)?sx(0):sx(xmin);
+  s+=`<line x1="${yax}" y1="${P}" x2="${yax}" y2="${H-P}" stroke="${axC}" stroke-width="1.2"/>`;
+  s+=`<text x="${W-P}" y="${x0+16}" font-size="11" font-family="ui-monospace,monospace" fill="${txC}" text-anchor="end">${cfg.xlabel||""}</text>`;
+  s+=`<text x="${P}" y="${P-10}" font-size="11" font-family="ui-monospace,monospace" fill="${txC}">${cfg.ylabel||""}</text>`;
+  [xmin,xmax].forEach(v=>{ s+=`<text x="${sx(v)}" y="${x0+14}" font-size="10" font-family="ui-monospace,monospace" fill="${txC}" text-anchor="middle">${fmt(v,1)}</text>`; });
+  s+=`<text x="${yax-5}" y="${sy(ymax)+4}" font-size="10" font-family="ui-monospace,monospace" fill="${txC}" text-anchor="end">${fmt(ymax,1)}</text>`;
+  (cfg.vlines||[]).forEach(v=>{
+    s+=`<line x1="${sx(v.x)}" y1="${P}" x2="${sx(v.x)}" y2="${H-P}" stroke="${v.color||CLR.target}" stroke-dasharray="4 4" stroke-width="1.4"/>`;
+    if(v.label)s+=`<text x="${sx(v.x)+5}" y="${P+12}" font-size="11" font-family="ui-monospace,monospace" fill="${v.color||CLR.target}">${v.label}</text>`;
+  });
+  (cfg.curves||[]).forEach(c=>{
+    let d="",pen=false;
+    for(let i=0;i<=200;i++){ const x=xmin+(xmax-xmin)*i/200; const v=c.f(x);
+      if(!isFinite(v)||v>ymax*1.5||v<ymin-(ymax-ymin)*.5){pen=false;continue;}
+      const X=sx(x),Y=sy(cy(v)); d+=(pen?"L":"M")+X.toFixed(1)+" "+Y.toFixed(1); pen=true; }
+    s+=`<path d="${d}" fill="none" stroke="${c.color}" stroke-width="${c.width||2.4}" ${c.dash?`stroke-dasharray="${c.dash}"`:""} stroke-linejoin="round"/>`;
+  });
+  if(cfg.tan){ const t=cfg.tan,dx=(xmax-xmin)*0.09;
+    const y1=cy(t.y-t.g*dx),y2=cy(t.y+t.g*dx);
+    s+=`<line x1="${sx(t.x-dx)}" y1="${sy(y1)}" x2="${sx(t.x+dx)}" y2="${sy(y2)}" stroke="${CLR.grad}" stroke-width="1.6" stroke-dasharray="3 4" opacity=".9"/>`;
+    if(Math.abs(t.g)>1e-3){ const dir=-Math.sign(t.g), len=clamp(Math.abs(t.g)*14,16,52);
+      s+=`<line x1="${sx(t.x)}" y1="${sy(t.y)}" x2="${sx(t.x)+dir*len}" y2="${sy(t.y)}" stroke="${CLR.grad}" stroke-width="2.4" marker-end="url(#ar${id})"/>`;
+      s+=`<text x="${sx(t.x)+dir*len*0.5}" y="${sy(t.y)-9}" font-size="10.5" font-family="ui-monospace,monospace" fill="${CLR.grad}" text-anchor="middle">descent</text>`; }
+  }
+  (cfg.points||[]).forEach(p=>{
+    s+=`<circle cx="${sx(p.x)}" cy="${sy(cy(p.y))}" r="${p.r||6}" fill="${p.color}" stroke="${dark?"#0F1B26":"#fff"}" stroke-width="2"/>`;
+    if(p.label)s+=`<text x="${sx(p.x)}" y="${sy(cy(p.y))-11}" font-size="11" font-family="ui-monospace,monospace" fill="${p.color}" text-anchor="middle" font-weight="700">${p.label}</text>`;
+  });
+  return s+"</svg>";
+}
+function segWire(el,attr,fn){ el.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ if(b.disabled)return;
+  el.querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); fn(b.dataset[attr]); })); }
+function segSet(el,attr,val){ el.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset[attr]===val)); }
+function bar(label,val,max,color,striped,valTxt){
+  const h=Math.max(3,val/max*100);
+  const bg=striped?`repeating-linear-gradient(45deg,${color},${color} 5px,#fff0 5px,#fff0 9px)`:color;
+  return `<div class="bar"><span class="val">${valTxt??fmt(val,2)}</span><div class="col" style="height:${h}%;background:${bg}"></div><span class="lab">${label}</span></div>`;
+}
+
+/* ============ HERO simulator ============ */
+const S0={task:"reg",loss:"mse",y:1,yhat:-1.5,z:-2,ybin:1,lr:0.4,
+  ml:{y:[1,0,1],z:[-1.2,1.8,0.6]}, mc:{z:[2.2,0.4,-0.8,0.1],t:1}};
+const S0AVAIL={reg:["mse","mae","huber"],bin:["bce"],ml:["bce"],mc:["ce"]};
+
+function s0BuildML(){
+  const box=$("s0-ctl-ml"); let h="";
+  for(let i=0;i<3;i++){
+    h+=`<div class="ctl" style="flex-wrap:wrap"><label>标签${i+1}</label>
+      <span class="seg s0-mly" data-i="${i}"><button data-y="1">y=1</button><button data-y="0">y=0</button></span>
+      <label>logit z${i+1}</label><input type="range" class="s0-mlz" data-i="${i}" min="-5" max="5" step="0.1" value="${S0.ml.z[i]}">
+      <span class="chip c-pred" id="s0-mlv-${i}"></span></div>`;
+  }
+  box.innerHTML=h;
+  box.querySelectorAll(".s0-mly").forEach(seg=>{ const i=+seg.dataset.i; segSet(seg,"y",String(S0.ml.y[i]));
+    segWire(seg,"y",v=>{S0.ml.y[i]=+v;s0Render();}); });
+  box.querySelectorAll(".s0-mlz").forEach(r=>r.addEventListener("input",()=>{S0.ml.z[+r.dataset.i]=+r.value;s0Render();}));
+}
+function s0BuildMC(){
+  const box=$("s0-ctl-mc"); const names=["A","B","C","D"]; let h="";
+  for(let i=0;i<4;i++){
+    h+=`<div class="ctl"><label>logit ${names[i]}</label><input type="range" class="s0-mcz" data-i="${i}" min="-4" max="6" step="0.1" value="${S0.mc.z[i]}"><span class="chip" id="s0-mcv-${i}"></span></div>`;
+  }
+  h+=`<div class="ctl"><label>正确类别</label><span class="seg" id="s0-mct">${names.map((n,i)=>`<button data-t="${i}">${n}</button>`).join("")}</span></div>`;
+  box.innerHTML=h;
+  box.querySelectorAll(".s0-mcz").forEach(r=>r.addEventListener("input",()=>{S0.mc.z[+r.dataset.i]=+r.value;s0Render();}));
+  const seg=$("s0-mct"); segSet(seg,"t",String(S0.mc.t)); segWire(seg,"t",v=>{S0.mc.t=+v;s0Render();});
+}
+function s0SyncSliders(){
+  $("s0-y").value=S0.y; $("s0-yhat").value=S0.yhat; $("s0-z").value=S0.z; $("s0-lr").value=S0.lr;
+  document.querySelectorAll(".s0-mlz").forEach(r=>r.value=S0.ml.z[+r.dataset.i]);
+  document.querySelectorAll(".s0-mcz").forEach(r=>r.value=S0.mc.z[+r.dataset.i]);
+}
+function s0Render(){
+  const t=S0.task;
+  ["reg","bin","ml","mc"].forEach(k=>{$("s0-ctl-"+k).style.display=(k===t)?"":"none";});
+  const avail=S0AVAIL[t]; if(!avail.includes(S0.loss))S0.loss=avail[0];
+  $("s0-loss").querySelectorAll("button").forEach(b=>{ b.disabled=!avail.includes(b.dataset.l); b.classList.toggle("on",b.dataset.l===S0.loss); });
+  segSet($("s0-task"),"t",t);
+  $("s0-lrv").textContent=fmt(S0.lr,2);
+  const R=$("s0-read"),PL=$("s0-plot"),HN=$("s0-hint");
+  const noteTheta="在真实网络里，「update parameters」指调整权重 θ 让输出朝梯度反方向移动；这里直接把输出当作可调参数，机制一样。";
+
+  if(t==="reg"){
+    $("s0-yv").textContent=fmt(S0.y,1); $("s0-yhv").textContent=fmt(S0.yhat,1);
+    const f=e=>L[S0.loss](e), g=e=>G[S0.loss](e);
+    const lv=f(S0.yhat-S0.y), gv=g(S0.yhat-S0.y);
+    PL.innerHTML=plot({dark:1,xmin:-4,xmax:4,xlabel:"ŷ",ylabel:"loss(ŷ)",
+      curves:[{f:x=>f(x-S0.y),color:CLR.loss}],
+      vlines:[{x:S0.y,label:"y (target)"}],
+      points:[{x:S0.yhat,y:lv,color:CLR.pred,label:"ŷ"}],
+      tan:{x:S0.yhat,y:lv,g:gv}});
+    const nyh=S0.yhat-S0.lr*gv;
+    R.innerHTML=`<span class="chip c-loss">loss=<b>${fmt(lv)}</b></span>
+      <span class="chip c-grad">∂loss/∂ŷ=<b>${fmt(gv)}</b></span>
+      <span class="chip c-pred">一步更新后 ŷ: <b>${fmt(S0.yhat,2)} → ${fmt(nyh,2)}</b></span>`;
+    HN.innerHTML=(Math.abs(gv)<1e-6?"梯度为 0：ŷ 已落在 y 上，模型不再收到修正信号。":
+      `梯度为${gv>0?"正":"负"} → 说明增大 ŷ 会${gv>0?"增大":"减小"} loss → 更新沿反方向把 ŷ 往${gv>0?"小":"大"}调，<b>向 y 靠近</b>。`)+" "+noteTheta;
+  }
+  else if(t==="bin"){
+    segSet($("s0-biny"),"y",String(S0.ybin));
+    $("s0-zv").textContent=fmt(S0.z,1); $("s0-pv").textContent=fmt(sig(S0.z),2);
+    const y=S0.ybin, lv=bceZ(S0.z,y), gv=sig(S0.z)-y;
+    PL.innerHTML=plot({dark:1,xmin:-6,xmax:6,xlabel:"logit z",ylabel:"BCE(z)",
+      curves:[{f:z=>bceZ(z,y),color:CLR.loss}],
+      points:[{x:S0.z,y:lv,color:CLR.pred,label:"z"}], tan:{x:S0.z,y:lv,g:gv}});
+    R.innerHTML=`<span class="chip c-pred">p=σ(z)=<b>${fmt(sig(S0.z),3)}</b></span>
+      <span class="chip c-loss">BCE=<b>${fmt(lv)}</b></span>
+      <span class="chip c-grad">∂loss/∂z = p − y = <b>${fmt(gv,3)}</b></span>
+      <span class="chip">一步更新后 z: <b>${fmt(S0.z,2)} → ${fmt(S0.z-S0.lr*gv,2)}</b></span>`;
+    HN.innerHTML=`注意梯度就是 <code>p − y</code>：预测概率离标签多远，修正信号就多强，且绝不超过 ±1。当前${(y===1?sig(S0.z)<0.5:sig(S0.z)>0.5)?"模型押错了边，曲线这一侧越走越陡":"模型押对了边，loss 正滑向 0"}。`+noteTheta;
+  }
+  else if(t==="ml"){
+    document.querySelectorAll(".s0-mly").forEach(seg=>segSet(seg,"y",String(S0.ml.y[+seg.dataset.i])));
+    let tot=0; const pts=[];
+    for(let i=0;i<3;i++){ const y=S0.ml.y[i],z=S0.ml.z[i],p=sig(z),l=bceZ(z,y); tot+=l;
+      $("s0-mlv-"+i).innerHTML=`p=<b>${fmt(p,2)}</b> · BCE=<b>${fmt(l,2)}</b> · grad=<b>${fmt(p-y,2)}</b>`;
+      pts.push({x:z,y:l,color:y===1?CLR.pred:CLR.target,label:"z"+(i+1)}); }
+    tot/=3;
+    PL.innerHTML=plot({dark:1,xmin:-5,xmax:5,ymax:5.4,xlabel:"每个标签自己的 logit",ylabel:"BCE",
+      curves:[{f:z=>bceZ(z,1),color:CLR.pred},{f:z=>bceZ(z,0),color:CLR.target,dash:"6 5"}],
+      points:pts});
+    R.innerHTML=`<span class="chip c-loss">total loss = mean(BCE₁..₃) = <b>${fmt(tot)}</b></span>`;
+    HN.innerHTML=`实线是 y=1 标签的 BCE 曲线，虚线是 y=0 的——<b>每个标签独立地滑向自己曲线的低处</b>，互不竞争、概率不要求加和为 1。这就是多标签 = K 个并联的二分类。`+noteTheta;
+  }
+  else{
+    const names=["A","B","C","D"], z=S0.mc.z, tt=S0.mc.t, p=softmax(z);
+    for(let i=0;i<4;i++)$("s0-mcv-"+i).innerHTML=`z=<b>${fmt(z[i],1)}</b> → p=<b>${fmt(p[i],2)}</b>${i===tt?" ★":""}`;
+    segSet($("s0-mct"),"t",String(tt));
+    const lv=logsumexp(z)-z[tt], gv=p[tt]-1;
+    const f=zt=>{const zz=z.slice();zz[tt]=zt;return logsumexp(zz)-zt;};
+    PL.innerHTML=plot({dark:1,xmin:-4,xmax:6,xlabel:"正确类别的 logit z_"+names[tt],ylabel:"CrossEntropy",
+      curves:[{f,color:CLR.loss}],
+      points:[{x:z[tt],y:lv,color:CLR.pred,label:"z_"+names[tt]}], tan:{x:z[tt],y:lv,g:gv}});
+    R.innerHTML=`<span class="chip c-pred">p(正确类 ${names[tt]})=<b>${fmt(p[tt],3)}</b></span>
+      <span class="chip c-loss">CE = −log p = <b>${fmt(lv)}</b></span>
+      <span class="chip c-grad">∂CE/∂z_${names[tt]} = p−1 = <b>${fmt(gv,3)}</b></span>
+      <span class="chip">其余类梯度 = 各自的 pᵢ（被压低）</span>`;
+    HN.innerHTML=`一步更新会把正确类 logit 推高 <code>lr·(1−p)</code>、其余类各压低 <code>lr·pᵢ</code>——Softmax 的归一化让"抬高正确类"和"压低错误类"变成同一件事。`+noteTheta;
+  }
+}
+function s0Step(){
+  const lr=S0.lr,t=S0.task;
+  if(t==="reg")S0.yhat=clamp(S0.yhat-lr*G[S0.loss](S0.yhat-S0.y),-4,4);
+  else if(t==="bin")S0.z=clamp(S0.z-lr*(sig(S0.z)-S0.ybin),-6,6);
+  else if(t==="ml")for(let i=0;i<3;i++)S0.ml.z[i]=clamp(S0.ml.z[i]-lr*(sig(S0.ml.z[i])-S0.ml.y[i]),-5,5);
+  else{const p=softmax(S0.mc.z);for(let i=0;i<4;i++)S0.mc.z[i]=clamp(S0.mc.z[i]-lr*(p[i]-(i===S0.mc.t?1:0)),-4,6);}
+  s0SyncSliders(); s0Render();
+}
+segWire($("s0-task"),"t",v=>{S0.task=v;s0Render();});
+segWire($("s0-loss"),"l",v=>{S0.loss=v;s0Render();});
+segWire($("s0-biny"),"y",v=>{S0.ybin=+v;s0Render();});
+$("s0-y").addEventListener("input",e=>{S0.y=+e.target.value;s0Render();});
+$("s0-yhat").addEventListener("input",e=>{S0.yhat=+e.target.value;s0Render();});
+$("s0-z").addEventListener("input",e=>{S0.z=+e.target.value;s0Render();});
+$("s0-lr").addEventListener("input",e=>{S0.lr=+e.target.value;s0Render();});
+$("s0-step").addEventListener("click",s0Step);
+$("s0-reset").addEventListener("click",()=>{Object.assign(S0,{y:1,yhat:-1.5,z:-2,ybin:1,lr:0.4});S0.ml={y:[1,0,1],z:[-1.2,1.8,0.6]};S0.mc={z:[2.2,0.4,-0.8,0.1],t:1};s0SyncSliders();s0Render();});
+s0BuildML(); s0BuildMC(); s0Render();
+
+/* ============ CH1 bars ============ */
+function c1Render(){
+  const e=+$("c1-e").value,p=+$("c1-p").value;
+  $("c1-ev").textContent=fmt(e,1); $("c1-pv").textContent=fmt(p,2);
+  const rl=[["MSE",L.mse(e),CLR.loss],["MAE",L.mae(e),CLR.pred],["Huber",L.huber(e),CLR.grad]];
+  const rg=[["|∂|MSE",Math.abs(G.mse(e)),CLR.loss],["|∂|MAE",Math.abs(G.mae(e)),CLR.pred],["|∂|Huber",Math.abs(G.huber(e)),CLR.grad]];
+  const m1=Math.max(...rl.map(x=>x[1]),...rg.map(x=>x[1]),1e-6);
+  $("c1-bars-reg").innerHTML=rl.map(x=>bar(x[0],x[1],m1,x[2])).join("")+rg.map(x=>bar(x[0],x[1],m1,x[2],1)).join("");
+  const ce=-Math.log(p),msep=(p-1)*(p-1);
+  const gce=Math.abs(p-1),gmse=Math.abs(2*(p-1)*p*(1-p));
+  const m2=Math.max(ce,msep,gce,gmse,1e-6);
+  $("c1-bars-cls").innerHTML=bar("CE loss",ce,m2,CLR.loss)+bar("MSE loss",msep,m2,CLR.pred)+bar("|∂CE/∂z|",gce,m2,CLR.loss,1)+bar("|∂MSE/∂z|",gmse,m2,CLR.pred,1);
+  $("c1-hint").innerHTML=`当前 e=${fmt(e,1)}：MSE 的 loss 是 MAE 的 <b>${fmt(L.mse(e)/Math.max(L.mae(e),1e-9),1)}倍</b>，梯度是 <b>${fmt(Math.abs(G.mse(e)),1)} vs 1</b>——同一个错误，模型收到的修正力度完全不同。分类侧：p=${fmt(p,2)} 时 CE 给的梯度是 MSE 路径的 <b>${fmt(gce/Math.max(gmse,1e-9),1)}倍</b>，p 越接近 0（自信地错），差距越悬殊。`;
+}
+["c1-e","c1-p"].forEach(id=>$(id).addEventListener("input",c1Render)); c1Render();
+
+/* ============ CH3 comparator ============ */
+function c3Render(){
+  const e=+$("c3-e").value,d=+$("c3-d").value;
+  $("c3-ev").textContent=fmt(e,2); $("c3-dv").textContent=fmt(d,1);
+  $("c3-plot-loss").innerHTML=plot({xmin:-4,xmax:4,ymax:16,xlabel:"e",ylabel:"loss",
+    curves:[{f:L.mse,color:CLR.loss},{f:L.mae,color:CLR.pred},{f:x=>L.huber(x,d),color:CLR.grad}],
+    vlines:[{x:d,color:"#B9C2B4",label:"δ"},{x:-d,color:"#B9C2B4"}],
+    points:[{x:e,y:L.mse(e),color:CLR.loss,r:5},{x:e,y:L.mae(e),color:CLR.pred,r:5},{x:e,y:L.huber(e,d),color:CLR.grad,r:5}]});
+  $("c3-plot-grad").innerHTML=plot({xmin:-4,xmax:4,ymin:-8,ymax:8,xlabel:"e",ylabel:"∂L/∂ŷ",
+    curves:[{f:G.mse,color:CLR.loss},{f:G.mae,color:CLR.pred},{f:x=>G.huber(x,d),color:CLR.grad}],
+    points:[{x:e,y:G.mse(e),color:CLR.loss,r:5},{x:e,y:G.mae(e),color:CLR.pred,r:5},{x:e,y:G.huber(e,d),color:CLR.grad,r:5}]});
+  $("c3-read").innerHTML=`<span class="chip c-loss">MSE: loss=<b>${fmt(L.mse(e))}</b>, grad=<b>${fmt(G.mse(e))}</b></span>
+    <span class="chip c-pred">MAE: loss=<b>${fmt(L.mae(e))}</b>, grad=<b>${fmt(G.mae(e))}</b></span>
+    <span class="chip c-grad">Huber: loss=<b>${fmt(L.huber(e,d))}</b>, grad=<b>${fmt(G.huber(e,d))}</b>（封顶 ±${fmt(d,1)}）</span>`;
+}
+["c3-e","c3-d"].forEach(id=>$(id).addEventListener("input",c3Render)); c3Render();
+
+/* ============ CH3 outlier ============ */
+let c3oLoss="mse";
+function c3oRender(){
+  const e6=+$("c3o-e").value; $("c3o-ev").textContent=fmt(e6,1);
+  const es=[0.5,-0.8,1.0,-0.3,0.7,e6];
+  const f=e=>c3oLoss==="huber"?L.huber(e,1):L[c3oLoss](e);
+  const ls=es.map(f), tot=ls.reduce((a,b)=>a+b,0), share=ls[5]/tot*100;
+  const m=Math.max(...ls);
+  $("c3o-bars").innerHTML=ls.map((l,i)=>bar(`e=${fmt(es[i],1)}${i===5?" ⚠":""}`,l,m,i===5?CLR.loss:CLR.pred,0,fmt(l,1))).join("");
+  $("c3o-read").innerHTML=`<span class="chip c-loss">mean loss=<b>${fmt(tot/6)}</b></span><span class="chip">离群点占总 loss 的 <b>${fmt(share,0)}%</b></span>`;
+  $("c3o-hint").innerHTML=c3oLoss==="mse"
+    ?`MSE 把 e=${fmt(e6,1)} 平方成 ${fmt(ls[5],1)}——一个点吃掉 <b>${fmt(share,0)}%</b> 的 loss，梯度自然也被它主导：模型会牺牲另外 5 个样本去讨好它。`
+    :c3oLoss==="mae"
+    ?`MAE 只线性计账，离群点占比降到 <b>${fmt(share,0)}%</b>；更关键的是它的梯度和普通样本一样是 ±1，<b>话语权被拉平了</b>。`
+    :`Huber 在 |e|≤1 内按二次方、之外按线性计账，离群点占 <b>${fmt(share,0)}%</b>，梯度被封顶在 ±δ——既保住小误差区的平滑收敛，又给离群点限了流。`;
+}
+segWire($("c3o-loss"),"l",v=>{c3oLoss=v;c3oRender();});
+$("c3o-e").addEventListener("input",c3oRender); c3oRender();
+
+/* ============ CH3 scale ============ */
+function c3sRender(u){
+  const k=u==="km"?1:1000, y=3.2*k, yh=3.52*k, e=yh-y;
+  $("c3s-read").innerHTML=`<span class="chip c-target">y=<b>${fmt(y,u==="km"?2:0)} ${u}</b></span>
+    <span class="chip c-pred">ŷ=<b>${fmt(yh,u==="km"?2:0)} ${u}</b>（高估 10%）</span>
+    <span class="chip c-loss">MSE=<b>${u==="km"?fmt(e*e,3):fmt(e*e,0)}</b></span>
+    <span class="chip c-grad">MSE 梯度 2e=<b>${fmt(2*e,u==="km"?2:0)}</b></span>
+    <span class="chip">MAE=<b>${fmt(Math.abs(e),u==="km"?2:0)}</b></span>`;
+}
+segWire($("c3s-unit"),"u",c3sRender); c3sRender("km");
+
+/* ============ CH4 BCE ============ */
+let c4bY=1;
+function c4bRender(){
+  const p=+$("c4b-p").value; $("c4b-pv").textContent=fmt(p,2);
+  const f=x=>c4bY===1?-Math.log(x):-Math.log(1-x);
+  const lv=f(p);
+  $("c4b-plot").innerHTML=plot({xmin:0,xmax:1,ymax:5,xlabel:"p（预测的正类概率）",ylabel:"BCE",
+    curves:[{f,color:CLR.loss}],
+    vlines:[{x:0.5,color:"#B9C2B4",label:"p=0.5"}],
+    points:[{x:p,y:lv,color:CLR.pred,label:"p"}]});
+  const z=Math.log(p/(1-p));
+  $("c4b-read").innerHTML=`<span class="chip c-loss">BCE=<b>${fmt(lv)}</b></span>
+    <span class="chip c-grad">∂loss/∂z = p − y = <b>${fmt(p-c4bY,3)}</b></span>
+    <span class="chip">等效 logit z=<b>${fmt(z,1)}</b></span>`;
+  const right=c4bY===1?p:1-p;
+  $("c4b-hint").innerHTML=right>0.85?`给正确一侧 ${fmt(right,2)} 的概率：loss≈${fmt(lv,2)}，接近 0——继续变自信的收益已经很小（曲线在这端很平）。`
+    :right>0.4?`p 在 0.5 附近："不知道"的状态，loss≈${fmt(lv,2)}（≈log 2=0.69），梯度中等，模型被温和地推向正确一侧。`
+    :`自信但错误：给正确一侧只留 ${fmt(right,2)} 的概率，loss 冲到 ${fmt(lv,2)}——曲线在这一端近乎垂直，−log 对"押错边的自信"施加趋向无穷的惩罚。`;
+}
+segWire($("c4b-y"),"y",v=>{c4bY=+v;c4bRender();});
+$("c4b-p").addEventListener("input",c4bRender); c4bRender();
+
+/* ============ CH4 multiclass editor ============ */
+const C4M={z:[1.0,2.4,-0.5,0.2],t:1};
+function c4mBuild(){
+  const names=["A","B","C","D"]; let h="";
+  for(let i=0;i<4;i++)h+=`<div class="ctl"><label>logit ${names[i]}</label><input type="range" class="c4m-z" data-i="${i}" min="-4" max="8" step="0.1" value="${C4M.z[i]}"><span class="chip" id="c4m-zv-${i}"></span></div>`;
+  $("c4m-sliders").innerHTML=h;
+  document.querySelectorAll(".c4m-z").forEach(r=>r.addEventListener("input",()=>{C4M.z[+r.dataset.i]=+r.value;c4mRender();}));
+}
+function c4mSync(){document.querySelectorAll(".c4m-z").forEach(r=>r.value=C4M.z[+r.dataset.i]);}
+function c4mRender(){
+  const names=["A","B","C","D"],p=softmax(C4M.z),t=C4M.t;
+  segSet($("c4m-t"),"t",String(t));
+  for(let i=0;i<4;i++)$("c4m-zv-"+i).innerHTML=`z=<b>${fmt(C4M.z[i],1)}</b>`;
+  const ce=logsumexp(C4M.z)-C4M.z[t];
+  $("c4m-bars").innerHTML=p.map((v,i)=>bar(`${names[i]}${i===t?" ★target":""}`,v,1,i===t?CLR.target:CLR.pred,0,fmt(v,2))).join("");
+  $("c4m-read").innerHTML=`<span class="chip c-target">p(target ${names[t]})=<b>${fmt(p[t],3)}</b></span>
+    <span class="chip c-loss">CE = −log ${fmt(p[t],3)} = <b>${fmt(ce)}</b></span>
+    <span class="chip c-grad">grad = p − onehot = [${p.map((v,i)=>fmt(v-(i===t?1:0),2)).join(", ")}]</span>`;
+  const am=p.indexOf(Math.max(...p));
+  $("c4m-hint").innerHTML=am===t
+    ?(p[t]>0.8?`自信且对：正确类概率 ${fmt(p[t],2)}，CE 已经很小，梯度整体接近 0——模型在这个样本上几乎"毕业"了。`
+      :`方向对但不自信：argmax 已经是 ${names[t]}，此刻 <b>Accuracy 已经记它为"对"</b>，但 CE=${fmt(ce,2)} 还有下降空间——这正是 loss 与 metric 脱节的微观现场（第 9 章）。`)
+    :`自信但错：概率被 ${names[am]} 抢走（${fmt(p[am],2)}），正确类只剩 ${fmt(p[t],2)}，CE 高达 <b>${fmt(ce,2)}</b>；梯度会猛压 ${names[am]} 的 logit、猛抬 ${names[t]} 的——这是交叉熵最有力的时刻。`;
+}
+segWire($("c4m-t"),"t",v=>{C4M.t=+v;c4mRender();});
+$("c4m-preset1").addEventListener("click",()=>{C4M.z=[0.5,1.6,0.2,-0.3];C4M.t=1;c4mSync();c4mRender();});
+$("c4m-preset2").addEventListener("click",()=>{C4M.z=[-1,5.5,-0.5,-1.2];C4M.t=1;c4mSync();c4mRender();});
+$("c4m-preset3").addEventListener("click",()=>{C4M.z=[6.5,-0.5,0.3,-0.8];C4M.t=1;c4mSync();c4mRender();});
+c4mBuild(); c4mRender();
+
+/* ============ CH5 ============ */
+function c5Render(){
+  const p=+$("c5-p").value; $("c5-pv").textContent=fmt(p,2);
+  const ce=x=>-Math.log(x), mse=x=>(x-1)*(x-1);
+  const gce=x=>Math.abs(x-1), gmse=x=>Math.abs(2*(x-1)*x*(1-x));
+  $("c5-plot-loss").innerHTML=plot({xmin:0,xmax:1,ymax:5,xlabel:"p（正确类概率）",ylabel:"loss",
+    curves:[{f:ce,color:CLR.loss},{f:mse,color:CLR.pred}],
+    points:[{x:p,y:ce(p),color:CLR.loss,r:5},{x:p,y:mse(p),color:CLR.pred,r:5}]});
+  $("c5-plot-grad").innerHTML=plot({xmin:0,xmax:1,ymax:1.05,xlabel:"p",ylabel:"|∂loss/∂z|",
+    curves:[{f:gce,color:CLR.loss},{f:gmse,color:CLR.pred}],
+    points:[{x:p,y:gce(p),color:CLR.loss,r:5},{x:p,y:gmse(p),color:CLR.pred,r:5}]});
+  $("c5-read").innerHTML=`<span class="chip c-loss">CE=<b>${fmt(ce(p))}</b>，|grad|=<b>${fmt(gce(p),3)}</b></span>
+    <span class="chip c-pred">MSE=<b>${fmt(mse(p))}</b>，|grad|=<b>${fmt(gmse(p),3)}</b></span>
+    <span class="chip">修正力度比 CE:MSE ≈ <b>${fmt(gce(p)/Math.max(gmse(p),1e-9),1)} : 1</b></span>`;
+  $("c5-hint").innerHTML=p<0.2
+    ?`看右图 p→0 的区域：CE 的梯度趋向 1（最强修正），而 MSE 路径的梯度<b>反而掉向 0</b>——Sigmoid 饱和区把 2(p−1) 乘上了趋零的 p(1−p)。错得最狠的地方修正最弱，这就是分类不用 MSE 的核心原因。`
+    :p>0.8?`p 已经很高：两个 loss 的梯度都很小，行为差别不大——差别只在"错的时候"才致命。往左拖回去看看。`
+    :`p 在中间地带：CE 的修正力度约是 MSE 路径的 ${fmt(gce(p)/Math.max(gmse(p),1e-9),1)} 倍。继续往左拖，看两条梯度曲线如何分道扬镳。`;
+}
+$("c5-p").addEventListener("input",c5Render); c5Render();
+
+/* ============ CH6 pairing ============ */
+const C6={
+ reg:{cards:[["模型输出","Linear，(N,) / (N,D)"],["推荐 loss","MSELoss / HuberLoss / L1Loss"],["手动激活","不需要"],["标签格式","float，与输出同 shape"]],
+  pit:"<span class='tag'>常见坑</span>目标值没有标准化：单位一换，loss 数值和梯度尺度天翻地覆，学习率跟着失效（第 3 章的尺度演示）。",
+  code:`head = nn.Linear(D, 1)\nloss = nn.MSELoss()(head(x), y)   # y: float, shape 对齐`},
+ bin:{cards:[["模型输出","1 个 logit，(N,) / (N,1)"],["推荐 loss","BCEWithLogitsLoss"],["手动激活","不需要（内置 Sigmoid + 数值稳定）"],["标签格式","float 0./1.，与输出同 shape"]],
+  pit:"<span class='tag'>常见坑</span>① 标签用了 int 类型直接报错；② 输出 (N,1) 标签 (N,) 被广播成 N×N，loss 能算、全是错的；③ 手写 sigmoid+log 在 |z| 大时数值下溢（第 7 章演示）。",
+  code:`head = nn.Linear(D, 1)\nloss = nn.BCEWithLogitsLoss()(head(x), y.float())  # 不要提前 sigmoid`},
+ ml:{cards:[["模型输出","K 个独立 logits，(N,K)"],["推荐 loss","BCEWithLogitsLoss"],["手动激活","不需要；<b>禁用 Softmax</b>"],["标签格式","multi-hot float，(N,K)"]],
+  pit:"<span class='tag'>常见坑</span>误用 Softmax/CrossEntropy：Softmax 强制概率加和为 1，标签之间被迫互斥——'既是猫又是室内照'这种共存标签直接学崩。",
+  code:`head = nn.Linear(D, K)\nloss = nn.BCEWithLogitsLoss()(head(x), y_multi_hot)  # 每个标签独立判断`},
+ mc:{cards:[["模型输出","K 个 logits，(N,K)"],["推荐 loss","CrossEntropyLoss"],["手动激活","不需要（内置 LogSoftmax）"],["标签格式","class index int64，(N,)"]],
+  pit:"<span class='tag'>常见坑</span>① 先手动 Softmax 再喂 CE = 双重归一化，loss 照降、梯度被压扁；② 标签给成 one-hot float 默认形态下报 shape 错；软标签要用概率 target 或 label_smoothing 参数。",
+  code:`head = nn.Linear(D, K)\nloss = nn.CrossEntropyLoss()(head(x), y_idx)  # y_idx: int64 类别索引\n# 软标签: nn.CrossEntropyLoss()(logits, y_prob) 或 label_smoothing=0.1`}
+};
+function c6Render(t){
+  const d=C6[t];
+  $("c6-grid").innerHTML=d.cards.map(c=>`<div class="pair-card"><span class="k">${c[0]}</span><span class="v">${c[1]}</span></div>`).join("");
+  $("c6-pit").innerHTML=d.pit;
+  $("c6-code").textContent=d.code;
+}
+segWire($("c6-task"),"t",c6Render); c6Render("reg");
+
+/* ============ CH7 reduction ============ */
+const C7R={red:"mean",w:1,bs:1};
+function c7rRender(){
+  const base=[0.2,1.5,0.4,3.0], w=[1,1,1,C7R.w];
+  $("c7r-wv").textContent=fmt(C7R.w,1);
+  const wl=base.map((l,i)=>l*w[i]);
+  const N=4*C7R.bs, sumW=w.reduce((a,b)=>a+b,0)*C7R.bs, sum=wl.reduce((a,b)=>a+b,0)*C7R.bs;
+  const mean=sum/sumW;
+  const m=Math.max(...wl,1e-6);
+  $("c7r-bars").innerHTML=wl.map((l,i)=>bar(`l${i+1}${i===3?`·w=${fmt(C7R.w,1)}`:""}`,l,m,i===3?CLR.target:CLR.pred,0,fmt(l,2))).join("");
+  let agg,scale;
+  if(C7R.red==="none"){agg=`[${wl.map(v=>fmt(v,2)).join(", ")}]${C7R.bs>1?" ×8 份":""}`;scale="逐元素，自己决定怎么聚合";}
+  else if(C7R.red==="mean"){agg=fmt(mean,3);scale="梯度尺度 ≈ ×1，与 N 无关";}
+  else{agg=fmt(sum,2);scale=`梯度尺度 ∝ N = ${N}`;}
+  $("c7r-read").innerHTML=`<span class="chip c-loss">training loss = <b>${agg}</b></span><span class="chip c-grad">${scale}</span><span class="chip">N=${N}</span>`;
+  $("c7r-hint").innerHTML=C7R.red==="sum"
+    ?`sum 模式下把 batch 从 4 复制到 32，loss 直接 ×8，<b>每个参数收到的梯度也 ×8</b>——等效学习率被偷偷放大了 8 倍。这就是"换 batch size 要不要重调 lr"问题的根源。`
+    :C7R.red==="mean"
+    ?`mean 模式下复制 batch，loss 数值不变——梯度尺度与 N 解耦，这是它成为默认值的原因。再试试把样本 4 的权重调到 0（等于把它 mask 掉）或 4（重点关照它）。`
+    :`none 返回逐样本 loss 向量——它是样本加权、mask、难例挖掘的原材料：先逐元素乘权重，再自己决定除以什么（第 12.4 节的手动 mask 就是这个套路）。`;
+}
+segWire($("c7r-red"),"r",v=>{C7R.red=v;c7rRender();});
+segWire($("c7r-bs"),"b",v=>{C7R.bs=+v;c7rRender();});
+$("c7r-w").addEventListener("input",e=>{C7R.w=+e.target.value;c7rRender();}); c7rRender();
+
+/* ============ CH7 mask ============ */
+let c7mOn=false;
+function c7mRender(){
+  const toks=[["今天",0.35],["的",0.42],["天气",0.38],["很",0.45],["好",0.40],["<pad>",2.2],["<pad>",2.4],["<pad>",2.3]];
+  $("c7m-toks").innerHTML=toks.map((t,i)=>`<div class="tok ${i>=5?"pad":""} ${c7mOn&&i>=5?"masked":""}">${t[0]}<span class="tl">loss ${fmt(t[1],2)}</span></div>`).join("");
+  const all=toks.reduce((a,t)=>a+t[1],0)/8;
+  const eff=toks.slice(0,5).reduce((a,t)=>a+t[1],0)/5;
+  $("c7m-read").innerHTML=c7mOn
+    ?`<span class="chip c-loss">loss = <b>${fmt(eff,3)}</b>（按 5 个有效 token 平均）</span><span class="chip c-grad">pad 位置梯度 = 0，训练信号干净</span>`
+    :`<span class="chip c-loss">loss = <b>${fmt(all,3)}</b>（8 个位置全算）</span><span class="chip">真实水平其实是 <b>${fmt(eff,3)}</b>，被虚高了 <b>${fmt((all/eff-1)*100,0)}%</b></span>`;
+  $("c7m-hint").innerHTML=c7mOn
+    ?`用 <code>ignore_index=PAD</code> 或手动 mask 后：pad 位置既不产生 loss 也不产生梯度，且注意分母是<b>有效 token 数</b>（5）而不是序列长度（8）——除错分母是 mask 写法里第二常见的 bug。`
+    :`3 个 pad 位置贡献了 ${fmt(6.9/(6.9+2.0)*100,0)}% 的总 loss：曲线数值虚高只是小事，<b>模型正在花梯度去学"如何预测 padding"</b>，这部分容量和信号全是浪费甚至污染。`;
+}
+segWire($("c7m-mask"),"m",v=>{c7mOn=v==="on";c7mRender();}); c7mRender();
+
+/* ============ CH7 numeric stability ============ */
+function c7nRender(){
+  const z=+$("c7n-z").value; $("c7n-zv").textContent=z;
+  const p32=Math.fround(1/(1+Math.exp(-z)));   // float32 概率
+  const naive=-Math.log(1-p32);                 // y=0: -log(1-p)
+  const stable=Math.max(z,0)+Math.log(1+Math.exp(-Math.abs(z))); // BCEWithLogits, y=0
+  const g=Math.fround(sig(z));
+  $("c7n-read").innerHTML=`<span class="chip">float32 的 p=σ(z) = <b>${p32===1?"1.0（被舍入！）":p32.toExponential(2)}</b></span>
+    <span class="chip c-loss">手动路径 −log(1−p) = <b>${isFinite(naive)?fmt(naive,3):"inf → 梯度 NaN ⚠"}</b></span>
+    <span class="chip c-grad">稳定路径 BCEWithLogits = <b>${fmt(stable,3)}</b></span>
+    <span class="chip">稳定梯度 σ(z)−0 = <b>${fmt(g,3)}</b></span>`;
+  $("c7n-hint").innerHTML=z>=16
+    ?`z=${z} 时 σ(z)=1−${Math.exp(-z).toExponential(1)}，而 float32 的分辨率只有 ~1.2e−7：<b>p 被四舍五入成恰好 1.0</b>，于是 −log(1−p)=−log(0)=inf，反向传播当场 NaN。稳定路径把 log 和 exp 合并成 <code>max(z,0)+log1p(e^{−|z|})</code>，永远不经过"先算出概率"这个下溢通道，答案是干净的 ${fmt(stable,1)}。`
+    :`z=${z} 时两条路径结果一致（${fmt(stable,4)}）。把 z 拖到 +16 以上，看手动路径在哪一步崩掉——场景是"标签 y=0，模型却给出很大的正 logit"，恰好是最需要大梯度修正的时刻。`;
+}
+$("c7n-z").addEventListener("input",c7nRender); c7nRender();
+
+/* ============ CH8 optimizer path ============ */
+const C8={loss:"mse",out:false,lr:0.3,c:5.5,path:[5.5],timer:null};
+function c8Data(){ const d=[0.8,1.0,1.1,1.2,1.4]; return C8.out?d.concat([6.0]):d; }
+function c8L(c){ const D=c8Data(),f=C8.loss==="huber"?e=>L.huber(e,1):L[C8.loss]; return D.reduce((a,y)=>a+f(c-y),0)/D.length; }
+function c8G(c){ const D=c8Data(),g=C8.loss==="huber"?e=>G.huber(e,1):G[C8.loss]; return D.reduce((a,y)=>a+g(c-y),0)/D.length; }
+function c8Opt(){ let best=0,bv=1e18; for(let i=0;i<=700;i++){const c=-1+8*i/700,v=c8L(c); if(v<bv){bv=v;best=c;}} return best; }
+function c8Render(){
+  $("c8-lrv").textContent=fmt(C8.lr,2);
+  const opt=c8Opt(), lv=c8L(C8.c), gv=c8G(C8.c);
+  const pts=C8.path.map((c,i)=>({x:c,y:c8L(c),color:i===C8.path.length-1?CLR.loss:"rgba(46,111,219,.45)",r:i===C8.path.length-1?7:3.6}));
+  $("c8-plot").innerHTML=plot({xmin:-1,xmax:7,xlabel:"参数 c（统一预测值）",ylabel:"mean loss(c)",
+    curves:[{f:c8L,color:"#7A8B99",width:2.2}],
+    vlines:[{x:opt,color:CLR.grad,label:"最优 c*="+fmt(opt,2)}],
+    points:pts, tan:{x:C8.c,y:lv,g:gv}});
+  $("c8-read").innerHTML=`<span class="chip c-pred">c=<b>${fmt(C8.c,3)}</b></span>
+    <span class="chip c-loss">loss=<b>${fmt(lv,3)}</b></span>
+    <span class="chip c-grad">grad=<b>${fmt(gv,3)}</b></span>
+    <span class="chip">已走 <b>${C8.path.length-1}</b> 步 · c*≈<b>${fmt(opt,2)}</b>（${C8.loss==="mse"?"均值":C8.loss==="mae"?"中位数":"介于两者"}${C8.out?"，含离群点":""}）</span>`;
+  const osc=C8.path.length>4 && Math.abs(C8.path.at(-1)-C8.path.at(-3))<0.02 && Math.abs(C8.path.at(-1)-C8.path.at(-2))>0.05;
+  $("c8-hint").innerHTML=osc?`参数在谷底两侧<b>来回横跳</b>：${C8.loss==="mae"?"MAE 的梯度恒为 ±1，不会在谷底自动变小——步长永远是 lr，只能靠减小 lr（学习率衰减）落地。":"当前 lr 对这个曲面来说太大，一步迈过了谷底。调小 lr 再自动运行。"}`
+    :`绿色虚线是当前曲面的最优点。试试：① MSE 下开关离群点，看 c* 从 ${C8.out?"1.10 被拽到 1.92":"1.10 会被拽去哪"}；② 切到 MAE 再开离群点，c*（中位数）几乎不动；③ MAE + lr=1.0，观察谷底横跳。`;
+}
+function c8Step(){ C8.c=clamp(C8.c-C8.lr*c8G(C8.c),-1,7); C8.path.push(C8.c); if(C8.path.length>40)C8.path.shift(); c8Render(); }
+function c8Reset(){ clearInterval(C8.timer);C8.timer=null; C8.c=5.5;C8.path=[5.5];c8Render(); }
+segWire($("c8-loss"),"l",v=>{C8.loss=v;c8Render();});
+segWire($("c8-out"),"o",v=>{C8.out=v==="on";c8Render();});
+$("c8-lr").addEventListener("input",e=>{C8.lr=+e.target.value;c8Render();});
+$("c8-step").addEventListener("click",c8Step);
+$("c8-run").addEventListener("click",()=>{ clearInterval(C8.timer);
+  if(REDUCED){for(let i=0;i<15;i++)c8Step();return;}
+  let n=0; C8.timer=setInterval(()=>{c8Step(); if(++n>=15)clearInterval(C8.timer);},170); });
+$("c8-reset").addEventListener("click",c8Reset); c8Render();
+
+/* ============ CH9 loss vs metric ============ */
+let c9Sc="a";
+function c9Build(){
+  const C=$("c9-ctl");
+  if(c9Sc==="a")C.innerHTML=`<div class="ctl"><label>整体自信度 ×t</label><input type="range" id="c9a-t" min="0.5" max="6" step="0.1" value="1"><span class="chip">t=<b id="c9a-tv">1.0</b></span></div>`;
+  else if(c9Sc==="b")C.innerHTML=`<div class="ctl"><label>模型输出的置信度 p</label><input type="range" id="c9b-p" min="0.55" max="0.99" step="0.01" value="0.99"><span class="chip">p=<b id="c9b-pv">0.99</b></span></div>`;
+  else C.innerHTML=`<div class="ctl"><label>策略</label><span class="seg" id="c9c-st"><button data-s="all" class="on">全预测负类</button><button data-s="try">认真找正类</button></span></div>`;
+  if(c9Sc==="a")$("c9a-t").addEventListener("input",c9Render);
+  if(c9Sc==="b")$("c9b-p").addEventListener("input",c9Render);
+  if(c9Sc==="c")segWire($("c9c-st"),"s",()=>c9Render());
+  c9Render();
+}
+function c9Render(){
+  const SM=$("c9-samples"),R=$("c9-read"),H=$("c9-hint");
+  if(c9Sc==="a"){
+    const t=+$("c9a-t").value; $("c9a-tv").textContent=fmt(t,1);
+    const zs=[0.5,0.25,-0.25,-0.5], ys=[1,1,0,0];
+    let ce=0; SM.innerHTML=zs.map((z,i)=>{const p=sig(z*t);ce+=-(ys[i]?Math.log(p):Math.log(1-p));
+      const ok=(p>=0.5)===(ys[i]===1);
+      return `<div class="tok" style="border-color:${ok?"var(--key-bd)":"var(--warn-bd)"}">样本${i+1} y=${ys[i]}<span class="tl">p=${fmt(p,2)} ${ok?"✓":"✗"}</span></div>`;}).join("");
+    ce/=4;
+    R.innerHTML=`<span class="chip c-loss">mean CE = <b>${fmt(ce,3)}</b></span><span class="chip c-grad">Accuracy = <b>100%</b>（阈值 0.5）</span>`;
+    H.innerHTML=`四个样本的 argmax 从一开始就全对。把 t 从 1 拖到 6：模型只是<b>变得更自信</b>，CE 从 0.64 一路降到 ${fmt(ce,2)}，而 Accuracy 一格未动——这就是"loss 在降、metric 不动"最常见的真相：优化在推进，只是推进的维度 metric 看不见。`;
+  }else if(c9Sc==="b"){
+    const p=+$("c9b-p").value; $("c9b-pv").textContent=fmt(p,2);
+    const n=10, right=9;
+    const ce=(right*(-Math.log(p))+1*(-Math.log(1-p)))/n;
+    SM.innerHTML=Array.from({length:n},(_,i)=>{const ok=i<right;
+      return `<div class="tok" style="border-color:${ok?"var(--key-bd)":"var(--warn-bd)"}">#${i+1}<span class="tl">conf ${fmt(p,2)} ${ok?"✓":"✗"}</span></div>`;}).join("");
+    R.innerHTML=`<span class="chip c-grad">Accuracy = <b>90%</b>（固定）</span>
+      <span class="chip">平均置信度 = <b>${fmt(p,2)}</b> → 校准差距 <b>${fmt(p-0.9,2)}</b></span>
+      <span class="chip c-loss">mean CE = <b>${fmt(ce,3)}</b></span>`;
+    H.innerHTML=p>0.93?`模型 10 个里对 9 个，却对每个都宣称 ${fmt(p,2)} 的把握——<b>Accuracy 很好看，概率却不可信</b>（说 99% 时只有 90% 兑现）。注意 CE 抓住了这一点：那 1 个自信错误贡献了 −log(${fmt(1-p,2)})=${fmt(-Math.log(1-p),1)} 的 loss。把 p 拖到 0.90 附近，CE 反而最小——CE 天然偏好校准好的模型，Accuracy 对此完全失明。`
+      :`p≈${fmt(p,2)} 时置信度和真实正确率（90%）接近，校准差距小，CE 也接近最低。往右拖到 0.99，看 Accuracy 纹丝不动而 CE 与校准差距一起变糟。`;
+  }else{
+    const tryHard=document.querySelector("#c9c-st button.on").dataset.s==="try";
+    let TP,FP,FN,TN;
+    if(!tryHard){TP=0;FP=0;FN=5;TN=95;}else{TP=3;FP=5;FN=2;TN=90;}
+    const acc=(TP+TN)/100, prec=TP?TP/(TP+FP):0, rec=TP/5, f1=(prec+rec)?2*prec*rec/(prec+rec):0;
+    SM.innerHTML=`<div class="tok">正类 5 个<span class="tl">抓到 ${TP}，漏掉 ${FN}</span></div><div class="tok">负类 95 个<span class="tl">误报 ${FP}</span></div>`;
+    R.innerHTML=`<span class="chip">Accuracy=<b>${fmt(acc*100,0)}%</b></span><span class="chip">Recall=<b>${fmt(rec*100,0)}%</b></span><span class="chip">Precision=<b>${TP?fmt(prec*100,0)+"%":"—"}</b></span><span class="chip c-loss">F1=<b>${fmt(f1,2)}</b></span>`;
+    H.innerHTML=!tryHard?`欺诈检测式场景（95:5）：模型摆烂"全判负类"，Accuracy 高达 <b>95%</b>，但 Recall=0、F1=0——一个正类都没抓到，模型毫无用处。<b>不均衡场景下 Accuracy 是最会说谎的指标。</b>`
+      :`模型认真干活：抓到 3/5 个正类，代价是 5 个误报。Accuracy <b>降</b>到 93%，但 Recall=60%、F1=0.46——按业务价值这是碾压式的进步。该看 F1/PR-AUC 的场景看 Accuracy，会奖励摆烂、惩罚干活。`;
+  }
+}
+segWire($("c9-sc"),"s",v=>{c9Sc=v;c9Build();}); c9Build();
+
+/* ============ QUIZ ============ */
+const QUIZ=[
+ {q:"PyTorch 里做多分类单标签，喂给 CrossEntropyLoss 的应该是？",
+  opts:["Softmax 后的概率","raw logits","手动 log_softmax 后再喂"],a:1,
+  exp:"CrossEntropyLoss = LogSoftmax + NLLLoss，接收 raw logits。先手动 Softmax 是双重归一化：loss 照样下降，梯度却被系统性压扁（第 6、11 章）。（手动 log_softmax 后应改用 NLLLoss。）"},
+ {q:"房价回归数据里混着少量极端豪宅样本，训练总被它们带偏。先换哪个 loss？",
+  opts:["MSE","Huber / MAE","BCEWithLogitsLoss"],a:1,
+  exp:"MSE 对离群点二次方放大，均值解被直接拖走；Huber/MAE 把大误差的梯度封顶/拉平，最优解移向中位数一侧（第 3、8 章的离群点演示）。BCE 是分类损失，语义不符。"},
+ {q:"一张图可以同时是「猫 + 室内 + 逆光」。输出层和 loss 怎么配？",
+  opts:["K 个 logits + Softmax + CrossEntropy","K 个独立 logits + BCEWithLogitsLoss","1 个 logit + MSE"],a:1,
+  exp:"多标签 = K 个并联的独立二分类，概率不要求加和为 1。Softmax 会强制归一化，让标签互斥——「是猫」和「在室内」被迫二选一（第 6 章）。"},
+ {q:"训练 loss 从 0.6 稳步降到 0.3，验证 Accuracy 却一格没动。下面哪个解释是【错误】的？",
+  opts:["模型在变自信，但 argmax 没变，Accuracy 看不见","可能开始过拟合，要看验证 loss 和其他 metric","loss 和 Accuracy 必然同步，一定是评估代码写错了"],a:2,
+  exp:"loss（CE）和 Accuracy 度量的是不同的东西：概率似然 vs argmax 对错，本来就不必同步（第 2、9 章的对照器）。前两个都是真实可能的原因，值得逐一排查。"},
+ {q:"seq2seq 训练 loss 高得异常又稳定不降，生成质量也差。最先检查什么？",
+  opts:["换个更大的 batch size","padding 位置是否用 ignore_index / mask 排除在 loss 之外","把 optimizer 从 Adam 换成 SGD"],a:1,
+  exp:"padding 参与 loss 是序列任务第一大污染源：模型被迫花梯度去「学习预测 pad」，loss 被无意义项抬高且难以下降（第 7 章的 mask 演示）。改 batch 或 optimizer 都治不了信号本身被污染。"}
+];
+$("quizbox").innerHTML=QUIZ.map((z,i)=>`<div class="quiz" id="qz${i}"><div class="q">Q${i+1}. ${z.q}</div>
+  <div class="opts">${z.opts.map((o,j)=>`<button data-j="${j}">${o}</button>`).join("")}</div>
+  <div class="exp">${z.exp}</div></div>`).join("");
+QUIZ.forEach((z,i)=>{ const box=$("qz"+i);
+  box.querySelectorAll(".opts button").forEach(b=>b.addEventListener("click",()=>{
+    box.classList.add("done");
+    box.querySelectorAll(".opts button").forEach(x=>{ x.disabled=true;
+      if(+x.dataset.j===z.a)x.classList.add("right"); else if(x===b)x.classList.add("wrong"); });
+  }));
+});
+</script>
+</body>
+</html>

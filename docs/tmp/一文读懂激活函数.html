@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂激活函数 · 非线性、梯度与输出层选择</title>
+<style>
+:root{
+  --bg:#0C131E;
+  --panel:#111C2B;
+  --panel2:#0F1826;
+  --line:#22354D;
+  --line-soft:#1A2A3F;
+  --grid:#16263A;
+  --ink:#E9EFF7;
+  --muted:#94A7BE;
+  --faint:#5E7290;
+  --c-linear:#9AA7B8;
+  --c-sigmoid:#FFB454;
+  --c-tanh:#57C7E3;
+  --c-relu:#F2637E;
+  --c-lrelu:#FF93A8;
+  --c-gelu:#B69CFF;
+  --c-silu:#7FE0C3;
+  --c-softmax:#A6D94B;
+  --ok:#7FE0C3;
+  --warn:#FFB454;
+  --bad:#F2637E;
+  --serif:"Noto Serif SC","Source Han Serif SC","Songti SC","SimSun",serif;
+  --sans:"Noto Sans SC","Source Han Sans SC","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
+  --mono:"JetBrains Mono","SF Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto} *{animation:none!important;transition:none!important}}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(87,199,227,.28)}
+a{color:var(--c-tanh);text-decoration:none;border-bottom:1px solid rgba(87,199,227,.35)}
+a:hover{border-bottom-color:var(--c-tanh)}
+code{font-family:var(--mono);font-size:.9em;background:rgba(87,199,227,.09);border:1px solid rgba(87,199,227,.14);padding:.08em .38em;border-radius:5px;color:#BFE6F2;white-space:nowrap}
+.wrap{max-width:1000px;margin:0 auto;padding:0 22px}
+.narrow{max-width:820px;margin:0 auto}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  border-bottom:1px solid var(--line-soft);
+  background:
+    linear-gradient(rgba(12,19,30,0) 60%, var(--bg) 100%),
+    repeating-linear-gradient(0deg, transparent 0 27px, var(--grid) 27px 28px),
+    repeating-linear-gradient(90deg, transparent 0 27px, var(--grid) 27px 28px);
+  padding:56px 0 40px;
+  overflow:hidden;
+}
+.hero::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(900px 420px at 24% 0%, rgba(87,199,227,.10), transparent 60%),
+             radial-gradient(700px 400px at 85% 20%, rgba(182,156,255,.08), transparent 60%);
+}
+.hero .wrap{position:relative}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.32em;color:var(--faint);text-transform:uppercase;margin-bottom:14px}
+h1{font-family:var(--serif);font-weight:700;font-size:clamp(30px,5vw,46px);line-height:1.25;letter-spacing:.01em}
+h1 .fx{background:linear-gradient(100deg,var(--c-sigmoid),var(--c-relu) 45%,var(--c-gelu));-webkit-background-clip:text;background-clip:text;color:transparent}
+.thesis{
+  margin:20px 0 8px;max-width:640px;
+  font-family:var(--serif);font-size:19px;color:#CFE0F0;
+  border-left:3px solid var(--c-sigmoid);padding-left:16px;
+}
+.thesis b{color:var(--c-sigmoid);font-weight:600}
+.hero-sub{color:var(--muted);max-width:640px;font-size:15px;margin-top:10px}
+
+/* ---------- section scaffolding ---------- */
+section{padding:64px 0 8px}
+.sec-head{margin-bottom:26px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.26em;color:var(--faint);display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.eyebrow::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+h2{font-family:var(--serif);font-size:clamp(23px,3.4vw,30px);font-weight:700;line-height:1.35}
+h3{font-family:var(--serif);font-size:19px;font-weight:600;margin:34px 0 12px;color:#DDE8F5}
+p{margin:0 0 16px;color:#C6D4E4}
+p strong,li strong{color:var(--ink);font-weight:600}
+ul.plain{margin:0 0 16px 1.3em;color:#C6D4E4}
+ul.plain li{margin-bottom:8px}
+.dim{color:var(--muted)}
+
+/* ---------- panels & controls ---------- */
+.panel{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:20px;
+  margin:26px 0;
+  box-shadow:0 14px 40px rgba(0,0,0,.28);
+}
+.panel-title{font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:var(--faint);text-transform:uppercase;margin-bottom:4px}
+.panel-q{font-size:14.5px;color:var(--muted);margin-bottom:16px}
+.panel-q em{color:#D8E4F2;font-style:normal;border-bottom:1px dashed var(--faint)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
+.chip{
+  font-family:var(--mono);font-size:13px;
+  padding:6px 13px;border-radius:999px;cursor:pointer;
+  background:transparent;border:1px solid var(--line);color:var(--muted);
+  transition:all .15s ease;
+}
+.chip:hover{border-color:var(--fc,var(--c-tanh));color:var(--ink)}
+.chip.on{background:color-mix(in srgb,var(--fc,var(--c-tanh)) 16%,transparent);border-color:var(--fc,var(--c-tanh));color:var(--fc,var(--c-tanh));font-weight:600}
+.chip:focus-visible,button:focus-visible,input:focus-visible,details summary:focus-visible{outline:2px solid var(--c-tanh);outline-offset:2px}
+.sliders{display:grid;gap:10px}
+.sl{display:grid;grid-template-columns:96px 1fr 64px;align-items:center;gap:12px;font-family:var(--mono);font-size:13px}
+.sl label{color:var(--muted)}
+.sl output{text-align:right;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--c-tanh);height:22px;background:transparent}
+.btn{
+  font-family:var(--mono);font-size:13px;padding:7px 16px;border-radius:9px;cursor:pointer;
+  background:rgba(87,199,227,.12);border:1px solid rgba(87,199,227,.4);color:var(--c-tanh);
+  transition:background .15s;
+}
+.btn:hover{background:rgba(87,199,227,.22)}
+.btn.ghost{background:transparent;border-color:var(--line);color:var(--muted)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--faint)}
+
+/* readouts */
+.readout{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.ro{
+  flex:1;min-width:110px;background:rgba(0,0,0,.22);border:1px solid var(--line-soft);
+  border-radius:10px;padding:9px 12px;
+}
+.ro .k{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.08em}
+.ro .v{font-family:var(--mono);font-size:19px;margin-top:2px;color:var(--ink)}
+.ro .v.small{font-size:14px}
+
+/* svg plots */
+.plot{width:100%;height:auto;display:block;border-radius:10px;background:rgba(0,0,0,.2);border:1px solid var(--line-soft)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.legend .sw{display:inline-block;width:16px;height:0;border-top:2.5px solid;vertical-align:middle;margin-right:6px;border-radius:2px}
+.legend .sw.dash{border-top-style:dashed}
+
+/* formula blocks */
+.formula{
+  font-family:var(--mono);font-size:14.5px;line-height:2;
+  background:rgba(0,0,0,.25);border:1px solid var(--line-soft);border-left:3px solid var(--c-gelu);
+  border-radius:0 10px 10px 0;padding:14px 18px;margin:18px 0;color:#D9E4F2;overflow-x:auto;white-space:nowrap;
+}
+.formula .why{display:block;font-family:var(--sans);font-size:13.5px;color:var(--muted);white-space:normal;margin-top:6px;line-height:1.7}
+sup,sub{font-size:.72em}
+
+/* callouts */
+.note{border:1px solid var(--line);border-left:3px solid var(--c-tanh);background:rgba(87,199,227,.05);border-radius:0 12px 12px 0;padding:14px 18px;margin:20px 0;font-size:15px;color:#C6D4E4}
+.note.warn{border-left-color:var(--c-sigmoid);background:rgba(255,180,84,.05)}
+.note.bad{border-left-color:var(--c-relu);background:rgba(242,99,126,.05)}
+.note b{color:var(--ink)}
+.note p{margin-bottom:8px}
+.note p:last-child{margin-bottom:0}
+
+/* function cards (family map) */
+.fcard{border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0;background:linear-gradient(180deg,rgba(255,255,255,.015),transparent)}
+.fcard-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.fcard-head .fname{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--fc)}
+.fcard-head .frole{font-size:13px;color:var(--muted)}
+.fcard .formula{margin:10px 0}
+.tagrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tag{font-family:var(--mono);font-size:11.5px;padding:3px 10px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
+.tag.good{color:var(--ok);border-color:rgba(127,224,195,.4)}
+.tag.risk{color:var(--bad);border-color:rgba(242,99,126,.4)}
+
+/* tables */
+.tbl-scroll{overflow-x:auto;margin:22px 0;border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:13.5px}
+th,td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--line-soft);vertical-align:top}
+th{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--faint);text-transform:uppercase;background:rgba(0,0,0,.25);position:sticky;top:0}
+td:first-child{font-family:var(--mono);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:rgba(87,199,227,.04)}
+td .mini{display:block;font-size:12px;color:var(--faint)}
+
+/* versus cards */
+.vs{border:1px solid var(--line);border-radius:14px;margin:16px 0;overflow:hidden;background:var(--panel2)}
+.vs summary{
+  cursor:pointer;list-style:none;display:flex;align-items:center;gap:12px;
+  padding:15px 20px;font-family:var(--mono);font-size:14.5px;font-weight:600;color:var(--ink);
+}
+.vs summary::-webkit-details-marker{display:none}
+.vs summary .arrow{margin-left:auto;color:var(--faint);transition:transform .2s;font-family:var(--sans)}
+.vs[open] summary .arrow{transform:rotate(90deg)}
+.vs summary:hover{background:rgba(255,255,255,.02)}
+.vs-body{padding:4px 20px 18px;border-top:1px solid var(--line-soft)}
+.vs-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+.vs-col{border:1px solid var(--line-soft);border-radius:10px;padding:14px 16px;background:rgba(0,0,0,.18)}
+.vs-col h4{font-family:var(--mono);font-size:14px;margin-bottom:8px;color:var(--vc,var(--ink))}
+.vs-col ul{margin-left:1.15em;font-size:13.8px;color:#C6D4E4}
+.vs-col li{margin-bottom:6px}
+.vs-verdict{font-size:13.8px;color:var(--muted);border-top:1px dashed var(--line);padding-top:10px}
+.vs-verdict b{color:var(--c-sigmoid)}
+
+/* task selector */
+.taskgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:16px}
+.taskbtn{
+  font-family:var(--sans);font-size:14px;padding:11px 10px;border-radius:11px;cursor:pointer;text-align:center;
+  background:transparent;border:1px solid var(--line);color:var(--muted);transition:all .15s;
+}
+.taskbtn small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:2px}
+.taskbtn:hover{border-color:var(--faint);color:var(--ink)}
+.taskbtn.on{border-color:var(--c-softmax);background:rgba(166,217,75,.08);color:var(--ink)}
+.taskcard{border:1px solid var(--line-soft);border-radius:12px;background:rgba(0,0,0,.2);padding:18px 20px}
+.taskcard .row{display:grid;grid-template-columns:130px 1fr;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line-soft);font-size:14px}
+.taskcard .row:last-of-type{border-bottom:none}
+.taskcard .row .k{font-family:var(--mono);font-size:12px;color:var(--faint);padding-top:2px}
+.taskcard .row .v{color:#D5E1EF}
+.taskcard pre{margin-top:12px}
+
+/* code */
+pre{
+  font-family:var(--mono);font-size:13px;line-height:1.75;
+  background:#0A111C;border:1px solid var(--line);border-radius:12px;
+  padding:16px 18px;overflow-x:auto;margin:18px 0;color:#C9D8E8;
+}
+pre .cm{color:#5E7290}
+pre .kw{color:#B69CFF}
+pre .st{color:#A6D94B}
+pre .fn{color:#57C7E3}
+pre .nb{color:#FFB454}
+.codewrap{position:relative}
+.copybtn{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+.copybtn:hover{color:var(--ink);border-color:var(--faint)}
+
+/* quiz */
+.quiz{border:1px solid var(--line);border-radius:12px;margin:14px 0;background:var(--panel2)}
+.quiz summary{cursor:pointer;list-style:none;padding:14px 18px;font-size:15px;color:#D8E4F2}
+.quiz summary::-webkit-details-marker{display:none}
+.quiz summary::before{content:"Q";font-family:var(--mono);font-weight:700;color:var(--c-gelu);margin-right:10px}
+.quiz .ans{padding:0 18px 16px;font-size:14.5px;color:var(--muted);border-top:1px dashed var(--line-soft)}
+.quiz .ans::before{content:"A";font-family:var(--mono);font-weight:700;color:var(--c-softmax);margin-right:10px}
+.quiz .ans p{display:inline}
+
+/* misc */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:20px 0}
+.mini-card{border:1px solid var(--line);border-radius:12px;padding:15px 17px;background:rgba(0,0,0,.15)}
+.mini-card .t{font-family:var(--mono);font-size:13px;font-weight:700;margin-bottom:6px;color:var(--mc,var(--c-tanh))}
+.mini-card p{font-size:13.8px;margin:0;color:var(--muted)}
+footer{border-top:1px solid var(--line-soft);margin-top:70px;padding:28px 0 44px;color:var(--faint);font-size:13px;font-family:var(--mono)}
+.toclist{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.toclist a{font-family:var(--mono);font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 13px;border-bottom-width:1px}
+.toclist a:hover{color:var(--ink);border-color:var(--faint)}
+.hero-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:22px;margin-top:34px;align-items:stretch}
+.neuron-svg{width:100%;height:auto}
+@media (max-width:860px){
+  .hero-grid,.grid2,.vs-grid,.grid3{grid-template-columns:1fr}
+  section{padding:48px 0 6px}
+  .sl{grid-template-columns:80px 1fr 56px}
+}
+</style>
+</head>
+<body>
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">ACTIVATION FUNCTIONS · 机制 / 图像 / 梯度 / 工程选择</div>
+    <h1>一文读懂<span class="fx">激活函数</span></h1>
+    <p class="thesis">没有非线性，<b>很多层线性网络仍然只是一层线性变换</b>。激活函数决定了网络能表达什么，也决定了梯度能不能传回来。</p>
+    <p class="hero-sub">这不是一份公式清单。下面的每个交互组件都回答一个问题：这个函数改变了网络的什么行为？先在这个单神经元上玩一玩——拖动 <code>x / w / b</code>，切换激活函数，观察输出和导数怎么变。</p>
+
+    <div class="panel hero-grid" style="margin-top:34px">
+      <div>
+        <div class="panel-title">Live Neuron</div>
+        <div class="panel-q">一个神经元 = 线性打分 <code>z = wx + b</code> + 非线性整形 <code>a = f(z)</code></div>
+        <svg id="neuronSvg" class="neuron-svg" viewBox="0 0 440 190" role="img" aria-label="单神经元数据流示意图"></svg>
+        <div class="sliders" style="margin-top:14px">
+          <div class="sl"><label for="hx">输入 x</label><input type="range" id="hx" min="-4" max="4" step="0.05" value="1.2"><output id="hxv">1.20</output></div>
+          <div class="sl"><label for="hw">权重 w</label><input type="range" id="hw" min="-3" max="3" step="0.05" value="1.5"><output id="hwv">1.50</output></div>
+          <div class="sl"><label for="hb">偏置 b</label><input type="range" id="hb" min="-3" max="3" step="0.05" value="-0.5"><output id="hbv">-0.50</output></div>
+        </div>
+      </div>
+      <div>
+        <div class="chips" id="heroChips" role="tablist" aria-label="选择激活函数"></div>
+        <svg id="heroPlot" class="plot" viewBox="0 0 560 300"></svg>
+        <div class="legend">
+          <span><span class="sw" id="lgF"></span>f(z) 函数曲线</span>
+          <span><span class="sw dash" id="lgD"></span>f′(z) 导数曲线</span>
+          <span>○ 当前工作点</span>
+        </div>
+        <div class="readout">
+          <div class="ro"><div class="k">z = wx + b</div><div class="v" id="roZ">–</div></div>
+          <div class="ro"><div class="k">输出 a = f(z)</div><div class="v" id="roA">–</div></div>
+          <div class="ro"><div class="k">导数 f′(z)</div><div class="v" id="roD">–</div></div>
+          <div class="ro"><div class="k">此处的训练信号</div><div class="v small" id="roMsg">–</div></div>
+        </div>
+        <p class="dim" id="heroNote" style="font-size:13px;margin-top:12px"></p>
+      </div>
+    </div>
+
+    <div class="toclist">
+      <a href="#s1">01 在激活什么</a><a href="#s2">02 为什么要非线性</a><a href="#s3">03 家族地图</a><a href="#s4">04 梯度消失</a><a href="#s5">05 输出层怎么选</a><a href="#s6">06 工程规则</a><a href="#s7">07 常见误区</a><a href="#s8">08 最小代码</a><a href="#s9">09 速查表</a>
+    </div>
+  </div>
+</header>
+
+<!-- ============ SECTION 1 ============ -->
+<section id="s1"><div class="wrap narrow">
+  <div class="sec-head"><div class="eyebrow">SECTION 01</div><h2>先理解：激活函数到底在“激活”什么</h2></div>
+
+  <p>把一个神经元拆开看，它只做两件事。第一步是<strong>线性打分</strong>：<code>z = wx + b</code>（多维时是 <code>z = w·x + b</code>）。这一步在回答“输入和我关心的方向有多对齐”，输出是一个可以任意大、任意小的实数。第二步才是激活：<code>a = f(z)</code>。它把这个裸的打分<strong>整形</strong>成适合往下一层传递的表示——这就是“激活”的含义：决定这个神经元以什么强度、什么形态参与后面的计算。</p>
+
+  <p>所以激活函数同时干了三件事，理解任何一个具体函数，都可以回到这三个维度上：</p>
+
+  <div class="grid3">
+    <div class="mini-card" style="--mc:var(--c-relu)"><div class="t">① 引入非线性</div><p>让“层的叠加”产生新的表达能力。没有它，加深网络在数学上是无效的（下面马上证明）。</p></div>
+    <div class="mini-card" style="--mc:var(--c-sigmoid)"><div class="t">② 控制范围与分布</div><p>把无界的打分压到 (0,1)、(−1,1)，或砍掉负半轴。这决定了下一层收到的输入长什么样、是否零中心。</p></div>
+    <div class="mini-card" style="--mc:var(--c-gelu)"><div class="t">③ 塑造梯度</div><p>反向传播时梯度要乘上 f′(z)。函数在哪里平、在哪里陡，直接决定训练信号能不能穿过这一层。</p></div>
+  </div>
+
+  <p>前两点在首屏就能看到：切到 <code>Sigmoid</code>，无论怎么拖 <code>w</code>，输出都被关在 (0,1) 里；切到 <code>ReLU</code>，把 <code>z</code> 拖到负半轴，输出和导数同时归零。第三点是第 4 节的主角。</p>
+
+  <h3>一个两行的推导：为什么“堆线性层”是无效的</h3>
+  <p>假设我们不用激活函数（或者说 <code>f(z)=z</code>），直接堆两层线性层：</p>
+  <div class="formula">
+    h  = W<sub>1</sub>x + b<sub>1</sub><br>
+    y  = W<sub>2</sub>h + b<sub>2</sub> = W<sub>2</sub>(W<sub>1</sub>x + b<sub>1</sub>) + b<sub>2</sub> = <b style="color:var(--c-relu)">(W<sub>2</sub>W<sub>1</sub>)</b>x + <b style="color:var(--c-relu)">(W<sub>2</sub>b<sub>1</sub> + b<sub>2</sub>)</b> = W′x + b′
+    <span class="why">两层的参数合并成了一个新的 W′ 和 b′——整个网络<b>精确等价于一层线性变换</b>。归纳下去，一百层也一样。参数变多了，但函数空间没有变大：它永远只能画直线（超平面）。</span>
+  </div>
+
+  <p>这就是为什么说激活函数不是网络里的一个“配件”，而是<strong>让深度成立的前提</strong>。非线性 <code>f</code> 插在层与层之间，让 <code>W₂ f(W₁x+b₁)</code> 无法再合并——每一层才真正贡献了新的表达能力。眼见为实：下一节你可以亲手训练一个小网络，看看拿掉激活函数会发生什么。</p>
+</div></section>
+
+<!-- ============ SECTION 2 ============ -->
+<section id="s2"><div class="wrap narrow">
+  <div class="sec-head"><div class="eyebrow">SECTION 02</div><h2>非线性为什么是深度学习的核心</h2></div>
+
+  <p>“深度”的价值不在于层数这个数字，而在于<strong>非线性特征的逐层组合</strong>：第一层用非线性把输入空间折出几个简单的弯，第二层把这些弯组合成更复杂的形状，层层递进。ReLU 网络是个直观的例子——每个 ReLU 神经元在输入空间里画出一条折痕，多层组合后就能用大量小平面拼出任意复杂的曲面。拿掉非线性，所有折痕消失，网络退回一条直线。</p>
+
+  <p>下面是一个真的在你浏览器里训练的网络（结构 <code>2→8→8→1</code>，输出层 Sigmoid + Binary Cross Entropy）。数据是经典的“环形套圆形”：内圈一类、外圈一类，<strong>线性不可分</strong>。切换隐藏层激活函数，点“开始训练”，观察决策边界能不能弯过来。</p>
+
+  <div class="panel">
+    <div class="panel-title">Minimal Experiment · 决策边界</div>
+    <div class="panel-q">回答的问题：<em>同样的网络结构和数据，隐藏层有无非线性，能学到的边界差多少？</em></div>
+    <div class="chips" id="dbChips"></div>
+    <div class="grid2" style="align-items:start">
+      <div>
+        <canvas id="dbCanvas" width="300" height="300" style="width:100%;max-width:340px;border-radius:10px;border:1px solid var(--line-soft);background:#0A111C;display:block"></canvas>
+        <div class="legend" style="margin-top:10px">
+          <span><span class="sw" style="border-color:var(--c-tanh)"></span>类别 A（内圈）</span>
+          <span><span class="sw" style="border-color:var(--c-sigmoid)"></span>类别 B（外圈）</span>
+          <span>背景色 = 网络预测的概率场</span>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          <button class="btn" id="dbTrain">开始训练</button>
+          <button class="btn ghost" id="dbReset">重置权重</button>
+        </div>
+        <div class="readout" style="margin-top:0">
+          <div class="ro"><div class="k">训练步数</div><div class="v" id="dbEpoch">0</div></div>
+          <div class="ro"><div class="k">Loss (BCE)</div><div class="v" id="dbLoss">–</div></div>
+          <div class="ro"><div class="k">训练精度</div><div class="v" id="dbAcc">–</div></div>
+        </div>
+        <p class="dim" id="dbNote" style="font-size:13.5px;margin-top:14px"></p>
+      </div>
+    </div>
+  </div>
+
+  <p>试完你应该能确认两件事：<strong>Linear 无论训练多久，边界都是一条直线</strong>，loss 卡在 0.69 附近下不去（相当于瞎猜）；换成 <code>Tanh</code> 或 <code>ReLU</code> 后，同样的结构几百步就把内圈包了起来。仔细看还能发现风格差异：ReLU 的边界由直线段拼成（折痕的组合），Tanh 的边界更圆润（平滑函数的组合）——激活函数的形状直接体现在网络学到的函数形状里。</p>
+
+  <div class="note"><b>一句话版本：</b>激活函数不是装饰组件，而是网络表达复杂函数的开关。“深”之所以有用，是因为每一层都在对<strong>上一层的非线性输出</strong>再做非线性组合；开关一关，深度立刻失效。</div>
+</div></section>
+<!-- ============ SECTION 3 ============ -->
+<section id="s3"><div class="wrap narrow">
+  <div class="sec-head"><div class="eyebrow">SECTION 03</div><h2>常见激活函数家族地图</h2></div>
+
+  <p>别按发明年份背函数。按<strong>它们各自解决什么问题</strong>来组织，一共四条线索：把打分变成概率（Sigmoid / Softmax）、给隐藏层做零中心压缩（Tanh）、让梯度畅通（ReLU 及其变体）、平滑的概率式门控（GELU / SiLU）。先在下面的浏览器里把每条曲线和它的导数都看一遍——<strong>实线是 f(z)，虚线是 f′(z)</strong>，鼠标或手指在图上滑动可以逐点读数。</p>
+
+  <div class="panel">
+    <div class="panel-title">Curve Explorer · 函数与导数</div>
+    <div class="panel-q">回答的问题：<em>这个函数在哪里陡（有梯度）、在哪里平（梯度趋零）、输出被约束在哪个范围？</em></div>
+    <div class="chips" id="exChips"></div>
+    <svg id="exPlot" class="plot" viewBox="0 0 560 320"></svg>
+    <div class="readout">
+      <div class="ro"><div class="k">z（滑动读取）</div><div class="v" id="exZ">–</div></div>
+      <div class="ro"><div class="k">f(z)</div><div class="v" id="exF">–</div></div>
+      <div class="ro"><div class="k">f′(z)</div><div class="v" id="exD">–</div></div>
+    </div>
+    <div class="readout">
+      <div class="ro" style="flex:1.2"><div class="k">输出范围</div><div class="v small" id="exRange">–</div></div>
+      <div class="ro"><div class="k">零中心</div><div class="v small" id="exZero">–</div></div>
+      <div class="ro"><div class="k">会饱和吗</div><div class="v small" id="exSat">–</div></div>
+      <div class="ro" style="flex:1.6"><div class="k">梯度特点</div><div class="v small" id="exGrad">–</div></div>
+    </div>
+  </div>
+
+  <h3>把打分变成概率：Sigmoid 与 Softmax</h3>
+
+  <div class="fcard" style="--fc:var(--c-sigmoid)">
+    <div class="fcard-head"><span class="fname">Sigmoid</span><span class="frole">二分类输出层的标准答案；作为隐藏层已基本退役</span></div>
+    <div class="formula">σ(z) = 1 / (1 + e<sup>−z</sup>) ，输出 ∈ (0, 1) ，σ′(z) = σ(z)(1 − σ(z)) ≤ 0.25
+      <span class="why">它把任意实数打分平滑地压进 (0,1)，天然可以解释为“正类概率”，配 Binary Cross Entropy 时梯度形式还特别干净（就是 <code>σ(z) − y</code>）。这是它守住输出层位置的原因。</span></div>
+    <p style="font-size:14.5px">但作为<strong>隐藏层</strong>它有三个问题，且互相叠加：① <strong>饱和</strong>——|z| 稍大（比如 5）导数就趋近 0，这一层几乎不再学习；② <strong>导数上限只有 0.25</strong>——链式法则逐层相乘，信号指数级衰减（第 4 节演示）；③ <strong>非零中心</strong>——输出恒为正，下一层收到的输入全是正数，同一神经元所有权重的梯度被迫同号，更新方向只能走“之字形”，收敛变慢。</p>
+    <div class="tagrow"><span class="tag good">输出层：二分类 / 多标签</span><span class="tag good">门控（LSTM/GRU）</span><span class="tag risk">隐藏层：梯度消失</span><span class="tag risk">非零中心</span></div>
+  </div>
+
+  <div class="fcard" style="--fc:var(--c-softmax)">
+    <div class="fcard-head"><span class="fname">Softmax</span><span class="frole">不是普通激活——它是多分类输出的归一化器，作用在整个向量上</span></div>
+    <div class="formula">softmax(z)<sub>i</sub> = e<sup>z<sub>i</sub></sup> / Σ<sub>j</sub> e<sup>z<sub>j</sub></sup> ，输出 ∈ (0,1) 且 Σ = 1
+      <span class="why">前面所有函数都是逐元素的：一个 z 进，一个 a 出。Softmax 不同——它读入<b>整个 logits 向量</b>，让各类别通过指数放大互相竞争，输出一个和为 1 的概率分布。改动任何一个 logit，所有输出都会变。</span></div>
+    <p style="font-size:14.5px">因此它只出现在<strong>互斥多分类的输出端</strong>（以及 attention 权重这类“归一化竞争”场景），不用于普通隐藏层：隐藏层需要的是独立的特征检测器，而 Softmax 会强行让特征互相抢份额，还把梯度耦合在一起。它与 Sigmoid 的输出层分工见下面的对比卡片。</p>
+    <div class="tagrow"><span class="tag good">多分类输出（配 Cross Entropy）</span><span class="tag good">Attention 权重</span><span class="tag risk">隐藏层：错误用法</span></div>
+  </div>
+
+  <h3>零中心的压缩：Tanh</h3>
+
+  <div class="fcard" style="--fc:var(--c-tanh)">
+    <div class="fcard-head"><span class="fname">Tanh</span><span class="frole">Sigmoid 的零中心版本；RNN 时代的隐藏层主力</span></div>
+    <div class="formula">tanh(z) = (e<sup>z</sup> − e<sup>−z</sup>) / (e<sup>z</sup> + e<sup>−z</sup>) = 2σ(2z) − 1 ，输出 ∈ (−1, 1) ，tanh′(z) = 1 − tanh²(z) ≤ 1
+      <span class="why">本质是拉伸平移过的 Sigmoid。两个改进：输出<b>零中心</b>，下一层拿到的输入有正有负，消除了之字形更新问题；导数上限从 0.25 提到 1（仅在 z=0 处取到）。</span></div>
+    <p style="font-size:14.5px">但它没有解决根本问题：两端照样<strong>饱和</strong>，深层堆叠时梯度照样消失，只是比 Sigmoid 慢一些。今天它主要活跃在 RNN/LSTM 的状态更新里（状态需要被约束在 (−1,1) 内防止爆炸），以及需要有界对称输出的场合。</p>
+    <div class="tagrow"><span class="tag good">零中心</span><span class="tag good">RNN 状态 / 有界输出</span><span class="tag risk">仍然饱和、梯度消失</span></div>
+  </div>
+
+  <h3>让梯度通行：ReLU 与它的修补者们</h3>
+
+  <div class="fcard" style="--fc:var(--c-relu)">
+    <div class="fcard-head"><span class="fname">ReLU</span><span class="frole">现代深度网络的默认起点；用“不压缩”换来了梯度畅通</span></div>
+    <div class="formula">ReLU(z) = max(0, z) ，导数：z &gt; 0 时为 1，z &lt; 0 时为 0
+      <span class="why">关键在“正区间导数恒等于 1”：梯度穿过激活层时<b>原样通过，不衰减</b>。链式法则里那串小于 1 的乘数消失了，这是深层网络（配合良好初始化和归一化）能训起来的直接原因之一。</span></div>
+    <p style="font-size:14.5px">附赠两个好处：<strong>稀疏激活</strong>——约一半神经元输出 0，表示更解耦；<strong>计算极简</strong>——一次比较，没有指数运算。代价是那条硬边界：如果某个神经元的 <code>z</code> 在整个数据集上都落进负区（常见诱因：学习率过大把偏置推得太负），它的输出恒为 0、导数恒为 0，<strong>梯度再也进不来，永久死亡</strong>——这就是 dead ReLU。轻则浪费容量，重则一次糟糕的更新杀掉一大片神经元。</p>
+    <div class="tagrow"><span class="tag good">正区梯度 = 1</span><span class="tag good">稀疏、便宜</span><span class="tag risk">dead ReLU</span><span class="tag risk">非零中心</span></div>
+  </div>
+
+  <div class="fcard" style="--fc:var(--c-lrelu)">
+    <div class="fcard-head"><span class="fname">Leaky ReLU / PReLU / ELU / SELU</span><span class="frole">同一个动机的四种答案：别让负区彻底死掉</span></div>
+    <p style="font-size:14.5px;margin-bottom:6px">这一族不必逐个背公式，记住它们<strong>都在修同一个 bug</strong>（负区梯度为 0），只是激进程度不同：</p>
+    <ul class="plain" style="font-size:14.5px">
+      <li><strong>Leaky ReLU</strong>：负区给一个小斜率 <code>αz</code>（α 常取 0.01），梯度永不为零，成本几乎为零。最保守的修法。</li>
+      <li><strong>PReLU</strong>：把 α 变成可学习参数，让网络自己决定漏多少。</li>
+      <li><strong>ELU</strong>：负区用 <code>α(e^z − 1)</code> 平滑地趋向 −α，输出均值更接近零（顺手改善非零中心问题），但引入了指数运算。</li>
+      <li><strong>SELU</strong>：精心调常数的 ELU，配合特定初始化可以“自归一化”（各层激活自动保持均值 0 方差 1）——想法漂亮，但条件苛刻，实践中基本被 BatchNorm/LayerNorm + ReLU/GELU 路线取代。</li>
+    </ul>
+    <p style="font-size:14px" class="dim">实用结论：怀疑出现 dead ReLU 时，Leaky ReLU 是成本最低的替换实验；其余变体在现代架构（归一化层普及之后）带来的增益通常很小。</p>
+  </div>
+
+  <h3>平滑的概率式门控：GELU 与 SiLU/Swish</h3>
+
+  <div class="fcard" style="--fc:var(--c-gelu)">
+    <div class="fcard-head"><span class="fname">GELU</span><span class="frole">Transformer 系（BERT/GPT/ViT）的事实标准</span></div>
+    <div class="formula">GELU(z) = z · Φ(z) （Φ 是标准正态的 CDF）≈ z · σ(1.702z)
+      <span class="why">读法：<b>把输入乘上“它该被保留的概率”</b>。z 很大 → Φ(z)≈1，几乎全通过；z 很负 → Φ(z)≈0，几乎关闭；中间地带则是<b>平滑加权</b>而非硬切换。它不是 ReLU 那样的硬截断闸门，而是一个带概率意味的软门控。</span></div>
+    <p style="font-size:14.5px">和 ReLU 的差异在零点附近：ReLU 在 0 处有个不可导的折角、负区一刀切；GELU 处处平滑可导，负区小幅保留信息（曲线在 z≈−0.75 附近还有一个浅浅的下凹），loss 曲面更光滑，深层 Transformer 训练更稳。代价是多一次指数/erf 运算——在以矩阵乘法为主的大模型里可以忽略。详细对比见下方卡片。</p>
+    <div class="tagrow"><span class="tag good">平滑可导</span><span class="tag good">Transformer 默认</span><span class="tag risk">略贵于 ReLU</span></div>
+  </div>
+
+  <div class="fcard" style="--fc:var(--c-silu)">
+    <div class="fcard-head"><span class="fname">SiLU / Swish</span><span class="frole">GELU 的近亲：自门控 z·σ(z)</span></div>
+    <div class="formula">SiLU(z) = z · σ(z)
+      <span class="why">同样的“输入 × 门”结构，只是门从 Φ(z) 换成 σ(z)。曲线与 GELU 几乎重叠（在浏览器里切换两者对比一下），性质也一致：平滑、非单调、负区留一点信息。</span></div>
+    <p style="font-size:14.5px">两者在实践里近似可互换，选择往往跟随架构惯例：BERT/GPT/ViT 系用 GELU；EfficientNet、YOLO 系以及 LLaMA 等模型的 SwiGLU 门控 FFN 用 SiLU。不必纠结谁更好——差异远小于学习率调错一档。</p>
+    <div class="tagrow"><span class="tag good">与 GELU 近似可互换</span><span class="tag good">SwiGLU 组件</span></div>
+  </div>
+
+  <details class="vs">
+    <summary><span style="color:var(--c-relu)">ReLU</span> vs <span style="color:var(--c-gelu)">GELU</span>：硬闸门与软门控 <span class="arrow">›</span></summary>
+    <div class="vs-body">
+      <div class="vs-grid">
+        <div class="vs-col" style="--vc:var(--c-relu)"><h4>ReLU · 硬截断</h4><ul>
+          <li>门只有开/关两档：z&gt;0 全通过，z&lt;0 全丢弃</li>
+          <li>正区梯度恒为 1，信号无衰减；负区梯度恒为 0</li>
+          <li>零点有折角，loss 曲面带棱；存在 dead ReLU 风险</li>
+          <li>计算最便宜，CNN/MLP 的强基线</li>
+        </ul></div>
+        <div class="vs-col" style="--vc:var(--c-gelu)"><h4>GELU · 平滑加权</h4><ul>
+          <li>门是连续的：按 Φ(z) 给每个输入一个 0~1 的通过权重</li>
+          <li>处处可导，负区保留微弱梯度，不会永久死亡</li>
+          <li>loss 曲面更平滑，深层 Transformer 训练更稳定</li>
+          <li>略贵（含 erf/exp），大模型中占比可忽略</li>
+        </ul></div>
+      </div>
+      <div class="vs-verdict"><b>怎么选：</b>CNN/MLP 先用 ReLU，够用且便宜；Transformer 或很深的网络默认 GELU（或 SiLU）。两者思想同源——GELU 可以理解为“把 ReLU 的 0/1 硬门换成概率软门”。</div>
+    </div>
+  </details>
+
+  <h3>一张表看全家</h3>
+  <div class="tbl-scroll"><table>
+    <thead><tr><th>函数</th><th>输出范围</th><th>零中心</th><th>饱和</th><th>梯度特点</th><th>常见位置</th><th>主要风险</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--c-linear)">Linear</td><td>(−∞, ∞)</td><td>是</td><td>否</td><td>恒为 1</td><td>回归输出层<span class="mini">隐藏层无效（可合并）</span></td><td>不提供任何非线性</td></tr>
+      <tr><td style="color:var(--c-sigmoid)">Sigmoid</td><td>(0, 1)</td><td>否</td><td>两端</td><td>≤ 0.25，饱和区 ≈ 0</td><td>二分类/多标签输出<span class="mini">LSTM/GRU 门控</span></td><td>隐藏层梯度消失、之字形更新</td></tr>
+      <tr><td style="color:var(--c-tanh)">Tanh</td><td>(−1, 1)</td><td>是</td><td>两端</td><td>≤ 1，饱和区 ≈ 0</td><td>RNN 状态、有界输出</td><td>深层仍梯度消失</td></tr>
+      <tr><td style="color:var(--c-relu)">ReLU</td><td>[0, ∞)</td><td>否</td><td>负区</td><td>正区 = 1，负区 = 0</td><td>CNN/MLP 隐藏层默认</td><td>dead ReLU</td></tr>
+      <tr><td style="color:var(--c-lrelu)">Leaky ReLU</td><td>(−∞, ∞)</td><td>近似</td><td>否</td><td>正区 1，负区 α</td><td>怀疑 dead ReLU 时的替换</td><td>α 需选择；提升常有限</td></tr>
+      <tr><td style="color:var(--c-gelu)">GELU</td><td>≈ (−0.17, ∞)</td><td>近似</td><td>负区渐进</td><td>平滑，负区留微弱梯度</td><td>Transformer FFN 默认</td><td>计算略贵</td></tr>
+      <tr><td style="color:var(--c-silu)">SiLU/Swish</td><td>≈ (−0.28, ∞)</td><td>近似</td><td>负区渐进</td><td>平滑，与 GELU 接近</td><td>EfficientNet、SwiGLU</td><td>同 GELU</td></tr>
+      <tr><td style="color:var(--c-softmax)">Softmax</td><td>(0,1)，Σ=1</td><td>—</td><td>大 logit 差时</td><td>各维梯度互相耦合</td><td>多分类输出、attention</td><td>误用于隐藏层；数值溢出需减 max</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+<!-- ============ SECTION 4 ============ -->
+<section id="s4"><div class="wrap narrow">
+  <div class="sec-head"><div class="eyebrow">SECTION 04</div><h2>梯度消失：从导数看训练为什么变慢</h2></div>
+
+  <p>反向传播是链式法则的机械执行。loss 对第 <code>l</code> 层的梯度，要从最后一层出发，<strong>逐层乘上</strong>“该层激活函数的导数 × 权重矩阵”才能传回来：</p>
+
+  <div class="formula">
+    ∂L/∂h<sub>l</sub> = ∂L/∂h<sub>L</sub> · Π<sub>k=l+1..L</sub> ( W<sub>k</sub><sup>T</sup> · diag(f′(z<sub>k</sub>)) )
+    <span class="why">注意那个连乘号。每往回传一层，梯度就要乘一次 <code>f′(z)</code>。如果每层的导数普遍是 0.2，传过 10 层就剩 0.2<sup>10</sup> ≈ 一千万分之一——底层拿到的训练信号约等于零，权重几乎不更新。这就是<b>梯度消失</b>：不是算错了，是信号在乘法链里衰减没了。</span>
+  </div>
+
+  <p>现在回看第 3 节的导数曲线就清楚了：Sigmoid 的导数<strong>最大才 0.25</strong>，且大部分区域远小于此；Tanh 好一点（峰值 1），但只在零附近陡，两端照样趴平。而 ReLU 正区导数恒为 1——乘多少次都是 1，信号原样通过。下面的模拟器把这件事量化了：一个随机初始化的深网络（Xavier 初始化，宽度 32），我们把单位梯度从顶层灌入，测量它传到每一层时还剩多少。</p>
+
+  <div class="panel">
+    <div class="panel-title">Gradient Flow Simulator · 梯度反传衰减</div>
+    <div class="panel-q">回答的问题：<em>同样深度下，换一个激活函数，传到底层的梯度差几个数量级？</em></div>
+    <div class="chips" id="gsChips"></div>
+    <div class="sliders" style="margin-bottom:12px">
+      <div class="sl"><label for="gsDepth">网络层数</label><input type="range" id="gsDepth" min="2" max="30" step="1" value="16"><output id="gsDepthV">16</output></div>
+      <div class="sl"><label for="gsScale">初始化尺度</label><input type="range" id="gsScale" min="0.5" max="1.6" step="0.05" value="1"><output id="gsScaleV">1.00×</output></div>
+    </div>
+    <svg id="gsPlot" class="plot" viewBox="0 0 560 320"></svg>
+    <div class="legend"><span>纵轴：log₁₀‖梯度‖（0 = 与顶层同量级，每降 1 格衰减 10 倍）· 横轴：层（右侧为输出层，梯度从右往左传）</span></div>
+    <div class="readout">
+      <div class="ro" style="flex:1.4"><div class="k">传到第 1 层时剩余</div><div class="v" id="gsBottom">–</div></div>
+      <div class="ro" style="flex:1.2"><div class="k">该激活的死区占比</div><div class="v" id="gsDead">–</div></div>
+      <button class="btn ghost" id="gsResample" style="align-self:center">重新随机采样</button>
+    </div>
+    <p class="dim" id="gsNote" style="font-size:13.5px;margin-top:12px"></p>
+  </div>
+
+  <p>几个值得动手验证的现象：</p>
+  <ul class="plain">
+    <li><strong>Sigmoid + 20 层</strong>：底层梯度通常衰减到 10⁻⁸ 以下——这正是 2010 年前“深网络训不动”的直接原因。</li>
+    <li><strong>ReLU 同深度</strong>：衰减主要来自被置零的那一半神经元和权重尺度，量级上远好于 Sigmoid；配合合适初始化基本可以维持梯度量级。但注意“死区占比”读数——负区导数为 0 是它换来畅通的代价，运气不好时表现为 dead ReLU。</li>
+    <li><strong>拖动“初始化尺度”</strong>：调小，所有函数都更快消失；调大，ReLU 甚至会<strong>梯度爆炸</strong>（曲线朝上翘）。这提示梯度消失/爆炸从来不是激活函数一个变量决定的——初始化、深度、归一化、残差连接都在同一个乘法链里。激活函数决定的是 <code>f′(z)</code> 这一项的“天花板”。</li>
+  </ul>
+
+  <div class="note warn"><b>为什么现代深网络能到几百层？</b>不是因为找到了完美激活函数，而是多管齐下：ReLU/GELU 保住 f′ 的量级 + He/Xavier 初始化保住 W 的量级 + BatchNorm/LayerNorm 持续校正分布 + <strong>残差连接给梯度开了一条不经过任何激活函数的直通旁路</strong>（∂(x+F(x))/∂x = I + …，恒有一条“乘 1”的路径）。激活函数是必要条件，不是全部答案。</div>
+</div></section>
+
+<!-- ============ SECTION 5 ============ -->
+<section id="s5"><div class="wrap narrow">
+  <div class="sec-head"><div class="eyebrow">SECTION 05</div><h2>输出层怎么选：由任务和 loss 决定</h2></div>
+
+  <p>这一节单独成章，因为初学最常见的混乱就是把两个问题搅在一起：<strong>隐藏层激活</strong>选的是“特征怎么变换、梯度怎么流”（答案基本是 ReLU/GELU 家族）；<strong>输出层激活</strong>选的是“网络最后一个数字代表什么含义”——它由任务类型和损失函数<strong>成对决定</strong>，没有自由发挥的空间。选下面一个任务试试：</p>
+
+  <div class="panel">
+    <div class="panel-title">Output Layer Selector · 任务 → 输出层 + Loss</div>
+    <div class="panel-q">回答的问题：<em>我的任务应该用什么输出激活、配什么 loss、输出的数字怎么解读？</em></div>
+    <div class="taskgrid" id="taskGrid"></div>
+    <div class="taskcard" id="taskCard"></div>
+  </div>
+
+  <details class="vs">
+    <summary><span style="color:var(--c-sigmoid)">Sigmoid</span> vs <span style="color:var(--c-softmax)">Softmax</span>：独立打分与互斥竞争 <span class="arrow">›</span></summary>
+    <div class="vs-body">
+      <p style="font-size:14.5px;margin-top:12px">两者都输出 (0,1) 的“概率”，但语义完全不同，选错会直接改变模型回答的问题：</p>
+      <div class="vs-grid">
+        <div class="vs-col" style="--vc:var(--c-sigmoid)"><h4>Sigmoid · 每个输出独立判断</h4><ul>
+          <li>逐元素作用，各输出互不影响，概率<b>不要求和为 1</b></li>
+          <li>回答 N 个独立的是非题：“有猫吗？有狗吗？”</li>
+          <li>一张图可以同时“有猫 0.9、有狗 0.8”</li>
+          <li>适用：二分类（单输出）、多标签分类</li>
+        </ul></div>
+        <div class="vs-col" style="--vc:var(--c-softmax)"><h4>Softmax · 全体竞争一个名额</h4><ul>
+          <li>作用于整个向量，输出<b>强制和为 1</b>，类别互斥</li>
+          <li>回答一道单选题：“这张图最可能是哪一类？”</li>
+          <li>“猫 0.9”必然压低其他所有类别的份额</li>
+          <li>适用：单标签多分类、语言模型下一个 token</li>
+        </ul></div>
+      </div>
+      <div class="vs-verdict"><b>判断口诀：</b>类别可以同时成立 → 各自 Sigmoid；类别有且只有一个成立 → Softmax。另外二分类里“单输出 Sigmoid”和“双输出 Softmax”数学等价，惯例用前者。</div>
+    </div>
+  </details>
+
+  <details class="vs">
+    <summary>隐藏层激活 vs 输出层激活：两个不同的问题 <span class="arrow">›</span></summary>
+    <div class="vs-body">
+      <div class="vs-grid">
+        <div class="vs-col" style="--vc:var(--c-relu)"><h4>隐藏层 · 为学习服务</h4><ul>
+          <li>目标：非线性表达力 + 梯度畅通</li>
+          <li>不关心输出数值的“含义”，只关心分布和导数</li>
+          <li>默认 ReLU / GELU / SiLU；几乎不用 Sigmoid，绝不用 Softmax</li>
+          <li>可以整网统一换掉，属于超参数</li>
+        </ul></div>
+        <div class="vs-col" style="--vc:var(--c-softmax)"><h4>输出层 · 为语义服务</h4><ul>
+          <li>目标：让输出匹配目标值的类型与范围</li>
+          <li>由任务+loss 成对锁定，不是调参自由度</li>
+          <li>回归 Linear；二分类/多标签 Sigmoid；多分类 Softmax</li>
+          <li>训练时常被折叠进 loss，代码里“看不见”（见下）</li>
+        </ul></div>
+      </div>
+    </div>
+  </details>
+
+  <div class="note"><b>关于 logits 的重要工程事实：</b>现代框架里，输出激活经常<strong>不显式出现在模型代码中</strong>。PyTorch 的 <code>CrossEntropyLoss</code> 内部自带 log-softmax，<code>BCEWithLogitsLoss</code> 内部自带 sigmoid——它们都直接接收<strong>原始 logits</strong>，在 log 空间合并计算以保证数值稳定。所以训练时模型最后一层就是裸的 <code>Linear</code>；Softmax/Sigmoid 只在推理阶段需要“人类可读的概率”或需要采样时才显式调用。语言模型同理：训练时 logits 直接进 loss，采样时才做 softmax（还常配 temperature）。</div>
+</div></section>
+
+<!-- ============ SECTION 6 ============ -->
+<section id="s6"><div class="wrap narrow">
+  <div class="sec-head"><div class="eyebrow">SECTION 06</div><h2>工程实践中的选择规则</h2></div>
+  <p>下面是实用的默认值，不是铁律——它们成立的前提写在括号里：</p>
+  <ul class="plain">
+    <li><strong>MLP / CNN 隐藏层：ReLU 是强基线。</strong>先用它把 pipeline 跑通；只有当你观察到大量死神经元或训练不稳时，才值得试 Leaky ReLU / GELU（收益通常是小幅的）。</li>
+    <li><strong>Transformer：GELU 或 SiLU。</strong>跟随架构惯例——BERT/GPT/ViT 用 GELU，LLaMA 系的 SwiGLU 用 SiLU。复现论文时保持一致，别自作主张换。</li>
+    <li><strong>RNN / LSTM / GRU：Sigmoid 和 Tanh 在这里不是遗产，是语义。</strong>门必须输出 (0,1) 的“开度”→ Sigmoid；状态必须有界防爆炸 → Tanh。这是结构设计，不要替换成 ReLU。</li>
+    <li><strong>输出概率：</strong>二分类 → 单输出 Sigmoid；互斥多分类 → Softmax；多标签 → 逐标签 Sigmoid。训练时优先用带 logits 的 loss（<code>BCEWithLogitsLoss</code>、<code>CrossEntropyLoss</code>），别手写 softmax + log。</li>
+    <li><strong>回归输出：Linear</strong>。目标有物理范围时，可用 Sigmoid/Tanh 压缩后再线性缩放到目标区间（例如像素值、角度），但注意目标贴近边界时会进入饱和区、训练变慢。</li>
+    <li><strong>训练不动别只怪激活函数。</strong>梯度消失/爆炸是乘法链整体的问题：检查顺序应该是学习率 → 初始化 → 归一化层 → 残差连接 → 然后才是激活函数。深网络里这五件事是一个系统。</li>
+  </ul>
+</div></section>
+
+<!-- ============ SECTION 7 ============ -->
+<section id="s7"><div class="wrap narrow">
+  <div class="sec-head"><div class="eyebrow">SECTION 07</div><h2>常见误区与反例</h2></div>
+
+  <div class="note bad"><b>误区一：“Sigmoid 输出像概率，所以隐藏层也用它。”</b><p>隐藏层根本不需要“像概率”——它需要的是梯度能通过。Sigmoid 导数上限 0.25 + 两端饱和 + 非零中心，三个问题在隐藏层全数发作，深一点就训不动。概率语义只在输出层有价值。</p></div>
+
+  <div class="note bad"><b>误区二：“ReLU 一定最好，无脑用。”</b><p>ReLU 是好默认，不是最优解：Transformer 里 GELU/SiLU 表现更稳已是共识；RNN 门控里换成 ReLU 会破坏门的语义还可能状态爆炸；学习率偏大时 dead ReLU 会实际发生。“强基线”意味着从它出发，不意味着到它为止。</p></div>
+
+  <div class="note bad"><b>误区三：“分类网络最后必须手写一层 Softmax。”</b><p>训练时通常恰恰不能写：<code>CrossEntropyLoss</code> 接收的是 logits，模型里再加 Softmax 等于做了两次，轻则数值精度受损，重则训练明显变差。这是新手最常见的 bug 之一。Softmax 属于推理/解释阶段。</p></div>
+
+  <div class="note bad"><b>误区四：“梯度消失是激活函数导致的。”</b><p>只对了一小半。梯度是“逐层乘 f′(z) 再乘 W”的连乘，初始化尺度、网络深度、有无归一化和残差连接每一项都在链条里（第 4 节的模拟器里拖动初始化尺度即可验证：同一个激活函数既能消失也能爆炸）。把 Sigmoid 换成 ReLU 只是修好了其中一环。</p></div>
+
+  <div class="note bad"><b>误区五：“激活函数越新、越复杂越好。”</b><p>从 ReLU 到 GELU 的典型增益是零点几个点，且依赖架构与任务；而它带来的差异远小于学习率、初始化或数据质量一档的差异。选择激活函数看三样：任务语义（输出层）、架构惯例（隐藏层）、训练稳定性——不看发表年份。</p></div>
+
+  <h3>自检：合上页面能答出来吗</h3>
+  <details class="quiz"><summary>为什么 100 层不带激活函数的网络等价于 1 层？</summary><div class="ans"><p>线性变换的复合仍是线性变换：W₂(W₁x+b₁)+b₂ = (W₂W₁)x + (W₂b₁+b₂)。所有层可以合并成一个 W′x+b′，函数空间没有扩大，只能表达线性映射。</p></div></details>
+  <details class="quiz"><summary>Sigmoid 作为隐藏层的三个问题分别是什么？</summary><div class="ans"><p>① 两端饱和，导数趋零，该层停止学习；② 导数上限仅 0.25，链式连乘导致梯度指数衰减；③ 输出非零中心（恒正），下层权重梯度被迫同号，更新走之字形。</p></div></details>
+  <details class="quiz"><summary>ReLU 为什么缓解梯度消失？代价是什么？</summary><div class="ans"><p>正区间导数恒为 1，梯度穿过激活层不衰减，切断了“乘一串小于 1 的数”的衰减机制。代价是负区导数为 0：神经元若长期落在负区，梯度永远进不来，即 dead ReLU。</p></div></details>
+  <details class="quiz"><summary>多标签分类为什么用多个 Sigmoid 而不是 Softmax？</summary><div class="ans"><p>多标签的各类别可以同时成立，是 N 道独立是非题；Softmax 强制概率和为 1、类别互斥，会让标签之间错误地互相竞争。独立判断 → 逐标签 Sigmoid + BCE。</p></div></details>
+  <details class="quiz"><summary>用 PyTorch 的 CrossEntropyLoss 时，模型最后要不要加 Softmax？</summary><div class="ans"><p>不要。CrossEntropyLoss = log-softmax + NLL，直接吃 logits。再加一层 Softmax 是重复计算，会损害数值稳定性和训练效果。推理时需要概率再单独做 softmax。</p></div></details>
+</div></section>
+<!-- ============ SECTION 8 ============ -->
+<section id="s8"><div class="wrap narrow">
+  <div class="sec-head"><div class="eyebrow">SECTION 08</div><h2>最小代码示例</h2></div>
+
+  <p>三段可直接运行的最小示例。第一段用 NumPy + Matplotlib 复现本文的函数/导数曲线（画一遍印象比看十遍深）：</p>
+
+  <div class="codewrap"><button class="copybtn">复制</button><pre><span class="cm"># 1) 画出主要激活函数及其导数（NumPy）</span>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+
+z = np.linspace(-<span class="nb">6</span>, <span class="nb">6</span>, <span class="nb">400</span>)
+sigmoid = <span class="kw">lambda</span> z: <span class="nb">1</span> / (<span class="nb">1</span> + np.exp(-z))
+acts = {
+    <span class="st">"Sigmoid"</span>: sigmoid(z),
+    <span class="st">"Tanh"</span>:    np.tanh(z),
+    <span class="st">"ReLU"</span>:    np.maximum(<span class="nb">0</span>, z),
+    <span class="st">"GELU"</span>:    z * sigmoid(<span class="nb">1.702</span> * z),          <span class="cm"># 常用近似 z·σ(1.702z)</span>
+    <span class="st">"SiLU"</span>:    z * sigmoid(z),
+}
+fig, (ax1, ax2) = plt.subplots(<span class="nb">1</span>, <span class="nb">2</span>, figsize=(<span class="nb">11</span>, <span class="nb">4</span>))
+<span class="kw">for</span> name, a <span class="kw">in</span> acts.items():
+    ax1.plot(z, a, label=name)
+    ax2.plot(z[:-<span class="nb">1</span>], np.diff(a) / np.diff(z), label=name)  <span class="cm"># 数值导数</span>
+ax1.set_title(<span class="st">"f(z)"</span>); ax2.set_title(<span class="st">"f'(z)  ← 梯度消失看这张"</span>)
+<span class="kw">for</span> ax <span class="kw">in</span> (ax1, ax2): ax.legend(); ax.grid(alpha=<span class="nb">.3</span>)
+plt.show()
+
+<span class="cm"># Softmax 作用在向量上，单独演示：</span>
+<span class="kw">def</span> <span class="fn">softmax</span>(v):
+    e = np.exp(v - v.max())      <span class="cm"># 减 max：防止 exp 溢出的标准写法</span>
+    <span class="kw">return</span> e / e.sum()
+<span class="fn">print</span>(softmax(np.array([<span class="nb">2.0</span>, <span class="nb">1.0</span>, <span class="nb">0.1</span>])))  <span class="cm"># [0.66 0.24 0.10]，和为 1</span></pre></div>
+
+  <p>第二段是三种任务的输出层写法。注意共同点：<strong>模型的最后一层都是裸 <code>nn.Linear</code></strong>，输出激活被折叠进 loss：</p>
+
+  <div class="codewrap"><button class="copybtn">复制</button><pre><span class="cm"># 2) 输出层三件套（PyTorch）—— 模型末端都是 Linear，激活在 loss 里</span>
+<span class="kw">import</span> torch, torch.nn <span class="kw">as</span> nn
+
+backbone = <span class="kw">lambda</span> d_in: nn.Sequential(       <span class="cm"># 隐藏层：ReLU/GELU 家族</span>
+    nn.Linear(d_in, <span class="nb">64</span>), nn.GELU(),
+    nn.Linear(<span class="nb">64</span>, <span class="nb">64</span>), nn.GELU(),
+)
+
+<span class="cm"># —— 二分类：1 个 logit + BCEWithLogitsLoss（内含 sigmoid）</span>
+bin_head  = nn.Linear(<span class="nb">64</span>, <span class="nb">1</span>)
+bin_loss  = nn.BCEWithLogitsLoss()            <span class="cm"># 目标 shape (N,1)，取值 0/1</span>
+<span class="cm"># 推理: prob = torch.sigmoid(logit)</span>
+
+<span class="cm"># —— 多分类（单标签，C 类）：C 个 logits + CrossEntropyLoss（内含 log-softmax）</span>
+mc_head   = nn.Linear(<span class="nb">64</span>, C)
+mc_loss   = nn.CrossEntropyLoss()             <span class="cm"># 目标是类别下标，shape (N,)</span>
+<span class="cm"># 推理: prob = logits.softmax(dim=-1)   ← 千万不要在模型里再加 Softmax 层</span>
+
+<span class="cm"># —— 多标签（C 个独立是非题）：C 个 logits + BCEWithLogitsLoss</span>
+ml_head   = nn.Linear(<span class="nb">64</span>, C)
+ml_loss   = nn.BCEWithLogitsLoss()            <span class="cm"># 目标 shape (N,C)，多个 1 可共存</span>
+<span class="cm"># 推理: probs = torch.sigmoid(logits)   # 各标签独立，和不必为 1</span>
+
+<span class="cm"># —— 回归：Linear 直接输出 + MSE / Huber</span>
+reg_head  = nn.Linear(<span class="nb">64</span>, <span class="nb">1</span>)
+reg_loss  = nn.MSELoss()</pre></div>
+
+  <p>第三段验证一个本文反复强调的事实——<code>CrossEntropyLoss</code> 接收 logits，手动加 Softmax 是错的：</p>
+
+  <div class="codewrap"><button class="copybtn">复制</button><pre><span class="cm"># 3) 亲手验证：CrossEntropyLoss 吃的是 logits</span>
+logits = torch.tensor([[<span class="nb">2.0</span>, <span class="nb">0.5</span>, -<span class="nb">1.0</span>]])
+target = torch.tensor([<span class="nb">0</span>])
+ce = nn.CrossEntropyLoss()
+
+correct = ce(logits, target)                  <span class="cm"># ✓ 正确：直接传 logits</span>
+wrong   = ce(logits.softmax(-<span class="nb">1</span>), target)      <span class="cm"># ✗ 常见 bug：先 softmax 再传</span>
+manual  = -logits.log_softmax(-<span class="nb">1</span>)[<span class="nb">0</span>, <span class="nb">0</span>]       <span class="cm"># 手动展开，验证与 correct 相等</span>
+<span class="fn">print</span>(correct.item(), manual.item(), wrong.item())
+<span class="cm"># correct == manual；wrong 的数值和梯度都不同 —— 双重 softmax 会伤训练</span></pre></div>
+</div></section>
+
+<!-- ============ SECTION 9 ============ -->
+<section id="s9"><div class="wrap narrow">
+  <div class="sec-head"><div class="eyebrow">SECTION 09</div><h2>激活函数选择速查表</h2></div>
+  <p>收藏这一张。左列是你面对的场景，右边是默认选择和触发条件：</p>
+  <div class="tbl-scroll"><table>
+    <thead><tr><th>场景</th><th>默认选择</th><th>配套 Loss</th><th>什么时候换 / 注意什么</th></tr></thead>
+    <tbody>
+      <tr><td>MLP / CNN 隐藏层</td><td style="color:var(--c-relu)">ReLU</td><td>—</td><td>出现大量死神经元 → Leaky ReLU；追求平滑训练 → GELU</td></tr>
+      <tr><td>Transformer FFN</td><td style="color:var(--c-gelu)">GELU / SiLU</td><td>—</td><td>跟随所复现架构的惯例（SwiGLU 用 SiLU）</td></tr>
+      <tr><td>RNN 门控 / 状态</td><td style="color:var(--c-sigmoid)">Sigmoid</td><td style="color:var(--c-tanh);font-family:var(--mono)">Tanh</td><td>结构语义，不要替换</td></tr>
+      <tr><td>回归输出</td><td style="color:var(--c-linear)">Linear</td><td>MSE / Huber</td><td>目标有界 → Sigmoid/Tanh + 缩放，防目标贴边饱和</td></tr>
+      <tr><td>二分类输出</td><td style="color:var(--c-sigmoid)">Sigmoid ×1</td><td>BCEWithLogitsLoss</td><td>训练传 logits；推理才取 sigmoid</td></tr>
+      <tr><td>多分类输出（单标签）</td><td style="color:var(--c-softmax)">Softmax</td><td>CrossEntropyLoss</td><td>loss 已含 softmax，模型里不要重复加</td></tr>
+      <tr><td>多标签输出</td><td style="color:var(--c-sigmoid)">Sigmoid ×C</td><td>BCEWithLogitsLoss</td><td>别误用 Softmax——类别不互斥</td></tr>
+      <tr><td>语言模型输出</td><td style="color:var(--c-linear)">Linear（logits）</td><td>CrossEntropyLoss</td><td>Softmax 只在采样/解释时出现，常配 temperature</td></tr>
+      <tr><td>深网络训不动</td><td colspan="2">先查学习率、初始化、归一化、残差</td><td>激活函数只是乘法链中的一环</td></tr>
+    </tbody>
+  </table></div>
+  <p class="dim" style="font-size:14px">读完这篇如果只记三句话：① 非线性是深度成立的前提，不是配件；② 隐藏层看梯度（选 ReLU/GELU 家族），输出层看语义（由任务和 loss 成对锁定）；③ 训练问题是乘法链整体的问题，激活函数决定其中 f′(z) 这一项的天花板。</p>
+</div></section>
+
+<footer><div class="wrap">ACTIVATION FUNCTIONS · 单文件交互式讲义 · 所有模拟均在你的浏览器本地运行，可离线打开</div></footer>
+<script>
+"use strict";
+/* ================= utilities ================= */
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const $ = id => document.getElementById(id);
+const fmt = (v,d=3) => (Math.abs(v)>=1000?v.toExponential(1):v.toFixed(d));
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gauss(rng){let u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+const sig = z => 1/(1+Math.exp(-z));
+
+/* ================= function registry ================= */
+const NUMH = 1e-4;
+const FN = {
+  linear:  {label:"Linear",   c:"--c-linear",  f:z=>z,                        yr:[-4,4],
+    range:"(−∞, ∞)", zero:"是", sat:"否", grad:"恒为 1，完全透明",
+    note:"f(z)=z：输出就是打分本身。注意导数恒为 1——它对梯度完全透明，但也完全不提供非线性。适合回归输出层。"},
+  sigmoid: {label:"Sigmoid",  c:"--c-sigmoid", f:z=>sig(z),                   yr:[-0.3,1.3],
+    range:"(0, 1)", zero:"否", sat:"两端", grad:"上限 0.25，|z|>4 后 ≈ 0",
+    note:"把 z 拖到 ±5 以外看看导数——这就是饱和区。输出恒为正（非零中心）也是它作为隐藏层的问题之一。"},
+  tanh:    {label:"Tanh",     c:"--c-tanh",    f:Math.tanh,                   yr:[-1.5,1.5],
+    range:"(−1, 1)", zero:"是", sat:"两端", grad:"上限 1（仅 z=0），两端 ≈ 0",
+    note:"形状像被拉高的 Sigmoid：零中心，导数峰值提到 1。但两端一样饱和——深层堆叠仍会梯度消失。"},
+  relu:    {label:"ReLU",     c:"--c-relu",    f:z=>Math.max(0,z),            yr:[-1.2,4],
+    range:"[0, ∞)", zero:"否", sat:"负半轴", grad:"正区 = 1，负区 = 0",
+    note:"把 z 拖进负区：输出与导数同时归零。若某神经元的 z 在所有样本上都为负，它就永久死亡（dead ReLU）。"},
+  lrelu:   {label:"Leaky ReLU", c:"--c-lrelu", f:z=>z>0?z:0.1*z,              yr:[-1.6,4],
+    range:"(−∞, ∞)", zero:"近似", sat:"否", grad:"正区 1，负区 α（图中 α=0.1）",
+    note:"负区留一条小斜率（这里 α=0.1，实际常用 0.01），梯度永不为零——dead ReLU 的最低成本修复。"},
+  gelu:    {label:"GELU",     c:"--c-gelu",    f:z=>z*sig(1.702*z),           yr:[-1.6,4],
+    range:"≈ (−0.17, ∞)", zero:"近似", sat:"负区渐进", grad:"平滑；负区保留微弱梯度",
+    note:"z · Φ(z)：输入乘上“被保留的概率”。注意 z≈−0.75 附近的浅凹和处处平滑的导数——这是与 ReLU 硬折角的本质区别。"},
+  silu:    {label:"SiLU",     c:"--c-silu",    f:z=>z*sig(z),                 yr:[-1.6,4],
+    range:"≈ (−0.28, ∞)", zero:"近似", sat:"负区渐进", grad:"平滑，与 GELU 接近",
+    note:"z · σ(z)：自门控。和 GELU 来回切换对比一下——两条曲线几乎重合，实践中近似可互换。"},
+  softmax: {label:"Softmax",  c:"--c-softmax", f:z=>{const e=Math.exp(Math.min(z,30));return e/(e+2)}, yr:[-0.3,1.3],
+    range:"(0,1)，全体和为 1", zero:"—", sat:"logit 差距大时", grad:"各维互相耦合",
+    note:"Softmax 作用在整个向量上。这里画的是三类 logits [z, 0, 0] 中第一类的概率：z 抬高自己时，另外两类的份额被同步压低——这就是“竞争归一化”。"},
+};
+for(const k in FN){const F=FN[k];F.df = z => (F.f(z+NUMH)-F.f(z-NUMH))/(2*NUMH);F.color = css(F.c);}
+
+/* ================= tiny SVG plot helper ================= */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent){const e=document.createElementNS(NS,tag);for(const a in attrs)e.setAttribute(a,attrs[a]);if(parent)parent.appendChild(e);return e}
+function makePlot(svg, xmin, xmax){
+  const W=+svg.viewBox.baseVal.width, H=+svg.viewBox.baseVal.height;
+  const pad={l:40,r:14,t:12,b:26};
+  const st={xmin,xmax,ymin:-1,ymax:1};
+  const X=x=>pad.l+(x-st.xmin)/(st.xmax-st.xmin)*(W-pad.l-pad.r);
+  const Y=y=>H-pad.b-(y-st.ymin)/(st.ymax-st.ymin)*(H-pad.t-pad.b);
+  const gGrid=el("g",{},svg), gAxis=el("g",{},svg), gData=el("g",{},svg);
+  function setY(ymin,ymax){
+    st.ymin=ymin;st.ymax=ymax;
+    gGrid.innerHTML="";gAxis.innerHTML="";
+    const grid=css("--grid"), faint=css("--faint");
+    const xstep=niceStep(st.xmax-st.xmin), ystep=niceStep(ymax-ymin);
+    for(let x=Math.ceil(st.xmin/xstep)*xstep;x<=st.xmax+1e-9;x+=xstep){
+      el("line",{x1:X(x),x2:X(x),y1:pad.t,y2:H-pad.b,stroke:grid,"stroke-width":x===0?0:1},gGrid);
+      el("text",{x:X(x),y:H-8,fill:faint,"font-size":10,"font-family":"var(--mono)","text-anchor":"middle"},gAxis).textContent=+x.toFixed(2);
+    }
+    for(let y=Math.ceil(ymin/ystep)*ystep;y<=ymax+1e-9;y+=ystep){
+      el("line",{x1:pad.l,x2:W-pad.r,y1:Y(y),y2:Y(y),stroke:grid,"stroke-width":y===0?0:1},gGrid);
+      el("text",{x:pad.l-6,y:Y(y)+3,fill:faint,"font-size":10,"font-family":"var(--mono)","text-anchor":"end"},gAxis).textContent=+y.toFixed(2);
+    }
+    if(st.xmin<0&&st.xmax>0)el("line",{x1:X(0),x2:X(0),y1:pad.t,y2:H-pad.b,stroke:css("--line"),"stroke-width":1.2},gAxis);
+    if(ymin<0&&ymax>0)el("line",{x1:pad.l,x2:W-pad.r,y1:Y(0),y2:Y(0),stroke:css("--line"),"stroke-width":1.2},gAxis);
+  }
+  function niceStep(span){const raw=span/6,p=Math.pow(10,Math.floor(Math.log10(raw)));const c=raw/p;return (c<1.5?1:c<3.5?2:c<7.5?5:10)*p}
+  function path(fn,color,dash,width){
+    const N=220;let d="";
+    for(let i=0;i<=N;i++){const x=st.xmin+(st.xmax-st.xmin)*i/N;let y=fn(x);
+      y=Math.max(st.ymin-(st.ymax-st.ymin),Math.min(st.ymax+(st.ymax-st.ymin),y));
+      d+=(i?"L":"M")+X(x).toFixed(1)+","+Y(y).toFixed(1);}
+    return el("path",{d,fill:"none",stroke:color,"stroke-width":width||2.6,"stroke-dasharray":dash||"none","stroke-linejoin":"round"},gData);
+  }
+  return {svg,X,Y,setY,path,gData,pad,W,H,clear:()=>gData.innerHTML="",st};
+}
+
+/* ================= HERO ================= */
+const heroOrder=["linear","sigmoid","tanh","relu","lrelu","gelu","softmax"];
+let heroFn="relu";
+const hp = makePlot($("heroPlot"), -6, 6);
+function buildChips(container, keys, current, cb){
+  container.innerHTML="";
+  keys.forEach(k=>{
+    const b=document.createElement("button");
+    b.className="chip"+(k===current?" on":"");
+    b.style.setProperty("--fc", FN[k].color);
+    b.textContent=FN[k].label;
+    b.setAttribute("role","tab");b.setAttribute("aria-selected",k===current);
+    b.onclick=()=>cb(k);
+    container.appendChild(b);
+  });
+}
+/* neuron svg */
+(function(){
+  const s=$("neuronSvg"), ink=css("--ink"), mut=css("--muted"), ln=css("--line");
+  s.innerHTML=`
+  <defs><marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="${mut}"/></marker></defs>
+  <circle cx="42" cy="105" r="24" fill="rgba(87,199,227,.08)" stroke="${css("--c-tanh")}" stroke-width="1.5"/>
+  <text x="42" y="100" text-anchor="middle" fill="${ink}" font-family="var(--mono)" font-size="13">x</text>
+  <text id="nX" x="42" y="116" text-anchor="middle" fill="${css("--c-tanh")}" font-family="var(--mono)" font-size="11"></text>
+  <line x1="66" y1="105" x2="150" y2="105" stroke="${mut}" stroke-width="1.4" marker-end="url(#arr)"/>
+  <text id="nW" x="108" y="96" text-anchor="middle" fill="${mut}" font-family="var(--mono)" font-size="11"></text>
+  <circle cx="108" cy="34" r="16" fill="none" stroke="${ln}" stroke-width="1.3"/>
+  <text id="nB" x="108" y="39" text-anchor="middle" fill="${mut}" font-family="var(--mono)" font-size="10"></text>
+  <line x1="119" y1="45" x2="163" y2="88" stroke="${mut}" stroke-width="1.2" marker-end="url(#arr)"/>
+  <circle cx="178" cy="105" r="26" fill="rgba(255,255,255,.03)" stroke="${ln}" stroke-width="1.5"/>
+  <text x="178" y="101" text-anchor="middle" fill="${ink}" font-family="var(--mono)" font-size="12">Σ</text>
+  <text id="nZ" x="178" y="116" text-anchor="middle" fill="${ink}" font-family="var(--mono)" font-size="10"></text>
+  <line x1="204" y1="105" x2="236" y2="105" stroke="${mut}" stroke-width="1.4" marker-end="url(#arr)"/>
+  <rect x="240" y="72" width="86" height="66" rx="12" fill="rgba(0,0,0,.25)" stroke="${ln}" stroke-width="1.5"/>
+  <text id="nFname" x="283" y="64" text-anchor="middle" font-family="var(--mono)" font-size="11"></text>
+  <path id="nCurve" fill="none" stroke-width="2.4"/>
+  <line x1="326" y1="105" x2="360" y2="105" stroke="${mut}" stroke-width="1.4" marker-end="url(#arr)"/>
+  <circle cx="392" cy="105" r="26" fill="rgba(166,217,75,.07)" stroke="${css("--c-softmax")}" stroke-width="1.5"/>
+  <text x="392" y="100" text-anchor="middle" fill="${ink}" font-family="var(--mono)" font-size="12">a</text>
+  <text id="nA" x="392" y="117" text-anchor="middle" fill="${css("--c-softmax")}" font-family="var(--mono)" font-size="11"></text>
+  <text x="42" y="152" text-anchor="middle" fill="${mut}" font-family="var(--mono)" font-size="10">input</text>
+  <text x="178" y="152" text-anchor="middle" fill="${mut}" font-family="var(--mono)" font-size="10">z = wx + b</text>
+  <text x="283" y="152" text-anchor="middle" fill="${mut}" font-family="var(--mono)" font-size="10">a = f(z)</text>
+  <text x="392" y="152" text-anchor="middle" fill="${mut}" font-family="var(--mono)" font-size="10">output</text>`;
+})();
+function miniCurve(){ /* activation icon inside neuron box */
+  const F=FN[heroFn];let d="";const x0=246,x1=320,y0=132,y1=78;
+  const lo=F.yr[0],hi=F.yr[1];
+  for(let i=0;i<=40;i++){const z=-4+8*i/40;let v=F.f(z);v=Math.max(lo,Math.min(hi,v));
+    const px=x0+(x1-x0)*i/40, py=y0-(v-lo)/(hi-lo)*(y0-y1);
+    d+=(i?"L":"M")+px.toFixed(1)+","+py.toFixed(1);}
+  const p=$("nCurve");p.setAttribute("d",d);p.setAttribute("stroke",F.color);
+  const nm=$("nFname");nm.textContent=F.label;nm.setAttribute("fill",F.color);
+}
+function heroRender(){
+  const F=FN[heroFn];
+  const x=+$("hx").value, w=+$("hw").value, b=+$("hb").value;
+  $("hxv").value=x.toFixed(2);$("hwv").value=w.toFixed(2);$("hbv").value=b.toFixed(2);
+  const z=w*x+b, a=F.f(z), d=F.df(z);
+  hp.clear();hp.setY(F.yr[0],F.yr[1]);
+  hp.path(F.f,F.color);
+  hp.path(F.df,F.color,"5 5",1.8).setAttribute("opacity",.75);
+  $("lgF").style.borderColor=F.color;$("lgD").style.borderColor=F.color;
+  const zc=Math.max(-6,Math.min(6,z));
+  el("line",{x1:hp.X(zc),x2:hp.X(zc),y1:hp.pad.t,y2:hp.H-hp.pad.b,stroke:F.color,"stroke-width":1,"stroke-dasharray":"2 4",opacity:.5},hp.gData);
+  el("circle",{cx:hp.X(zc),cy:hp.Y(Math.max(F.yr[0],Math.min(F.yr[1],a))),r:6,fill:F.color,stroke:"#0C131E","stroke-width":2},hp.gData);
+  el("circle",{cx:hp.X(zc),cy:hp.Y(Math.max(F.yr[0],Math.min(F.yr[1],d))),r:4.5,fill:"none",stroke:F.color,"stroke-width":2,"stroke-dasharray":"2 2"},hp.gData);
+  $("roZ").textContent=fmt(z,2);
+  $("roA").textContent=fmt(a,3);
+  $("roD").textContent=fmt(d,3);
+  const ad=Math.abs(d);let msg,col;
+  if(heroFn==="linear"){msg="完全透明通过";col=css("--muted")}
+  else if(ad<0.02){msg=(heroFn==="relu"?"死区：梯度 = 0":"深度饱和：几乎学不动");col=css("--bad")}
+  else if(ad<0.15){msg="接近饱和，信号很弱";col=css("--warn")}
+  else if(ad<0.6){msg="有梯度，但逐层衰减";col=css("--warn")}
+  else{msg="梯度接近全速通过";col=css("--ok")}
+  const m=$("roMsg");m.textContent=msg;m.style.color=col;
+  $("heroNote").textContent=F.note;
+  $("nX").textContent=x.toFixed(2);$("nW").textContent="w = "+w.toFixed(2);
+  $("nB").textContent="b="+b.toFixed(1);$("nZ").textContent=fmt(z,2);$("nA").textContent=fmt(a,2);
+  miniCurve();
+}
+function heroSet(k){heroFn=k;buildChips($("heroChips"),heroOrder,k,heroSet);heroRender()}
+buildChips($("heroChips"),heroOrder,heroFn,heroSet);
+["hx","hw","hb"].forEach(id=>$(id).addEventListener("input",heroRender));
+heroRender();
+
+/* ================= CURVE EXPLORER ================= */
+const exOrder=["linear","sigmoid","tanh","relu","lrelu","gelu","silu","softmax"];
+let exFn="sigmoid";
+const ex = makePlot($("exPlot"), -6, 6);
+function exRender(){
+  const F=FN[exFn];
+  ex.clear();ex.setY(F.yr[0],F.yr[1]);
+  ex.path(F.f,F.color,null,2.8);
+  ex.path(F.df,F.color,"5 5",1.8).setAttribute("opacity",.75);
+  $("exRange").textContent=F.range;$("exZero").textContent=F.zero;
+  $("exSat").textContent=F.sat;$("exGrad").textContent=F.grad;
+  exProbe(exProbe.lastZ==null?1:exProbe.lastZ);
+}
+function exProbe(z){
+  exProbe.lastZ=z;const F=FN[exFn];
+  ex.gData.querySelectorAll(".probe").forEach(n=>n.remove());
+  const a=F.f(z),d=F.df(z);
+  const mk=(v,fill)=>{const c=el("circle",{cx:ex.X(z),cy:ex.Y(Math.max(ex.st.ymin,Math.min(ex.st.ymax,v))),r:fill?5.5:4.5,fill:fill?F.color:"none",stroke:fill?"#0C131E":F.color,"stroke-width":2},ex.gData);c.classList.add("probe")};
+  const l=el("line",{x1:ex.X(z),x2:ex.X(z),y1:ex.pad.t,y2:ex.H-ex.pad.b,stroke:F.color,"stroke-width":1,"stroke-dasharray":"2 4",opacity:.45},ex.gData);l.classList.add("probe");
+  mk(a,true);mk(d,false);
+  $("exZ").textContent=fmt(z,2);$("exF").textContent=fmt(a,3);$("exD").textContent=fmt(d,3);
+}
+$("exPlot").addEventListener("pointermove",e=>{
+  const r=$("exPlot").getBoundingClientRect();
+  const vx=(e.clientX-r.left)/r.width*560;
+  const z=ex.st.xmin+(vx-ex.pad.l)/(560-ex.pad.l-ex.pad.r)*(ex.st.xmax-ex.st.xmin);
+  if(z>=ex.st.xmin&&z<=ex.st.xmax)exProbe(z);
+});
+function exSet(k){exFn=k;buildChips($("exChips"),exOrder,k,exSet);exRender()}
+buildChips($("exChips"),exOrder,exFn,exSet);
+exRender();
+
+/* ================= GRADIENT SIMULATOR ================= */
+const gsOrder=["sigmoid","tanh","relu","lrelu","gelu"];
+let gsFn="sigmoid", gsSeed=7;
+const gs = makePlot($("gsPlot"), 1, 16);
+const gsNotes={
+  sigmoid:"Sigmoid：每层最多乘 0.25，实际远小于此——曲线近乎直线下坠，深一点底层就收不到任何信号。",
+  tanh:"Tanh：峰值导数为 1，衰减比 Sigmoid 慢，但只要激活落进两端饱和区，趋势仍是稳定下行。",
+  relu:"ReLU：正区导数恒为 1，衰减主要来自被置零的约一半单元与权重尺度。试着调大初始化尺度——它也会爆炸。",
+  lrelu:"Leaky ReLU：与 ReLU 接近，但负区 α=0.1 的小梯度让死区占比归零——没有单元被彻底关闭。",
+  gelu:"GELU：行为介于 ReLU 与平滑函数之间，负区保留微弱梯度，整体量级与 ReLU 相近且更平滑。"
+};
+function gsRun(){
+  const F=FN[gsFn], L=+$("gsDepth").value, scale=+$("gsScale").value;
+  $("gsDepthV").value=L;$("gsScaleV").value=scale.toFixed(2)+"\u00d7";
+  const n=24, trials=8, rng=mulberry32(gsSeed*1000+L*7+Math.round(scale*100));
+  const logs=new Array(L+1).fill(0);let deadCnt=0,totCnt=0;
+  for(let t=0;t<trials;t++){
+    const Ws=[],Ds=[];let h=Array.from({length:n},()=>gauss(rng));
+    for(let l=0;l<L;l++){
+      const W=[];for(let i=0;i<n;i++){const row=[];for(let j=0;j<n;j++)row.push(gauss(rng)*scale/Math.sqrt(n));W.push(row)}
+      const z=new Array(n).fill(0);
+      for(let i=0;i<n;i++){let s=0;for(let j=0;j<n;j++)s+=W[i][j]*h[j];z[i]=s}
+      const D=z.map(F.df);
+      D.forEach(d=>{totCnt++;if(Math.abs(d)<1e-3)deadCnt++});
+      h=z.map(F.f);Ws.push(W);Ds.push(D);
+    }
+    let g=Array.from({length:n},()=>gauss(rng));
+    const norm0=Math.hypot(...g);
+    logs[L]+=0;
+    for(let l=L-1;l>=0;l--){
+      const gd=g.map((v,i)=>v*Ds[l][i]);
+      const g2=new Array(n).fill(0);
+      for(let j=0;j<n;j++){let s=0;for(let i=0;i<n;i++)s+=Ws[l][i][j]*gd[i];g2[j]=s}
+      g=g2;
+      const nn=Math.hypot(...g);
+      logs[l]+=Math.log10(Math.max(nn/norm0,1e-24));
+    }
+  }
+  for(let l=0;l<L;l++)logs[l]/=trials;
+  const lo=Math.min(-0.5,Math.floor(Math.min(...logs))), hi=Math.max(1,Math.ceil(Math.max(...logs)));
+  gs.st.xmin=1;gs.st.xmax=L+1;
+  gs.clear();gs.setY(lo,hi);
+  let d="";for(let l=0;l<=L;l++)d+=(l?"L":"M")+gs.X(l+1).toFixed(1)+","+gs.Y(Math.max(lo,logs[l])).toFixed(1);
+  el("path",{d,fill:"none",stroke:F.color,"stroke-width":2.8,"stroke-linejoin":"round"},gs.gData);
+  for(let l=0;l<=L;l++)el("circle",{cx:gs.X(l+1),cy:gs.Y(Math.max(lo,logs[l])),r:3.4,fill:F.color},gs.gData);
+  const bottom=Math.pow(10,logs[0]);
+  $("gsBottom").textContent=bottom>=0.01?("\u00d7 "+bottom.toFixed(2)):("\u00d7 10^"+logs[0].toFixed(1));
+  $("gsBottom").style.color=logs[0]<-4?css("--bad"):logs[0]>1?css("--warn"):css("--ok");
+  $("gsDead").textContent=(100*deadCnt/totCnt).toFixed(1)+" %";
+  $("gsNote").textContent=gsNotes[gsFn];
+}
+function gsSet(k){gsFn=k;buildChips($("gsChips"),gsOrder,k,gsSet);gsRun()}
+buildChips($("gsChips"),gsOrder,gsFn,gsSet);
+$("gsDepth").addEventListener("input",gsRun);
+$("gsScale").addEventListener("input",gsRun);
+$("gsResample").addEventListener("click",()=>{gsSeed=Math.floor(Math.random()*1e6);gsRun()});
+gsRun();
+</script>
+<script>
+"use strict";
+/* ================= DECISION BOUNDARY TRAINER ================= */
+(function(){
+  const cvs=$("dbCanvas"), ctx=cvs.getContext("2d");
+  const ACTS={
+    linear:{label:"Linear（无非线性）",c:"--c-linear",f:z=>z,df:z=>1,
+      note:"边界始终是一条直线，loss 卡在 0.69 左右（≈随机猜测）。参数在动，但网络的函数空间从未离开“线性”。"},
+    tanh:{label:"Tanh",c:"--c-tanh",f:Math.tanh,df:z=>1-Math.tanh(z)**2,
+      note:"平滑函数的组合 → 圆润的边界。观察它如何逐渐把内圈整个包起来。"},
+    relu:{label:"ReLU",c:"--c-relu",f:z=>z>0?z:0,df:z=>z>0?1:0,
+      note:"折痕的组合 → 边界由直线段拼成的多边形。这正是每个 ReLU 神经元贡献一条折线的直观体现。"}
+  };
+  let actKey="linear", net=null, running=false, step=0, raf=null;
+  /* data: inner disk (class 1) + outer ring (class 0) */
+  const rng=mulberry32(42), data=[];
+  for(let i=0;i<90;i++){const r=Math.sqrt(rng())*1.05,t=rng()*6.2832;data.push({x:r*Math.cos(t),y:r*Math.sin(t),l:1})}
+  for(let i=0;i<90;i++){const r=1.7+rng()*0.9,t=rng()*6.2832;data.push({x:r*Math.cos(t),y:r*Math.sin(t),l:0})}
+  const SIZES=[2,8,8,1];
+  function initNet(){
+    const r=mulberry32(Math.floor(Math.random()*1e9));
+    net={W:[],b:[],vW:[],vb:[]};
+    for(let l=0;l<SIZES.length-1;l++){
+      const fanIn=SIZES[l], fanOut=SIZES[l+1];
+      const std=actKey==="relu"?Math.sqrt(2/fanIn):Math.sqrt(1/fanIn);
+      net.W.push(Array.from({length:fanOut},()=>Array.from({length:fanIn},()=>gauss(r)*std)));
+      net.b.push(new Array(fanOut).fill(0));
+      net.vW.push(Array.from({length:fanOut},()=>new Array(fanIn).fill(0)));
+      net.vb.push(new Array(fanOut).fill(0));
+    }
+    step=0;
+  }
+  function forward(px,py,cache){
+    const A=ACTS[actKey];let h=[px,py];const hs=[h],zs=[];
+    for(let l=0;l<3;l++){
+      const z=net.b[l].map((bv,i)=>{let s=bv;const Wr=net.W[l][i];for(let j=0;j<h.length;j++)s+=Wr[j]*h[j];return s});
+      zs.push(z);
+      h = l<2 ? z.map(A.f) : z; /* hidden act; output layer -> logit */
+      hs.push(h);
+    }
+    if(cache){cache.hs=hs;cache.zs=zs}
+    return sig(h[0]);
+  }
+  function trainSteps(k){
+    const A=ACTS[actKey], lr=0.05, mom=0.9;
+    for(let s=0;s<k;s++){
+      const gW=net.W.map(M=>M.map(r=>r.map(()=>0)));
+      const gb=net.b.map(v=>v.map(()=>0));
+      let loss=0;
+      for(const pt of data){
+        const c={};const p=forward(pt.x,pt.y,c);
+        loss+=-(pt.l*Math.log(p+1e-9)+(1-pt.l)*Math.log(1-p+1e-9));
+        let delta=[p-pt.l]; /* dL/dz_out */
+        for(let l=2;l>=0;l--){
+          const hIn=c.hs[l];
+          for(let i=0;i<delta.length;i++){
+            gb[l][i]+=delta[i];
+            for(let j=0;j<hIn.length;j++)gW[l][i][j]+=delta[i]*hIn[j];
+          }
+          if(l>0){
+            const nd=new Array(hIn.length).fill(0);
+            for(let j=0;j<hIn.length;j++){let sum=0;for(let i=0;i<delta.length;i++)sum+=net.W[l][i][j]*delta[i];nd[j]=sum*A.df(c.zs[l-1][j])}
+            delta=nd;
+          }
+        }
+      }
+      const N=data.length;
+      for(let l=0;l<3;l++)for(let i=0;i<net.W[l].length;i++){
+        net.vb[l][i]=mom*net.vb[l][i]-lr*gb[l][i]/N;net.b[l][i]+=net.vb[l][i];
+        for(let j=0;j<net.W[l][i].length;j++){net.vW[l][i][j]=mom*net.vW[l][i][j]-lr*gW[l][i][j]/N;net.W[l][i][j]+=net.vW[l][i][j]}
+      }
+      step++;
+      if(s===k-1){
+        let acc=0;for(const pt of data)acc+=((forward(pt.x,pt.y)>0.5?1:0)===pt.l)?1:0;
+        $("dbEpoch").textContent=step;
+        $("dbLoss").textContent=(loss/N).toFixed(3);
+        $("dbAcc").textContent=(100*acc/N).toFixed(0)+" %";
+      }
+    }
+  }
+  const S=300, EXT=3; /* canvas 300px, coords [-3,3] */
+  function draw(){
+    const img=ctx.createImageData(60,60);
+    for(let gy=0;gy<60;gy++)for(let gx=0;gx<60;gx++){
+      const x=-EXT+2*EXT*(gx+0.5)/60, y=EXT-2*EXT*(gy+0.5)/60;
+      const p=forward(x,y);
+      const i=(gy*60+gx)*4;
+      /* blend between orange (class B, p=0) and cyan (class A, p=1) over dark bg */
+      const t=p;
+      img.data[i]  =Math.round(20+(1-t)*70+t*15);
+      img.data[i+1]=Math.round(25+(1-t)*42+t*70);
+      img.data[i+2]=Math.round(38+(1-t)*18+t*82);
+      img.data[i+3]=255;
+    }
+    const off=document.createElement("canvas");off.width=60;off.height=60;
+    off.getContext("2d").putImageData(img,0,0);
+    ctx.imageSmoothingEnabled=true;
+    ctx.clearRect(0,0,S,S);
+    ctx.drawImage(off,0,0,S,S);
+    /* 0.5 contour hint: skip, points suffice */
+    for(const pt of data){
+      const cx=(pt.x+EXT)/(2*EXT)*S, cy=(EXT-pt.y)/(2*EXT)*S;
+      ctx.beginPath();ctx.arc(cx,cy,3.2,0,6.2832);
+      ctx.fillStyle=pt.l?css("--c-tanh"):css("--c-sigmoid");
+      ctx.fill();ctx.strokeStyle="#0A111C";ctx.lineWidth=1;ctx.stroke();
+    }
+  }
+  function loop(){
+    if(!running)return;
+    trainSteps(8);
+    draw();
+    if(step<4000)raf=requestAnimationFrame(loop);
+    else{running=false;$("dbTrain").textContent="开始训练"}
+  }
+  const container=$("dbChips");
+  function rebuild(cur){
+    container.innerHTML="";
+    Object.keys(ACTS).forEach(k=>{
+      const b=document.createElement("button");
+      b.className="chip"+(k===cur?" on":"");
+      b.style.setProperty("--fc",css(ACTS[k].c));
+      b.textContent=ACTS[k].label;
+      b.onclick=()=>{setActClean(k)};
+      container.appendChild(b);
+    });
+  }
+  function setActClean(k){
+    actKey=k;running=false;cancelAnimationFrame(raf);$("dbTrain").textContent="开始训练";
+    rebuild(k);
+    $("dbNote").textContent=ACTS[k].note;
+    initNet();$("dbEpoch").textContent=0;$("dbLoss").textContent="–";$("dbAcc").textContent="–";
+    draw();
+  }
+  $("dbTrain").addEventListener("click",()=>{
+    running=!running;
+    $("dbTrain").textContent=running?"暂停":"继续训练";
+    if(running){cancelAnimationFrame(raf);raf=requestAnimationFrame(loop)}
+  });
+  $("dbReset").addEventListener("click",()=>{running=false;cancelAnimationFrame(raf);$("dbTrain").textContent="开始训练";initNet();$("dbEpoch").textContent=0;$("dbLoss").textContent="–";$("dbAcc").textContent="–";draw()});
+  setActClean("linear");
+})();
+
+/* ================= OUTPUT LAYER SELECTOR ================= */
+(function(){
+  const TASKS={
+    reg:{name:"回归",sub:"predict a value",act:'<span style="color:var(--c-linear)">Linear</span>（直接输出）',
+      loss:"MSELoss / HuberLoss",
+      mean:"输出就是预测值本身，范围 (−∞, ∞)，与目标同量纲。",
+      ex:"房价预测、温度预测、深度估计",
+      pit:"目标有物理范围（如像素 [0,1]、角度）时，可用 Sigmoid/Tanh 压缩后线性缩放；但目标常贴近边界时会落入饱和区，训练变慢。",
+      code:"head = nn.Linear(d, 1)\nloss = nn.MSELoss()(head(h), y)"},
+    bin:{name:"二分类",sub:"one yes/no",act:'<span style="color:var(--c-sigmoid)">Sigmoid</span> × 1（训练时隐含在 loss 中）',
+      loss:"BCEWithLogitsLoss（内含 sigmoid）",
+      mean:"单个输出 = P(正类)，∈ (0,1)；P(负类) = 1 − P(正类)。",
+      ex:"垃圾邮件判断、疾病筛查、点击率预估",
+      pit:"训练时模型输出裸 logit，别手动加 sigmoid 再用 BCELoss（数值不稳）；推理时才 torch.sigmoid(logit)。",
+      code:"head = nn.Linear(d, 1)\nloss = nn.BCEWithLogitsLoss()(head(h), y)  # y: (N,1) ∈ {0,1}\nprob = torch.sigmoid(head(h))            # 仅推理时"},
+    multi:{name:"多分类（单标签）",sub:"pick one of C",act:'<span style="color:var(--c-softmax)">Softmax</span>（训练时隐含在 loss 中）',
+      loss:"CrossEntropyLoss（内含 log-softmax）",
+      mean:"C 个输出组成概率分布，和为 1；各类别互斥竞争。",
+      ex:"图像分类（ImageNet）、意图识别",
+      pit:"最经典的 bug：模型里再加一层 Softmax → 双重 softmax，训练明显变差。CrossEntropyLoss 直接吃 logits。",
+      code:"head = nn.Linear(d, C)\nloss = nn.CrossEntropyLoss()(head(h), y)  # y: (N,) 类别下标\nprob = head(h).softmax(-1)               # 仅推理时"},
+    label:{name:"多标签分类",sub:"C yes/no's",act:'<span style="color:var(--c-sigmoid)">Sigmoid</span> × C（每个标签独立）',
+      loss:"BCEWithLogitsLoss（逐标签）",
+      mean:"C 个独立概率，互不影响，和不必为 1——一张图可以既有猫又有狗。",
+      ex:"图片打多个标签、文章多主题分类、毒性多维度检测",
+      pit:"和多分类的本质区别：类别是否互斥。误用 Softmax 会强迫标签互相抢份额，同时成立的标签被压低。",
+      code:"head = nn.Linear(d, C)\nloss = nn.BCEWithLogitsLoss()(head(h), y) # y: (N,C)，多个 1 可共存\nprobs = torch.sigmoid(head(h))           # 各标签独立判断"},
+    lm:{name:"语言模型",sub:"next-token logits",act:'<span style="color:var(--c-linear)">Linear → logits</span>（训练全程不做 softmax）',
+      loss:"CrossEntropyLoss（对每个位置）",
+      mean:"输出 |V| 维 logits；softmax 后才是下一个 token 的概率分布。",
+      ex:"GPT 系预训练、指令微调",
+      pit:"训练时 logits 直接进 loss；Softmax 只在采样/评估时显式出现，且常配 temperature：softmax(logits / T)。",
+      code:"logits = lm_head(h)                      # (N, T, |V|)\nloss = F.cross_entropy(logits.view(-1, V), y.view(-1))\nnext_p = (logits[:, -1] / temp).softmax(-1)  # 采样时"}
+  };
+  let cur="multi";
+  const grid=$("taskGrid"), card=$("taskCard");
+  function render(){
+    grid.innerHTML="";
+    for(const k in TASKS){
+      const b=document.createElement("button");
+      b.className="taskbtn"+(k===cur?" on":"");
+      b.innerHTML=TASKS[k].name+"<small>"+TASKS[k].sub+"</small>";
+      b.onclick=()=>{cur=k;render()};
+      grid.appendChild(b);
+    }
+    const t=TASKS[cur];
+    card.innerHTML=`
+      <div class="row"><div class="k">输出层激活</div><div class="v">${t.act}</div></div>
+      <div class="row"><div class="k">损失函数</div><div class="v"><code>${t.loss}</code></div></div>
+      <div class="row"><div class="k">输出的含义</div><div class="v">${t.mean}</div></div>
+      <div class="row"><div class="k">典型任务</div><div class="v">${t.ex}</div></div>
+      <div class="row"><div class="k">常见坑</div><div class="v">${t.pit}</div></div>
+      <pre>${t.code.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</pre>`;
+  }
+  render();
+})();
+
+/* ================= copy buttons ================= */
+document.querySelectorAll(".copybtn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const pre=btn.parentElement.querySelector("pre");
+    navigator.clipboard.writeText(pre.textContent).then(()=>{
+      btn.textContent="已复制 ✓";setTimeout(()=>btn.textContent="复制",1500);
+    });
+  });
+});
+</script>
+</body>
+</html>
