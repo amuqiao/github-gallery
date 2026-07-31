@@ -1,0 +1,52 @@
+schema_version: 2
+id: bert
+hall: models
+kind: ai_model
+title: BERT
+summary: 基于 Transformer encoder 的双向语言表示模型，是理解编码器式预训练、掩码语言建模和下游微调的重要基线。
+source:
+  type: paper
+  url: https://arxiv.org/abs/1810.04805
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  provider: Google Research
+  modalities:
+    input:
+      - text
+    output:
+      - text
+  tasks:
+    - language-understanding
+    - representation-learning
+  access:
+    - paper
+  formats:
+    - architecture
+  runtimes:
+    - pytorch
+notes:
+  - id: bert-explainer
+    title: 一文读懂 BERT · Encoder 与双向语言表示
+    type: html
+    path: ./notes/bert-explainer.html
+    summary: 从 Transformer Encoder、MLM、NSP、预训练到微调理解 BERT 的模型结构和适用边界。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Paper
+        url: https://arxiv.org/abs/1810.04805
+  - type: highlights
+    title: 模型要点
+    items:
+      - Encoder-only Transformer model for bidirectional language representation.
+      - Uses masked language modeling to learn contextual token representations.
+      - Serves as a baseline for language understanding and fine-tuning workflows.
+  - type: use-cases
+    items:
+      - 理解 encoder-only 模型与 GPT-style decoder-only 模型的差异。
+      - 学习预训练、微调、文本分类、匹配和抽取式问答流程。
+      - 对比现代 embedding、reranker 和语言理解模型的基础设计。

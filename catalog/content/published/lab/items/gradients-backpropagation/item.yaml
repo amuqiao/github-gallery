@@ -1,0 +1,44 @@
+schema_version: 2
+id: gradients-backpropagation
+hall: lab
+kind: knowledge_article
+title: 梯度与反向传播
+summary: 从导数、偏导数、链式法则、计算图、梯度流，以及梯度消失/爆炸理解神经网络训练。
+source:
+  type: reference
+  url: https://en.wikipedia.org/wiki/Backpropagation
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  domain: 机器学习基础
+  topics:
+    - 导数
+    - 链式法则
+    - 计算图
+    - 梯度稳定性
+  audience:
+    - 自学者
+notes:
+  - id: gradients-backpropagation-explainer
+    title: 一文读懂梯度与反向传播 · 计算图与链式法则
+    type: html
+    path: ./notes/gradients-backpropagation-explainer.html
+    summary: 从导数、偏导数、链式法则、计算图、梯度流和梯度消失/爆炸理解反向传播。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Reference
+        url: https://en.wikipedia.org/wiki/Backpropagation
+  - type: highlights
+    items:
+      - 梯度表达损失对参数变化的局部敏感度。
+      - 反向传播用链式法则在计算图上高效求梯度。
+      - 梯度消失和爆炸会直接影响深层网络的可训练性。
+  - type: use-cases
+    items:
+      - 理解神经网络训练中 forward、loss、backward、step 的流程。
+      - 将导数、偏导数、计算图和自动微分放在同一框架下理解。
+      - 分析深层模型训练不稳定、学习率异常和梯度裁剪问题。

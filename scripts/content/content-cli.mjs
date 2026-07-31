@@ -66,7 +66,7 @@ function assertId(id, label = "id") {
 
 function usage() {
   console.log(`用法：
-  ./scripts/content.sh item new <hall> <github_project|ai_model> <id> [options]
+  ./scripts/content.sh item new <hall> <github_project|ai_model|knowledge_article> <id> [options]
   ./scripts/content.sh item note add <hall> <id> <note-id> [options]
   ./scripts/content.sh item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>]
   ./scripts/content.sh item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
@@ -695,38 +695,99 @@ function buildItemConfig(hall, kind, id, options) {
     };
   }
 
+  if (kind === "knowledge_article") {
+    const topics = optionValues(options, "topic");
+    if (topics.length === 0) {
+      die("knowledge_article item new requires at least one --topic");
+    }
+
+    const profile = {
+      domain: requiredOption(options, "domain"),
+      topics
+    };
+    const audience = optionValues(options, "audience");
+
+    if (audience.length > 0) {
+      profile.audience = audience;
+    }
+
+    return {
+      schema_version: 2,
+      id,
+      hall,
+      kind,
+      title,
+      summary,
+      source: {
+        type: requiredOption(options, "source-type"),
+        url: requiredOption(options, "source-url")
+      },
+      body: {
+        type: "markdown",
+        path: "./index.md"
+      },
+      profile
+    };
+  }
+
+  die(`unknown content item kind: ${kind}`);
+}
+
+function itemNewAllowedOptions(kind) {
+  const commonOptions = ["title", "summary"];
+
+  if (kind === "github_project") {
+    return new Set([
+      ...commonOptions,
+      "repo",
+      "category",
+      "tag",
+      "maintenance-status",
+      "license",
+      "language"
+    ]);
+  }
+
+  if (kind === "ai_model") {
+    return new Set([
+      ...commonOptions,
+      "source-type",
+      "source-url",
+      "provider",
+      "input",
+      "output",
+      "task",
+      "access",
+      "format",
+      "runtime",
+      "license"
+    ]);
+  }
+
+  if (kind === "knowledge_article") {
+    return new Set([
+      ...commonOptions,
+      "source-type",
+      "source-url",
+      "domain",
+      "topic",
+      "audience"
+    ]);
+  }
+
   die(`unknown content item kind: ${kind}`);
 }
 
 async function createItem(args) {
   const [hall, kind, id, ...rest] = args;
   if (!hall || !kind || !id) {
-    die("item new requires <hall> <github_project|ai_model> <id>");
+    die("item new requires <hall> <github_project|ai_model|knowledge_article> <id>");
   }
 
   assertId(hall, "hall id");
   assertId(id, "item id");
 
-  const allowedOptions = new Set([
-    "title",
-    "summary",
-    "source-type",
-    "source-url",
-    "provider",
-    "input",
-    "output",
-    "task",
-    "access",
-    "format",
-    "runtime",
-    "license",
-    "repo",
-    "category",
-    "tag",
-    "maintenance-status",
-    "language"
-  ]);
-  const { options, positionals } = parseOptions(rest, allowedOptions);
+  const { options, positionals } = parseOptions(rest, itemNewAllowedOptions(kind));
   if (positionals.length > 0) {
     die(`unexpected arguments for item new: ${positionals.join(" ")}`);
   }

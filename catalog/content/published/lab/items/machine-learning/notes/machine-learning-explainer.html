@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂机器学习 · 领域知识地图</title>
+<style>
+:root{
+  --ink:#1F2E3D; --ink-soft:#4A5A6A; --ink-faint:#7E8B98;
+  --paper:#F2F4F3; --card:#FFFFFF; --line:#DCE1DF; --line-strong:#B9C2BE;
+  --paradigm:#0F766E; --paradigm-bg:#E3F1EE; --paradigm-line:#8FC7BE;
+  --method:#4F46E5; --method-bg:#EAE8FB; --method-line:#B4AEF0;
+  --task:#B45309; --task-bg:#F7EDDD; --task-line:#E0BE8A;
+  --mark-know:#9AA6A2; --mark-learn:#0F766E; --mark-deep:#B45309;
+  --radius:10px;
+  --serif:"Source Han Serif SC","Noto Serif SC","Songti SC","SimSun",serif;
+  --sans:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","Consolas",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.75}
+en,.en{font-family:var(--mono);font-size:.88em;background:rgba(31,46,61,.06);padding:1px 5px;border-radius:4px;white-space:nowrap}
+a{color:var(--paradigm)}
+.wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+
+/* ---------- top nav ---------- */
+nav{position:sticky;top:0;z-index:50;background:rgba(242,244,243,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:6px;height:52px;overflow-x:auto}
+nav .brand{font-family:var(--serif);font-weight:700;font-size:15px;margin-right:10px;white-space:nowrap}
+nav a{font-size:13px;color:var(--ink-soft);text-decoration:none;padding:5px 10px;border-radius:20px;white-space:nowrap}
+nav a:hover{background:#fff;color:var(--ink)}
+
+/* ---------- hero ---------- */
+header{padding:52px 0 8px}
+.kicker{font-size:13px;letter-spacing:.35em;color:var(--ink-faint);text-transform:uppercase;margin-bottom:14px}
+h1{font-family:var(--serif);font-size:clamp(30px,5vw,44px);line-height:1.3;font-weight:700}
+h1 .dim{color:var(--ink-faint);font-weight:400}
+.lede{max-width:640px;color:var(--ink-soft);margin:16px 0 8px}
+.axis-legend{display:flex;flex-wrap:wrap;gap:14px;margin:18px 0 4px;font-size:13px;color:var(--ink-soft)}
+.axis-legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+.dot.p{background:var(--paradigm)}.dot.m{background:var(--method)}.dot.t{background:var(--task)}
+
+/* ---------- panorama map ---------- */
+#map-panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 22px 26px;margin:22px 0 0;box-shadow:0 1px 0 rgba(31,46,61,.04)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{border:1px solid var(--line-strong);background:transparent;color:var(--ink-soft);font-size:14px;padding:7px 16px;border-radius:22px;cursor:pointer;font-family:var(--sans);transition:all .18s}
+.tab:hover{border-color:var(--ink-soft)}
+.tab.on-p{background:var(--paradigm);border-color:var(--paradigm);color:#fff}
+.tab.on-m{background:var(--method);border-color:var(--method);color:#fff}
+.tab.on-t{background:var(--task);border-color:var(--task);color:#fff}
+.map-hint{font-size:13px;color:var(--ink-faint);margin:10px 0 16px}
+#map-cols{display:grid;gap:14px}
+#map-cols.c3{grid-template-columns:repeat(3,1fr)}
+#map-cols.c2{grid-template-columns:repeat(2,1fr)}
+#map-cols.c5{grid-template-columns:repeat(5,1fr)}
+.map-col{border-radius:12px;padding:14px;border:1px solid;min-height:150px}
+.map-col h4{font-size:15px;margin-bottom:2px}
+.map-col .sub{font-size:12px;opacity:.75;margin-bottom:10px;line-height:1.5}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12.5px;background:#fff;border:1px solid rgba(31,46,61,.18);border-radius:16px;padding:3px 10px;cursor:default;animation:pop .3s ease both}
+.chip.hl{outline:2px solid var(--ink);outline-offset:1px}
+@keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.chip{animation:none}}
+.col-p{background:var(--paradigm-bg);border-color:var(--paradigm-line)}.col-p h4{color:#0B5A54}
+.col-m{background:var(--method-bg);border-color:var(--method-line)}.col-m h4{color:#3730A3}
+.col-t{background:var(--task-bg);border-color:var(--task-line)}.col-t h4{color:#8A3E06}
+.trace-tip{margin-top:14px;font-size:13px;color:var(--ink-soft);border-top:1px dashed var(--line);padding-top:12px}
+.trace-tip b{color:var(--ink)}
+.trace-btn{font-size:12.5px;border:1px solid var(--line-strong);background:#fff;border-radius:14px;padding:2px 10px;cursor:pointer;margin-left:6px;font-family:var(--sans)}
+.trace-btn:hover{border-color:var(--ink)}
+
+/* ---------- sections ---------- */
+section{padding:56px 0 8px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.sec-no{font-family:var(--mono);font-size:13px;color:var(--ink-faint);letter-spacing:.1em}
+h2{font-family:var(--serif);font-size:clamp(22px,3.4vw,30px);font-weight:700}
+.sec-lede{color:var(--ink-soft);max-width:700px;margin-bottom:24px}
+h3{font-family:var(--serif);font-size:19px;margin:26px 0 10px}
+p{margin:10px 0}
+.note{font-size:14px;color:var(--ink-soft);background:var(--card);border-left:3px solid var(--line-strong);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+
+/* level marks */
+.lv{display:inline-flex;align-items:center;gap:5px;font-size:12px;border-radius:12px;padding:1px 9px;vertical-align:1px;white-space:nowrap}
+.lv i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.lv.know{color:#5D6A66;background:#EDEFEE}.lv.know i{border:1.5px solid var(--mark-know)}
+.lv.learn{color:#0B5A54;background:var(--paradigm-bg)}.lv.learn i{background:var(--mark-learn)}
+.lv.deep{color:#8A3E06;background:var(--task-bg)}.lv.deep i{background:var(--mark-deep)}
+
+/* boundary section */
+.bound-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:18px 0}
+.bound-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+.bound-card h4{font-size:15px;margin-bottom:8px}
+.bound-card ul{padding-left:18px;font-size:14.5px;color:var(--ink-soft)}
+.bound-card li{margin:6px 0}
+.is h4{color:#0B5A54}.isnot h4{color:#8A3E06}
+.nesting{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin:20px 0}
+.ring{border:1.5px dashed;border-radius:14px;padding:14px 16px}
+.ring .rl{font-size:13px;font-weight:600;margin-bottom:8px}
+.r1{border-color:var(--ink-faint)}.r1>.rl{color:var(--ink-soft)}
+.r2{border-color:var(--paradigm);margin-top:4px}.r2>.rl{color:var(--paradigm)}
+.r3{border-color:var(--method);margin-top:4px}.r3>.rl{color:var(--method)}
+.ring p{font-size:13px;color:var(--ink-soft);margin:4px 0 8px}
+
+/* branch accordions */
+.branch{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);margin:12px 0;overflow:hidden}
+.branch>button{width:100%;display:flex;align-items:center;gap:12px;padding:16px 20px;background:none;border:none;cursor:pointer;font-family:var(--sans);text-align:left}
+.branch>button:hover{background:#FAFBFA}
+.b-tag{font-size:11px;font-weight:600;letter-spacing:.06em;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.b-tag.p{color:#0B5A54;background:var(--paradigm-bg)}
+.b-tag.m{color:#3730A3;background:var(--method-bg)}
+.b-tag.t{color:#8A3E06;background:var(--task-bg)}
+.b-title{font-size:16.5px;font-weight:600;flex:1}
+.b-title small{font-family:var(--mono);font-weight:400;color:var(--ink-faint);font-size:12px;margin-left:8px}
+.caret{transition:transform .2s;color:var(--ink-faint);font-size:13px}
+.branch.open .caret{transform:rotate(90deg)}
+.b-body{display:none;padding:2px 20px 20px;border-top:1px dashed var(--line)}
+.branch.open .b-body{display:block}
+.qa{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0 6px}
+.qa div{background:#FAFBFA;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:14px}
+.qa b{display:block;font-size:12.5px;color:var(--ink-faint);margin-bottom:6px;font-weight:600}
+.qa .body{color:var(--ink-soft)}
+
+/* concept layers */
+.layers{margin:20px 0}
+.layer{display:grid;grid-template-columns:190px 1fr;border:1px solid var(--line);border-top:none;background:var(--card)}
+.layer:first-child{border-top:1px solid var(--line);border-radius:var(--radius) var(--radius) 0 0}
+.layer:last-child{border-radius:0 0 var(--radius) var(--radius)}
+.layer .lname{padding:14px 16px;border-right:1px solid var(--line);background:#FAFBFA}
+.layer .lname b{font-size:14.5px;display:block}
+.layer .lname span{font-size:12px;color:var(--ink-faint)}
+.layer .lbody{padding:12px 16px;font-size:14px;color:var(--ink-soft)}
+.layer .lbody .chips{margin-top:6px}
+.layer .chip{cursor:default}
+
+/* confusion table */
+.confuse{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);margin:14px 0;overflow:hidden}
+.confuse>button{width:100%;text-align:left;padding:15px 20px;background:none;border:none;cursor:pointer;font-family:var(--sans);display:flex;gap:12px;align-items:center}
+.confuse>button:hover{background:#FAFBFA}
+.vs{font-family:var(--mono);font-size:11px;color:#fff;background:var(--ink-soft);border-radius:4px;padding:2px 6px}
+.confuse .c-title{font-size:15.5px;font-weight:600;flex:1}
+.confuse .c-body{display:none;padding:0 20px 18px;border-top:1px dashed var(--line);font-size:14.5px}
+.confuse.open .c-body{display:block}
+.confuse table{width:100%;border-collapse:collapse;margin:14px 0 8px;font-size:14px}
+.confuse th{text-align:left;font-size:12.5px;color:var(--ink-faint);font-weight:600;padding:6px 10px;border-bottom:1px solid var(--line)}
+.confuse td{padding:8px 10px;border-bottom:1px solid #EEF1F0;vertical-align:top;color:var(--ink-soft)}
+.confuse td:first-child{color:var(--ink);font-weight:500;white-space:nowrap}
+.judge{font-size:13.5px;background:var(--paradigm-bg);color:#0B5A54;border-radius:8px;padding:9px 14px;margin-top:10px}
+.judge b{font-weight:700}
+
+/* example walkthrough */
+.walk{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:18px 0}
+.walk h4{font-family:var(--serif);font-size:17px;margin-bottom:4px}
+.walk .goal{font-size:13.5px;color:var(--ink-faint);margin-bottom:14px}
+.steps{display:grid;gap:0}
+.step{display:grid;grid-template-columns:120px 1fr;gap:14px;padding:10px 0;border-top:1px dashed var(--line);font-size:14.5px}
+.step b{font-size:13px;color:var(--ink-faint);font-weight:600;padding-top:2px}
+.step .sv{color:var(--ink-soft)}
+.step .sv strong{color:var(--ink);font-weight:600}
+
+/* classify flow */
+.qflow{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin:18px 0}
+.qrow{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;padding:9px 0;border-bottom:1px dashed #EEF1F0;font-size:14.5px}
+.qrow:last-child{border-bottom:none}
+.qrow .q{color:var(--ink)}
+.qrow .arr{color:var(--ink-faint);font-family:var(--mono)}
+.qrow .a{color:var(--ink-soft)}
+.qrow .a b{color:var(--ink)}
+
+/* entries */
+.entry-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.etab{border:1px solid var(--line-strong);background:#fff;border-radius:20px;padding:6px 16px;font-size:14px;cursor:pointer;font-family:var(--sans);color:var(--ink-soft)}
+.etab.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.entry-panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;display:none}
+.entry-panel.on{display:block}
+.entry-panel h4{font-size:16px;margin-bottom:8px}
+.entry-panel .who{font-size:13px;color:var(--ink-faint);margin-bottom:10px}
+.entry-panel ol{padding-left:20px;font-size:14.5px;color:var(--ink-soft)}
+.entry-panel li{margin:8px 0}
+
+/* term tooltip */
+.term{border-bottom:1.5px dotted var(--paradigm);cursor:help;position:relative}
+#tip{position:fixed;z-index:99;max-width:290px;background:var(--ink);color:#F0F3F2;font-size:13px;line-height:1.6;padding:10px 13px;border-radius:8px;pointer-events:none;opacity:0;transition:opacity .12s;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+#tip b{color:#9FD8CF}
+
+footer{margin-top:70px;padding:30px 0 50px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-faint)}
+
+@media(max-width:840px){
+  #map-cols.c3,#map-cols.c5{grid-template-columns:1fr 1fr}
+  .qa{grid-template-columns:1fr}
+  .bound-grid{grid-template-columns:1fr}
+  .layer{grid-template-columns:1fr}
+  .layer .lname{border-right:none;border-bottom:1px solid var(--line)}
+}
+@media(max-width:560px){
+  #map-cols.c3,#map-cols.c5,#map-cols.c2{grid-template-columns:1fr}
+  .step{grid-template-columns:1fr}
+  .qrow{grid-template-columns:1fr;gap:2px}
+  .qrow .arr{display:none}
+}
+button:focus-visible,a:focus-visible,.tab:focus-visible{outline:2px solid var(--paradigm);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="brand">ML 知识地图</span>
+  <a href="#panorama">全景</a>
+  <a href="#boundary">边界</a>
+  <a href="#branches">主干分支</a>
+  <a href="#layers">概念层级</a>
+  <a href="#confuse">易混辨析</a>
+  <a href="#walk">贯穿示例</a>
+  <a href="#classify">新名词归类</a>
+  <a href="#entries">深入入口</a>
+</div></nav>
+
+<header class="wrap" id="panorama">
+  <div class="kicker">FIELD MAP · 一文读懂</div>
+  <h1>机器学习<span class="dim">,一张地图看清全域</span></h1>
+  <p class="lede">这不是一门课程,而是一张<strong>知识地图</strong>:先看清领域覆盖什么、主干分支有哪些、每个概念处在哪一层,再决定往哪里深入。理解本页只需要一个核心认知——<strong>机器学习不是一棵树,而是同一块领地的三种切法</strong>。切换下面的视角,看同一批概念如何重新归位。</p>
+  <div class="axis-legend">
+    <span><i class="dot p"></i>按学习范式切(靠什么信号学)</span>
+    <span><i class="dot m"></i>按方法体系切(用什么模型)</span>
+    <span><i class="dot t"></i>按任务应用切(解决什么问题)</span>
+  </div>
+
+  <div id="map-panel">
+    <div class="tabs" role="tablist">
+      <button class="tab on-p" data-view="p" aria-selected="true">① 学习范式视角</button>
+      <button class="tab" data-view="m" aria-selected="false">② 方法体系视角</button>
+      <button class="tab" data-view="t" aria-selected="false">③ 任务应用视角</button>
+    </div>
+    <p class="map-hint" id="map-hint"></p>
+    <div id="map-cols" class="c3"></div>
+    <p class="trace-tip"><b>追踪一个概念:</b>点击
+      <button class="trace-btn" data-trace="Transformer">Transformer</button>
+      <button class="trace-btn" data-trace="K-means">K-means</button>
+      <button class="trace-btn" data-trace="DQN">DQN</button>
+      ,再切换视角,观察它落到哪一列——同一个东西,在不同切法下属于不同分类,这正是初学最容易混乱的原因。</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============ 01 边界 ============ -->
+<section id="boundary">
+  <div class="sec-head"><span class="sec-no">01</span><h2>先切清边界:机器学习是什么、不是什么</h2></div>
+  <p class="sec-lede">机器学习(<span class="en">Machine Learning, ML</span>)是让计算机<strong>从数据中自动学出规律</strong>、而不是由人逐条编写规则的一类方法。判断某个东西属不属于 ML,就看这一条:<em>行为是学出来的,还是写死的。</em></p>
+
+  <div class="bound-grid">
+    <div class="bound-card is">
+      <h4>✓ 属于机器学习</h4>
+      <ul>
+        <li>给一万封标注过的邮件,让模型<strong>学会</strong>判断垃圾邮件</li>
+        <li>让程序自己下几百万盘棋,<strong>试错</strong>出走子策略</li>
+        <li>不给任何标签,让算法自己把用户<strong>分成几群</strong></li>
+        <li>大语言模型读海量文本,<strong>预训练</strong>出语言规律</li>
+      </ul>
+    </div>
+    <div class="bound-card isnot">
+      <h4>✗ 不属于机器学习</h4>
+      <ul>
+        <li>手写 <span class="en">if 邮件含"中奖" then 拦截</span> —— 规则系统,没有"学"</li>
+        <li>数据库查询、报表统计 —— 只是检索汇总,不产生模型</li>
+        <li>普通爬虫、自动化脚本 —— 自动化 ≠ 智能化</li>
+        <li>纯专家系统 —— 知识由人编码,而非从数据中归纳</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>它在更大的版图里处于什么位置</h3>
+  <div class="nesting">
+    <div class="ring r1">
+      <div class="rl">人工智能 AI(上位概念)</div>
+      <p>一切"让机器表现出智能"的努力,包括不学习的方法(规则系统、搜索、专家系统)。</p>
+      <div class="ring r2">
+        <div class="rl">机器学习 ML(AI 的主流实现路径)</div>
+        <p>从数据中学规律。同时与<span class="term" data-t="statistics">统计学</span>深度重叠、被<span class="term" data-t="ds">数据科学</span>作为核心工具使用。</p>
+        <div class="ring r3">
+          <div class="rl">深度学习 DL(ML 的一类方法)</div>
+          <p>用深层神经网络自动学特征,是当前 ML 中最主流的方法体系,但不是全部——<span class="en">XGBoost</span> 在表格数据上仍常胜过它。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">常见误解:"AI = 机器学习 = 深度学习 = 大模型"。实际是层层包含关系:大模型 ⊂ 深度学习 ⊂ 机器学习 ⊂ 人工智能。日常语境混用没问题,但读文献、做技术选型时必须分清层级。</div>
+</section>
+
+<!-- ============ 02 主干分支 ============ -->
+<section id="branches">
+  <div class="sec-head"><span class="sec-no">02</span><h2>主干分支:每一支解决什么、依赖什么、产出什么</h2></div>
+  <p class="sec-lede">下面按首屏地图的三个视角组织。每个分支都回答三个问题:<strong>解决什么问题 / 依赖哪些前置概念 / 代表对象或产物是什么</strong>。点击展开。标记含义:<span class="lv know"><i></i>先认识即可</span> <span class="lv learn"><i></i>需要理解</span> <span class="lv deep"><i></i>值得深入</span></p>
+
+  <h3><i class="dot p" style="vertical-align:-1px"></i> 按学习范式:靠什么信号学</h3>
+
+  <div class="branch open">
+    <button aria-expanded="true"><span class="b-tag p">范式</span><span class="b-title">监督学习<small>Supervised Learning</small></span><span class="lv deep"><i></i>值得深入</span><span class="caret">▶</span></button>
+    <div class="b-body">
+      <div class="qa">
+        <div><b>解决什么问题</b><span class="body">有"标准答案"(标注数据)时,学习输入到输出的映射。两大任务:<strong>分类</strong>(离散类别)与<strong>回归</strong>(连续数值)。</span></div>
+        <div><b>依赖的前置概念</b><span class="body">特征 <span class="en">feature</span>、标签 <span class="en">label</span>、损失函数、训练集 / 测试集划分、过拟合与泛化。</span></div>
+        <div><b>代表对象 / 产物</b><span class="body">线性回归、逻辑回归、决策树、<span class="en">SVM</span>、随机森林、<span class="en">XGBoost</span>;产物是一个可预测的<strong>分类器或回归器</strong>。</span></div>
+      </div>
+      <p style="font-size:14px;color:var(--ink-soft)">这是 ML 的主战场,工业界 80% 的落地问题(风控评分、点击率预估、质检)最终都被建模成监督学习。入门首选。</p>
+    </div>
+  </div>
+
+  <div class="branch">
+    <button aria-expanded="false"><span class="b-tag p">范式</span><span class="b-title">无监督学习<small>Unsupervised Learning</small></span><span class="lv learn"><i></i>需要理解</span><span class="caret">▶</span></button>
+    <div class="b-body">
+      <div class="qa">
+        <div><b>解决什么问题</b><span class="body">没有标签时,发现数据的<strong>内在结构</strong>:相似的分在一起(聚类)、高维压到低维(降维)、找出异常点(异常检测)。</span></div>
+        <div><b>依赖的前置概念</b><span class="body">距离与相似度度量、特征空间的概念;评估比监督学习更依赖人的判断。</span></div>
+        <div><b>代表对象 / 产物</b><span class="body"><span class="en">K-means</span>、层次聚类、<span class="en">PCA</span>、<span class="en">t-SNE</span>;产物是<strong>数据的分组或低维表示</strong>,常作为下游任务的预处理。</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="branch">
+    <button aria-expanded="false"><span class="b-tag p">范式</span><span class="b-title">强化学习<small>Reinforcement Learning</small></span><span class="lv know"><i></i>先认识即可</span><span class="caret">▶</span></button>
+    <div class="b-body">
+      <div class="qa">
+        <div><b>解决什么问题</b><span class="body"><strong>序贯决策</strong>:没有现成答案,智能体与环境交互,靠奖励信号试错出最优策略。适合下棋、机器人控制、推荐调度。</span></div>
+        <div><b>依赖的前置概念</b><span class="body">智能体 / 环境 / 状态 / 动作 / 奖励,马尔可夫决策过程 <span class="en">MDP</span>,探索与利用的权衡。</span></div>
+        <div><b>代表对象 / 产物</b><span class="body"><span class="en">Q-learning</span>、<span class="en">DQN</span>、<span class="en">PPO</span>;产物是一个<strong>策略</strong>。<span class="en">RLHF</span> 用它对齐大模型。</span></div>
+      </div>
+      <p style="font-size:14px;color:var(--ink-soft)">除非目标就是游戏 AI / 机器人 / 大模型对齐,初学阶段知道它的定位即可,不必先啃。</p>
+    </div>
+  </div>
+
+  <div class="branch">
+    <button aria-expanded="false"><span class="b-tag p">范式</span><span class="b-title">自监督与半监督<small>Self- / Semi-supervised</small></span><span class="lv learn"><i></i>需要理解</span><span class="caret">▶</span></button>
+    <div class="b-body">
+      <div class="qa">
+        <div><b>解决什么问题</b><span class="body">标注太贵。半监督:少量标注 + 大量未标注一起学。自监督:<strong>从数据本身构造标签</strong>(如遮住一个词让模型猜)。</span></div>
+        <div><b>依赖的前置概念</b><span class="body">监督学习的全部基础,外加"预训练 → 微调"的两阶段思维。</span></div>
+        <div><b>代表对象 / 产物</b><span class="body"><span class="en">BERT</span> 的掩码预测、<span class="en">GPT</span> 的下一词预测、对比学习 <span class="en">SimCLR</span>;产物是可迁移的<strong>预训练模型</strong>。</span></div>
+      </div>
+      <p style="font-size:14px;color:var(--ink-soft)">自监督是整个大模型时代的基石——理解它,就理解了 <span class="en">GPT</span> 为什么不需要人工标注也能学会语言。</p>
+    </div>
+  </div>
+
+  <h3><i class="dot m" style="vertical-align:-1px"></i> 按方法体系:用什么模型</h3>
+
+  <div class="branch">
+    <button aria-expanded="false"><span class="b-tag m">方法</span><span class="b-title">传统机器学习<small>Classical ML</small></span><span class="lv deep"><i></i>值得深入</span><span class="caret">▶</span></button>
+    <div class="b-body">
+      <div class="qa">
+        <div><b>解决什么问题</b><span class="body">中小规模、结构化(表格)数据上的预测。需要人先做<strong>特征工程</strong>,但训练快、可解释、样本效率高。</span></div>
+        <div><b>依赖的前置概念</b><span class="body">线性代数与概率基础、特征工程、正则化、交叉验证。</span></div>
+        <div><b>代表对象 / 产物</b><span class="body">决策树、<span class="en">SVM</span>、朴素贝叶斯、集成学习(<span class="en">Random Forest</span>、<span class="en">XGBoost</span>、<span class="en">LightGBM</span>)。</span></div>
+      </div>
+      <p style="font-size:14px;color:var(--ink-soft)">别被"传统"二字误导:表格数据竞赛和企业风控里,梯度提升树至今仍是首选,常打败深度学习。</p>
+    </div>
+  </div>
+
+  <div class="branch">
+    <button aria-expanded="false"><span class="b-tag m">方法</span><span class="b-title">深度学习<small>Deep Learning</small></span><span class="lv deep"><i></i>值得深入</span><span class="caret">▶</span></button>
+    <div class="b-body">
+      <div class="qa">
+        <div><b>解决什么问题</b><span class="body">图像、文本、语音等<strong>高维非结构化数据</strong>——特征无法人工设计,由多层神经网络<strong>自动学出</strong>。</span></div>
+        <div><b>依赖的前置概念</b><span class="body">神经元与层、反向传播、梯度下降、<span class="en">GPU</span> 并行;工程上依赖 <span class="en">PyTorch</span> / <span class="en">TensorFlow</span>。</span></div>
+        <div><b>代表对象 / 产物</b><span class="body"><span class="en">CNN</span>(图像)、<span class="en">RNN/LSTM</span>(序列,已渐被取代)、<span class="en">Transformer</span>(当前统治级架构)、扩散模型(生成图像)。</span></div>
+      </div>
+      <p style="font-size:14px;color:var(--ink-soft)">关键认知:深度学习<strong>横切</strong>所有范式——它可以做监督(图像分类)、自监督(<span class="en">GPT</span> 预训练)、强化(<span class="en">DQN</span>)。它回答"用什么模型",不回答"靠什么信号学"。</p>
+    </div>
+  </div>
+
+  <div class="branch">
+    <button aria-expanded="false"><span class="b-tag m">方法</span><span class="b-title">生成式模型<small>Generative Models</small></span><span class="lv learn"><i></i>需要理解</span><span class="caret">▶</span></button>
+    <div class="b-body">
+      <div class="qa">
+        <div><b>解决什么问题</b><span class="body">不只是判别(这是猫还是狗),而是<strong>生成新样本</strong>:写文章、画图、合成语音。学的是数据的分布本身。</span></div>
+        <div><b>依赖的前置概念</b><span class="body">深度学习基础、概率分布、自监督预训练。</span></div>
+        <div><b>代表对象 / 产物</b><span class="body"><span class="en">GAN</span>、<span class="en">VAE</span>、扩散模型(<span class="en">Stable Diffusion</span>)、大语言模型(<span class="en">GPT</span>、<span class="en">Claude</span>)。</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3><i class="dot t" style="vertical-align:-1px"></i> 按任务应用:解决什么问题</h3>
+
+  <div class="branch">
+    <button aria-expanded="false"><span class="b-tag t">应用</span><span class="b-title">计算机视觉 与 自然语言处理<small>CV & NLP</small></span><span class="lv learn"><i></i>需要理解</span><span class="caret">▶</span></button>
+    <div class="b-body">
+      <div class="qa">
+        <div><b>解决什么问题</b><span class="body"><span class="en">CV</span>:让机器看懂图像(分类、检测、分割、生成)。<span class="en">NLP</span>:让机器处理语言(翻译、问答、摘要、对话)。</span></div>
+        <div><b>依赖的前置概念</b><span class="body">深度学习方法体系;<span class="en">CV</span> 靠 <span class="en">CNN</span>/<span class="en">ViT</span>,<span class="en">NLP</span> 靠 <span class="en">Transformer</span> 与词嵌入 <span class="en">embedding</span>。</span></div>
+        <div><b>代表对象 / 产物</b><span class="body"><span class="en">ResNet</span>、<span class="en">YOLO</span>、<span class="en">BERT</span>、<span class="en">GPT</span>;产物是人脸识别、自动驾驶感知、聊天助手等能力。</span></div>
+      </div>
+      <p style="font-size:14px;color:var(--ink-soft)">应用领域是"问题的集合",不是新的学习原理——CV 和 NLP 用的底层范式与方法都来自前两个视角。选一条应用线深入,是最常见的学习路径。</p>
+    </div>
+  </div>
+
+  <div class="branch">
+    <button aria-expanded="false"><span class="b-tag t">应用</span><span class="b-title">推荐、语音与时序<small>RecSys / Speech / Time Series</small></span><span class="lv know"><i></i>先认识即可</span><span class="caret">▶</span></button>
+    <div class="b-body">
+      <div class="qa">
+        <div><b>解决什么问题</b><span class="body">推荐:预测"你会喜欢什么"。语音:识别 <span class="en">ASR</span> 与合成 <span class="en">TTS</span>。时序:预测随时间变化的量(销量、股价、负载)。</span></div>
+        <div><b>依赖的前置概念</b><span class="body">监督学习为主;推荐还涉及协同过滤与 <span class="en">embedding</span>,时序涉及自相关等统计概念。</span></div>
+        <div><b>代表对象 / 产物</b><span class="body">协同过滤、双塔模型、<span class="en">Whisper</span>、<span class="en">ARIMA</span>/<span class="en">Prophet</span>;产物是信息流排序、语音助手、销量预测系统。</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 概念层级 ============ -->
+<section id="layers">
+  <div class="sec-head"><span class="sec-no">03</span><h2>概念层级:每个名词各就各位</h2></div>
+  <p class="sec-lede">学 ML 最大的困扰是名词多且不知道它们"重不重要、在哪一层"。这张八层地图把常见概念全部归位——以后遇到任何新名词,先问它属于哪一层。悬停带虚线下划线的词可看解释。</p>
+
+  <div class="layers">
+    <div class="layer"><div class="lname"><b>① 基础概念</b><span>所有分支共用的地基</span></div>
+      <div class="lbody">无论走哪条线都绕不开 <span class="lv deep"><i></i>值得深入</span>
+      <div class="chips"><span class="chip term" data-t="feature">特征 feature</span><span class="chip term" data-t="label">标签 label</span><span class="chip term" data-t="loss">损失函数 loss</span><span class="chip term" data-t="gd">梯度下降</span><span class="chip term" data-t="overfit">过拟合 / 欠拟合</span><span class="chip term" data-t="general">泛化 generalization</span><span class="chip term" data-t="split">训练 / 验证 / 测试集</span></div></div>
+    </div>
+    <div class="layer"><div class="lname"><b>② 学习范式</b><span>子领域,按信号切</span></div>
+      <div class="lbody">监督 · 无监督 · 强化 · 自监督 / 半监督 <span class="lv learn"><i></i>需要理解</span></div>
+    </div>
+    <div class="layer"><div class="lname"><b>③ 方法体系</b><span>按模型类型切</span></div>
+      <div class="lbody">传统 ML · 深度学习 · 集成学习 · 概率图模型 · 生成式模型 <span class="lv learn"><i></i>需要理解</span></div>
+    </div>
+    <div class="layer"><div class="lname"><b>④ 模型 / 算法 / 工具</b><span>具体可运行的对象</span></div>
+      <div class="lbody">算法与架构:<span class="en">XGBoost</span> <span class="en">ResNet</span> <span class="en">Transformer</span> <span class="en">BERT</span>;框架与库:<span class="en">scikit-learn</span> <span class="en">PyTorch</span> <span class="en">TensorFlow</span> <span class="en">Hugging Face</span> —— 按需掌握,不必穷尽 <span class="lv know"><i></i>先认识即可</span></div>
+    </div>
+    <div class="layer"><div class="lname"><b>⑤ 流程环节</b><span>一个项目的生命周期</span></div>
+      <div class="lbody">数据收集 → 清洗 → <span class="term" data-t="fe">特征工程</span> → 训练 → <span class="term" data-t="hp">调参</span> → 评估 → 部署 → 监控 <span class="lv learn"><i></i>需要理解</span></div>
+    </div>
+    <div class="layer"><div class="lname"><b>⑥ 评估方式</b><span>怎么判断模型好坏</span></div>
+      <div class="lbody">分类:准确率、<span class="term" data-t="pr">精确率 / 召回率</span>、<span class="en">F1</span>、<span class="en">AUC</span>;回归:<span class="en">MSE</span> / <span class="en">MAE</span>;方法:<span class="term" data-t="cv">交叉验证</span> <span class="lv deep"><i></i>值得深入</span></div>
+    </div>
+    <div class="layer"><div class="lname"><b>⑦ 工程实践</b><span>让模型活在生产环境</span></div>
+      <div class="lbody"><span class="en">MLOps</span>、数据标注、模型部署与推理优化、<span class="en">A/B</span> 测试、模型监控与漂移检测 <span class="lv know"><i></i>先认识即可</span></div>
+    </div>
+    <div class="layer"><div class="lname"><b>⑧ 应用方向</b><span>问题所在的行业场景</span></div>
+      <div class="lbody">搜索与推荐、金融风控、医疗影像、自动驾驶、智能客服、内容生成 <span class="lv know"><i></i>先认识即可</span></div>
+    </div>
+  </div>
+  <div class="note">分层标记的用法:<strong>①⑥ 两层值得任何人深入</strong>(基础概念 + 评估思维决定你能不能正确使用模型);②③⑤ 需要建立准确理解;④⑦⑧ 先认识轮廓,等具体任务出现再按需深入——初学者最常犯的错误就是一头扎进第④层背模型清单。</div>
+</section>
+
+<!-- ============ 04 易混辨析 ============ -->
+<section id="confuse">
+  <div class="sec-head"><span class="sec-no">04</span><h2>易混概念边界对照</h2></div>
+  <p class="sec-lede">五组最常被混淆的概念。每组给出关系类型、对照表和一句话判断方法。点击展开。</p>
+
+  <div class="confuse open">
+    <button aria-expanded="true"><span class="vs">VS</span><span class="c-title">深度学习 vs 强化学习 —— 不同维度,可以叠加</span><span class="caret">▶</span></button>
+    <div class="c-body">
+      <p>最典型的误会是把它们当并列关系。实际上:<strong>强化学习回答"靠什么信号学"(范式层),深度学习回答"用什么模型"(方法层)</strong>,两者正交。</p>
+      <table><tr><th></th><th>深度学习</th><th>强化学习</th></tr>
+        <tr><td>所在维度</td><td>方法体系(用不用深层神经网络)</td><td>学习范式(靠奖励信号试错)</td></tr>
+        <tr><td>可否组合</td><td colspan="2">可以——用深度网络做强化学习 = 深度强化学习(<span class="en">DQN</span>、<span class="en">AlphaGo</span>)</td></tr>
+      </table>
+      <div class="judge"><b>判断法:</b>问"它描述的是数据 / 信号,还是模型结构?" 信号 → 范式层;结构 → 方法层。</div>
+    </div>
+  </div>
+
+  <div class="confuse">
+    <button aria-expanded="false"><span class="vs">VS</span><span class="c-title">AI vs ML vs DL vs 大模型 —— 层层包含的上下位关系</span><span class="caret">▶</span></button>
+    <div class="c-body">
+      <table><tr><th>概念</th><th>范围</th><th>反例(属于上层但不属于本层)</th></tr>
+        <tr><td>AI</td><td>一切让机器表现智能的方法</td><td>——</td></tr>
+        <tr><td>ML</td><td>从数据中学规律的 AI</td><td>规则专家系统是 AI 但不是 ML</td></tr>
+        <tr><td>DL</td><td>用深层神经网络的 ML</td><td><span class="en">XGBoost</span> 是 ML 但不是 DL</td></tr>
+        <tr><td>大模型 LLM</td><td>超大规模自监督预训练的 DL</td><td><span class="en">ResNet</span> 是 DL 但不是大模型</td></tr>
+      </table>
+      <div class="judge"><b>判断法:</b>从里向外问三次——"用神经网络吗?规模巨大且预训练吗?从数据学吗?" 依次定位到 DL、LLM、ML。</div>
+    </div>
+  </div>
+
+  <div class="confuse">
+    <button aria-expanded="false"><span class="vs">VS</span><span class="c-title">分类 vs 聚类 —— 一字之差,分属两个范式</span><span class="caret">▶</span></button>
+    <div class="c-body">
+      <table><tr><th></th><th>分类 classification</th><th>聚类 clustering</th></tr>
+        <tr><td>范式</td><td>监督学习(有标签)</td><td>无监督学习(无标签)</td></tr>
+        <tr><td>类别来源</td><td>人预先定义(垃圾 / 正常)</td><td>算法自己发现,含义靠人事后解读</td></tr>
+        <tr><td>典型算法</td><td>逻辑回归、决策树、<span class="en">SVM</span></td><td><span class="en">K-means</span>、层次聚类、<span class="en">DBSCAN</span></td></tr>
+      </table>
+      <div class="judge"><b>判断法:</b>问"训练时知道正确答案吗?" 知道 → 分类;不知道 → 聚类。</div>
+    </div>
+  </div>
+
+  <div class="confuse">
+    <button aria-expanded="false"><span class="vs">VS</span><span class="c-title">参数 vs 超参数 —— 谁学的,谁定的</span><span class="caret">▶</span></button>
+    <div class="c-body">
+      <table><tr><th></th><th>参数 parameter</th><th>超参数 hyperparameter</th></tr>
+        <tr><td>由谁决定</td><td>模型从数据中<strong>学出来</strong>(权重、偏置)</td><td>人在训练前<strong>设定</strong>(学习率、树深度、层数)</td></tr>
+        <tr><td>数量级</td><td>可达千亿("7B 模型"指 70 亿参数)</td><td>通常几个到几十个</td></tr>
+        <tr><td>如何优化</td><td>梯度下降等训练算法</td><td>网格搜索、贝叶斯优化,即"调参"</td></tr>
+      </table>
+      <div class="judge"><b>判断法:</b>问"训练结束后这个值是算法算出来的吗?" 是 → 参数;训练前就得填 → 超参数。</div>
+    </div>
+  </div>
+
+  <div class="confuse">
+    <button aria-expanded="false"><span class="vs">VS</span><span class="c-title">机器学习 vs 统计学 / 数据科学 —— 相邻领域怎么划界</span><span class="caret">▶</span></button>
+    <div class="c-body">
+      <table><tr><th></th><th>统计学</th><th>机器学习</th><th>数据科学</th></tr>
+        <tr><td>核心追求</td><td>解释与推断:变量间关系是否显著</td><td>预测与泛化:新样本上准不准</td><td>用数据解决业务问题的全流程</td></tr>
+        <tr><td>典型产出</td><td>置信区间、假设检验结论</td><td>可部署的预测模型</td><td>分析报告 + 模型 + 决策建议</td></tr>
+        <tr><td>关系</td><td colspan="3">ML 大量借用统计学理论;数据科学把 ML 作为工具箱之一,还包含数据工程与业务分析</td></tr>
+      </table>
+      <div class="judge"><b>判断法:</b>关心"为什么"(解释)偏统计;关心"预测得准不准"偏 ML;关心"业务问题有没有解决"是数据科学。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 贯穿示例 ============ -->
+<section id="walk">
+  <div class="sec-head"><span class="sec-no">05</span><h2>两个问题贯穿全图</h2></div>
+  <p class="sec-lede">示例的目的不是教会你做项目,而是演示<strong>一个真实问题如何逐层落进这张地图</strong>:从任务定位到范式、方法、流程、评估、工具、应用,每一步都对应第 03 节的某一层。</p>
+
+  <div class="walk">
+    <h4>示例 A · 垃圾邮件识别(判别式问题的标准路径)</h4>
+    <p class="goal">目标:给定一封邮件,判断是否垃圾邮件</p>
+    <div class="steps">
+      <div class="step"><b>任务定位 ⑧→②</b><div class="sv">这是一个<strong>二分类</strong>问题;有历史标注邮件 → 落入<strong>监督学习</strong>范式</div></div>
+      <div class="step"><b>方法选择 ③④</b><div class="sv">起步用传统 ML:词频特征 + <strong>朴素贝叶斯</strong>或逻辑回归;数据量大、要理解语义时升级为深度学习(<span class="en">BERT</span> 微调)</div></div>
+      <div class="step"><b>流程环节 ⑤</b><div class="sv">收集邮件 → 清洗(去 HTML)→ 特征工程(分词、<span class="en">TF-IDF</span>)→ 划分训练 / 测试集 → 训练 → 调参</div></div>
+      <div class="step"><b>评估方式 ⑥</b><div class="sv">不能只看准确率——垃圾邮件占比低时全判"正常"也有 95% 准确率。要看<strong>精确率</strong>(别误杀正常邮件)与<strong>召回率</strong>(别漏放垃圾)的权衡</div></div>
+      <div class="step"><b>工程与应用 ⑦⑧</b><div class="sv">用 <span class="en">scikit-learn</span> 训练、部署为在线服务、监控误判率随时间的漂移</div></div>
+    </div>
+  </div>
+
+  <div class="walk">
+    <h4>示例 B · 让模型学会写文章(生成式问题的对照路径)</h4>
+    <p class="goal">目标:训练一个能续写文本的语言模型——注意每一层的选择如何不同</p>
+    <div class="steps">
+      <div class="step"><b>任务定位 ⑧→②</b><div class="sv">生成任务,没有人工标注 → <strong>自监督学习</strong>:把"预测下一个词"当作从数据自造的标签</div></div>
+      <div class="step"><b>方法选择 ③④</b><div class="sv">必须用深度学习——语言特征无法人工设计;架构选 <strong><span class="en">Transformer</span></strong>(即 <span class="en">GPT</span> 路线)</div></div>
+      <div class="step"><b>流程环节 ⑤</b><div class="sv">海量文本 → 预训练(学语言规律)→ 指令微调 → <span class="en">RLHF</span>(用<strong>强化学习</strong>对齐人类偏好——三种范式在此汇合)</div></div>
+      <div class="step"><b>评估方式 ⑥</b><div class="sv">困惑度 <span class="en">perplexity</span> + 基准测试 + 人工评估——生成任务没有唯一正确答案,评估远比分类难</div></div>
+      <div class="step"><b>工程与应用 ⑦⑧</b><div class="sv"><span class="en">PyTorch</span> + <span class="en">GPU</span> 集群训练,推理优化后成为聊天助手、写作工具</div></div>
+    </div>
+  </div>
+  <div class="note">对照两条路径可以看到地图的用法:<strong>同样的八层结构,不同的问题在每层做出不同选择</strong>。会走这张图,比记住任何单个算法都重要。</div>
+</section>
+
+<!-- ============ 06 新名词归类 ============ -->
+<section id="classify">
+  <div class="sec-head"><span class="sec-no">06</span><h2>看到一个新名词,如何归类</h2></div>
+  <p class="sec-lede">以后读文章、听分享遇到陌生术语,不要立刻去查教程,先用下面五个问题把它放回地图——多数时候"知道它在哪一层"就够了。</p>
+
+  <div class="qflow">
+    <div class="qrow"><span class="q">它描述的是"靠什么信号 / 数据学习"?(如对比学习、少样本学习)</span><span class="arr">→</span><span class="a">放入 <b>② 范式层</b>,想清它更接近监督、无监督还是强化</span></div>
+    <div class="qrow"><span class="q">它是一种网络结构、算法或具体模型名?(如 <span class="en">ViT</span>、<span class="en">LoRA</span>、<span class="en">LightGBM</span>)</span><span class="arr">→</span><span class="a">放入 <b>③/④ 方法与模型层</b>,先只记它属于哪个方法家族、擅长什么数据</span></div>
+    <div class="qrow"><span class="q">它是衡量好坏的指标或验证手段?(如 <span class="en">BLEU</span>、<span class="en">mAP</span>)</span><span class="arr">→</span><span class="a">放入 <b>⑥ 评估层</b>,弄清它对应哪类任务</span></div>
+    <div class="qrow"><span class="q">它是软件库、平台或流程工具?(如 <span class="en">MLflow</span>、<span class="en">ONNX</span>)</span><span class="arr">→</span><span class="a">放入 <b>④/⑦ 工具与工程层</b>,有具体需要时再学</span></div>
+    <div class="qrow"><span class="q">它是某个业务场景或产品能力?(如 <span class="en">OCR</span>、智能风控)</span><span class="arr">→</span><span class="a">放入 <b>⑧ 应用层</b>,追问一句"它底层是哪类任务 + 哪种方法"</span></div>
+  </div>
+  <div class="note">都不匹配时,大概率是<strong>① 基础概念层</strong>的理论词(如"归纳偏置""维度灾难")——这类词值得认真查,因为它们会反复出现在所有分支里。</div>
+</section>
+
+<!-- ============ 07 深入入口 ============ -->
+<section id="entries">
+  <div class="sec-head"><span class="sec-no">07</span><h2>按你的目标选深入入口</h2></div>
+  <p class="sec-lede">全景建立之后,不同目标应该优先走不同的分支。选择你的画像:</p>
+
+  <div class="entry-tabs" role="tablist">
+    <button class="etab on" data-e="e1">偏理论</button>
+    <button class="etab" data-e="e2">偏工程</button>
+    <button class="etab" data-e="e3">偏应用</button>
+    <button class="etab" data-e="e4">偏研究</button>
+    <button class="etab" data-e="e5">偏产品</button>
+    <button class="etab" data-e="e6">偏实践上手</button>
+  </div>
+
+  <div class="entry-panel on" id="e1">
+    <h4>想搞懂原理与数学</h4><p class="who">适合:在校学生、想打牢地基再动手的人</p>
+    <ol>
+      <li>主攻 <b>① 基础概念 + ② 范式层</b>:损失函数、梯度下降、偏差-方差权衡,推公式而不只是记结论</li>
+      <li>系统读一本教材:周志华《机器学习》(西瓜书)或 <span class="en">Bishop, PRML</span>;进阶 <span class="en">ESL</span></li>
+      <li>数学补给按需进行:线性代数 → 概率统计 → 凸优化,不必全部学完再开始</li>
+    </ol>
+  </div>
+  <div class="entry-panel" id="e2">
+    <h4>想成为算法 / ML 工程师</h4><p class="who">适合:有编程基础、目标是工业界岗位的人</p>
+    <ol>
+      <li>主攻 <b>③④⑤⑦ 方法、工具与工程层</b>:<span class="en">scikit-learn</span> 打底,<span class="en">PyTorch</span> 进深度学习</li>
+      <li>完整跑通 ⑤ 的全流程若干次:从脏数据到可部署模型,重点练特征工程与调参</li>
+      <li>补 <span class="en">MLOps</span>:实验管理、模型部署、监控——工程岗真正的分水岭在第⑦层</li>
+    </ol>
+  </div>
+  <div class="entry-panel" id="e3">
+    <h4>想深入某个应用领域</h4><p class="who">适合:目标明确指向 CV、NLP、推荐等方向的人</p>
+    <ol>
+      <li>先用 <b>①②③ 层</b>建立最小共同基础(监督学习 + 深度学习入门即可)</li>
+      <li>然后<strong>只沿一条应用线垂直深入</strong>:NLP 走 词嵌入 → <span class="en">Transformer</span> → 预训练模型;CV 走 <span class="en">CNN</span> → 检测 / 分割 → <span class="en">ViT</span></li>
+      <li>用该领域的经典数据集复现 2–3 个代表模型,比广撒网学十个领域有效得多</li>
+    </ol>
+  </div>
+  <div class="entry-panel" id="e4">
+    <h4>想做研究、读写论文</h4><p class="who">适合:研究生或准备进入前沿方向的人</p>
+    <ol>
+      <li>在 <b>②③ 层</b>选定细分方向(自监督、生成式模型、对齐……),读该方向的综述 <span class="en">survey</span> 建立谱系</li>
+      <li>精读 5–10 篇里程碑论文并<strong>复现其一</strong>:如 <span class="en">Attention Is All You Need</span></li>
+      <li>养成追踪习惯:<span class="en">arXiv</span> + 顶会(<span class="en">NeurIPS</span> / <span class="en">ICML</span> / <span class="en">CVPR</span> / <span class="en">ACL</span>)</li>
+    </ol>
+  </div>
+  <div class="entry-panel" id="e5">
+    <h4>想做 AI 产品 / 决策</h4><p class="who">适合:产品经理、业务负责人,不写代码但要做判断</p>
+    <ol>
+      <li>主攻 <b>②⑥⑧ 层</b>:分清任务类型(分类 / 生成 / 排序),看懂评估指标,了解每类应用的成熟度</li>
+      <li>重点建立<strong>能力边界感</strong>:什么问题适合 ML(有数据、可容错、模式稳定),什么不适合(强因果、零容错、规则明确)</li>
+      <li>学会问工程师三个问题:数据从哪来?怎么评估?错了的代价是什么?</li>
+    </ol>
+  </div>
+  <div class="entry-panel" id="e6">
+    <h4>想立刻动手试起来</h4><p class="who">适合:学习靠手感、先跑通再回头补理论的人</p>
+    <ol>
+      <li>从 <b>④⑤ 层</b>切入:装好 <span class="en">Python</span> + <span class="en">scikit-learn</span>,用 <span class="en">Titanic</span> / <span class="en">Iris</span> 数据集当天跑出第一个模型</li>
+      <li>上 <span class="en">Kaggle</span> 参加入门赛,在排行榜压力下自然学会特征工程与调参</li>
+      <li>每遇到一个不懂的词,回到第 06 节归类,再决定要不要深挖——避免被术语雪崩淹没</li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  一文读懂 · 机器学习知识地图 —— 单文件离线版。建议使用路径:全景 → 边界 → 主干分支 → 概念层级 → 需要时回查易混辨析与新名词归类。
+</div></footer>
+
+<div id="tip" role="tooltip"></div>
+
+<script>
+/* ---------- panorama data: same concepts, three cuts ---------- */
+const CONCEPTS=[
+  {n:"线性回归",p:"sup",m:"cls",t:"tab"},
+  {n:"逻辑回归",p:"sup",m:"cls",t:"tab"},
+  {n:"决策树",p:"sup",m:"cls",t:"tab"},
+  {n:"SVM",p:"sup",m:"cls",t:"tab"},
+  {n:"XGBoost",p:"sup",m:"cls",t:"tab"},
+  {n:"朴素贝叶斯",p:"sup",m:"cls",t:"nlp"},
+  {n:"K-means",p:"uns",m:"cls",t:"tab"},
+  {n:"PCA",p:"uns",m:"cls",t:"tab"},
+  {n:"CNN 图像分类",p:"sup",m:"dl",t:"cv"},
+  {n:"YOLO 目标检测",p:"sup",m:"dl",t:"cv"},
+  {n:"Transformer",p:"self",m:"dl",t:"nlp"},
+  {n:"BERT",p:"self",m:"dl",t:"nlp"},
+  {n:"GPT / 大语言模型",p:"self",m:"dl",t:"nlp"},
+  {n:"扩散模型",p:"self",m:"dl",t:"cv"},
+  {n:"自编码器",p:"uns",m:"dl",t:"tab"},
+  {n:"Q-learning",p:"rl",m:"cls",t:"dec"},
+  {n:"DQN",p:"rl",m:"dl",t:"dec"},
+  {n:"PPO / RLHF",p:"rl",m:"dl",t:"dec"},
+  {n:"协同过滤",p:"sup",m:"cls",t:"rec"},
+  {n:"双塔召回模型",p:"sup",m:"dl",t:"rec"},
+  {n:"Whisper 语音识别",p:"self",m:"dl",t:"nlp"},
+  {n:"ARIMA 时序预测",p:"sup",m:"cls",t:"tab"}
+];
+const VIEWS={
+  p:{cls:"c3",colClass:"col-p",hint:"按「靠什么信号学」切分 —— 这是教科书最经典的三分法(自监督并入其衍生位置单列)。",
+    cols:[
+      {k:"sup",h:"监督学习",s:"有标注数据,学输入→输出映射"},
+      {k:["uns","self"],h:"无监督 / 自监督",s:"无人工标注,发现结构或自造标签"},
+      {k:"rl",h:"强化学习",s:"与环境交互,靠奖励试错学策略"}
+    ]},
+  m:{cls:"c2",colClass:"col-m",hint:"按「用什么模型」切分 —— 深度学习横切上一视角的全部三类,这就是它无法与『监督 / 强化』并列的原因。",
+    cols:[
+      {k:"cls",h:"传统机器学习",s:"人工特征工程,小数据高效可解释"},
+      {k:"dl",h:"深度学习",s:"神经网络自动学特征,擅长图文语音"}
+    ]},
+  t:{cls:"c5",colClass:"col-t",hint:"按「解决什么问题」切分 —— 应用视角。同一列里往往混用多种范式与方法。",
+    cols:[
+      {k:"cv",h:"视觉 CV",s:"看懂与生成图像"},
+      {k:"nlp",h:"语言 / 语音",s:"理解与生成语言"},
+      {k:"rec",h:"推荐系统",s:"预测偏好并排序"},
+      {k:"dec",h:"决策控制",s:"游戏、机器人、对齐"},
+      {k:"tab",h:"表格 / 时序",s:"结构化数据预测"}
+    ]}
+};
+let curView="p",traced=null;
+const colsEl=document.getElementById("map-cols"),hintEl=document.getElementById("map-hint");
+function renderMap(){
+  const v=VIEWS[curView];
+  colsEl.className=v.cls;hintEl.textContent=v.hint;colsEl.innerHTML="";
+  v.cols.forEach(c=>{
+    const keys=Array.isArray(c.k)?c.k:[c.k];
+    const div=document.createElement("div");
+    div.className="map-col "+v.colClass;
+    div.innerHTML=`<h4>${c.h}</h4><div class="sub">${c.s}</div>`;
+    const chips=document.createElement("div");chips.className="chips";
+    CONCEPTS.filter(x=>keys.includes(x[curView])).forEach((x,i)=>{
+      const s=document.createElement("span");
+      s.className="chip"+(traced===x.n?" hl":"");
+      s.style.animationDelay=(i*22)+"ms";
+      s.textContent=x.n;chips.appendChild(s);
+    });
+    div.appendChild(chips);colsEl.appendChild(div);
+  });
+}
+document.querySelectorAll(".tab").forEach(b=>{
+  b.addEventListener("click",()=>{
+    curView=b.dataset.view;
+    document.querySelectorAll(".tab").forEach(t=>{t.className="tab";t.setAttribute("aria-selected","false")});
+    b.classList.add("on-"+curView);b.setAttribute("aria-selected","true");
+    renderMap();
+  });
+});
+document.querySelectorAll(".trace-btn").forEach(b=>{
+  b.addEventListener("click",()=>{traced=(traced===b.dataset.trace)?null:b.dataset.trace;renderMap();});
+});
+renderMap();
+
+/* ---------- accordions ---------- */
+document.querySelectorAll(".branch>button,.confuse>button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    const box=b.parentElement,open=box.classList.toggle("open");
+    b.setAttribute("aria-expanded",open);
+  });
+});
+
+/* ---------- entry tabs ---------- */
+document.querySelectorAll(".etab").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll(".etab").forEach(t=>t.classList.remove("on"));
+    document.querySelectorAll(".entry-panel").forEach(p=>p.classList.remove("on"));
+    b.classList.add("on");
+    document.getElementById(b.dataset.e).classList.add("on");
+  });
+});
+
+/* ---------- term tooltips ---------- */
+const TERMS={
+  statistics:"<b>统计学</b>与 ML 深度重叠:很多 ML 算法(线性回归、朴素贝叶斯)本身就来自统计。差异在追求:统计重解释与推断,ML 重预测与泛化。",
+  ds:"<b>数据科学</b>是用数据解决业务问题的完整学科,ML 是它的核心工具之一,此外还包括数据工程、可视化与业务分析。",
+  feature:"<b>特征 feature</b>:描述样本的输入变量。如预测房价时的面积、地段、房龄。特征质量往往比模型选择更影响效果。",
+  label:"<b>标签 label</b>:监督学习中的\u201c标准答案\u201d。如邮件的\u201c垃圾 / 正常\u201d。有没有标签,是范式划分的第一依据。",
+  loss:"<b>损失函数 loss</b>:量化\u201c预测有多差\u201d的函数。训练的本质就是不断调整参数使损失变小。",
+  gd:"<b>梯度下降 gradient descent</b>:沿损失下降最快的方向一小步一小步调参数,是绝大多数模型(尤其神经网络)的训练引擎。",
+  overfit:"<b>过拟合</b>:把训练数据背下来了,新数据上反而差;<b>欠拟合</b>:连训练数据都没学好。ML 实践的核心矛盾。",
+  general:"<b>泛化 generalization</b>:模型在没见过的新数据上的表现。ML 的终极目标不是训练集上的高分,而是泛化能力。",
+  split:"<b>训练 / 验证 / 测试集</b>:训练集用来学,验证集用来调参选模型,测试集只在最后摸一次底——防止自欺欺人。",
+  fe:"<b>特征工程</b>:把原始数据加工成对模型有用的特征(分箱、编码、组合)。传统 ML 中最耗时也最见功力的环节。",
+  hp:"<b>调参</b>:搜索最优超参数(学习率、树深度等)。方法有网格搜索、随机搜索、贝叶斯优化。",
+  pr:"<b>精确率 precision</b>:判为正的样本里多少真的是正;<b>召回率 recall</b>:所有正样本里抓回来多少。二者常此消彼长,按业务代价取舍。",
+  cv:"<b>交叉验证 cross-validation</b>:把数据轮流切成 K 份训练与验证,让评估更稳健、不依赖单次划分的运气。"
+};
+const tip=document.getElementById("tip");
+document.querySelectorAll(".term").forEach(el=>{
+  const show=e=>{
+    tip.innerHTML=TERMS[el.dataset.t]||"";tip.style.opacity=1;
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+8;
+    tip.style.left=Math.min(x,window.innerWidth-310)+"px";
+    tip.style.top=Math.min(y,window.innerHeight-140)+"px";
+  };
+  el.addEventListener("mouseenter",show);
+  el.addEventListener("click",show);
+  el.addEventListener("mouseleave",()=>tip.style.opacity=0);
+});
+document.addEventListener("scroll",()=>tip.style.opacity=0,{passive:true});
+</script>
+</body>
+</html>

@@ -16,7 +16,7 @@ usage() {
   管理 catalog/content/{drafts,published,archived}/ 下的 content bundle 骨架和发布状态。
 
 命令：
-  item new <hall> <github_project|ai_model> <id> [options]
+  item new <hall> <github_project|ai_model|knowledge_article> <id> [options]
   item note add <hall> <id> <note-id> [options]
   item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>]
   item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
@@ -51,6 +51,16 @@ usage() {
     --category ai \\
     --tag audio \\
     --maintenance-status unknown
+
+  ./scripts/content.sh item new lab knowledge_article activation-functions \\
+    --title "激活函数" \\
+    --summary "从非线性、常见函数、梯度稳定性和输出层选择理解激活函数。" \\
+    --source-type manual \\
+    --source-url "https://example.com/activation-functions" \\
+    --domain "机器学习基础" \\
+    --topic "非线性" \\
+    --topic "梯度流" \\
+    --audience "自学者"
 
   ./scripts/content.sh item note add models htdemucs-ft-onnx quick-start \\
     --title "快速试用" \\

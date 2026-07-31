@@ -1,0 +1,44 @@
+schema_version: 2
+id: machine-learning
+hall: lab
+kind: knowledge_article
+title: 机器学习
+summary: 从数据、模型、训练、泛化、评估和部署边界建立机器学习整体心智模型。
+source:
+  type: reference
+  url: https://en.wikipedia.org/wiki/Machine_learning
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  domain: AI 基础
+  topics:
+    - 监督学习
+    - 无监督学习
+    - 泛化
+    - 模型评估
+  audience:
+    - 自学者
+notes:
+  - id: machine-learning-explainer
+    title: 一文读懂机器学习 · 从数据到泛化
+    type: html
+    path: ./notes/machine-learning-explainer.html
+    summary: 从数据、特征、模型、训练、验证、泛化和部署边界建立机器学习全局心智模型。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Reference
+        url: https://en.wikipedia.org/wiki/Machine_learning
+  - type: highlights
+    items:
+      - 以数据、目标、模型、训练和泛化构成基本闭环。
+      - 区分监督学习、无监督学习、强化学习和生成建模等范式。
+      - 把损失函数、评估指标、验证集和测试集放回同一条主线。
+  - type: use-cases
+    items:
+      - 作为机器学习自学路径的总览入口。
+      - 在深挖具体算法、神经网络或大模型前建立全局框架。
+      - 检查项目目标、数据和评估方案是否定义清楚。

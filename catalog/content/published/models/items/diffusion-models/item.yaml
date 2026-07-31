@@ -1,0 +1,54 @@
+schema_version: 2
+id: diffusion-models
+hall: models
+kind: ai_model
+title: Diffusion Models
+summary: 通过逐步加噪与逐步去噪进行生成建模的模型家族，是图像、视频、音频和结构生成的重要范式。
+source:
+  type: paper
+  url: https://arxiv.org/abs/2006.11239
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  provider: Diffusion research community
+  modalities:
+    input:
+      - noise
+      - condition
+    output:
+      - generated-sample
+  tasks:
+    - generative-modeling
+    - image-generation
+    - video-generation
+  access:
+    - paper
+  formats:
+    - architecture
+  runtimes:
+    - pytorch
+notes:
+  - id: diffusion-models-overview
+    title: 一文读懂扩散模型家族 · 全局视角
+    type: html
+    path: ./notes/diffusion-models-overview.html
+    summary: 从前向加噪、反向去噪、DDPM/DDIM/SDE/Latent Diffusion 到具体产品理解扩散模型家族。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: DDPM Paper
+        url: https://arxiv.org/abs/2006.11239
+  - type: highlights
+    title: 模型要点
+    items:
+      - Diffusion is a model family and generative modeling framework, not one concrete model.
+      - Common core is forward noising plus learned reverse denoising.
+      - Variants differ in sampling process, score/SDE view, latent space, network backbone and conditioning.
+  - type: use-cases
+    items:
+      - 建立扩散模型家族、具体模型和产品之间的层级关系。
+      - 学习 DDPM、DDIM、Latent Diffusion、Flow Matching 等分支前的全局地图。
+      - 为后续 Stable Diffusion、DiT、Flux 或视频扩散专题做入口。

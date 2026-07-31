@@ -39,27 +39,46 @@ const [site, hall, body, memberCollections, relatedItems] = await Promise.all([
 ]);
 const BodyContent = body.type === "markdown" ? body.Content : undefined;
 const htmlFragment = body.type === "html" ? body.html : undefined;
-const profile = item.profile;
-const isAiModel = "provider" in profile;
-const taxonomy = isAiModel ? undefined : await getTaxonomyCatalog();
-const category = !isAiModel && taxonomy ? getCategory(taxonomy, profile.category) : undefined;
-const tags = !isAiModel && taxonomy ? profile.tags.map((tag) => getTag(taxonomy, tag)) : [];
-const maintenanceStatus =
-  !isAiModel && taxonomy ? getProjectMaintenanceStatus(taxonomy, profile.maintenance_status) : undefined;
-const stats =
-  isAiModel
-    ? [
-        { label: "提供方", value: profile.provider },
-        { label: "模态", value: `${profile.modalities.input.join("+")} -> ${profile.modalities.output.join("+")}` },
-        { label: "格式", value: profile.formats.join(" · ") }
-      ]
-    : [
-        { label: "分类", value: category?.label ?? profile.category },
-        { label: "维护", value: maintenanceStatus?.label ?? profile.maintenance_status },
-        { label: "语言", value: profile.languages?.[0] ?? "Unknown" },
-        { label: "License", value: profile.license ?? "Unknown" }
-      ];
-const badges = isAiModel ? profile.tasks : tags.map((tag) => tag.label);
+let itemKindLabel: string;
+let stats: { label: string; value: string | number }[];
+let badges: string[];
+
+if (item.kind === "ai_model") {
+  const profile = item.profile;
+  itemKindLabel = "模型";
+  stats = [
+    { label: "提供方", value: profile.provider },
+    { label: "模态", value: `${profile.modalities.input.join("+")} -> ${profile.modalities.output.join("+")}` },
+    { label: "格式", value: profile.formats.join(" · ") }
+  ];
+  badges = profile.tasks;
+} else if (item.kind === "knowledge_article") {
+  const profile = item.profile;
+  itemKindLabel = "知识";
+  stats = [
+    { label: "领域", value: profile.domain },
+    { label: "主题", value: profile.topics.join(" · ") },
+    { label: "来源", value: item.source.type }
+  ];
+  if (profile.audience) {
+    stats.push({ label: "适合", value: profile.audience.join(" · ") });
+  }
+  badges = profile.topics;
+} else {
+  const profile = item.profile;
+  const taxonomy = await getTaxonomyCatalog();
+  const category = getCategory(taxonomy, profile.category);
+  const tags = profile.tags.map((tag) => getTag(taxonomy, tag));
+  const maintenanceStatus = getProjectMaintenanceStatus(taxonomy, profile.maintenance_status);
+  itemKindLabel = "项目";
+  stats = [
+    { label: "分类", value: category.label },
+    { label: "维护", value: maintenanceStatus.label },
+    { label: "语言", value: profile.languages?.[0] ?? "Unknown" },
+    { label: "License", value: profile.license ?? "Unknown" }
+  ];
+  badges = tags.map((tag) => tag.label);
+}
 let sectionNumber = 1;
 const notesSectionIndex = item.notes.length > 0 ? String(sectionNumber++).padStart(2, "0") : undefined;
 const memberCollectionsSectionIndex =
@@ -77,7 +96,7 @@ const relatedItemsSectionIndex = relatedItems.length > 0 ? String(sectionNumber+
       ]}
     />
     <PageHeader
-      eyebrow={`${hall.title} / ${item.kind === "ai_model" ? "模型" : "项目"}`}
+      eyebrow={`${hall.title} / ${itemKindLabel}`}
       title={item.title}
       description={item.summary}
       stats={stats}

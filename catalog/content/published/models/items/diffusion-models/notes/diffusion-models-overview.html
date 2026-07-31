@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂扩散模型家族 · 从加噪-去噪思想到 Stable Diffusion 与 Sora</title>
+<style>
+/* ============ 设计令牌:噪声(violet)→ 信号(teal)的语义色轴 ============ */
+:root{
+  --bg:#F5F6F9;
+  --panel:#FFFFFF;
+  --ink:#171923;
+  --muted:#5B6172;
+  --line:#E2E5EC;
+  --soft:#EEF0F5;
+  --noise:#6C5CE7;   /* 噪声 / 先验分布 */
+  --signal:#0EA47A;  /* 数据 / 生成样本 */
+  --dir:linear-gradient(90deg,var(--noise),var(--signal));
+  --dir-rev:linear-gradient(90deg,var(--signal),var(--noise));
+  /* 家族分层色 */
+  --c-core:#171923;
+  --c-theory:#3B5BDB;
+  --c-sampling:#E8890C;
+  --c-space:#0CA678;
+  --c-flow:#9C36B5;
+  --c-arch:#E03131;
+  --c-product:#3E4557;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r:10px;
+  --shadow:0 1px 2px rgba(23,25,35,.05),0 8px 24px -12px rgba(23,25,35,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:56px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  font-family:var(--sans);color:var(--ink);background:var(--bg);
+  font-size:16px;line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:color-mix(in srgb,var(--noise) 22%,transparent)}
+
+/* ============ 顶部阅读进度:阅读 = 一次去噪 ============ */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--dir);z-index:99}
+
+/* ============ 布局 ============ */
+.wrap{display:grid;grid-template-columns:236px minmax(0,1fr);max-width:1220px;margin:0 auto;gap:0 40px;padding:0 24px}
+main{min-width:0;max-width:880px;padding-bottom:120px}
+nav.toc{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:36px 0 40px;font-size:13px;scrollbar-width:thin}
+nav.toc .toclogo{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid transparent;line-height:1.5}
+nav.toc a:hover{color:var(--ink)}
+nav.toc a.on{color:var(--ink);border-left-color:var(--noise);background:linear-gradient(90deg,color-mix(in srgb,var(--noise) 8%,transparent),transparent)}
+nav.toc a .n{font-family:var(--mono);font-size:10px;color:#A2A8B8;margin-right:6px}
+details.mtoc{display:none;margin:16px 0;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;font-size:14px}
+details.mtoc a{display:block;color:var(--muted);text-decoration:none;padding:3px 0}
+@media (max-width:1000px){
+  .wrap{grid-template-columns:1fr;padding:0 16px}
+  nav.toc{display:none}
+  details.mtoc{display:block}
+}
+
+/* ============ 首屏 ============ */
+.hero{
+  position:relative;margin:0 -24px;padding:64px 24px 48px;
+  background:
+    radial-gradient(1100px 480px at 78% -10%,color-mix(in srgb,var(--noise) 12%,transparent),transparent 60%),
+    radial-gradient(900px 420px at 10% 108%,color-mix(in srgb,var(--signal) 10%,transparent),transparent 60%),
+    #FBFBFD;
+  border-bottom:1px solid var(--line);
+}
+.hero::before{ /* 颗粒噪声底纹:主题即噪声 */
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix type='matrix' values='0 0 0 0 0.35 0 0 0 0 0.35 0 0 0 0 0.45 0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+.hero>*{position:relative}
+.hero .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+.hero h1{
+  font-size:clamp(30px,4.6vw,46px);line-height:1.2;font-weight:800;letter-spacing:-.01em;
+  margin:12px 0 8px;transition:filter .25s ease,opacity .25s ease;
+}
+.hero h1 .grad{background:var(--dir);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .point{
+  display:inline-block;margin:10px 0 0;padding:9px 16px;border-radius:999px;
+  background:var(--ink);color:#fff;font-size:14.5px;font-weight:600;letter-spacing:.01em;
+}
+.hero .sub{color:var(--muted);max-width:660px;margin-top:14px;font-size:15px}
+
+/* 去噪条:clean / x_t / 估计 */
+.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:30px}
+.cbox{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px;box-shadow:var(--shadow);text-align:center}
+.cbox canvas{width:100%;height:auto;image-rendering:pixelated;border-radius:6px;background:#0f1117;display:block}
+.cbox .cl{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px;letter-spacing:.04em}
+.cbox .cl b{color:var(--ink)}
+@media (max-width:640px){.strip{grid-template-columns:repeat(3,1fr);gap:8px}.cbox{padding:6px}.cbox .cl{font-size:9.5px}}
+
+/* 时间步滑杆:轨道即 噪声→数据 方向 */
+.trow{display:flex;align-items:center;gap:14px;margin-top:16px;flex-wrap:wrap}
+.trow .tl{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+input[type=range].tsl{
+  -webkit-appearance:none;appearance:none;flex:1;min-width:200px;height:8px;border-radius:99px;
+  background:var(--dir-rev);outline:none;
+}
+input[type=range].tsl::-webkit-slider-thumb{
+  -webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;
+  border:3px solid var(--ink);cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,.25);
+}
+input[type=range].tsl::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--ink);cursor:grab}
+.tval{font-family:var(--mono);font-size:13px;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:2px 10px;min-width:110px;text-align:center}
+
+/* ============ 家族地图 ============ */
+.mapcard{margin-top:34px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.maptabs{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--line);background:#FCFCFE}
+.maptabs button{
+  appearance:none;border:0;background:none;font:inherit;font-size:13.5px;font-weight:600;color:var(--muted);
+  padding:12px 16px;cursor:pointer;border-bottom:2px solid transparent;
+}
+.maptabs button:hover{color:var(--ink)}
+.maptabs button.on{color:var(--ink);border-bottom-color:var(--noise)}
+.mapbody{padding:20px;min-height:220px;overflow-x:auto}
+.maphint{font-size:12.5px;color:var(--muted);padding:0 20px 12px}
+
+/* 节点 chip:左侧色条编码所属层 */
+.chip{
+  appearance:none;display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:13px;font-weight:600;
+  padding:6px 12px;margin:3px;border-radius:8px;cursor:pointer;line-height:1.35;text-align:left;
+  border:1px solid var(--line);border-left:4px solid var(--lc,#888);
+  background:color-mix(in srgb,var(--lc,#888) 6%,#fff);color:var(--ink);
+  transition:transform .12s ease,box-shadow .12s ease;
+}
+.chip:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+.chip.sel{outline:2px solid var(--lc,#888);outline-offset:1px}
+.chip .en{font-family:var(--mono);font-weight:500;font-size:12px}
+.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.chip[data-layer=core]{--lc:var(--c-core)}
+.chip[data-layer=theory]{--lc:var(--c-theory)}
+.chip[data-layer=sampling]{--lc:var(--c-sampling)}
+.chip[data-layer=space]{--lc:var(--c-space)}
+.chip[data-layer=flow]{--lc:var(--c-flow)}
+.chip[data-layer=arch]{--lc:var(--c-arch)}
+.chip[data-layer=product]{--lc:var(--c-product)}
+
+/* 思想主线视图 */
+.flowmap{display:flex;align-items:stretch;gap:10px;min-width:760px}
+.fcol{flex:1;display:flex;flex-direction:column;gap:4px;align-items:stretch}
+.fcol .ft{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;text-align:center}
+.fcol .chip{justify-content:flex-start;margin:2px 0}
+.farr{align-self:center;flex:0 0 26px;height:8px;border-radius:99px;background:var(--dir);position:relative;margin-top:14px}
+.farr::after{content:"";position:absolute;right:-2px;top:50%;transform:translateY(-50%);border:6px solid transparent;border-left:8px solid var(--signal)}
+
+/* 时间演化视图 */
+.timeline{display:flex;gap:0;min-width:900px;position:relative;padding:8px 0 4px}
+.timeline::before{content:"";position:absolute;left:0;right:0;top:26px;height:3px;background:var(--dir);border-radius:99px}
+.tcol{flex:1;position:relative;padding:0 6px}
+.tcol .yr{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink);text-align:center;margin-bottom:14px;position:relative}
+.tcol .yr::after{content:"";position:absolute;left:50%;top:22px;width:9px;height:9px;border-radius:50%;background:#fff;border:2.5px solid var(--ink);transform:translateX(-50%)}
+.tcol .tstack{display:flex;flex-direction:column;align-items:stretch;margin-top:10px}
+.tcol .chip{font-size:12px;margin:2px 0}
+
+/* 分层视图 */
+.layers{display:flex;flex-direction:column;gap:8px}
+.lband{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;border:1px solid var(--line);border-left:5px solid var(--lc);background:color-mix(in srgb,var(--lc) 4%,#fff)}
+.lband .lt{font-weight:700;font-size:13.5px}
+.lband .lt small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;line-height:1.5}
+.lband[data-layer=core]{--lc:var(--c-core)}
+.lband[data-layer=theory]{--lc:var(--c-theory)}
+.lband[data-layer=sampling]{--lc:var(--c-sampling)}
+.lband[data-layer=space]{--lc:var(--c-space)}
+.lband[data-layer=flow]{--lc:var(--c-flow)}
+.lband[data-layer=arch]{--lc:var(--c-arch)}
+.lband[data-layer=product]{--lc:var(--c-product)}
+@media (max-width:640px){.lband{grid-template-columns:1fr}}
+
+/* 具体模型视图 */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.pcard{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff;cursor:pointer;transition:box-shadow .12s ease,transform .12s ease}
+.pcard:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
+.pcard h4{font-size:14.5px;margin-bottom:2px}
+.pcard .py{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.pcard .recipe{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px}
+.tagl{font-size:11px;font-family:var(--mono);padding:2px 7px;border-radius:5px;border:1px solid var(--line);background:color-mix(in srgb,var(--lc,#888) 8%,#fff);border-left:3px solid var(--lc,#888);color:var(--ink)}
+.tagl[data-layer=theory]{--lc:var(--c-theory)}.tagl[data-layer=sampling]{--lc:var(--c-sampling)}
+.tagl[data-layer=space]{--lc:var(--c-space)}.tagl[data-layer=flow]{--lc:var(--c-flow)}
+.tagl[data-layer=arch]{--lc:var(--c-arch)}.tagl[data-layer=core]{--lc:var(--c-core)}
+
+/* 学习路线视图 */
+.route{display:flex;flex-direction:column;gap:0}
+.rstep{display:grid;grid-template-columns:44px 1fr;gap:14px;padding:12px 4px;border-bottom:1px dashed var(--line)}
+.rstep:last-child{border-bottom:0}
+.rstep .rn{font-family:var(--mono);font-weight:700;font-size:15px;color:#fff;background:var(--ink);width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.rstep h4{font-size:14.5px;margin-bottom:2px}
+.rstep p{font-size:13px;color:var(--muted);margin-bottom:6px}
+
+/* 详情面板:三句话定位 */
+.detail{border-top:1px solid var(--line);background:#FBFBFD;padding:18px 20px}
+.detail .dh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.detail .dh h3{font-size:17px}
+.badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;color:#fff;background:var(--lc,#888);letter-spacing:.04em}
+.badge[data-layer=core]{--lc:var(--c-core)}.badge[data-layer=theory]{--lc:var(--c-theory)}
+.badge[data-layer=sampling]{--lc:var(--c-sampling)}.badge[data-layer=space]{--lc:var(--c-space)}
+.badge[data-layer=flow]{--lc:var(--c-flow)}.badge[data-layer=arch]{--lc:var(--c-arch)}
+.badge[data-layer=product]{--lc:var(--c-product)}
+.d3{display:grid;gap:8px}
+.d3 .drow{display:grid;grid-template-columns:96px 1fr;gap:10px;font-size:14px}
+.d3 .dk{font-family:var(--mono);font-size:11.5px;color:var(--muted);padding-top:3px;white-space:nowrap}
+.d3 .dv{line-height:1.7}
+.detail .dreps{margin-top:10px;font-size:12.5px;color:var(--muted)}
+.detail .dreps b{color:var(--ink)}
+.detail .empty{color:var(--muted);font-size:14px}
+@media (max-width:640px){.d3 .drow{grid-template-columns:1fr;gap:2px}}
+
+/* ============ 正文章节 ============ */
+section.sec{padding-top:64px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+.eyebrow b{color:var(--noise);font-weight:700}
+section.sec h2{font-size:clamp(22px,3vw,28px);font-weight:800;letter-spacing:-.01em;margin:6px 0 18px;line-height:1.3}
+section.sec h3{font-size:17.5px;font-weight:700;margin:28px 0 10px}
+section.sec p{margin:0 0 14px;max-width:74ch}
+section.sec ul,section.sec ol{margin:0 0 14px 1.4em;max-width:72ch}
+section.sec li{margin-bottom:6px}
+.mn{font-family:var(--mono);font-size:.92em}
+code,.kbd{font-family:var(--mono);font-size:.88em;background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+.chain{
+  font-family:var(--mono);font-size:13px;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--noise);
+  border-radius:var(--r);padding:14px 16px;margin:16px 0;overflow-x:auto;white-space:nowrap;box-shadow:var(--shadow);
+}
+.chain .a{color:var(--noise);font-weight:700}
+.chain .b{color:var(--signal);font-weight:700}
+.note{background:color-mix(in srgb,var(--signal) 6%,#fff);border:1px solid color-mix(in srgb,var(--signal) 30%,var(--line));border-radius:var(--r);padding:14px 16px;margin:16px 0;font-size:14.5px}
+.note b:first-child{color:var(--signal)}
+.warn{background:color-mix(in srgb,var(--noise) 6%,#fff);border:1px solid color-mix(in srgb,var(--noise) 28%,var(--line));border-radius:var(--r);padding:14px 16px;margin:16px 0;font-size:14.5px}
+.warn b:first-child{color:var(--noise)}
+
+/* 交互面板通用 */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:18px;margin:20px 0}
+.panel .pt{font-size:13px;font-weight:700;letter-spacing:.02em;margin-bottom:4px}
+.panel .pq{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+.panel .pq b{color:var(--ink)}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.ctl label{font-size:12.5px;color:var(--muted);font-family:var(--mono)}
+select,.btn{
+  appearance:none;font:inherit;font-size:13.5px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);
+  background:#fff;color:var(--ink);cursor:pointer;
+}
+select:focus-visible,.btn:focus-visible,input:focus-visible{outline:2px solid var(--noise);outline-offset:1px}
+.btn{font-weight:600}
+.btn:hover{border-color:#C6CBDA;background:#FBFBFD}
+.btn.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.pri:hover{background:#2A2E3F}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{appearance:none;border:0;background:#fff;font:inherit;font-size:13px;font-weight:600;color:var(--muted);padding:7px 14px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--ink);color:#fff}
+.readout{font-size:14px;background:#FBFBFD;border:1px dashed var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;line-height:1.8}
+.readout b{color:var(--ink)}
+
+/* 表格 */
+.twrap{overflow-x:auto;margin:16px 0;border:1px solid var(--line);border-radius:var(--r);background:#fff;box-shadow:var(--shadow)}
+table.t{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+table.t th{background:#FBFBFD;font-size:12px;font-family:var(--mono);letter-spacing:.04em;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.t td{padding:10px 12px;border-bottom:1px solid var(--soft);vertical-align:top;line-height:1.7}
+table.t tr:last-child td{border-bottom:0}
+table.t td:first-child{font-weight:700;white-space:nowrap}
+table.t .mn{white-space:nowrap}
+
+/* 小型度量条 */
+.meter{display:grid;grid-template-columns:110px 1fr 74px;gap:10px;align-items:center;font-size:12.5px;margin:6px 0}
+.meter .mtk{font-family:var(--mono);color:var(--muted);text-align:right}
+.meter .bar{height:10px;border-radius:99px;background:var(--soft);overflow:hidden}
+.meter .bar i{display:block;height:100%;border-radius:99px;background:var(--dir);transition:width .25s ease}
+.meter .mv{font-family:var(--mono);font-size:12px}
+
+/* 误区手风琴 */
+.mis{border:1px solid var(--line);border-radius:10px;background:#fff;margin:10px 0;overflow:hidden}
+.mis summary{cursor:pointer;list-style:none;padding:13px 16px;font-weight:700;font-size:14.5px;display:flex;gap:10px;align-items:baseline}
+.mis summary::-webkit-details-marker{display:none}
+.mis summary .x{font-family:var(--mono);color:#D6336C;font-size:12px;flex:0 0 auto}
+.mis[open] summary{border-bottom:1px solid var(--soft)}
+.mis .fix{padding:12px 16px 14px;font-size:14px;color:var(--ink);background:#FBFDFC}
+.mis .fix b{color:var(--signal)}
+
+/* 测验 */
+.quiz .qrow{display:grid;grid-template-columns:200px 1fr 30px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px dashed var(--soft)}
+.quiz .qrow .qn{font-weight:700;font-size:14px}
+.quiz .qrow .qn .en{font-family:var(--mono);font-weight:500;font-size:12px;color:var(--muted);display:block}
+.quiz .mark{font-size:16px;text-align:center}
+.quiz .qexp{grid-column:1/-1;font-size:12.5px;color:var(--muted);padding:2px 0 6px;display:none}
+.quiz .qrow.done .qexp{display:block}
+@media (max-width:640px){.quiz .qrow{grid-template-columns:1fr}.quiz .mark{text-align:left}}
+
+/* 画布通用 */
+canvas.demo{width:100%;height:auto;display:block;border-radius:8px;background:#0F1117}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:700px){.grid2{grid-template-columns:1fr}}
+
+/* 管线图 */
+.pipe{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--mono);font-size:12.5px;margin:14px 0}
+.pipe .pn{border:1.5px solid var(--ink);border-radius:8px;padding:8px 12px;background:#fff;font-weight:600}
+.pipe .pn.dim{border-style:dashed;color:var(--muted);border-color:#B7BDCB}
+.pipe .pn.hot{border-color:var(--noise);color:var(--noise);background:color-mix(in srgb,var(--noise) 6%,#fff)}
+.pipe .pa{color:var(--muted)}
+
+footer{margin-top:80px;padding:28px 0 12px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;font-family:var(--mono)}
+a.inl{color:var(--ink);text-decoration:underline;text-decoration-color:#C4C9D8;text-underline-offset:3px}
+</style>
+</head>
+<body>
+<div id="progress" aria-hidden="true"></div>
+<div class="wrap">
+
+<nav class="toc" aria-label="目录">
+  <div class="toclogo">Diffusion Family</div>
+  <a href="#hero"><span class="n">◇</span>首屏 · 家族总图</a>
+  <a href="#s1"><span class="n">01</span>Diffusion 到底是什么</a>
+  <a href="#s2"><span class="n">02</span>为什么需要这种范式</a>
+  <a href="#s3"><span class="n">03</span>先抓五个变量</a>
+  <a href="#s4"><span class="n">04</span>加噪与去噪机制</a>
+  <a href="#s5"><span class="n">05</span>家族地图分层</a>
+  <a href="#s6"><span class="n">06</span>DDPM 经典基线</a>
+  <a href="#s7"><span class="n">07</span>DDIM 与采样加速</a>
+  <a href="#s8"><span class="n">08</span>Score / SDE 视角</a>
+  <a href="#s9"><span class="n">09</span>Latent Diffusion</a>
+  <a href="#s10"><span class="n">10</span>Flow Matching / RF</a>
+  <a href="#s11"><span class="n">11</span>Consistency 少步生成</a>
+  <a href="#s12"><span class="n">12</span>U-Net、DiT 与控制</a>
+  <a href="#s13"><span class="n">13</span>条件生成与 guidance</a>
+  <a href="#s14"><span class="n">14</span>视频·音频·3D·蛋白质</a>
+  <a href="#s15"><span class="n">15</span>关键横向对比</a>
+  <a href="#s16"><span class="n">16</span>模型放回地图</a>
+  <a href="#s17"><span class="n">17</span>误区与归位测验</a>
+  <a href="#s18"><span class="n">18</span>后续学习路线</a>
+  <a href="#cheat"><span class="n">附</span>家族速查表</a>
+</nav>
+
+<main>
+<section class="hero" id="hero">
+  <div class="kicker">Generative Modeling · Family Map · 自学型交互文档</div>
+  <h1 id="heroTitle">一文读懂<span class="grad">扩散模型家族</span></h1>
+  <div class="point">Diffusion Model 是一类生成建模范式,不是 Stable Diffusion 这一类具体产品。</div>
+  <p class="sub">这个家族的所有成员共享同一条主线:<b>逐步加噪破坏数据,再学习逐步去噪还原数据</b>。下面先用一张可交互的家族总图建立全局坐标,再逐层拆开每个名字。拖动时间步 <span class="mn">t</span>,标题和图像会跟着"去噪"。</p>
+
+  <!-- 签名交互:去噪三联画 + 共享 timestep 滑杆 -->
+  <div class="strip" aria-label="加噪与去噪演示">
+    <div class="cbox"><canvas id="cvClean" width="96" height="96"></canvas><div class="cl"><b>clean sample</b> · x₀<br>真实数据</div></div>
+    <div class="cbox"><canvas id="cvNoisy" width="96" height="96"></canvas><div class="cl"><b>noisy sample</b> · x_t<br>前向加噪到第 t 步</div></div>
+    <div class="cbox"><canvas id="cvDenoi" width="96" height="96"></canvas><div class="cl"><b>denoising</b> · x̂₀(t)<br>反向去噪的当前估计(示意)</div></div>
+  </div>
+  <div class="trow">
+    <span class="tl">t = T(纯噪声)</span>
+    <input class="tsl" id="heroT" type="range" min="0" max="1000" value="620" aria-label="拖动时间步 t">
+    <span class="tl">t = 0(数据)</span>
+    <span class="tval" id="heroTv">t = 620 / 1000</span>
+  </div>
+
+  <!-- 家族总图 -->
+  <div class="mapcard" id="mapcard">
+    <div class="maptabs" role="tablist" aria-label="切换家族地图视角">
+      <button class="on" data-view="main">思想主线</button>
+      <button data-view="time">时间演化</button>
+      <button data-view="layer">技术分层</button>
+      <button data-view="model">具体模型</button>
+      <button data-view="route">学习路线</button>
+    </div>
+    <div class="mapbody" id="mapbody"></div>
+    <div class="maphint">点击任意节点,查看它属于哪一层、解决什么问题、和相邻概念的区别。</div>
+    <div class="detail" id="mapdetail"><div class="empty">尚未选择节点。先从 <b>核心思想</b> 或 <b>DDPM</b> 点起。</div></div>
+  </div>
+</section>
+
+<details class="mtoc"><summary>目录</summary>
+  <a href="#s1">01 Diffusion 到底是什么</a><a href="#s2">02 为什么需要这种范式</a><a href="#s3">03 先抓五个变量</a><a href="#s4">04 加噪与去噪机制</a><a href="#s5">05 家族地图分层</a><a href="#s6">06 DDPM 经典基线</a><a href="#s7">07 DDIM 与采样加速</a><a href="#s8">08 Score / SDE 视角</a><a href="#s9">09 Latent Diffusion</a><a href="#s10">10 Flow Matching / RF</a><a href="#s11">11 Consistency 少步生成</a><a href="#s12">12 U-Net、DiT 与控制</a><a href="#s13">13 条件生成与 guidance</a><a href="#s14">14 视频·音频·3D·蛋白质</a><a href="#s15">15 关键横向对比</a><a href="#s16">16 模型放回地图</a><a href="#s17">17 误区与归位测验</a><a href="#s18">18 后续学习路线</a><a href="#cheat">附 家族速查表</a>
+</details>
+
+<!-- ================= 01 ================= -->
+<section class="sec" id="s1">
+  <div class="eyebrow"><b>01</b> · What Diffusion Really Is</div>
+  <h2>先理解:Diffusion Model 到底是什么</h2>
+  <p>很多人第一次接触这个词,是通过 Stable Diffusion 或 Midjourney 这样的产品,于是很自然地以为"Diffusion Model 就是那个画图的 AI"。这是本文要纠正的第一件事:<b>Diffusion Model 是一个模型家族、一种生成建模范式,而不是某个单一模型</b>。它规定的是"怎么把生成问题建成数学问题",而不是某一套具体的网络权重。</p>
+  <p>一个准确的类比是:</p>
+  <ul>
+    <li><span class="mn">Diffusion Model</span> 之于 <span class="mn">Stable Diffusion</span>,就像 <span class="mn">Transformer</span> 之于 <span class="mn">GPT</span>——前者是方法论类别,后者是基于它构建的具体系统;</li>
+    <li>说"我用了 Diffusion Model",信息量类似于说"我用了 Transformer":你还没说清用的是哪个数学框架、哪种采样算法、哪种网络结构、在什么空间上建模。</li>
+  </ul>
+  <h3>全家共享的核心:一条被拆碎的生成路径</h3>
+  <p>家族成员再怎么分化,都围绕同一对过程展开:</p>
+  <ul>
+    <li><b>forward process(前向过程)</b>:对真实数据一步步注入噪声,直到它彻底变成没有信息的纯噪声。这个过程不需要学习,是人为设计的"破坏程序"。</li>
+    <li><b>reverse process(反向过程)</b>:训练一个神经网络,学习把这个破坏过程一步步倒放——从纯噪声出发,逐步去噪,最终"长出"一个像真实数据的新样本。</li>
+  </ul>
+  <div class="chain"><span class="b">clean data</span> → partially noisy data → <span class="a">pure noise</span> ⇢ denoise step by step ⇢ <span class="b">generated data</span></div>
+  <p>首屏那组三联画演示的就是这条链路:左边是干净样本 <span class="mn">x₀</span>,中间是加噪到第 <span class="mn">t</span> 步的 <span class="mn">x_t</span>,右边是反向去噪时模型对干净样本的当前估计。注意右边的规律:<b>t 很大时只能恢复出粗糙的整体结构,t 越小细节越清晰</b>——多步去噪本质上是"先定构图、再补细节"。</p>
+  <h3>共享思想之下,成员差别可以非常大</h3>
+  <p>同一条加噪-去噪主线,可以在至少五个维度上分化:<b>数学框架</b>(离散概率过程、score、SDE、流匹配)、<b>采样算法</b>(上千步随机采样、几十步确定性求解、一步生成)、<b>网络结构</b>(U-Net、Transformer)、<b>作用空间</b>(像素、潜空间、原子坐标)、<b>应用领域</b>(图像、视频、音频、3D、蛋白质)。第 5 章的分层地图就是沿这些维度画出来的。</p>
+  <div class="note"><b>判断标准。</b>怎么判断一个方法能不能放进这个家族讨论?看它是否围绕"<b>从简单噪声分布到数据分布的逐步生成/去噪路径</b>"来建模。满足这一点,就可以放进扩散或扩散相关的生成范式一起讨论;但具体归到哪一支,要看它的<b>训练目标</b>(预测噪声?score?速度场?)和<b>采样过程</b>(随机多步?确定性 ODE?一步映射?)——这也是第 3 章那套"五个变量"阅读框架的由来。</div>
+</section>
+
+<!-- ================= 02 ================= -->
+<section class="sec" id="s2">
+  <div class="eyebrow"><b>02</b> · Why This Paradigm</div>
+  <h2>为什么需要这种生成范式</h2>
+  <p>生成建模要解决的根本问题只有一句话:<b>给定一堆来自未知分布的数据,学会从这个分布里采出新样本</b>。难点在于真实数据分布(比如"所有自然图像的分布")极其复杂,直接建模几乎不可行。GAN、VAE、Autoregressive Model、Diffusion 是四条不同的绕行路线。</p>
+  <p>扩散模型这条路线的直觉是:</p>
+  <ul>
+    <li><b>它不要求一步到位。</b>GAN 的生成器要一口气从随机向量变出整张图,这个映射非常难学、训练容易不稳定;扩散模型把它换成"每次只去掉一点点噪声",单步任务简单得多。</li>
+    <li><b>它把一个复杂问题拆成一串简单问题。</b>"从纯噪声生成图像"很难,"给一张 95% 是噪声的图去掉一点噪声"相对容易——而后者重复几百次,就等价于前者。这和"把复杂函数拆成多层简单变换"的深度学习哲学一脉相承。</li>
+    <li><b>训练目标是稳定的回归损失。</b>典型做法是随机取一个时间步、加噪、让网络预测所加的噪声,用均方误差训练。没有 GAN 那种对抗博弈,训练明显更稳,规模化更容易。</li>
+    <li><b>代价主要在采样端。</b>生成一个样本要跑几十到上千次网络前向,天然比一步生成的 GAN 慢——这个短板正是后面 DDIM、DPM-Solver、Consistency Models、Rectified Flow 等一大批工作的共同动机。</li>
+  </ul>
+  <div class="twrap"><table class="t">
+    <thead><tr><th>模型范式</th><th>生成方式</th><th>训练稳定性</th><th>采样速度</th><th>典型优势</th><th>典型代价</th></tr></thead>
+    <tbody>
+      <tr><td>GAN</td><td>一次前向直接生成</td><td>较差(对抗训练易崩)</td><td>非常快</td><td>推理快、结果锐利</td><td>模式塌缩、多样性难保证</td></tr>
+      <tr><td>VAE</td><td>编码-解码一次生成</td><td>好</td><td>快</td><td>有显式潜空间、可插值</td><td>样本常偏模糊</td></tr>
+      <tr><td>Autoregressive</td><td>逐 token 顺序生成</td><td>好</td><td>随序列长度线性变慢</td><td>似然可算、与 LLM 同构</td><td>高维连续数据序列极长</td></tr>
+      <tr><td>Diffusion</td><td>多步迭代去噪修正</td><td>好(回归损失)</td><td>慢(多步前向)</td><td>质量与多样性俱佳、训练稳、易加条件</td><td>推理成本高,需采样加速</td></tr>
+    </tbody>
+  </table></div>
+  <p>理解了"质量与稳定换速度"这笔账,就能看懂家族后续几乎所有演化:<b>Latent Diffusion 降低每一步的成本,DDIM / DPM-Solver 减少步数,Consistency / Rectified Flow 追求少步甚至一步</b>——都是在补采样慢这块短板,而不是推翻加噪-去噪这条主线。</p>
+</section>
+
+<!-- ================= 03 ================= -->
+<section class="sec" id="s3">
+  <div class="eyebrow"><b>03</b> · A Reading Frame</div>
+  <h2>读这类模型,先抓五个变量</h2>
+  <p>家族地图上名字很多,但任何一个扩散相关模型,都可以用同一张"体检表"看穿。以后读任何论文或模型卡,先回答这五个问题,它在家族里的位置就基本确定了。</p>
+  <h3>① 数据表示在哪里(空间)</h3>
+  <p>扩散发生在什么空间上?可以是 <b>pixel space</b>(直接对像素加噪,如 DDPM、Imagen 的级联像素扩散),可以是 <b>latent space</b>(先用 autoencoder 压缩再扩散,如 Stable Diffusion),也可以是 token / patch 序列、音频波形或频谱、视频时空块、3D 点云或隐式场、蛋白质原子坐标。<b>换空间不换范式</b>,但强烈影响成本和工程形态。</p>
+  <h3>② 时间或路径怎么定义</h3>
+  <p>从数据到噪声的这条路是怎么参数化的?<b>discrete timestep</b>(DDPM 的 t = 1…1000)、<b>continuous time</b>(SDE 框架的 t ∈ [0,1])、还是 <b>learned / designed transport path</b>(Flow Matching 直接指定一条插值路径,Rectified Flow 进一步把它拉直)。</p>
+  <h3>③ 模型每一步预测什么(训练目标)</h3>
+  <p>网络的输出可以是:所加的噪声 <span class="mn">ε</span>、干净样本 <span class="mn">x₀</span>、score(log 密度梯度)、速度 <span class="mn">v</span>,或更一般的 flow / 更新方向。这些目标在数学上大多可以互相换算,但<b>选哪个作为回归目标,是区分 DDPM 系、score 系和流匹配系最直接的指纹</b>。</p>
+  <h3>④ 怎么采样</h3>
+  <p><b>stochastic sampling</b>(每步注入随机性,DDPM 祖先采样)、<b>deterministic sampling</b>(DDIM、probability-flow ODE)、用高阶 <b>ODE / SDE solver</b>(DPM-Solver),还是 <b>few-step / one-step</b>(Consistency Models、蒸馏方法)。同一个训练好的模型往往可以配多种采样器——所以"采样器"是可插拔的一层,不要和训练框架混为一谈。</p>
+  <h3>⑤ 条件如何进入</h3>
+  <p>无条件生成很少直接可用,产品化的关键是条件:class label、text embedding(cross-attention 注入)、图像 / 视频 / 音频条件、mask / depth / pose 等控制信号,以及 guidance(如 classifier-free guidance)或 ControlNet 类外挂控制模块。</p>
+
+  <div class="panel">
+    <div class="pt">交互 · 模型归类表单</div>
+    <div class="pq">回答的理解问题:<b>给出一个模型的五个变量取值,你能推断它属于家族哪一支吗?</b>选好五项,看看它最接近谁。</div>
+    <div class="ctl">
+      <label>① 数据表示<br><select id="clsSpace">
+        <option value="pixel">pixel space</option>
+        <option value="latent" selected>latent space</option>
+        <option value="other">音频 / 视频 / 3D / 蛋白质表示</option>
+      </select></label>
+      <label>② 时间 / 路径<br><select id="clsTime">
+        <option value="discrete" selected>discrete timestep</option>
+        <option value="continuous">continuous time</option>
+        <option value="path">designed / learned transport path</option>
+      </select></label>
+      <label>③ 预测目标<br><select id="clsTarget">
+        <option value="eps" selected>噪声 ε</option>
+        <option value="x0">干净样本 x₀</option>
+        <option value="score">score</option>
+        <option value="v">velocity v / flow 方向</option>
+      </select></label>
+      <label>④ 采样方式<br><select id="clsSample">
+        <option value="sto">随机多步(祖先采样)</option>
+        <option value="det" selected>确定性 ODE / solver</option>
+        <option value="few">1–4 步少步生成</option>
+      </select></label>
+      <label>⑤ 条件类型<br><select id="clsCond">
+        <option value="none">无条件</option>
+        <option value="class">class label</option>
+        <option value="text" selected>text embedding</option>
+        <option value="multi">图像 / 视频 / 结构等多模态条件</option>
+      </select></label>
+    </div>
+    <div class="readout" id="clsOut"></div>
+  </div>
+</section>
+
+<!-- ================= 04 ================= -->
+<section class="sec" id="s4">
+  <div class="eyebrow"><b>04</b> · Core Mechanism</div>
+  <h2>最核心机制:加噪与去噪</h2>
+  <p>这一章把首屏那条链路拆开讲清楚。全家族的"发动机"就这一对过程,后面所有分支都是在给这台发动机换零件。</p>
+  <h3>前向:人为设计的破坏程序</h3>
+  <p>前向过程对数据反复注入高斯噪声。以 DDPM 的记号,第 <span class="mn">t</span> 步的样本可以一步写出(这是全家族最值得记住的一个关系):</p>
+  <div class="chain">x_t = √ᾱ_t · x₀ + √(1−ᾱ_t) · ε ,&nbsp;&nbsp;ε ~ N(0, I)</div>
+  <p>其中 <span class="mn">ᾱ_t</span> 从 1 单调降到接近 0,由<b>噪声调度(noise schedule)</b>决定:它控制每一步破坏多少信息。调度是设计选择——linear 调度在中段破坏很快,cosine 调度破坏更平缓,给中间时间步保留更多可学信号。</p>
+  <h3>反向:学出来的还原程序</h3>
+  <p>反向过程从纯噪声 <span class="mn">x_T</span> 出发,每一步让网络看着当前的 <span class="mn">x_t</span> 和时间 <span class="mn">t</span>,预测一个"去噪方向",走一小步得到 <span class="mn">x_{t−1}</span>,循环直到 <span class="mn">x₀</span>。网络训练时学的可以是下面任意一种,它们互相之间只差已知的换算:</p>
+  <ul>
+    <li>预测噪声 <span class="mn">ε</span>:DDPM 的经典目标,损失就是 <span class="mn">‖ε − ε_θ(x_t, t)‖²</span>;</li>
+    <li>预测干净样本 <span class="mn">x₀</span>:与 ε 目标由上面那条公式直接互换;</li>
+    <li>预测 score(<span class="mn">∇ log p(x_t)</span>):score 系的目标,在高斯加噪下与 ε 只差一个缩放符号;</li>
+    <li>预测 velocity <span class="mn">v</span>:x₀ 与 ε 的一种混合参数化,也是流匹配类方法的核心目标形态。</li>
+  </ul>
+  <p>公式到此为止——记住"<b>一条公式 + 四种可互换的预测目标</b>"就足够支撑全文了,推导留给后续 DDPM 专题。</p>
+
+  <div class="panel">
+    <div class="pt">交互 · 加噪 / 去噪播放器</div>
+    <div class="pq">回答的理解问题:<b>噪声调度如何决定每一步的破坏强度?反向过程为什么是"先结构后细节"?</b></div>
+    <div class="ctl">
+      <button class="btn" id="p4Fwd">▶ 播放前向(数据 → 噪声)</button>
+      <button class="btn" id="p4Rev">◀ 播放反向(噪声 → 数据)</button>
+      <button class="btn" id="p4Stop">⏸ 暂停</button>
+      <span class="seg" id="p4Sched"><button class="on" data-s="cosine">cosine 调度</button><button data-s="linear">linear 调度</button></span>
+    </div>
+    <div class="grid2">
+      <div>
+        <canvas class="demo" id="p4cv" width="240" height="240" aria-label="加噪去噪动画"></canvas>
+        <div class="trow" style="margin-top:10px">
+          <input class="tsl" id="p4T" type="range" min="0" max="1000" value="0" aria-label="时间步">
+          <span class="tval" id="p4Tv">t = 0</span>
+        </div>
+      </div>
+      <div>
+        <canvas class="demo" id="p4curve" width="360" height="150" style="background:#fff;border:1px solid var(--line)" aria-label="噪声调度曲线"></canvas>
+        <div class="readout" id="p4Read" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ================= 05 ================= -->
+<section class="sec" id="s5">
+  <div class="eyebrow"><b>05</b> · The Family Map</div>
+  <h2>家族地图:这些名字分别在哪一层</h2>
+  <p>把 DDPM、DDIM、Latent Diffusion、DiT、Stable Diffusion 平铺在一起比较,是混乱的根源——它们根本不在同一层。正确的图景是<b>一栈可以自由组合的层</b>:上面的层回答"学什么、怎么走",下面的层回答"在哪算、用什么网络",最底下才是把各层选择打包成型的具体模型。</p>
+  <ul>
+    <li><b>核心思想层</b>:加噪-去噪;从简单分布出发,沿一条路径走到数据分布。所有人的公共祖先。</li>
+    <li><b>概率建模层</b>:DDPM(离散时间概率过程)、Score-based Models(密度梯度)、SDE framework(连续时间统一视角)。回答"训练时在拟合什么数学对象"。</li>
+    <li><b>采样与加速层</b>:DDIM、DPM-Solver、Consistency Models 及各类少步方法。回答"反向过程怎么走、走几步"。</li>
+    <li><b>表示空间层</b>:Pixel Diffusion 与 Latent Diffusion。回答"扩散发生在什么空间"。</li>
+    <li><b>路径 / 流相关层</b>:Flow Matching、Rectified Flow。它们把"路径本身"当成第一设计对象,是与扩散相邻、可互相转换的推广。</li>
+    <li><b>网络结构层</b>:U-Net、DiT,以及 cross-attention / CFG / ControlNet 等条件控制模块。回答"每一步的预测由什么网络完成、听谁指挥"。</li>
+    <li><b>模型实例层</b>:Stable Diffusion、Imagen、DALL·E、Midjourney、Sora、音频扩散、AlphaFold 3 等。它们是上面各层的一组具体搭配 + 训练数据 + 工程。</li>
+  </ul>
+  <div class="panel">
+    <div class="pt">交互 · 分层家族地图</div>
+    <div class="pq">回答的理解问题:<b>任给一个名字,你能说出它属于哪层、解决什么问题、和上下游的区别吗?</b>点击任意节点,下方给出"三句话定位"。</div>
+    <div id="s5layers" class="layers" style="min-width:0"></div>
+    <div class="detail" id="s5detail" style="border:1px dashed var(--line);border-radius:10px;margin-top:14px"><div class="empty">点击上方任意节点查看三句话定位。</div></div>
+  </div>
+  <div class="warn"><b>不要混层。</b>"Stable Diffusion 和 DDPM 哪个好"是一个混层问题:一个是模型实例,一个是理论基线。合法的比较只发生在同层之间(DDPM vs Score/SDE、U-Net vs DiT、Pixel vs Latent);跨层之间的关系是"搭配",不是"竞争"。</div>
+</section>
+
+<!-- ================= 06 ================= -->
+<section class="sec" id="s6">
+  <div class="eyebrow"><b>06</b> · The Classic Baseline</div>
+  <h2>DDPM:经典扩散模型基线</h2>
+  <p><b>DDPM</b>(Denoising Diffusion Probabilistic Models, Ho et al. 2020)不是扩散思想的发明者(思想可追溯到 Sohl-Dickstein et al. 2015),但它第一次把这套思想调到了"生成质量可与 GAN 正面竞争"的水平,并给出了一个极其简洁的训练配方,从此成为全家族的<b>参照系</b>。后来几乎每个分支介绍自己时,都是以"相对 DDPM 改了什么"来定义的。</p>
+  <h3>它的配方</h3>
+  <ul>
+    <li><b>时间步</b>:离散的 <span class="mn">t = 1 … T</span>(典型 T = 1000);</li>
+    <li><b>前向</b>:固定的马尔可夫加噪链,噪声调度 <span class="mn">β_t</span> 人为设计,不学习;</li>
+    <li><b>训练目标</b>:随机采一个 t,加噪得到 x_t,让网络预测所加噪声,优化 <span class="mn">‖ε − ε_θ(x_t, t)‖²</span>;</li>
+    <li><b>采样</b>:从 x_T ~ N(0, I) 出发,逐步随机采样(每步都注入新噪声),走满上千步。</li>
+  </ul>
+  <div class="chain">x₀ →(加噪到第 t 步)→ x_t →(网络预测 ε̂)→ 由 ε̂ 计算均值 →(采样)→ x_{t−1} → … → x̂₀</div>
+  <h3>它的位置:基线,而非全家</h3>
+  <p>DDPM 是理解家族的最佳入口,但<b>它不等于整个 Diffusion Model 家族</b>。把它当参照系,后续分支的关系一句话就能说清:</p>
+  <ul>
+    <li><b>DDIM</b>:不改训练,改<b>采样路径</b>——同一个 DDPM 权重可以直接用 DDIM 少步采样;</li>
+    <li><b>Score-based / SDE</b>:给同一件事换<b>数学视角</b>——连续时间、密度梯度,并由此派生出各种 solver;</li>
+    <li><b>Latent Diffusion</b>:改<b>扩散发生的空间</b>——从像素搬进 autoencoder 的潜空间;</li>
+    <li><b>DiT</b>:改<b>去噪网络结构</b>——U-Net 换成 Transformer;</li>
+    <li><b>Flow Matching / Rectified Flow</b>:改<b>路径的定义与训练目标</b>——不从加噪过程反推,直接学传输路径。</li>
+  </ul>
+  <p>1000 步采样与少步采样的直觉差异,在下一章的对比器里直接拖给你看:步数足够多时,每步修正很小、误差不断被纠正;步数骤减后,每一步要"跨"得更远,对轨迹近似的精度要求就高得多——这正是采样加速这一层存在的原因。</p>
+  <div class="note"><b>最易混淆。</b>DDPM 最容易和"扩散模型"这个词本身混淆。记法:论文语境里 DDPM 指 2020 年那个具体框架(离散时间 + ε 预测 + 随机祖先采样);"扩散模型"泛指整个家族。说"Sora 是 DDPM"是错的,说"Sora 被介绍为扩散(相关)模型"才稳妥。</div>
+</section>
+
+<!-- ================= 07 ================= -->
+<section class="sec" id="s7">
+  <div class="eyebrow"><b>07</b> · Faster Sampling</div>
+  <h2>DDIM 与采样加速</h2>
+  <p>DDPM 的痛点直白:生成一张图要跑上千次网络前向。<b>DDIM</b>(Song, Meng & Ermon 2020)给出的答案同样直白:<b>训练一个字都不改,换一条反向轨迹来走</b>。它构造了一族与 DDPM 训练目标兼容的非马尔可夫反向过程,其中最有名的特例是完全<b>确定性</b>的:给定同一个起始噪声,输出唯一确定,而且可以只在少数几十个时间步上"跳着走"。</p>
+  <p>三个要点:</p>
+  <ul>
+    <li><b>减步数</b>:从 1000 步压到 50、20 甚至 10 步,质量损失往往可接受;</li>
+    <li><b>确定性</b>:同一噪声种子给出同一结果,使得插值、反演(把真实图像编码回噪声)等操作成为可能;</li>
+    <li><b>它不是新的训练范式</b>:DDIM 提供的是对反向采样轨迹的另一种理解,复用 DDPM 训练好的网络——这条确定性轨迹后来在 SDE 框架里被统一理解为 probability-flow ODE。</li>
+  </ul>
+  <p>沿着"把反向过程当 ODE 解"的思路,<b>DPM-Solver</b> 等高阶数值求解器进一步把步数压到 10–25 步。这一层的共同特征是:<b>换算法,不换模型</b>。与之相对,第 11 章的 Consistency Models 走的是另一条路:换训练目标,让模型本身具备少步能力。</p>
+  <div class="panel">
+    <div class="pt">交互 · 采样步数对比器</div>
+    <div class="pq">回答的理解问题:<b>步数、速度、质量、随机性之间的取舍长什么样?</b>选择步数与采样器,观察生成结果(示意)、相对耗时与确定性。</div>
+    <div class="ctl">
+      <span class="seg" id="p7Steps">
+        <button data-n="1000" class="on">1000</button><button data-n="250">250</button><button data-n="100">100</button><button data-n="50">50</button><button data-n="20">20</button><button data-n="10">10</button>
+      </span>
+      <span class="seg" id="p7Alg"><button class="on" data-a="ddpm">DDPM 随机采样</button><button data-a="ddim">DDIM 确定性采样</button></span>
+      <button class="btn" id="p7Re">↻ 用新随机种子重新采样</button>
+    </div>
+    <div class="grid2">
+      <div><canvas class="demo" id="p7cv" width="240" height="240"></canvas></div>
+      <div>
+        <div class="meter"><span class="mtk">相对耗时</span><div class="bar"><i id="p7time"></i></div><span class="mv" id="p7timev"></span></div>
+        <div class="meter"><span class="mtk">细节保真</span><div class="bar"><i id="p7q"></i></div><span class="mv" id="p7qv"></span></div>
+        <div class="readout" id="p7Read"></div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><b>这层的原则。</b>采样算法可以替换或改进,但这<b>不等于换了整个生成范式</b>。"SD WebUI 里把 sampler 从 Euler 换成 DPM++"改的是这一层;模型还是那个模型。</div>
+</section>
+
+<!-- ================= 08 ================= -->
+<section class="sec" id="s8">
+  <div class="eyebrow"><b>08</b> · Score & SDE View</div>
+  <h2>Score-based Models / SDE 视角</h2>
+  <p>同一台发动机,还有另一套图纸。<b>score</b> 指的是数据分布对样本求梯度的量 <span class="mn">∇_x log p(x)</span>——直观地说,它是"站在样本空间任何一点,指向概率密度升高最快方向"的箭头场。Song & Ermon(2019)的洞见是:与其建模密度本身,不如直接学这个箭头场;学会之后,把任意一团噪声点沿着箭头往高密度区推,推着推着就落在了数据流形上。</p>
+  <p>这与去噪是同一件事:在高斯加噪的设定下,<b>"预测所加噪声"和"估计加噪后分布的 score"只差一个已知的缩放和符号</b>。DDPM 训练出的网络,本质上就是各噪声水平下的 score 估计器。</p>
+  <h3>SDE:把离散楼梯抹成连续坡道</h3>
+  <p>Score-SDE(Song et al., ICLR 2021)把这幅图景推到连续时间:前向加噪是一条<b>随机微分方程</b>(SDE)描述的连续扩散;反向生成对应一条反向 SDE,它只依赖 score。同一过程还存在一条边缘分布完全相同的<b>确定性 ODE</b>(probability-flow ODE)——DDIM 的确定性轨迹、DPM-Solver 的高阶求解,都可以在这条 ODE 上获得统一解释。</p>
+  <div class="panel">
+    <div class="pt">交互 · score 场:把点推回数据流形</div>
+    <div class="pq">回答的理解问题:<b>"去噪"为什么等于"沿密度梯度上坡"?</b>拖动噪声水平,观察散点如何被箭头场从噪声推向两个数据簇。</div>
+    <canvas class="demo" id="p8cv" width="560" height="260" style="background:#fff;border:1px solid var(--line)"></canvas>
+    <div class="trow" style="margin-top:10px">
+      <span class="tl">纯噪声</span>
+      <input class="tsl" id="p8T" type="range" min="0" max="100" value="85">
+      <span class="tl">数据分布</span>
+      <span class="tval" id="p8Tv"></span>
+    </div>
+  </div>
+  <h3>与 DDPM 是什么关系</h3>
+  <ul>
+    <li><b>DDPM</b> 从离散时间的加噪 / 去噪概率过程出发,好处是训练配方直观、实现简单;</li>
+    <li><b>Score / SDE</b> 从连续时间随机过程与密度梯度出发,好处是数学统一——采样器设计、噪声调度、离散化误差都有了统一语言;</li>
+    <li>二者<b>不是互斥阵营,而是同一对象的两套坐标系</b>:DDPM 是这套连续框架的一种离散化,score 与 ε 可互相换算。工程上写代码常用 DDPM 的记号,分析和设计新采样器常用 SDE 的记号。</li>
+  </ul>
+</section>
+
+<!-- ================= 09 ================= -->
+<section class="sec" id="s9">
+  <div class="eyebrow"><b>09</b> · Where Diffusion Happens</div>
+  <h2>Latent Diffusion:为什么不总在像素空间扩散</h2>
+  <p>在像素空间做扩散,成本随分辨率平方级膨胀:一张 <span class="mn">1024×1024</span> RGB 图有三百多万个数值,反向过程的每一步都要让网络处理全部像素,还要重复几十步。早期高分辨率像素扩散(如级联式的 Imagen)只能靠"低分辨率生成 + 多级超分"硬扛,训练与推理都极其昂贵。</p>
+  <p><b>Latent Diffusion</b>(Rombach et al. 2021/2022)的核心动作只有一个:<b>换地方扩散</b>。</p>
+  <div class="pipe">
+    <span class="pn">image</span><span class="pa">→</span>
+    <span class="pn dim">encoder ℰ</span><span class="pa">→</span>
+    <span class="pn hot">latent z(在这里加噪 / 去噪)</span><span class="pa">→</span>
+    <span class="pn dim">decoder 𝒟</span><span class="pa">→</span>
+    <span class="pn">image</span>
+  </div>
+  <p>先训练一个 autoencoder,把图像压缩成一个小得多但保留语义与结构的 latent(典型压缩 8 倍边长,通道数 4 左右);扩散的加噪、去噪、采样全部发生在这个潜空间;最后把去噪完成的 latent 解码回像素。<b>Stable Diffusion 正是这个方法最著名的实例</b>——"SD 属于 Latent Diffusion"这句话的意思是:它在方法层选了"潜空间"这个选项,而不是说二者是同义词。</p>
+  <div class="panel">
+    <div class="pt">交互 · Pixel vs Latent 成本对比器</div>
+    <div class="pq">回答的理解问题:<b>把扩散搬进潜空间,到底省下了什么量级的计算?</b>选择分辨率,对比两种空间中"每一步去噪要处理的数值规模"。</div>
+    <div class="ctl">
+      <label>目标分辨率
+      <select id="p9res"><option value="256">256 × 256</option><option value="512" selected>512 × 512</option><option value="1024">1024 × 1024</option></select></label>
+      <label>压缩倍率 f<select id="p9f"><option value="4">f = 4</option><option value="8" selected>f = 8</option></select></label>
+    </div>
+    <div id="p9out"></div>
+  </div>
+  <h3>代价与取舍</h3>
+  <ul>
+    <li><b>省</b>:单步计算量下降一到两个数量级,消费级 GPU 也能训练微调、实时出图,这是文生图得以平民化的直接原因;</li>
+    <li><b>赌</b>:扩散模型再强,也只能生成 autoencoder 能表达的内容——<b>细节保真的上限由压缩表示决定</b>。小字、手指、纹理等高频细节的失真,很多时候来自 decoder 而不是扩散本身;</li>
+    <li><b>对照</b>:Pixel Diffusion 直接在可见数据空间建模,链路直观、无编码瓶颈,但成本高;Latent Diffusion 高效,但引入了编码器 / 解码器这个新的质量瓶颈。二者是表示空间层上的两个选项,与用什么训练框架、什么网络结构正交。</li>
+  </ul>
+</section>
+
+<!-- ================= 10 ================= -->
+<section class="sec" id="s10">
+  <div class="eyebrow"><b>10</b> · Flows, Adjacent But Distinct</div>
+  <h2>Flow Matching / Rectified Flow:相关,但别混为一谈</h2>
+  <p>近两年的新旗舰(SD3、Flux 等)介绍自己时,常说用的是 flow matching 或 rectified flow 而不是"经典扩散"。它们和扩散是什么关系?一句话:<b>同一个目标(把简单分布运输成数据分布)、同一种产品形态(迭代求解一条从噪声到样本的路径),但换了出发点和训练目标</b>。</p>
+  <h3>共同点</h3>
+  <ul>
+    <li>都在学习"从简单分布(高斯噪声)到数据分布"的<b>连续生成路径</b>;</li>
+    <li>采样都可以写成沿一条 ODE(或 SDE)从噪声积分到数据;</li>
+    <li>在特定的路径与参数化选择下,flow matching 与扩散的目标可以互相转换——它们是近亲,不是陌生人。</li>
+  </ul>
+  <h3>不同点:路径是设计出来的,不是反推出来的</h3>
+  <ul>
+    <li><b>传统 diffusion</b>:先设计一个加噪过程,再通过 score / ε 估计把它"倒放"——路径是加噪过程的副产品,通常是弯曲的;</li>
+    <li><b>Flow Matching</b>(Lipman et al. 2022):跳过加噪叙事,<b>直接指定一条从噪声到数据的插值路径</b>(最常用的就是两点连直线),训练网络回归这条路径上每一点的<b>速度场 v</b>。训练目标是干净的回归,连续时间天然内建;</li>
+    <li><b>Rectified Flow</b>(Liu et al. 2022):在此基础上追求<b>把路径拉直</b>——通过 reflow 等操作迭代校直传输轨迹。路径越直,ODE 求解需要的步数越少,极限情况一步走完。SD3 论文明确采用了 rectified flow 类训练目标。</li>
+  </ul>
+  <div class="panel">
+    <div class="pt">交互 · 弯路径 vs 直路径</div>
+    <div class="pq">回答的理解问题:<b>为什么"路径更直"意味着"步数更少"?</b>切换路径类型,并调整求解步数,看折线(数值求解)偏离真实路径多少。</div>
+    <div class="ctl">
+      <span class="seg" id="p10path"><button class="on" data-p="curve">扩散式弯曲路径</button><button data-p="straight">Rectified 直线路径</button></span>
+      <label>ODE 求解步数 <select id="p10n"><option>2</option><option>4</option><option selected>8</option><option>32</option></select></label>
+    </div>
+    <canvas class="demo" id="p10cv" width="560" height="240" style="background:#fff;border:1px solid var(--line)"></canvas>
+    <div class="readout" id="p10read"></div>
+  </div>
+  <h3>为什么新模型爱用它</h3>
+  <ul>
+    <li><b>训练目标更直接</b>:回归速度场,少一层"从加噪过程反推"的间接性,调度与加权的设计空间更干净;</li>
+    <li><b>路径可能更短更直</b>:直接对应更少的采样步数;</li>
+    <li><b>与 Transformer 和大规模训练合拍</b>:连续时间 + 简洁目标,和 DiT 类主干、多模态 token 拼接的工程栈组合起来很顺手。</li>
+  </ul>
+  <div class="warn"><b>边界。</b>Flow Matching / Rectified Flow 是扩散思想的<b>推广与邻近范式</b>:讨论"扩散相关生成模型"时应该把它们放进来,但不要把所有 flow-based 方法都粗暴叫成 DDPM,也不要因为名字里没有 diffusion 就以为是完全另一套东西。判断依据回到第 3 章五变量:看训练目标(速度场)与路径定义(设计的插值路径),而不是看名字。</div>
+</section>
+<!-- ================= 11 ================= -->
+<section class="sec" id="s11">
+  <div class="eyebrow"><b>11</b> · Few-Step Generation</div>
+  <h2>Consistency Models 与少步生成</h2>
+  <p>DDIM 和 DPM-Solver 把步数从 1000 压到了 10–50,但要继续压到 1–4 步,solver 思路开始撞墙:步子太大,数值解偏离真实轨迹太远。<b>Consistency Models</b>(Song et al. 2023)换了个问法:与其更聪明地"走"这条轨迹,能不能训练一个模型<b>直接"跳"到终点</b>?</p>
+  <h3>核心直觉:处处输出一致</h3>
+  <p>反向过程的一条轨迹上有无数个点(不同噪声水平的同一个样本的"祖先")。Consistency 的训练约束是:<b>把这条轨迹上任何一点喂给模型,它都应该输出同一个干净样本</b>——即"自洽 / 一致性"。学会了这一点,生成就可以一步完成:随便采一团噪声,直接映射到样本;想要更高质量,也可以走 2–4 步的"跳-加噪-再跳"。它可以从头训练,更常见的是<b>从预训练扩散模型蒸馏</b>而来(LCM 等把这一思路带进了 Stable Diffusion 生态)。</p>
+  <h3>和 solver 类方法的分界线</h3>
+  <ul>
+    <li><b>DDIM / DPM-Solver</b>:改<b>采样算法</b>,模型权重不动——是"推理期"的加速;</li>
+    <li><b>Consistency Models</b>:改<b>训练目标</b>,让模型本身获得少步生成能力——是"训练期"的加速;</li>
+    <li>相邻但不同的还有 Rectified Flow:它从<b>路径几何</b>(把路拉直)入手逼近少步,Consistency 从<b>输出一致性约束</b>入手,殊途同归于"few-step"。</li>
+  </ul>
+  <h3>取舍</h3>
+  <ul>
+    <li><b>快</b>:1–4 步出图,交互式应用、端侧部署因此可行;</li>
+    <li><b>贵在训练</b>:蒸馏 / 一致性训练的设置比标准扩散训练复杂,常依赖一个强教师模型;</li>
+    <li><b>质量、多样性与稳定性需要具体模型具体判断</b>:少步模型常在细节丰富度和可控性上有折损,不能一概而论地说"已经追平多步"。</li>
+  </ul>
+  <div class="note"><b>最易混淆。</b>Consistency Models 常与 DDIM 混为"都是加速"。分界记法:<b>DDIM 是同一个模型的另一种走法;Consistency 是另一个(训练出来的)模型</b>。前者随时可换,后者需要重新训练或蒸馏。</div>
+</section>
+
+<!-- ================= 12 ================= -->
+<section class="sec" id="s12">
+  <div class="eyebrow"><b>12</b> · Backbones & Control</div>
+  <h2>网络结构:U-Net、DiT 和条件控制</h2>
+  <p>容易被忽略的一点:<b>扩散框架本身不绑定任何网络结构</b>。框架(DDPM / SDE / Flow Matching)定义的是"训练什么目标、采样怎么走";每一步里真正做预测的那个神经网络,是一个可替换的零件。这一层有两个主流选择,外加一组条件控制模块。</p>
+  <h3>U-Net:图像扩散的长期主力</h3>
+  <p>卷积编码-解码结构,带跨尺度跳连:一路下采样抓全局结构,一路上采样恢复分辨率,跳连把细节直接递给解码侧。这与去噪任务的需求高度匹配——去噪既要看懂全局("这是一只猫"),又要修好局部("胡须的走向")。从 DDPM 到 SD 1.x / SDXL,U-Net(加上注入时间步嵌入、插入 cross-attention)一直是图像扩散的默认主干。</p>
+  <h3>DiT:把去噪交给 Transformer</h3>
+  <p><b>DiT / Diffusion Transformer</b>(Peebles & Xie)把图像(或视频)的 latent 切成 patch token,用标准 Transformer 块做去噪,时间步与条件通过 adaLN 等机制注入。它的吸引力在于:<b>规模化行为好</b>(算力换质量的曲线平滑)、与多模态 token 序列拼接自然。SD3、Flux 采用 DiT 类主干(MMDiT),Sora 也被官方介绍为在时空 patch 上工作的 diffusion transformer 方向。</p>
+  <h3>条件控制模块:让去噪"听指挥"</h3>
+  <ul>
+    <li><b>Cross-Attention</b>:把文本 embedding 作为 key/value 插进主干,让每一步去噪都能"读题";</li>
+    <li><b>Classifier-Free Guidance(CFG)</b>:训练时随机丢弃条件,推理时用"有条件预测"与"无条件预测"的差值外推,一个旋钮调节服从度(下一章可玩);</li>
+    <li><b>ControlNet / adapter 类结构</b>:在冻结的主干旁挂一条可训练支路,把边缘、深度、姿态、mask 等空间条件注入去噪过程,实现结构级控制。</li>
+  </ul>
+  <div class="warn"><b>不要混层(再次)。</b>U-Net / DiT 是<b>去噪网络结构</b>;DDPM / SDE / Flow Matching 是<b>训练或生成路径框架</b>;Stable Diffusion / Sora 是<b>具体模型或产品方向</b>。"SD3 把 U-Net 换成了 DiT、把 DDPM 式目标换成了 rectified flow"——一句话里动了两层,但潜空间那层(Latent Diffusion)没动。能这样一层层读改动,家族地图就算真正建立了。</div>
+</section>
+
+<!-- ================= 13 ================= -->
+<section class="sec" id="s13">
+  <div class="eyebrow"><b>13</b> · Conditioning & Guidance</div>
+  <h2>条件生成:文本、图像、视频如何控制去噪</h2>
+  <p>无条件扩散模型只能"随机掉落"一个样本;产品需要的是"按需生成"。条件信息进入模型的常见通道:<b>class label</b>(嵌入后与时间步一起注入)、<b>text embedding</b>(经 CLIP / T5 等文本编码器,cross-attention 注入)、<b>image condition</b>(图生图:从加噪的参考图出发;或作为额外通道拼入)、<b>mask / depth / pose / audio</b>(经 ControlNet / adapter 注入空间或时序约束)。</p>
+  <h3>Classifier-Free Guidance:服从度的旋钮</h3>
+  <p>训练时以一定概率把条件置空,模型同时学会"有条件"与"无条件"两种预测;推理时按 <span class="mn">ε̂ = ε_uncond + s · (ε_cond − ε_uncond)</span> 外推。guidance scale <span class="mn">s</span> 的效果:<b>调大,文本服从度上升、样本更"典型",但多样性下降,过大时画面过饱和、构图僵硬甚至畸变;调小,更自由多样,但可能跑题</b>。negative prompt 则是把"不想要的条件"放进无条件端,把采样方向从它那里推开。</p>
+  <div class="panel">
+    <div class="pt">交互 · 条件与 guidance 演示器(二维玩具分布)</div>
+    <div class="pq">回答的理解问题:<b>prompt 决定去哪个模式,guidance scale 决定"贴得多紧",negative prompt 决定躲开谁。</b>每个点是一次采样结果。</div>
+    <div class="ctl">
+      <label>prompt<select id="p13prompt"><option value="0" selected>“一只猫”</option><option value="1">“一只狗”</option><option value="2">“一片风景”</option></select></label>
+      <label>negative prompt<select id="p13neg"><option value="-1" selected>(无)</option><option value="0">“猫”</option><option value="1">“狗”</option><option value="2">“风景”</option></select></label>
+      <label style="flex:1;min-width:220px">guidance scale s = <b id="p13gv">7.5</b>
+      <input class="tsl" id="p13g" type="range" min="0" max="15" step="0.5" value="7.5" style="width:100%"></label>
+    </div>
+    <canvas class="demo" id="p13cv" width="560" height="280" style="background:#fff;border:1px solid var(--line)"></canvas>
+    <div style="margin-top:10px">
+      <div class="meter"><span class="mtk">条件服从度</span><div class="bar"><i id="p13m1"></i></div><span class="mv" id="p13v1"></span></div>
+      <div class="meter"><span class="mtk">多样性</span><div class="bar"><i id="p13m2"></i></div><span class="mv" id="p13v2"></span></div>
+      <div class="meter"><span class="mtk">失真风险</span><div class="bar"><i id="p13m3"></i></div><span class="mv" id="p13v3"></span></div>
+    </div>
+  </div>
+  <p><b>条件控制是扩散模型能产品化的关键原因之一</b>:同一套加噪-去噪机制,插上文本就是文生图,插上参考图就是图生图,插上姿态就是可控人像,插上多帧约束就是视频。范式没变,变的是"听谁指挥"。</p>
+</section>
+
+<!-- ================= 14 ================= -->
+<section class="sec" id="s14">
+  <div class="eyebrow"><b>14</b> · Beyond Images</div>
+  <h2>从图像到视频、音频、3D、蛋白质</h2>
+  <p>"逐步生成 / 逐步去噪"这个思想不挑数据类型——只要能给一种数据定义"加噪"和"表示空间",就能把这台发动机搬过去。但每个领域都要重新回答第 3 章的五个变量,尤其是<b>数据表示</b>和<b>领域特有的一致性约束</b>:</p>
+  <ul>
+    <li><b>图像</b>:在像素或 latent 上扩散,最成熟的领域;</li>
+    <li><b>视频</b>:多了时间维——不仅每帧要好,帧与帧之间要<b>时空一致</b>(物体不闪烁、运动连贯),常在时空 latent / 时空 patch 上建模;</li>
+    <li><b>音频</b>:可作用于原始波形、频谱图(当图像处理)或音频 latent,条件可以是文本、旋律、参考音色;</li>
+    <li><b>3D</b>:表示本身就五花八门——点云、体素、隐式场(NeRF 类)、多视图图像;还有一条借力路线:用预训练 2D 扩散蒸馏 3D(DreamFusion 的 SDS);</li>
+    <li><b>蛋白质 / 分子结构</b>:在原子三维坐标上做扩散,从噪声坐标逐步"折叠"出合理构象,还需满足物理与化学约束——AlphaFold 3 的结构生成模块是这一方向的代表。</li>
+  </ul>
+  <div class="panel">
+    <div class="pt">交互 · 领域迁移矩阵</div>
+    <div class="pq">回答的理解问题:<b>换一个领域,五个变量里哪些跟着变?</b>点击行首领域可展开"什么变了 / 什么没变"。</div>
+    <div class="twrap"><table class="t" id="p14t">
+      <thead><tr><th>领域</th><th>数据表示</th><th>常见条件</th><th>主要挑战</th><th>代表模型或产品</th></tr></thead>
+      <tbody>
+        <tr data-x="没变:加噪-去噪训练与迭代采样。变了:空间基本是 2D latent / 像素;挑战集中在分辨率、细节与文本服从。"><td>图像</td><td>pixel / 2D latent</td><td>文本、参考图、mask、depth、pose</td><td>细节保真、文本服从、可控性</td><td class="mn">Stable Diffusion, Imagen, DALL·E, Midjourney</td></tr>
+        <tr data-x="没变:去噪主线与条件注入方式。变了:表示升维为时空块;新增跨帧一致性与长时序连贯这一硬约束,算力需求急剧上升。"><td>视频</td><td>时空 latent / 时空 patch</td><td>文本、首帧图、参考视频</td><td>时间一致性、长时序连贯、算力</td><td class="mn">Sora, 可灵, Veo(作为方向代表)</td></tr>
+        <tr data-x="没变:可以完全复用图像那套(把频谱当图)。变了:相位重建、长程节奏结构、采样率与实时性要求。"><td>音频</td><td>波形 / 频谱 / 音频 latent</td><td>文本、旋律、参考音色</td><td>长程结构、相位与音质、实时性</td><td class="mn">AudioLDM, Stable Audio(方向代表)</td></tr>
+        <tr data-x="没变:逐步生成思想。变了:表示不唯一且互不兼容(点云/体素/隐式场/多视图);评价与监督数据稀缺;常借 2D 扩散先验蒸馏。"><td>3D</td><td>点云 / 体素 / 隐式场 / 多视图</td><td>文本、单图、多视图</td><td>三维一致性、数据稀缺、表示选择</td><td class="mn">DreamFusion, Point-E(方向代表)</td></tr>
+        <tr data-x="没变:从噪声逐步到结构的生成路径。变了:空间是原子坐标;必须满足几何/物理约束与对称性;评价指标是结构精度而非观感。"><td>蛋白质 / 分子</td><td>原子 3D 坐标、构象</td><td>序列、配体、结合口袋</td><td>物理化学约束、对称性、结构精度</td><td class="mn">AlphaFold 3 扩散模块, RFdiffusion</td></tr>
+      </tbody>
+    </table></div>
+    <div class="readout" id="p14read">点击任意一行,查看"什么变了 / 什么没变"。</div>
+  </div>
+  <p>共同点是<b>范式</b>(逐步生成/去噪),不同点在<b>数据表示、网络结构、条件约束与评价指标</b>。所以"扩散模型只能生成图片"是误区,"把图像扩散原样搬去别的领域就能用"同样是误区。</p>
+</section>
+
+<!-- ================= 15 ================= -->
+<section class="sec" id="s15">
+  <div class="eyebrow"><b>15</b> · Side-by-Side</div>
+  <h2>关键横向对比:一眼看懂主要区别</h2>
+  <p>先给六组最常被混淆的对子一个"一行结论",再用对比器细看任意两个概念。</p>
+  <div class="twrap"><table class="t">
+    <thead><tr><th>对子</th><th>一行结论</th></tr></thead>
+    <tbody>
+      <tr><td class="mn">DDPM vs DDIM</td><td>一个是经典训练 + 随机逐步采样的<b>基线</b>;一个不改训练,提供<b>确定性 / 少步采样路径</b>。</td></tr>
+      <tr><td class="mn">DDPM vs Score/SDE</td><td>一个偏<b>离散时间概率过程</b>叙事;一个偏<b>连续时间 score / SDE 统一视角</b>。同一对象,两套坐标系。</td></tr>
+      <tr><td class="mn">Pixel vs Latent Diffusion</td><td>一个在<b>原始数据空间</b>扩散,直观但贵;一个在<b>压缩潜空间</b>扩散,高效但受 autoencoder 上限约束。</td></tr>
+      <tr><td class="mn">U-Net vs DiT</td><td>一个是<b>卷积多尺度</b>去噪主干;一个是 <b>Transformer 式 token/patch</b> 去噪主干。同层的两种零件。</td></tr>
+      <tr><td class="mn">Diffusion vs Flow Matching / RF</td><td>一个常从<b>加噪去噪或 score 估计</b>出发;一个直接<b>指定并回归从噪声到数据的路径 / 速度场</b>(RF 追求把路拉直)。</td></tr>
+      <tr><td class="mn">Stable Diffusion vs Diffusion Model</td><td>一个是<b>具体模型 / 系统</b>;一个是<b>模型家族与建模范式</b>。实例与类别的关系。</td></tr>
+    </tbody>
+  </table></div>
+  <div class="panel">
+    <div class="pt">交互 · 概念两两对比器</div>
+    <div class="pq">回答的理解问题:<b>任选两个名词,它们各在哪层?共同点是什么?关键区别在哪?最常见的误区是什么?</b></div>
+    <div class="ctl">
+      <label>概念 A<select id="cmpA"></select></label>
+      <span style="font-family:var(--mono);color:var(--muted)">vs</span>
+      <label>概念 B<select id="cmpB"></select></label>
+    </div>
+    <div id="cmpOut"></div>
+  </div>
+</section>
+<!-- ================= 16 ================= -->
+<section class="sec" id="s16">
+  <div class="eyebrow"><b>16</b> · Instances On The Map</div>
+  <h2>具体模型如何放回家族地图</h2>
+  <p>最后一步训练:拿到一个具体产品名,把它拆成"各层选了什么"。注意两条纪律:<b>产品不是理论框架</b>;<b>闭源模型的内部细节不宜过度断言</b>——以下对开源模型按论文描述归位,对闭源产品只标注"可作为某方向代表"。</p>
+  <ul>
+    <li><b>Stable Diffusion(1.x / 2.x)</b>:表示空间层选 <span class="mn">Latent Diffusion</span>;条件为文本(CLIP 文本编码器 + cross-attention);主干为 U-Net;训练目标是 ε 预测;采样常配 DDIM / DPM-Solver 等。它是"各层选择打包成开源系统"的教科书案例。</li>
+    <li><b>SDXL → SD3 → Flux</b>:同一生态的演化线。SDXL 放大 U-Net 与条件编码;SD3 把主干换成 MMDiT(DiT 类)、训练目标换成 rectified flow;Flux 是同方向的后继模型。逐版对照,正好练习"分层读改动"。</li>
+    <li><b>Imagen</b>:文本到图像扩散的另一代表,论文版本以强文本编码器(T5)+ 级联<b>像素</b>扩散著称——说明"文生图不一定要走潜空间"。后续产品迭代的内部细节以官方披露为准。</li>
+    <li><b>DALL·E / Midjourney</b>:作为文生图产品或模型族的代表。DALL·E 2 论文(unCLIP)使用了扩散组件;DALL·E 3 与 Midjourney 公开细节有限,归类时说"扩散 / 扩散相关产品代表"即可,不要断言其内部架构。</li>
+    <li><b>Sora 及视频生成模型</b>:扩散(相关)范式在视频领域的代表方向。官方技术报告将其描述为在时空 patch 上工作的 diffusion transformer 路线;相对图像,核心增量是<b>时间一致性</b>与长时序建模。内部实现同样不宜过度断言。</li>
+    <li><b>AlphaFold 3 结构生成模块</b>:扩散思想迁移到科学结构生成的例子——用扩散模块直接生成原子坐标,取代了前代的确定性结构模块。它提醒我们:这个家族的边界远在"生成好看图片"之外。</li>
+    <li><b>音频扩散模型</b>:AudioLDM、Stable Audio 等表明扩散可作用于波形、频谱或音频 latent,文本 / 旋律作条件。</li>
+  </ul>
+  <div class="note"><b>练习。</b>回到首屏家族总图,切到"具体模型"视角,点开每张卡片看它的"配方标签"——每个标签就是该模型在某一层的选择。能独立复述配方,这一章就过关了。</div>
+</section>
+
+<!-- ================= 17 ================= -->
+<section class="sec" id="s17">
+  <div class="eyebrow"><b>17</b> · Misconceptions & Quiz</div>
+  <h2>常见误区与归位测验</h2>
+  <p>每条误区点开看纠正。这些不是稻草人——几乎每一条都来自真实的高频误读。</p>
+  <div id="misList">
+    <details class="mis"><summary><span class="x">误区 01</span>“Diffusion Model 就是 Stable Diffusion。”</summary><div class="fix"><b>纠正:</b>Diffusion Model 是建模范式(类别),Stable Diffusion 是该范式下一个具体的开源系统(实例)。关系如 Transformer 之于 GPT。SD 的实现细节(潜空间、U-Net、CFG)都是可替换的层内选择,不能反推为家族定义。</div></details>
+    <details class="mis"><summary><span class="x">误区 02</span>“DDPM 就代表所有扩散模型。”</summary><div class="fix"><b>纠正:</b>DDPM 是 2020 年确立的经典基线:离散时间 + ε 预测 + 随机祖先采样。家族里还有 score/SDE 的连续时间视角、流匹配的路径视角、Consistency 的少步训练目标——它们都不是 DDPM,却都是家族成员。</div></details>
+    <details class="mis"><summary><span class="x">误区 03</span>“扩散模型只能生成图片。”</summary><div class="fix"><b>纠正:</b>视频(Sora 方向)、音频(AudioLDM 等)、3D(DreamFusion 等)、蛋白质结构(AlphaFold 3 扩散模块、RFdiffusion)都在用。只要能定义"表示空间 + 加噪方式",范式就能迁移;变的是表示、结构、条件与评价指标。</div></details>
+    <details class="mis"><summary><span class="x">误区 04</span>“扩散模型一定在像素空间工作。”</summary><div class="fix"><b>纠正:</b>在哪扩散是"表示空间层"的选择。Latent Diffusion 在压缩潜空间工作(SD 即如此),还有在波形、频谱、原子坐标、时空 patch 上工作的成员。像素只是选项之一。</div></details>
+    <details class="mis"><summary><span class="x">误区 05</span>“采样步数越多一定越好。”</summary><div class="fix"><b>纠正:</b>步数带来的收益会饱和:超过一定步数后质量提升可忽略,耗时却线性增长;确定性 solver 在几十步内就能贴近极限,少步蒸馏模型甚至 1–4 步可用。合理说法是"步数太少可能不够,不是越多越好"。第 7 章的对比器展示了这条饱和曲线的直觉。</div></details>
+    <details class="mis"><summary><span class="x">误区 06</span>“U-Net 是扩散模型的必需组件。”</summary><div class="fix"><b>纠正:</b>扩散框架不绑定网络结构。U-Net 只是图像扩散长期常用的主干;DiT 用 Transformer 同样(甚至在规模化上更)胜任,SD3、Flux 已经换用 DiT 类主干。框架层与结构层是两层。</div></details>
+    <details class="mis"><summary><span class="x">误区 07</span>“Flow Matching / Rectified Flow 和 DDPM 完全一样。”</summary><div class="fix"><b>纠正:</b>它们同属"从简单分布到数据分布的连续路径"思想,特定设定下目标可互相转换,但<b>训练目标</b>(回归速度场 vs 预测噪声)、<b>路径参数化</b>(设计的直线插值 vs 加噪过程的反演)、<b>采样形式</b>不同。是近亲,不是同一人;也不要反过来说毫无关系。</div></details>
+    <details class="mis"><summary><span class="x">误区 08</span>“看懂 Stable Diffusion 就等于看懂扩散模型全家族。”</summary><div class="fix"><b>纠正:</b>SD 只覆盖了每层的<b>一种</b>选择:潜空间、U-Net、ε 预测、CFG。没碰到的还有像素扩散、score/SDE 理论、流匹配训练、DiT 主干、Consistency 少步、以及图像之外的所有领域。SD 是很好的切片,但只是切片。</div></details>
+    <details class="mis"><summary><span class="x">误区 09</span>“扩散模型就是在不断把图片模糊再还原。”</summary><div class="fix"><b>纠正:</b>加的是<b>噪声</b>不是模糊,而且关键不在"还原某张图",而在<b>学习数据分布上的生成路径</b>:训练时模型在所有噪声水平上学习"往数据分布走的方向"(score / ε / v),采样时从新的随机噪声出发走这条路径,得到的是<b>分布中的新样本</b>,不是训练图的复原。</div></details>
+    <details class="mis"><summary><span class="x">误区 10</span>“全局视角只要把名词列一遍,细节以后再说。”</summary><div class="fix"><b>纠正:</b>只记名词的"地图"是假地图。入门就必须能说清:全家共享的机制(加噪-去噪 / 路径建模)、每个主要分支解决什么问题、以及相邻概念的核心区别(本文每章的"最易混淆"框)。论文级推导可以留给专题,<b>分支间的区别不能留</b>。</div></details>
+  </div>
+
+  <div class="panel quiz">
+    <div class="pt">交互 · 概念归位测验</div>
+    <div class="pq">回答的理解问题:<b>你能把这些名字放回正确的层吗?</b>为每个概念选择所属层级,然后检查。</div>
+    <div id="quizBody"></div>
+    <div class="ctl" style="margin-top:12px">
+      <button class="btn pri" id="quizCheck">检查答案</button>
+      <button class="btn" id="quizReset">重做</button>
+      <span class="tval" id="quizScore" style="min-width:90px">0 / 8</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 18 ================= -->
+<section class="sec" id="s18">
+  <div class="eyebrow"><b>18</b> · What To Learn Next</div>
+  <h2>后续学习路线</h2>
+  <p>本文的目标是地图;下面是按地图分层推进的路线,每一层都可以拆成独立专题深入(论文推导、代码实现、工程细节留到那里)。建议顺序学,因为每层都以上一层为语言。</p>
+  <ol>
+    <li><b>核心思想</b>:加噪、去噪、时间步、噪声调度。检验:能默写 <span class="mn">x_t = √ᾱ_t·x₀ + √(1−ᾱ_t)·ε</span> 并解释每一项。</li>
+    <li><b>经典框架</b>:DDPM、DDIM、Score-based Models、SDE。检验:能说清 ε、x₀、score、v 四种目标怎么互换;能解释 DDIM 为什么不用重训。</li>
+    <li><b>工程化生成</b>:Latent Diffusion、Stable Diffusion、classifier-free guidance。检验:能画出 SD 的完整管线(文本编码器 → 潜空间去噪 → decoder),并解释 guidance scale 的作用曲线。</li>
+    <li><b>现代扩展</b>:DiT、Flow Matching、Rectified Flow、Consistency Models。检验:能解释 SD3 相对 SD1.5 在哪两层动了刀;能区分"solver 加速"与"训练出少步能力"。</li>
+    <li><b>具体领域</b>:图像、视频、音频、3D、蛋白质结构生成。检验:任给一个领域,能回答第 3 章五个变量分别取什么值。</li>
+    <li><b>具体模型专题</b>:Stable Diffusion 全解 → SDXL / SD3 → Flux → Sora(公开资料范围内)→ 感兴趣的音频或 3D 扩散模型。到这一层,读任何新模型的技术报告,都应该能在 10 分钟内把它放回地图。</li>
+  </ol>
+  <p>首屏家族总图的"学习路线"视角就是这份路线的可点击版本——每一层的节点都可以点开复习三句话定位。</p>
+</section>
+
+<!-- ================= 速查表 ================= -->
+<section class="sec" id="cheat">
+  <div class="eyebrow"><b>附</b> · Cheat Sheet</div>
+  <h2>扩散模型家族速查表</h2>
+  <div class="twrap"><table class="t">
+    <thead><tr><th>名称</th><th>层级</th><th>一句话定位</th><th>最易混淆 & 核心区别</th></tr></thead>
+    <tbody>
+      <tr><td class="mn">Diffusion Model</td><td>核心思想</td><td>加噪-去噪的生成建模范式,一个家族的总称</td><td>vs Stable Diffusion:范式 vs 实例</td></tr>
+      <tr><td class="mn">DDPM</td><td>概率建模</td><td>离散时间 + ε 预测 + 随机逐步采样的经典基线</td><td>vs 整个家族:基线 ≠ 全家</td></tr>
+      <tr><td class="mn">Score-based</td><td>概率建模</td><td>学 log 密度梯度,沿高密度方向推样本</td><td>vs DDPM:视角不同,目标可互换</td></tr>
+      <tr><td class="mn">SDE framework</td><td>概率建模</td><td>连续时间统一视角,派生反向 SDE 与 PF-ODE</td><td>vs DDPM:连续 vs 离散,同一对象</td></tr>
+      <tr><td class="mn">DDIM</td><td>采样加速</td><td>不改训练的确定性 / 少步采样轨迹</td><td>vs DDPM:改走法不改学法</td></tr>
+      <tr><td class="mn">DPM-Solver</td><td>采样加速</td><td>把反向过程当 ODE 高阶数值求解,10–25 步</td><td>vs DDIM:同思路的高阶版</td></tr>
+      <tr><td class="mn">Consistency Models</td><td>采样加速</td><td>训练/蒸馏出 1–4 步直接生成的能力</td><td>vs DDIM:改训练目标 vs 改采样算法</td></tr>
+      <tr><td class="mn">Pixel Diffusion</td><td>表示空间</td><td>直接在像素上扩散,直观但昂贵</td><td>vs Latent:空间不同,框架相同</td></tr>
+      <tr><td class="mn">Latent Diffusion</td><td>表示空间</td><td>autoencoder 压缩后在潜空间扩散</td><td>vs SD:方法 vs 采用它的模型</td></tr>
+      <tr><td class="mn">Flow Matching</td><td>路径 / 流</td><td>直接指定噪声→数据路径,回归速度场</td><td>vs Diffusion:设计路径 vs 反推加噪过程</td></tr>
+      <tr><td class="mn">Rectified Flow</td><td>路径 / 流</td><td>把传输路径拉直,逼近极少步采样</td><td>vs FM:同框架,更强调"直"</td></tr>
+      <tr><td class="mn">U-Net</td><td>网络结构</td><td>卷积多尺度去噪主干,图像扩散长期主力</td><td>vs DiT:同层两种主干</td></tr>
+      <tr><td class="mn">DiT</td><td>网络结构</td><td>patch token 上的 Transformer 去噪主干</td><td>vs 扩散框架:换零件不换范式</td></tr>
+      <tr><td class="mn">CFG / ControlNet</td><td>网络结构(控制)</td><td>让条件真正左右去噪方向的机制</td><td>vs 主干:主干管计算,控制管"听谁的"</td></tr>
+      <tr><td class="mn">Stable Diffusion</td><td>模型实例</td><td>Latent + U-Net + 文本条件的开源文生图系统</td><td>vs Diffusion Model:实例 vs 范式</td></tr>
+      <tr><td class="mn">SDXL / SD3 / Flux</td><td>模型实例</td><td>SD 生态演化线;SD3 起换 DiT + rectified flow</td><td>逐版对照练"分层读改动"</td></tr>
+      <tr><td class="mn">Imagen</td><td>模型实例</td><td>强文本编码 + 级联像素扩散的文生图代表</td><td>vs SD:像素级联 vs 潜空间路线</td></tr>
+      <tr><td class="mn">DALL·E / Midjourney</td><td>模型实例</td><td>扩散(相关)文生图产品代表,细节有限</td><td>不要断言闭源内部实现</td></tr>
+      <tr><td class="mn">Sora</td><td>模型实例</td><td>时空 patch 上扩散 transformer 方向的视频代表</td><td>vs 图像扩散:新增时间一致性难题</td></tr>
+      <tr><td class="mn">AlphaFold 3 扩散模块</td><td>模型实例</td><td>扩散迁移到原子坐标结构生成的代表</td><td>说明家族边界远超图像生成</td></tr>
+    </tbody>
+  </table></div>
+  <p>把这张表和首屏地图对照使用:表管"是什么、别混谁",图管"在哪层、连着谁"。两者都能脱口而出时,你就拥有了读任何扩散相关新工作的坐标系。</p>
+</section>
+
+<footer>Diffusion Model Family · 自学型交互文档 · 单文件离线可用 · 画布中的图像与采样效果均为教学示意,非真实模型输出</footer>
+</main>
+</div>
+<script>
+"use strict";
+/* ================= 数据:家族节点 ================= */
+const LAYERS = {
+  core:    {name:"核心思想层",  sub:"加噪-去噪;从简单分布到数据分布"},
+  theory:  {name:"概率建模层",  sub:"训练时拟合什么数学对象"},
+  sampling:{name:"采样与加速层",sub:"反向过程怎么走、走几步"},
+  space:   {name:"表示空间层",  sub:"扩散发生在什么空间"},
+  flow:    {name:"路径 / 流相关层", sub:"把路径本身当设计对象"},
+  arch:    {name:"网络结构层",  sub:"每步预测由什么网络完成、听谁指挥"},
+  product: {name:"模型实例层",  sub:"各层选择 + 数据 + 工程的打包"}
+};
+const N = {
+core:{name:"加噪-去噪范式",en:"Diffusion Paradigm",layer:"core",yr:2015,
+ solves:"把「从复杂数据分布采样」这个几乎无从下手的问题,拆成一长串「每步只去掉一点噪声」的简单回归问题。",
+ rel:"全家族的公共祖先:DDPM / Score / SDE 是它的三种数学表述,采样加速、潜空间、流匹配、DiT 都是在这条链路上替换某个环节。",
+ diff:"最易与 Stable Diffusion 混淆——前者是范式(类别),后者是范式下的一个具体系统(实例),关系如 Transformer 之于 GPT。",
+ reps:"Sohl-Dickstein et al. 2015 提出思想;DDPM (2020) 使其实用化。"},
+ddpm:{name:"DDPM",en:"Denoising Diffusion Probabilistic Models",layer:"theory",yr:2020,
+ solves:"给加噪-去噪思想一个可训练的离散时间概率模型:固定马尔可夫加噪链 + 网络以预测噪声 ε 为目标学习逐步反向去噪。",
+ rel:"上游是 2015 的扩散思想;下游所有分支以它为参照——DDIM 改其采样,SDE 给其连续时间解释,Latent 换其空间,DiT 换其网络。",
+ diff:"最易与「扩散模型」一词本身混淆:DDPM 只是家族的经典基线(离散时间 + ε 预测 + 随机祖先采样),不是家族本身。",
+ reps:"Ho, Jain & Abbeel, “DDPM” (NeurIPS 2020)。"},
+score:{name:"Score-based Models",en:"NCSN / Score Matching",layer:"theory",yr:2019,
+ solves:"不直接建概率密度,改学 score(log 密度的梯度场),用「沿密度上坡方向推样本」的方式实现生成。",
+ rel:"与 DDPM 殊途同归:高斯加噪下 score 与 ε 只差已知缩放;是 SDE 统一框架的直接前身。",
+ diff:"与 DDPM 的区别在出发点:离散加噪过程 vs 密度梯度场;结论互通,视角不同,不是竞争阵营。",
+ reps:"Song & Ermon, NCSN (2019)。"},
+sde:{name:"SDE 框架",en:"Score-SDE / PF-ODE",layer:"theory",yr:2021,
+ solves:"用随机微分方程把 DDPM 与 score matching 统一到连续时间:前向是加噪 SDE,生成对应反向 SDE 或等价的确定性 probability-flow ODE。",
+ rel:"理论层的「总纲」:DDIM 的确定性轨迹、DPM-Solver 的高阶求解都在这套语言下获得统一解释。",
+ diff:"与 DDPM 不是对手而是同一对象的连续时间版本;分析与设计采样器时用它,写训练代码时常用 DDPM 记号。",
+ reps:"Song et al., “Score-Based Generative Modeling through SDEs” (ICLR 2021)。"},
+ddim:{name:"DDIM",en:"Denoising Diffusion Implicit Models",layer:"sampling",yr:2020,
+ solves:"不重训模型,换一条(可确定性的)反向采样轨迹,把上千步压缩到几十步,并让同种子结果可复现、可反演。",
+ rel:"直接复用 DDPM 训练好的网络;其确定性轨迹对应 SDE 框架中的 probability-flow ODE。",
+ diff:"vs DDPM:改「怎么走」不改「怎么学」;vs Consistency Models:DDIM 仍是多步 solver 思路,后者靠训练目标获得少步能力。",
+ reps:"Song, Meng & Ermon, “DDIM” (2020)。"},
+dpm:{name:"DPM-Solver",en:"高阶 ODE 求解器",layer:"sampling",yr:2022,
+ solves:"把反向过程当 ODE 用高阶数值方法求解,10–25 步逼近原有质量。",
+ rel:"建立在 SDE / PF-ODE 视角上,可视为 DDIM 思路的高阶化;是各推理框架的默认采样器之一。",
+ diff:"与 DDIM 同层同思路,区别在数值方法的阶数与精度;同样「换算法不换模型」。",
+ reps:"Lu et al., DPM-Solver / DPM-Solver++ (2022)。"},
+cm:{name:"Consistency Models",en:"少步 / 一步生成",layer:"sampling",yr:2023,
+ solves:"训练(或从扩散模型蒸馏)一个映射,使同一轨迹上任意噪声水平的点都输出同一干净样本,实现 1–4 步生成。",
+ rel:"通常以预训练扩散模型为教师蒸馏;LCM 等把该思路带入 Stable Diffusion 生态。",
+ diff:"vs DDIM / DPM-Solver:后者改采样算法、权重不动;它改训练目标、需要重新训练或蒸馏——「另一种走法」vs「另一个模型」。",
+ reps:"Song et al., Consistency Models (2023);LCM。"},
+pixel:{name:"Pixel Diffusion",en:"像素空间扩散",layer:"space",yr:2020,
+ solves:"直接在像素上加噪去噪,链路最直观,不依赖额外的编码器 / 解码器。",
+ rel:"DDPM、ADM 与 Imagen(级联)走这条路;高分辨率下成本平方级膨胀,直接催生了 Latent Diffusion。",
+ diff:"vs Latent Diffusion:建模空间不同——原始数据空间 vs 压缩潜空间;训练框架与网络结构两边完全通用。",
+ reps:"DDPM、ADM、Imagen 的级联像素扩散。"},
+latent:{name:"Latent Diffusion",en:"潜空间扩散",layer:"space",yr:2021,
+ solves:"先用 autoencoder 压缩数据,再在潜空间做扩散,单步计算量降一到两个数量级,让文生图在消费级 GPU 上可用。",
+ rel:"上游可接任意训练框架(ε 预测或流匹配都行);下游最著名的实例是 Stable Diffusion 系列。",
+ diff:"vs Stable Diffusion:一个是方法(在哪儿扩散),一个是采用该方法的具体模型;vs Pixel:高效,但细节上限受 autoencoder 制约。",
+ reps:"Rombach et al., “Latent Diffusion Models” (2021/2022)。"},
+fm:{name:"Flow Matching",en:"流匹配",layer:"flow",yr:2022,
+ solves:"跳过「加噪再反推」,直接指定一条从噪声到数据的插值路径(常为直线),训练网络回归路径上的速度场 v。",
+ rel:"与扩散同属「简单分布→数据分布的连续路径」思想,特定设定下目标可互相转换;SD3、Flux 采用该类目标。",
+ diff:"vs 传统 diffusion:设计路径并回归速度 vs 反推加噪过程 / 估计 score;vs Rectified Flow:FM 是一般框架,RF 是「把路拉直」的具体路线。",
+ reps:"Lipman et al., Flow Matching (2022)。"},
+rf:{name:"Rectified Flow",en:"整流 / 直线化路径",layer:"flow",yr:2022,
+ solves:"通过 reflow 等操作把噪声→数据的传输路径尽量拉直;路径越直,ODE 求解步数越少,极限一步走完。",
+ rel:"Flow Matching 家族的一支;SD3 论文明确采用 rectified flow 训练目标。",
+ diff:"vs FM:同一框架,更强调路径几何的「直」;vs Consistency:一个从路径几何入手,一个从输出一致性训练入手,都指向少步。",
+ reps:"Liu et al., Rectified Flow (2022);SD3 (2024)。"},
+unet:{name:"U-Net",en:"卷积多尺度主干",layer:"arch",yr:2020,
+ solves:"以编码-解码 + 跳连的结构同时处理全局结构与局部细节,为每一步去噪提供预测主干。",
+ rel:"从 DDPM 到 SD1.x / SDXL 的图像扩散长期默认主干;文本条件经 cross-attention 注入其中。",
+ diff:"vs DiT:同层的两种主干选择(卷积多尺度 vs token 全局注意力);vs DDPM:一个是网络结构,一个是训练框架,层级不同。",
+ reps:"DDPM / Stable Diffusion / SDXL 的去噪网络。"},
+dit:{name:"DiT",en:"Diffusion Transformer",layer:"arch",yr:2022,
+ solves:"把图像 / 视频 latent 切成 patch token,用 Transformer 做去噪主干;规模化行为好,易与多模态 token 拼接。",
+ rel:"常与流匹配目标搭配出现(SD3 的 MMDiT、Flux);Sora 被官方介绍为时空 patch 上的 diffusion transformer 方向。",
+ diff:"vs U-Net:token 全局注意力 vs 卷积多尺度;vs 扩散框架:换的是零件(主干),不是范式。",
+ reps:"Peebles & Xie, DiT (2022/2023)。"},
+cond:{name:"条件控制",en:"CFG / Cross-Attn / ControlNet",layer:"arch",yr:2021,
+ solves:"让文本、类别、边缘、深度、姿态等条件真正左右每一步去噪方向;CFG 用「有条件-无条件」外推提供服从度旋钮。",
+ rel:"依附于任意主干与训练框架之上,是扩散模型产品化(文生图、可控生成)的关键一环。",
+ diff:"vs 网络主干:主干决定「怎么算」,条件模块决定「听谁的」;guidance scale 是采样期旋钮,不改权重。",
+ reps:"Classifier-Free Guidance (2021);ControlNet (2023)。"},
+sd:{name:"Stable Diffusion",en:"SD 1.x / 2.x",layer:"product",yr:2022,recipe:["latent","unet","cond","ddim","ddpm"],
+ solves:"把「潜空间扩散 + U-Net + 文本条件 + CFG」打包为开源系统,让文生图在消费级显卡可用,引爆社区生态。",
+ rel:"是 Latent Diffusion 方法最著名的实例;采样常配 DDIM / DPM-Solver;后继为 SDXL / SD3 / Flux 演化线。",
+ diff:"vs Diffusion Model:实例 vs 范式;vs Latent Diffusion:产品 vs 方法。不要用它的实现细节反推整个家族。",
+ reps:"Stability AI & CompVis, 2022 开源发布。"},
+sdnext:{name:"SDXL · SD3 · Flux",en:"SD 生态演化线",layer:"product",yr:2024,recipe:["latent","dit","rf","cond"],
+ solves:"同一生态的迭代:SDXL 放大 U-Net;SD3 换 MMDiT 主干 + rectified flow 目标;Flux 为同方向后继模型。",
+ rel:"逐版对照是练习「分层读改动」的最佳材料:表示空间层未动,结构层与训练目标层各换了一次。",
+ diff:"vs SD1.x:同为潜空间文生图,但主干(U-Net→DiT)与训练目标(ε 预测→rectified flow)已换代。",
+ reps:"SDXL (2023);SD3 (2024);FLUX.1 (2024)。"},
+imagen:{name:"Imagen",en:"Google 文生图",layer:"product",yr:2022,recipe:["pixel","unet","cond"],
+ solves:"论文版本以强文本编码器(T5)+ 级联像素扩散取得高质量文生图,证明潜空间不是唯一路线。",
+ rel:"表示空间层选了 Pixel(级联超分);与 SD 形成「像素级联 vs 潜空间」的路线对照。",
+ diff:"vs Stable Diffusion:像素级联 vs 潜空间;后续产品迭代的内部细节以官方披露为准,不宜过度断言。",
+ reps:"Saharia et al., Imagen (2022)。"},
+dalle:{name:"DALL·E / Midjourney",en:"闭源文生图产品",layer:"product",yr:2022,recipe:["core","cond"],
+ solves:"作为扩散(相关)文生图产品的代表:DALL·E 2 论文(unCLIP)使用扩散组件;DALL·E 3 与 Midjourney 公开细节有限。",
+ rel:"归入模型实例层的「产品代表」;讨论时以公开论文与官方披露为界。",
+ diff:"与开源模型的区别在可考证性:闭源产品应表述为「扩散 / 扩散相关产品代表」,不要断言内部架构。",
+ reps:"Ramesh et al., unCLIP (2022);Midjourney(产品)。"},
+sora:{name:"Sora / 视频生成",en:"时空 patch 扩散方向",layer:"product",yr:2024,recipe:["latent","dit","cond"],
+ solves:"扩散(相关)范式在视频领域的代表方向;相对图像的核心增量是跨帧时间一致性与长时序连贯。",
+ rel:"官方技术报告描述为在时空 patch 上工作的 diffusion transformer 路线;可灵、Veo 等属同方向。",
+ diff:"vs 图像扩散:多了时间维与一致性约束,算力需求陡增;内部实现细节不宜过度断言。",
+ reps:"OpenAI Sora 技术报告 (2024)。"},
+audio:{name:"音频扩散",en:"AudioLDM / Stable Audio 等",layer:"product",yr:2023,recipe:["latent","cond"],
+ solves:"把扩散作用于波形、频谱或音频 latent,以文本 / 旋律 / 音色为条件生成音频与音乐。",
+ rel:"频谱路线几乎可复用图像扩散全套;波形与 latent 路线需处理相位与长程结构。",
+ diff:"vs 图像扩散:表示与评价指标不同(相位、节奏、音质),范式相同。",
+ reps:"AudioLDM (2023);Stable Audio(方向代表)。"},
+af3:{name:"AlphaFold 3 扩散模块",en:"结构生成",layer:"product",yr:2024,recipe:["core","dit","cond"],
+ solves:"用扩散模块直接生成原子三维坐标构象,取代前代确定性结构模块;扩散思想迁移到科学结构生成的代表。",
+ rel:"与 RFdiffusion 等同属「结构扩散」方向;条件为序列、配体等生物学信息。",
+ diff:"vs 图像扩散:空间是原子坐标,须满足物理化学约束,评价看结构精度而非观感。",
+ reps:"Abramson et al., AlphaFold 3 (Nature 2024);RFdiffusion。"},
+threed:{name:"3D 生成",en:"DreamFusion / Point-E 等",layer:"product",yr:2022,recipe:["core","cond"],
+ solves:"在点云 / 体素 / 隐式场 / 多视图等表示上做扩散,或借 2D 扩散先验蒸馏 3D(SDS)。",
+ rel:"表示选择本身就是该领域的核心问题;常与 NeRF 类表示结合。",
+ diff:"vs 图像扩散:三维一致性与数据稀缺是新难题;「表示空间」这一层的选项远比图像多。",
+ reps:"DreamFusion (2022);Point-E(方向代表)。"}
+};
+const LAYER_ORDER = ["core","theory","sampling","space","flow","arch","product"];
+const LAYER_NODES = {
+  core:["core"], theory:["ddpm","score","sde"], sampling:["ddim","dpm","cm"],
+  space:["pixel","latent"], flow:["fm","rf"], arch:["unet","dit","cond"],
+  product:["sd","sdnext","imagen","dalle","sora","audio","af3","threed"]
+};
+const $ = s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+const esc = s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+/* ================= 节点 chip 与详情面板 ================= */
+function chipHTML(id, small){
+  const n=N[id];
+  return `<button class="chip" data-id="${id}" data-layer="${n.layer}" title="${esc(n.en||"")}">${n.name}${n.en&&!small?` <span class="en">${esc(n.en)}</span>`:""}</button>`;
+}
+function detailHTML(id){
+  const n=N[id], L=LAYERS[n.layer];
+  return `<div class="dh"><span class="badge" data-layer="${n.layer}">${L.name}</span><h3>${n.name}${n.en?` <span class="mn" style="font-weight:500;color:var(--muted);font-size:13px">${esc(n.en)}</span>`:""}</h3></div>
+  <div class="d3">
+    <div class="drow"><span class="dk">属于哪一层</span><span class="dv">${L.name} —— ${L.sub}。</span></div>
+    <div class="drow"><span class="dk">解决什么问题</span><span class="dv">${n.solves}</span></div>
+    <div class="drow"><span class="dk">与相邻概念的区别</span><span class="dv">${n.diff}</span></div>
+  </div>
+  <div class="dreps"><b>上下游关系:</b>${n.rel}<br><b>代表:</b>${n.reps}</div>`;
+}
+function bindChips(container, panel){
+  container.addEventListener("click", e=>{
+    const c=e.target.closest(".chip,[data-id].pcard"); if(!c) return;
+    const id=c.dataset.id; if(!N[id]) return;
+    container.querySelectorAll(".sel").forEach(x=>x.classList.remove("sel"));
+    if(c.classList.contains("chip")) c.classList.add("sel");
+    panel.innerHTML = detailHTML(id);
+  });
+}
+
+/* ================= 首屏地图:五个视角 ================= */
+const mapbody=$("#mapbody"), mapdetail=$("#mapdetail");
+function renderLayerView(el){
+  el.innerHTML = `<div class="layers">`+LAYER_ORDER.map(l=>
+    `<div class="lband" data-layer="${l}"><div class="lt">${LAYERS[l].name}<small>${LAYERS[l].sub}</small></div><div>${LAYER_NODES[l].map(id=>chipHTML(id,true)).join("")}</div></div>`
+  ).join("")+`</div>`;
+}
+const VIEWS={
+ main(el){
+  el.innerHTML=`<div class="flowmap">
+    <div class="fcol"><div class="ft">Core Idea</div>${chipHTML("core")}</div>
+    <div class="farr"></div>
+    <div class="fcol"><div class="ft">理论框架</div>${["ddpm","score","sde"].map(i=>chipHTML(i,true)).join("")}</div>
+    <div class="farr"></div>
+    <div class="fcol"><div class="ft">改进维度:采样 · 空间 · 路径 · 结构</div>${["ddim","dpm","cm","latent","fm","rf","unet","dit","cond"].map(i=>chipHTML(i,true)).join("")}</div>
+    <div class="farr"></div>
+    <div class="fcol"><div class="ft">模型实例</div>${["sd","sdnext","imagen","sora","audio","af3"].map(i=>chipHTML(i,true)).join("")}</div>
+  </div>`;
+ },
+ time(el){
+  const ids=Object.keys(N).filter(i=>i!=="pixel");
+  const byYear={};
+  ids.forEach(i=>{(byYear[N[i].yr]=byYear[N[i].yr]||[]).push(i)});
+  const years=Object.keys(byYear).sort();
+  el.innerHTML=`<div class="timeline">`+years.map(y=>
+    `<div class="tcol"><div class="yr">${y}</div><div class="tstack">${byYear[y].map(i=>chipHTML(i,true)).join("")}</div></div>`
+  ).join("")+`</div><div style="font-size:12px;color:var(--muted);margin-top:10px">时间轴按代表性论文 / 发布年份粗略排布,用于看清演化顺序,不追求逐月精确。</div>`;
+ },
+ layer(el){ renderLayerView(el); },
+ model(el){
+  const prods=LAYER_NODES.product;
+  el.innerHTML=`<div class="pgrid">`+prods.map(id=>{
+    const n=N[id];
+    return `<div class="pcard chipish" data-id="${id}"><h4>${n.name}</h4><div class="py">${esc(n.en||"")} · ${n.yr}</div>
+    <div class="recipe">${(n.recipe||[]).map(r=>`<span class="tagl" data-layer="${N[r].layer}">${N[r].name}</span>`).join("")}</div></div>`;
+  }).join("")+`</div><div style="font-size:12px;color:var(--muted);margin-top:10px">卡片下方的标签是该模型在各层的"配方";点击卡片查看三句话定位。闭源产品的配方仅依据公开论文 / 技术报告,不代表当前内部实现。</div>`;
+  el.querySelectorAll(".pcard").forEach(c=>c.addEventListener("click",()=>{mapdetail.innerHTML=detailHTML(c.dataset.id);}));
+ },
+ route(el){
+  const steps=[
+   ["核心思想","加噪、去噪、时间步、噪声调度——能默写并解释一条前向公式。",["core"]],
+   ["经典框架","四种预测目标怎么互换;DDIM 为什么不用重训。",["ddpm","ddim","score","sde"]],
+   ["工程化生成","画出 SD 完整管线;解释 guidance scale 的作用。",["latent","sd","cond"]],
+   ["现代扩展","区分 solver 加速与训练出少步能力;读懂 SD3 的两处换代。",["dit","fm","rf","cm"]],
+   ["具体领域","任给领域,答出五个变量的取值。",["sora","audio","threed","af3"]],
+   ["具体模型专题","10 分钟内把任何新模型放回地图。",["sd","sdnext","sora"]]
+  ];
+  el.innerHTML=`<div class="route">`+steps.map((s,i)=>
+   `<div class="rstep"><div class="rn">${i+1}</div><div><h4>${s[0]}</h4><p>${s[1]}</p><div>${s[2].map(id=>chipHTML(id,true)).join("")}</div></div></div>`
+  ).join("")+`</div>`;
+ }
+};
+function setView(v){
+  $$("#mapcard .maptabs button").forEach(b=>b.classList.toggle("on",b.dataset.view===v));
+  VIEWS[v](mapbody);
+}
+$("#mapcard .maptabs").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(b) setView(b.dataset.view);
+});
+bindChips(mapbody, mapdetail);
+setView("main");
+
+/* 第 5 章分层地图(独立实例) */
+renderLayerView($("#s5layers"));
+bindChips($("#s5layers"), $("#s5detail"));
+</script>
+<script>
+"use strict";
+/* ================= 画布工具:玩具图像 + 高斯噪声 ================= */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gaussArr(n,seed){const r=mulberry32(seed),o=new Float32Array(n);for(let i=0;i<n;i+=2){const u=Math.max(r(),1e-9),v=r(),m=Math.sqrt(-2*Math.log(u));o[i]=m*Math.cos(2*Math.PI*v);if(i+1<n)o[i+1]=m*Math.sin(2*Math.PI*v)}return o}
+const S=96, NPX=S*S*3;
+function makeClean(){ // 程序化"日落小景":有结构、有细节,便于观察去噪
+  const img=new Float32Array(NPX);
+  for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+    const i=(y*S+x)*3, u=x/S, v=y/S;
+    let r=.18+.62*v*1.1, g=.10+.30*v, b=.34+.30*(1-v); // 天空渐变(紫→橙)
+    r+= .30*Math.max(0,1-v*1.6)*.2;
+    const dx=u-.66, dy=v-.34, d=Math.sqrt(dx*dx+dy*dy); // 太阳
+    if(d<.12){r=1;g=.82;b=.45}else if(d<.16){const k=(0.16-d)/.04;r=r*(1-k)+k;g=g*(1-k)+.8*k;b=b*(1-k)+.45*k}
+    const h1=.68+.09*Math.sin(u*9)+.04*Math.sin(u*23+1.7); // 远山
+    if(v>h1){r=.16;g=.10;b=.24}
+    const h2=.82+.06*Math.sin(u*6+2.4)+.03*Math.sin(u*17); // 近山
+    if(v>h2){r=.07;g=.05;b=.12}
+    if(v>h1&&v<h1+.02){r+=.15;g+=.06} // 山脊亮边
+    img[i]=Math.min(1,r);img[i+1]=Math.min(1,g);img[i+2]=Math.min(1,b);
+  }
+  return img;
+}
+const CLEAN=makeClean(), EPS=gaussArr(NPX,42);
+/* 噪声调度 ᾱ(t/T) */
+function abCos(t){const s=.008,f=x=>Math.cos((x+s)/(1+s)*Math.PI/2)**2;return f(t)/f(0)}
+const AB_LIN=(()=>{const T=1000,a=new Float32Array(T+1);let c=1;a[0]=1;for(let i=1;i<=T;i++){const b=1e-4+(0.02-1e-4)*(i-1)/(T-1);c*=(1-b);a[i]=c}return a})();
+function alphaBar(t,sched){return sched==="linear"?AB_LIN[Math.round(t*1000)]:abCos(t)}
+function drawNoisy(cv,t,sched,eps){ // x_t = √ᾱ x0 + √(1-ᾱ) ε
+  const ab=alphaBar(t,sched),sa=Math.sqrt(ab),sb=Math.sqrt(1-ab);
+  const ctx=cv.getContext("2d"),im=ctx.createImageData(S,S),d=im.data,e=eps||EPS;
+  for(let p=0,q=0;p<NPX;p+=3,q+=4){
+    d[q]  =255*Math.min(1,Math.max(0,sa*CLEAN[p]  +sb*(.5+.28*e[p])));
+    d[q+1]=255*Math.min(1,Math.max(0,sa*CLEAN[p+1]+sb*(.5+.28*e[p+1])));
+    d[q+2]=255*Math.min(1,Math.max(0,sa*CLEAN[p+2]+sb*(.5+.28*e[p+2])));
+    d[q+3]=255;
+  }
+  ctx.putImageData(im,0,0);
+}
+const blurTmp=document.createElement("canvas");blurTmp.width=blurTmp.height=S;
+function drawEstimate(cv,t,sched){ // x̂0(t) 示意:t 大→只剩粗结构,t 小→细节浮现
+  const ab=alphaBar(t,sched);
+  const ctx=cv.getContext("2d"),tc=blurTmp.getContext("2d");
+  const im=tc.createImageData(S,S),d=im.data;
+  for(let p=0,q=0;p<NPX;p+=3,q+=4){d[q]=255*CLEAN[p];d[q+1]=255*CLEAN[p+1];d[q+2]=255*CLEAN[p+2];d[q+3]=255}
+  tc.putImageData(im,0,0);
+  const small=Math.max(3,Math.round(3+ab*(S-3))); // ab 小 → 缩得狠 → 模糊
+  const t2=document.createElement("canvas");t2.width=t2.height=small;
+  const c2=t2.getContext("2d");c2.imageSmoothingEnabled=true;
+  c2.drawImage(blurTmp,0,0,small,small);
+  ctx.imageSmoothingEnabled=true;ctx.clearRect(0,0,S,S);
+  ctx.drawImage(t2,0,0,S,S);
+  const g=ctx.getImageData(0,0,S,S),gd=g.data,amp=.35*(1-ab); // 残余噪声
+  for(let p=0,q=0;p<NPX;p+=3,q+=4){gd[q]+=60*amp*EPS[p];gd[q+1]+=60*amp*EPS[p+1];gd[q+2]+=60*amp*EPS[p+2]}
+  ctx.putImageData(g,0,0);
+}
+function drawClean(cv){drawNoisy(cv,0,"cosine")}
+
+/* ================= 首屏三联画 ================= */
+(function(){
+  const cvC=$("#cvClean"),cvN=$("#cvNoisy"),cvD=$("#cvDenoi"),sl=$("#heroT"),tv=$("#heroTv"),h1=$("#heroTitle");
+  drawClean(cvC);
+  function upd(){
+    const t=+sl.value/1000;
+    drawNoisy(cvN,t,"cosine");
+    drawEstimate(cvD,t,"cosine");
+    tv.textContent=`t = ${sl.value} / 1000`;
+    h1.style.filter=`blur(${(t*5).toFixed(1)}px)`;h1.style.opacity=String(1-.35*t);
+  }
+  sl.addEventListener("input",upd);upd();
+})();
+
+/* ================= §3 模型归类表单 ================= */
+(function(){
+  const ids=["clsSpace","clsTime","clsTarget","clsSample","clsCond"];
+  function run(){
+    const sp=$("#clsSpace").value,ti=$("#clsTime").value,ta=$("#clsTarget").value,sa=$("#clsSample").value,co=$("#clsCond").value;
+    let base, notes=[];
+    if(ta==="v"||ti==="path") base="<b>Flow Matching / Rectified Flow 一系</b>:回归速度场、路径本身是设计对象——这是流匹配系最直接的指纹";
+    else if(ta==="score"||(ti==="continuous"&&ta!=="eps")) base="<b>Score-based / SDE 视角</b>:连续时间 + score 目标,分析与采样器设计走这套语言";
+    else base="<b>经典 DDPM 一系</b>:离散时间 + ε(或 x₀)预测,是教科书式的扩散训练配方";
+    if(ti==="continuous"&&ta==="eps") notes.push("连续时间 + ε 预测:实践中常见的「DDPM 目标、SDE 视角」混搭,两套记号描述同一件事");
+    if(sa==="det") notes.push("确定性采样 → 配的是 <b>DDIM / DPM-Solver / PF-ODE</b> 这一采样加速层,不改训练");
+    if(sa==="few") notes.push("1–4 步生成 → 叠加了 <b>Consistency / 少步蒸馏</b>(或极直的 Rectified Flow 路径):这是训练出来的能力,不只是换采样器");
+    if(sa==="sto") notes.push("随机多步祖先采样 → 最接近 DDPM 原始采样方式");
+    if(sp==="latent") notes.push("在潜空间扩散 → 表示空间层选择了 <b>Latent Diffusion</b> 工程路线");
+    if(sp==="pixel") notes.push("像素空间扩散 → <b>Pixel Diffusion</b> 路线(如 DDPM、Imagen 级联)");
+    if(sp==="other") notes.push("非图像表示 → 属于扩散思想向 <b>音频 / 视频 / 3D / 结构生成</b> 的领域迁移,先确认它的表示空间与一致性约束");
+    if(co==="text") notes.push("文本条件 → 产品形态上已接近文生图 / 文生 X 一族"+(sp==="latent"&&ta==="eps"?";<b>latent + ε 预测 + 文本条件</b> 这套组合正是 Stable Diffusion 1.x 的配方":""));
+    if(co==="multi") notes.push("多模态条件 → 大概率还挂着 ControlNet / adapter 类控制模块");
+    if(co==="none") notes.push("无条件 → 更像研究基线而非产品形态");
+    $("#clsOut").innerHTML=`主框架判定:${base}。<br>`+notes.map(n=>"· "+n).join("<br>")+
+      `<br><span style="color:var(--muted);font-size:12.5px">判定逻辑:②③(时间/路径 + 预测目标)决定理论归属,④ 决定采样层,① 决定空间层,⑤ 决定产品形态——正文第 3 章的五变量框架。</span>`;
+  }
+  ids.forEach(i=>$("#"+i).addEventListener("change",run));run();
+})();
+
+/* ================= §4 加噪 / 去噪播放器 ================= */
+(function(){
+  const cv=$("#p4cv"),sl=$("#p4T"),tv=$("#p4Tv"),curve=$("#p4curve"),read=$("#p4Read");
+  let sched="cosine",timer=null,dir=1;
+  const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // 用更大的画布重绘(把 96 放大到 240)
+  const off=document.createElement("canvas");off.width=off.height=S;
+  function draw(){
+    const t=+sl.value/1000;
+    if(dir>=0)drawNoisy(off,t,sched);else drawEstimate(off,t,sched);
+    const ctx=cv.getContext("2d");ctx.imageSmoothingEnabled=false;
+    ctx.clearRect(0,0,240,240);ctx.drawImage(off,0,0,240,240);
+    tv.textContent=`t = ${sl.value}`;
+    const ab=alphaBar(t,sched);
+    read.innerHTML=`当前 <b>ᾱ_t = ${ab.toFixed(3)}</b>:信号占比 √ᾱ ≈ ${Math.sqrt(ab).toFixed(2)},噪声占比 √(1−ᾱ) ≈ ${Math.sqrt(1-ab).toFixed(2)}。<br>`+
+      (dir>=0?`正在看<b>前向加噪</b>:x_t = √ᾱ·x₀ + √(1−ᾱ)·ε。${sched==="cosine"?"cosine 调度破坏平缓,中段仍保留可学信号。":"linear 调度中段破坏很快,信息早早被抹掉。"}`
+             :`正在看<b>反向去噪</b>(示意):t 大时模型只能给出粗结构估计,t 越小细节越清晰——"先构图,后细节"。`);
+    drawCurve(t);
+  }
+  function drawCurve(tNow){
+    const c=curve.getContext("2d"),W=curve.width,H=curve.height;
+    c.clearRect(0,0,W,H);c.font="11px monospace";
+    c.strokeStyle="#E2E5EC";c.beginPath();c.moveTo(34,10);c.lineTo(34,H-24);c.lineTo(W-8,H-24);c.stroke();
+    c.fillStyle="#5B6172";c.fillText("ᾱ_t",6,20);c.fillText("t →",W-34,H-8);
+    [["cosine","#6C5CE7"],["linear","#0EA47A"]].forEach(([s,col])=>{
+      c.strokeStyle=col;c.lineWidth=s===sched?2.5:1.2;c.globalAlpha=s===sched?1:.45;c.beginPath();
+      for(let i=0;i<=100;i++){const t=i/100,ab=alphaBar(t,s);
+        const x=34+(W-46)*t,y=10+(H-38)*(1-ab);i?c.lineTo(x,y):c.moveTo(x,y)}
+      c.stroke();c.globalAlpha=1;
+      c.fillStyle=col;c.fillText(s,W-110+(s==="linear"?55:0),22);
+    });
+    const ab=alphaBar(tNow,sched);
+    c.fillStyle="#171923";c.beginPath();
+    c.arc(34+(W-46)*tNow,10+(H-38)*(1-ab),4,0,7);c.fill();
+    c.lineWidth=1;
+  }
+  function play(d){stop();dir=d;if(reduced)return;
+    timer=setInterval(()=>{let v=+sl.value+d*12;
+      if(v>=1000){v=1000;stop()} if(v<=0){v=0;stop()}
+      sl.value=v;draw();},40);}
+  function stop(){if(timer){clearInterval(timer);timer=null}}
+  $("#p4Fwd").addEventListener("click",()=>{if(+sl.value>=1000)sl.value=0;play(1)});
+  $("#p4Rev").addEventListener("click",()=>{if(+sl.value<=0)sl.value=1000;play(-1)});
+  $("#p4Stop").addEventListener("click",stop);
+  sl.addEventListener("input",()=>{stop();draw()});
+  $("#p4Sched").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+    sched=b.dataset.s;$$("#p4Sched button").forEach(x=>x.classList.toggle("on",x===b));draw()});
+  draw();
+})();
+
+/* ================= §7 采样步数对比器 ================= */
+(function(){
+  let steps=1000,alg="ddpm",seed=7;
+  const off=document.createElement("canvas");off.width=off.height=S;
+  function render(){
+    const q=Math.min(1,Math.log(steps)/Math.log(1000)); // 0..1 质量近似(饱和曲线)
+    const ctx0=off.getContext("2d");
+    // 基图
+    const im=ctx0.createImageData(S,S),d=im.data;
+    const e=alg==="ddpm"?gaussArr(NPX,seed):EPS;
+    const resid=alg==="ddpm"?(1-q)*.9:(1-q)*.35;   // DDPM 少步:残余噪声
+    for(let p=0,z=0;p<NPX;p+=3,z+=4){
+      d[z]=255*Math.min(1,Math.max(0,CLEAN[p]+resid*.5*e[p]));
+      d[z+1]=255*Math.min(1,Math.max(0,CLEAN[p+1]+resid*.5*e[p+1]));
+      d[z+2]=255*Math.min(1,Math.max(0,CLEAN[p+2]+resid*.5*e[p+2]));d[z+3]=255;
+    }
+    ctx0.putImageData(im,0,0);
+    if(alg==="ddim"&&steps<100){ // DDIM 少步:细节抹平
+      const k=Math.max(24,Math.round(S*q));const t2=document.createElement("canvas");t2.width=t2.height=k;
+      t2.getContext("2d").drawImage(off,0,0,k,k);
+      ctx0.clearRect(0,0,S,S);ctx0.drawImage(t2,0,0,S,S);
+    }
+    const ctx=$("#p7cv").getContext("2d");ctx.imageSmoothingEnabled=false;
+    ctx.clearRect(0,0,240,240);ctx.drawImage(off,0,0,240,240);
+    // 读数
+    const tpct=steps/1000*100;
+    $("#p7time").style.width=Math.max(2,tpct)+"%";
+    $("#p7timev").textContent="×"+(steps/10).toFixed(steps<100?1:0);
+    const qual=alg==="ddim"?Math.min(1,q*1.08):q;
+    $("#p7q").style.width=(qual*100).toFixed(0)+"%";$("#p7qv").textContent=(qual*100).toFixed(0)+" / 100";
+    $("#p7Read").innerHTML=
+      `<b>${steps} 步 · ${alg==="ddpm"?"DDPM 随机采样":"DDIM 确定性采样"}</b><br>`+
+      (alg==="ddpm"
+        ?`每步注入新随机性:步数充足时误差被反复纠正;骤减到 ${steps<100?steps+" 步时残余噪声来不及去净":"几十步内质量仍可维持"}。点「重新采样」会得到<b>不同</b>结果(随机)。`
+        :`确定性轨迹、跳步前进:同一种子结果<b>完全一致</b>(点「重新采样」验证);步数很少时高频细节先被抹平,但整体结构稳。`)+
+      `<br><span style="color:var(--muted);font-size:12.5px">质量随步数的收益是饱和的:1000 → 100 步几乎无损,100 → 10 步才开始明显掉——这就是"步数越多越好"是误区的原因。</span>`;
+  }
+  $("#p7Steps").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+    steps=+b.dataset.n;$$("#p7Steps button").forEach(x=>x.classList.toggle("on",x===b));render()});
+  $("#p7Alg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+    alg=b.dataset.a;$$("#p7Alg button").forEach(x=>x.classList.toggle("on",x===b));render()});
+  $("#p7Re").addEventListener("click",()=>{if(alg==="ddpm")seed=Math.floor(Math.random()*1e6);render()});
+  render();
+})();
+</script>
+<script>
+"use strict";
+/* ================= §8 score 场演示 ================= */
+(function(){
+  const cv=$("#p8cv"),sl=$("#p8T"),tv=$("#p8Tv");
+  const W=cv.width,H=cv.height;
+  const mus=[[170,130],[400,150]],sig=34; // 两个数据簇
+  const pts=[];const rnd=mulberry32(11);
+  for(let i=0;i<160;i++){ // 初始:均匀噪声点 + 归属簇
+    pts.push({x0:30+rnd()*(W-60),y0:25+rnd()*(H-50),m:rnd()<0.5?0:1,j1:rnd()-.5,j2:rnd()-.5});
+  }
+  function draw(){
+    const k=+sl.value/100; // 0 噪声 → 1 数据
+    const ctx=cv.getContext("2d");ctx.clearRect(0,0,W,H);
+    // 密度等高圈
+    mus.forEach(m=>{for(let r=3;r>=1;r--){ctx.beginPath();ctx.arc(m[0],m[1],sig*r*.8,0,7);
+      ctx.strokeStyle=`rgba(14,164,122,${.10+.08*(3-r)})`;ctx.lineWidth=1.2;ctx.stroke()}});
+    // score 箭头场(稀疏网格)
+    ctx.strokeStyle="rgba(108,92,231,.45)";ctx.fillStyle="rgba(108,92,231,.45)";ctx.lineWidth=1;
+    for(let gx=30;gx<W-10;gx+=44)for(let gy=25;gy<H-10;gy+=40){
+      let vx=0,vy=0,wsum=0;
+      mus.forEach(m=>{const dx=m[0]-gx,dy=m[1]-gy,d2=dx*dx+dy*dy,w=Math.exp(-d2/(2*(sig*2.4)**2));vx+=w*dx;vy+=w*dy;wsum+=w});
+      vx/=wsum+1e-9;vy/=wsum+1e-9;const L=Math.hypot(vx,vy)+1e-9,s=Math.min(15,L*.14);
+      const ex=gx+vx/L*s,ey=gy+vy/L*s;
+      ctx.beginPath();ctx.moveTo(gx,gy);ctx.lineTo(ex,ey);ctx.stroke();
+      ctx.beginPath();ctx.arc(ex,ey,1.6,0,7);ctx.fill();
+    }
+    // 样本点:沿"上坡"从噪声位置插值到簇
+    pts.forEach(p=>{
+      const m=mus[p.m];
+      const tx=m[0]+p.j1*sig*2,ty=m[1]+p.j2*sig*2;
+      const x=p.x0+(tx-p.x0)*k,y=p.y0+(ty-p.y0)*k;
+      const col=`rgba(${Math.round(108+(14-108)*k)},${Math.round(92+(164-92)*k)},${Math.round(231+(122-231)*k)},.85)`;
+      ctx.beginPath();ctx.arc(x,y,3,0,7);ctx.fillStyle=col;ctx.fill();
+    });
+    ctx.font="12px monospace";ctx.fillStyle="#5B6172";
+    ctx.fillText("紫色箭头 = score 方向(指向密度更高处)",14,H-10);
+    tv.textContent=`去噪进度 ${sl.value}%`;
+  }
+  sl.addEventListener("input",draw);draw();
+})();
+
+/* ================= §9 Pixel vs Latent 对比器 ================= */
+(function(){
+  function fmt(n){return n>=1e6?(n/1e6).toFixed(2)+" M":n>=1e3?(n/1e3).toFixed(1)+" K":String(n)}
+  function run(){
+    const R=+$("#p9res").value,f=+$("#p9f").value;
+    const px=3*R*R, lz=4*(R/f)*(R/f), ratio=px/lz;
+    const lw=Math.max(2,100/ratio);
+    $("#p9out").innerHTML=`
+      <div class="meter"><span class="mtk">pixel space</span><div class="bar"><i style="width:100%"></i></div><span class="mv">${fmt(px)}</span></div>
+      <div class="meter"><span class="mtk">latent space</span><div class="bar"><i style="width:${lw}%"></i></div><span class="mv">${fmt(lz)}</span></div>
+      <div class="readout">
+        <b>pixel:</b> 张量 <span class="mn">3 × ${R} × ${R}</span> = ${fmt(px)} 个数值,每一步去噪都要全量处理;<br>
+        <b>latent (f=${f}):</b> 张量 <span class="mn">4 × ${R/f} × ${R/f}</span> = ${fmt(lz)} 个数值 —— 规模约为像素空间的 <b>1 / ${ratio.toFixed(0)}</b>。<br>
+        <span style="color:var(--muted);font-size:12.5px">这只是"每步要处理的数值量";考虑注意力等超线性开销,实际单步算力差距还会更大。代价:生成质量的上限交给了 autoencoder——decoder 画不出的细节,扩散再强也补不回来。</span>
+      </div>`;
+  }
+  $("#p9res").addEventListener("change",run);$("#p9f").addEventListener("change",run);run();
+})();
+
+/* ================= §10 弯路径 vs 直路径 ================= */
+(function(){
+  const cv=$("#p10cv"),W=cv.width,H=cv.height;
+  let mode="curve";
+  const A=[70,H-50],B=[W-70,60]; // 噪声 → 数据
+  function truePath(t){ // 参数化真实路径
+    if(mode==="straight")return [A[0]+(B[0]-A[0])*t, A[1]+(B[1]-A[1])*t];
+    const x=A[0]+(B[0]-A[0])*t;
+    const y=A[1]+(B[1]-A[1])*t - 95*Math.sin(Math.PI*t) + 28*Math.sin(2.2*Math.PI*t);
+    return [x,y];
+  }
+  function draw(){
+    const n=+$("#p10n").value;
+    const ctx=cv.getContext("2d");ctx.clearRect(0,0,W,H);
+    // 真实路径
+    ctx.beginPath();for(let i=0;i<=200;i++){const p=truePath(i/200);i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])}
+    ctx.strokeStyle="rgba(23,25,35,.35)";ctx.lineWidth=2.5;ctx.setLineDash([1,0]);ctx.stroke();
+    // Euler 数值解:每步沿当前切线直走
+    ctx.setLineDash([]);let cur=[...A];let err=0;
+    ctx.beginPath();ctx.moveTo(cur[0],cur[1]);
+    for(let i=0;i<n;i++){
+      const t=i/n,h=1/n;
+      const p1=truePath(t),p2=truePath(t+.002);
+      const dx=(p2[0]-p1[0])/.002,dy=(p2[1]-p1[1])/.002; // 真实速度场在当前"时间"的方向
+      cur=[cur[0]+dx*h,cur[1]+dy*h];
+      ctx.lineTo(cur[0],cur[1]);
+      const tp=truePath((i+1)/n);err+=Math.hypot(cur[0]-tp[0],cur[1]-tp[1]);
+    }
+    ctx.strokeStyle="#6C5CE7";ctx.lineWidth=2;ctx.stroke();
+    // 步点
+    cur=[...A];ctx.fillStyle="#6C5CE7";
+    for(let i=0;i<=n;i++){ctx.beginPath();ctx.arc(cur[0],cur[1],3.4,0,7);ctx.fill();
+      if(i<n){const t=i/n,h=1/n,p1=truePath(t),p2=truePath(t+.002);
+        cur=[cur[0]+(p2[0]-p1[0])/.002*h,cur[1]+(p2[1]-p1[1])/.002*h]}}
+    // 端点
+    ctx.fillStyle="#6C5CE7";ctx.beginPath();ctx.arc(A[0],A[1],7,0,7);ctx.fill();
+    ctx.fillStyle="#0EA47A";ctx.beginPath();ctx.arc(B[0],B[1],7,0,7);ctx.fill();
+    ctx.font="12px monospace";ctx.fillStyle="#5B6172";
+    ctx.fillText("噪声 z",A[0]-18,A[1]+22);ctx.fillText("数据 x₀",B[0]-24,B[1]-14);
+    const gap=Math.hypot(cur[0]-B[0],cur[1]-B[1]);
+    $("#p10read").innerHTML=`灰线 = 真实传输路径;紫折线 = 用 ${n} 步数值求解走出的轨迹。终点偏差:<b>${gap.toFixed(0)} px</b>。<br>`+
+      (mode==="curve"
+       ?`弯曲路径上,大步长的每一步都沿切线"切出弯外",步数少时偏差迅速累积——这就是经典扩散需要较多步数的几何原因。`
+       :`直线路径上,切线方向处处等于终点方向,理论上<b>一步</b>就能走到——Rectified Flow 追求"把路拉直"的意义正在于此。`);
+  }
+  $("#p10path").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+    mode=b.dataset.p;$$("#p10path button").forEach(x=>x.classList.toggle("on",x===b));draw()});
+  $("#p10n").addEventListener("change",draw);
+  draw();
+})();
+
+/* ================= §13 条件与 guidance 演示 ================= */
+(function(){
+  const cv=$("#p13cv"),W=cv.width,H=cv.height;
+  const CL=[{n:"猫",x:130,y:150,c:"#6C5CE7"},{n:"狗",x:300,y:110,c:"#0EA47A"},{n:"风景",x:450,y:180,c:"#E8890C"}];
+  const rnd=mulberry32(99),base=[];
+  for(let i=0;i<220;i++)base.push([rnd()*2-1,rnd()*2-1,rnd()]);
+  function draw(){
+    const pi=+$("#p13prompt").value, ni=+$("#p13neg").value, g=+$("#p13g").value;
+    $("#p13gv").textContent=g.toFixed(1);
+    const ctx=cv.getContext("2d");ctx.clearRect(0,0,W,H);
+    // 背景:三个模式
+    CL.forEach((m,i)=>{ctx.beginPath();ctx.arc(m.x,m.y,58,0,7);
+      ctx.strokeStyle=m.c+"44";ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+      ctx.font="12px monospace";ctx.fillStyle=m.c;ctx.fillText("“"+m.n+"”模式",m.x-26,m.y-64)});
+    const M=CL[pi];
+    const spread=58/(1+.42*g);            // g 越大越收紧
+    const over=Math.max(0,(g-9)/6);       // 过高:失真
+    let mx=M.x,my=M.y;
+    if(ni>=0&&ni!==pi){const Nn=CL[ni];const dx=M.x-Nn.x,dy=M.y-Nn.y,L=Math.hypot(dx,dy);
+      mx+= dx/L*g*3.2; my+= dy/L*g*3.2;}
+    base.forEach(b=>{
+      let x=mx+b[0]*spread*(1+.4*b[2]), y=my+b[1]*spread*(1+.4*b[2]);
+      if(over>0){x+= (b[2]-.5)*over*26*Math.sign(b[0]); y+= (b[0])*over*10;} // 失真:分布被拉裂
+      if(g<1.5){const other=CL[(pi+1+Math.floor(b[2]*2))%3]; // g 太小:跑题混入其他模式
+        const k=(1.5-g)/1.5*.5*b[2];x+= (other.x-x)*k;y+=(other.y-y)*k;}
+      x=Math.max(8,Math.min(W-8,x));y=Math.max(8,Math.min(H-8,y));
+      ctx.beginPath();ctx.arc(x,y,2.6,0,7);
+      ctx.fillStyle=over>0?`rgba(214,51,108,${.5+.5*over})`:M.c+"CC";ctx.fill();
+    });
+    if(ni>=0&&ni!==pi){const Nn=CL[ni];ctx.font="11px monospace";ctx.fillStyle="#D6336C";
+      ctx.fillText("← negative prompt 推离“"+Nn.n+"”",Nn.x-40,Nn.y+76)}
+    // 三个度量
+    const obey=Math.min(1,.25+g/10), div=Math.max(.06,1-g/13), risk=Math.min(1,over*1.4+(ni>=0?.08:0));
+    $("#p13m1").style.width=obey*100+"%";$("#p13v1").textContent=(obey*100|0)+"%";
+    $("#p13m2").style.width=div*100+"%";$("#p13v2").textContent=(div*100|0)+"%";
+    $("#p13m3").style.width=risk*100+"%";$("#p13v3").textContent=(risk*100|0)+"%";
+  }
+  ["p13prompt","p13neg"].forEach(i=>$("#"+i).addEventListener("change",draw));
+  $("#p13g").addEventListener("input",draw);
+  draw();
+})();
+
+/* ================= §14 领域矩阵行展开 ================= */
+(function(){
+  $("#p14t tbody").addEventListener("click",e=>{
+    const tr=e.target.closest("tr");if(!tr)return;
+    $$("#p14t tbody tr").forEach(r=>r.style.background=r===tr?"color-mix(in srgb,var(--noise) 6%,#fff)":"");
+    $("#p14read").innerHTML=`<b>${tr.cells[0].textContent}:</b>${tr.dataset.x}`;
+  });
+})();
+</script>
+<script>
+"use strict";
+/* ================= §15 概念两两对比器 ================= */
+(function(){
+  const IDS=["core","ddpm","score","sde","ddim","dpm","cm","pixel","latent","fm","rf","unet","dit","cond","sd","sdnext","sora"];
+  const P={}; const put=(a,b,o)=>{P[a+"|"+b]=o;P[b+"|"+a]=o};
+  put("ddpm","ddim",{same:"共用同一套训练好的去噪网络;都描述「从 x_T 走回 x₀」的反向过程。",
+    diff:"DDPM 定义了训练目标 + 随机祖先采样(上千步、每步注入新噪声);DDIM 不改训练,给出确定性、可跳步的另一条反向轨迹。",
+    use:"DDPM 用来理解与实现基线;DDIM 用来加速推理、做插值与反演。",
+    trap:"把 DDIM 当成「新模型」——它更像同一个模型的另一种走法。"});
+  const dpsc={same:"数学上可互相转换:高斯加噪下 ε 预测与 score 估计只差已知缩放;二者描述同一生成过程。",
+    diff:"DDPM 走离散时间加噪-去噪概率过程叙事;Score/SDE 走连续时间密度梯度 / 随机过程叙事,并派生统一的采样器语言。",
+    use:"写训练代码常用 DDPM 记号;分析调度、设计新采样器常用 SDE 记号。",
+    trap:"把二者当成互斥阵营——它们是同一对象的两套坐标系。"};
+  put("ddpm","score",dpsc);put("ddpm","sde",dpsc);
+  put("pixel","latent",{same:"训练框架与网络结构完全通用,只是扩散发生的空间不同。",
+    diff:"Pixel 在原始数据空间建模,直观、无编码瓶颈但成本平方级膨胀;Latent 在 autoencoder 压缩表示上建模,省一到两个数量级算力,但质量上限受 decoder 制约。",
+    use:"极致保真或小分辨率研究可走 pixel;工程化文生图几乎都走 latent。",
+    trap:"认为 latent 一定更差(或一定更好)——这是成本与保真上限之间的工程取舍。"});
+  put("unet","dit",{same:"都是「每步预测去噪方向」的可替换主干,可服务同一训练框架与采样器。",
+    diff:"U-Net 用卷积多尺度 + 跳连,擅长图像局部细节;DiT 把 latent 切成 patch token 用 Transformer,全局注意力、规模化曲线好、易与多模态拼接。",
+    use:"SD1.x/SDXL 用 U-Net;SD3、Flux 及视频方向多转向 DiT。",
+    trap:"把主干差异当成范式差异——换零件不换发动机。"});
+  const dfm={same:"都学习「从简单分布到数据分布」的连续路径;采样都可写成解一条 ODE/SDE;特定参数化下目标可互换。",
+    diff:"传统扩散先设计加噪过程再反推(经 ε/score 估计);Flow Matching 直接指定插值路径并回归速度场 v,Rectified Flow 进一步把路径拉直以逼近极少步。",
+    use:"经典扩散语言成熟、生态齐全;流匹配目标更直接,与 DiT 和大规模训练组合顺手(SD3、Flux)。",
+    trap:"两个极端都错:说它们「完全一样」或「毫无关系」。近亲,不同人。"};
+  put("core","fm",dfm);put("core","rf",dfm);put("ddpm","fm",dfm);put("ddpm","rf",dfm);
+  put("fm","rf",{same:"同属「指定路径 + 回归速度场」的流匹配框架。",
+    diff:"FM 是一般框架(路径可多样);RF 是其中强调把传输路径拉直的路线,配合 reflow 迭代校直,极限一步生成。",
+    use:"读论文时 FM 是框架名,RF 常是具体训练目标名(如 SD3)。",
+    trap:"把 RF 当成与 FM 并列的另一门派。"});
+  put("core","sd",{same:"Stable Diffusion 是加噪-去噪范式的一个完整实例,继承家族全部核心机制。",
+    diff:"Diffusion Model 是范式 / 家族总称;SD 是一组具体选择(潜空间 + U-Net + 文本条件 + CFG)加上权重、数据与开源生态。",
+    use:"讨论方法用前者;讨论产品、生态、微调用后者。",
+    trap:"用 SD 的实现细节反推家族定义,或把家族成果都记在 SD 名下。"});
+  put("latent","sd",{same:"SD 的表示空间层选择正是 Latent Diffusion。",
+    diff:"Latent Diffusion 是「在哪扩散」的方法;SD 是采用该方法的具体模型系统(还包含文本编码器、U-Net、CFG、训练数据等)。",
+    use:"方法层讨论用 Latent Diffusion;系统层讨论用 SD。",
+    trap:"把二者当同义词——Latent Diffusion 还有很多非 SD 的实例。"});
+  put("ddim","cm",{same:"目标一致:把采样步数降下来。",
+    diff:"DDIM(与 DPM-Solver)改采样算法,权重不动,随换随用;Consistency Models 改训练目标(或蒸馏),让模型本身获得 1–4 步生成能力。",
+    use:"想立刻提速用 solver;想进入交互级速度用一致性蒸馏(如 LCM)。",
+    trap:"把所有「加速」混为一谈——一种是另一种走法,一种是另一个模型。"});
+  put("ddim","dpm",{same:"同属采样加速层的 solver 思路:换算法不换模型。",
+    diff:"DDIM 是一阶确定性轨迹;DPM-Solver 用高阶数值方法求解同一条 ODE,同等质量下步数更少。",
+    use:"两者都是推理框架里的可选采样器。",
+    trap:"以为换采样器需要重新训练。"});
+  put("score","sde",{same:"同一脉络:SDE 框架正是建立在 score 估计之上的连续时间推广。",
+    diff:"Score-based(NCSN)先提出多噪声水平的 score 匹配;SDE 框架把前向/反向统一写成随机微分方程并给出 PF-ODE。",
+    use:"理解直觉看 score;做统一分析与采样器设计看 SDE。",
+    trap:"把 SDE 当成与 score 无关的另一理论。"});
+  function auto(a,b){
+    const A=N[a],B=N[b];
+    const same=A.layer===B.layer
+      ?`同属${LAYERS[A.layer].name}(${LAYERS[A.layer].sub}),是这一层内的两种选择。`
+      :`分属不同层(${LAYERS[A.layer].name} / ${LAYERS[B.layer].name}),它们之间是「搭配」关系而非竞争关系——都服务于同一条从噪声到数据的生成链路。`;
+    return {same,diff:`${A.name}:${A.solves}<br>${B.name}:${B.solves}`,
+      use:`${A.name} 的定位——${A.diff}<br>${B.name} 的定位——${B.diff}`,
+      trap:A.layer!==B.layer?"跨层直接比优劣(「哪个更好」)通常是混层问题;先问各自在哪一层。":"忽略二者的适用前提,只记名字不记差异。"};
+  }
+  const sa=$("#cmpA"),sb=$("#cmpB");
+  IDS.forEach(i=>{sa.add(new Option(N[i].name,i));sb.add(new Option(N[i].name,i))});
+  sa.value="ddpm";sb.value="ddim";
+  function run(){
+    const a=sa.value,b=sb.value;
+    if(a===b){$("#cmpOut").innerHTML=`<div class="readout">选了同一个概念。换一个试试——推荐先看 <b>DDPM vs DDIM</b>、<b>Diffusion vs Flow Matching</b>。</div>`;return}
+    const d=P[a+"|"+b]||auto(a,b);
+    $("#cmpOut").innerHTML=`
+      <div class="ctl" style="margin:4px 0 10px">
+        <span class="badge" data-layer="${N[a].layer}">${N[a].name} · ${LAYERS[N[a].layer].name}</span>
+        <span class="badge" data-layer="${N[b].layer}">${N[b].name} · ${LAYERS[N[b].layer].name}</span>
+      </div>
+      <div class="d3">
+        <div class="drow"><span class="dk">共同点</span><span class="dv">${d.same}</span></div>
+        <div class="drow"><span class="dk">关键区别</span><span class="dv">${d.diff}</span></div>
+        <div class="drow"><span class="dk">代表用途</span><span class="dv">${d.use}</span></div>
+        <div class="drow"><span class="dk">常见误区</span><span class="dv">${d.trap}</span></div>
+      </div>`;
+  }
+  sa.addEventListener("change",run);sb.addEventListener("change",run);run();
+})();
+
+/* ================= §17 概念归位测验 ================= */
+(function(){
+  const Q=[["DDPM","theory"],["DDIM","sampling"],["Stable Diffusion","product"],["DiT","arch"],
+           ["Flow Matching","flow"],["Sora","product"],["Latent Diffusion","space"],["Consistency Models","sampling"]];
+  const KEY={DDPM:"ddpm",DDIM:"ddim","Stable Diffusion":"sd",DiT:"dit","Flow Matching":"fm",Sora:"sora","Latent Diffusion":"latent","Consistency Models":"cm"};
+  const body=$("#quizBody");
+  function build(){
+    body.innerHTML=Q.map((q,i)=>`
+      <div class="qrow" data-i="${i}">
+        <div class="qn">${q[0]}<span class="en">${esc(N[KEY[q[0]]].en||"")}</span></div>
+        <select data-i="${i}"><option value="">选择所属层级…</option>${LAYER_ORDER.map(l=>`<option value="${l}">${LAYERS[l].name}</option>`).join("")}</select>
+        <div class="mark" data-i="${i}"></div>
+        <div class="qexp" data-i="${i}"></div>
+      </div>`).join("");
+  }
+  build();
+  $("#quizCheck").addEventListener("click",()=>{
+    let ok=0;
+    Q.forEach((q,i)=>{
+      const sel=body.querySelector(`select[data-i="${i}"]`);
+      const mark=body.querySelector(`.mark[data-i="${i}"]`);
+      const exp=body.querySelector(`.qexp[data-i="${i}"]`);
+      const row=body.querySelector(`.qrow[data-i="${i}"]`);
+      const right=sel.value===q[1];
+      if(right)ok++;
+      mark.textContent=sel.value?(right?"✓":"✗"):"—";
+      mark.style.color=right?"var(--signal)":"#D6336C";
+      const n=N[KEY[q[0]]];
+      exp.innerHTML=(right?"":`正确答案:<b>${LAYERS[q[1]].name}</b>。`)+n.diff;
+      row.classList.add("done");
+    });
+    $("#quizScore").textContent=ok+" / "+Q.length;
+  });
+  $("#quizReset").addEventListener("click",()=>{build();$("#quizScore").textContent="0 / 8"});
+})();
+
+/* ================= 阅读进度 + 目录高亮 ================= */
+(function(){
+  const bar=$("#progress");
+  addEventListener("scroll",()=>{
+    const h=document.documentElement;
+    bar.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+"%";
+  },{passive:true});
+  const links=$$("nav.toc a");
+  const map={};links.forEach(a=>map[a.getAttribute("href").slice(1)]=a);
+  const obs=new IntersectionObserver(es=>{
+    es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.remove("on"));
+      const a=map[e.target.id];if(a)a.classList.add("on")}});
+  },{rootMargin:"-20% 0px -70% 0px"});
+  $$("section[id]").forEach(s=>obs.observe(s));
+})();
+</script>
+</body>
+</html>

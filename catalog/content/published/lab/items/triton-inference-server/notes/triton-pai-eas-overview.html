@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 · 在 PAI-EAS 上镜像部署 Triton Inference Server</title>
+<style>
+:root{
+  --bg:#F5F7F3; --panel:#FFFFFF; --ink:#17241D; --muted:#5A6B60;
+  --line:#DFE6DA; --line-strong:#C4CFBC;
+  --green:#76B900; --green-deep:#4E7A00; --green-soft:#EEF6DE;
+  --orange:#FF6A00; --orange-deep:#C25000; --orange-soft:#FFF0E4;
+  --code-bg:#111B15; --code-ink:#D9E6D2; --code-dim:#7E937F;
+  --bad:#C2372E; --bad-soft:#FBEDEB; --ok:#3E7A2E; --ok-soft:#EDF6E8;
+  --radius:14px; --maxw:1060px;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",Segoe UI,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto} *{animation:none!important;transition:none!important}}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.75;font-size:16px}
+a{color:var(--green-deep)}
+code,pre,.mono{font-family:var(--mono)}
+main{max-width:var(--maxw);margin:0 auto;padding:0 20px 80px}
+section{margin-top:72px;scroll-margin-top:70px}
+h2{font-size:26px;line-height:1.35;margin-bottom:6px;letter-spacing:.01em}
+h3{font-size:18px;margin:26px 0 10px}
+p{margin:10px 0;max-width:78ch}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--green-deep);text-transform:uppercase;font-weight:700}
+.sec-eyebrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.sec-eyebrow::after{content:"";flex:1;height:1px;background:var(--line-strong)}
+.lede{color:var(--muted)}
+strong{font-weight:700}
+.kbd{background:#EDF1EA;border:1px solid var(--line);border-radius:5px;padding:0 6px;font-family:var(--mono);font-size:.86em;white-space:nowrap}
+
+/* top nav */
+.topnav{position:sticky;top:0;z-index:50;background:rgba(245,247,243,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topnav .in{max-width:var(--maxw);margin:0 auto;padding:10px 20px;display:flex;gap:6px;align-items:center;overflow-x:auto;white-space:nowrap}
+.topnav .brand{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--ink);margin-right:10px}
+.topnav .brand b{color:var(--green-deep)}
+.topnav a.nl{font-size:13px;color:var(--muted);text-decoration:none;padding:4px 10px;border-radius:999px}
+.topnav a.nl:hover{background:var(--green-soft);color:var(--green-deep)}
+
+/* hero */
+.hero{max-width:var(--maxw);margin:0 auto;padding:44px 20px 8px}
+.hero h1{font-size:clamp(28px,4.6vw,44px);line-height:1.2;letter-spacing:.005em;font-weight:800;margin:10px 0 12px}
+.hero h1 .hl{color:var(--green-deep)}
+.hero .sub{max-width:74ch;color:var(--muted)}
+.hero .sub b{color:var(--ink)}
+.pipe-wrap{margin-top:26px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:0 1px 0 rgba(23,36,29,.04)}
+.pipe-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.pipe-title{font-weight:700}
+.pipe-title .mono{font-size:12px;color:var(--muted);font-weight:400;display:block}
+.pipe{display:flex;align-items:stretch;gap:0;margin-top:16px;flex-wrap:wrap}
+.pnode{flex:1;min-width:180px;border:1.5px solid var(--line-strong);border-radius:12px;padding:14px 16px;cursor:pointer;background:#FCFDFB;transition:border-color .2s,box-shadow .2s;position:relative}
+.pnode .tag,.pnode .nm,.pnode .ds{display:block}
+.pnode .tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--muted)}
+.pnode .nm{font-weight:700;margin-top:2px}
+.pnode .ds{font-size:13px;color:var(--muted);line-height:1.55;margin-top:4px}
+.pnode.active{border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+.pnode.eas.active{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft)}
+.parrow{display:flex;align-items:center;padding:0 8px;color:var(--line-strong);font-size:22px;user-select:none}
+.pnode.lit{border-color:var(--green);background:var(--green-soft)}
+.pnode.eas.lit{border-color:var(--orange);background:var(--orange-soft)}
+.pipe-note{margin-top:14px;border-left:3px solid var(--green);background:var(--green-soft);border-radius:0 10px 10px 0;padding:10px 14px;font-size:14px;color:var(--ink)}
+.pipe-note.eas{border-left-color:var(--orange);background:var(--orange-soft)}
+.btn{appearance:none;border:1.5px solid var(--green-deep);background:var(--green-deep);color:#fff;font-family:var(--mono);font-size:13px;font-weight:700;padding:8px 16px;border-radius:999px;cursor:pointer}
+.btn:hover{background:var(--green);border-color:var(--green)}
+.btn:focus-visible,.pnode:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.btn.ghost{background:transparent;color:var(--green-deep)}
+.term{margin-top:16px;background:var(--code-bg);border-radius:10px;padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.75;color:var(--code-ink);min-height:120px;max-height:240px;overflow:auto}
+.term .tl{display:block;opacity:0;transform:translateY(3px);transition:opacity .25s,transform .25s;white-space:pre-wrap}
+.term .tl.show{opacity:1;transform:none}
+.term .cmd{color:#AEE96A}
+.term .dim{color:var(--code-dim)}
+.term .okc{color:#FFB169}
+
+/* generic panel + code */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+pre.code{background:var(--code-bg);color:var(--code-ink);border-radius:10px;padding:14px 16px;font-size:13px;line-height:1.7;overflow:auto;margin:12px 0}
+pre.code .c{color:var(--code-dim)}
+pre.code .k{color:#AEE96A}
+pre.code .s{color:#FFC98F}
+pre.code b{color:#fff;font-weight:700}
+.note{border-left:3px solid var(--green);background:var(--green-soft);padding:10px 14px;border-radius:0 10px 10px 0;font-size:14px;margin:12px 0}
+.note.warn{border-left-color:var(--orange);background:var(--orange-soft)}
+.small{font-size:13px;color:var(--muted)}
+
+/* chain diagram (定位) */
+.chain{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:16px 0;font-size:13.5px}
+.chain .cbox{border:1.5px solid var(--line-strong);border-radius:10px;padding:8px 12px;background:#fff;text-align:center;line-height:1.4}
+.chain .cbox small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.chain .cbox.focus{border-color:var(--green);background:var(--green-soft);font-weight:700}
+.chain .cbox.eas{border-color:var(--orange);background:var(--orange-soft)}
+.chain .arr{color:var(--line-strong);font-size:18px}
+
+/* repo explorer */
+.repo{display:grid;grid-template-columns:270px 1fr;gap:18px;margin-top:16px}
+@media (max-width:760px){.repo{grid-template-columns:1fr}}
+.tree{background:var(--code-bg);border-radius:10px;padding:14px 10px;font-family:var(--mono);font-size:13px;color:var(--code-ink);align-self:start}
+.tree .ti{display:block;width:100%;text-align:left;background:none;border:none;color:inherit;font:inherit;padding:4px 8px;border-radius:6px;cursor:pointer;white-space:pre}
+.tree .ti:hover{background:rgba(174,233,106,.12)}
+.tree .ti.on{background:rgba(118,185,0,.25);color:#fff}
+.tree .ti .ic{color:#AEE96A}
+.tree .ti.dim-i{color:var(--code-dim);cursor:default}
+.repo-view{min-height:340px}
+.repo-view h4{font-family:var(--mono);font-size:13px;color:var(--green-deep);margin-bottom:6px}
+.repo-view .why{font-size:14px}
+
+/* annotated code lines */
+.acode{background:var(--code-bg);border-radius:10px;padding:12px 0;font-family:var(--mono);font-size:13px;line-height:1.7;color:var(--code-ink);overflow-x:auto;margin:10px 0}
+.acode .ln{display:block;width:100%;text-align:left;background:none;border:none;border-left:3px solid transparent;color:inherit;font:inherit;padding:1px 14px;white-space:pre;cursor:pointer}
+.acode .ln:hover{background:rgba(174,233,106,.1)}
+.acode .ln.hot{border-left-color:var(--green)}
+.acode .ln.sel{background:rgba(118,185,0,.22);border-left-color:var(--green)}
+.acode .ln.plain{cursor:default}
+.acode .cm{color:var(--code-dim)}
+.anote{border:1.5px solid var(--green);background:var(--green-soft);border-radius:10px;padding:10px 14px;font-size:14px;margin-top:10px;min-height:52px}
+.anote .t{font-family:var(--mono);font-size:12px;color:var(--green-deep);font-weight:700}
+
+/* steps (deploy path) */
+.steps{counter-reset:st;display:flex;flex-direction:column;gap:12px;margin-top:16px}
+details.step{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+details.step summary{list-style:none;display:flex;gap:14px;align-items:baseline;padding:14px 18px;cursor:pointer;font-weight:700}
+details.step summary::-webkit-details-marker{display:none}
+details.step summary::before{counter-increment:st;content:counter(st);font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--green-deep);border-radius:8px;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;transform:translateY(3px)}
+details.step summary .out{font-weight:400;font-size:13px;color:var(--muted);margin-left:auto;font-family:var(--mono)}
+details.step[open]{border-color:var(--green)}
+details.step .body{padding:2px 18px 18px 58px}
+@media (max-width:640px){details.step .body{padding-left:18px}}
+.vrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:13px}
+.pill{border:1px solid var(--line-strong);border-radius:999px;padding:2px 12px;background:#fff}
+.pill.v{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.pill.e{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
+
+/* request simulator */
+.sim{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-top:16px}
+.simnodes{display:flex;align-items:center;gap:0;flex-wrap:wrap}
+.sn{flex:1;min-width:120px;border:1.5px solid var(--line-strong);border-radius:10px;padding:10px 10px;text-align:center;background:#FCFDFB;transition:all .2s}
+.sn .snt{font-size:13.5px;font-weight:700;line-height:1.3}
+.sn .snd{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:2px}
+.sn.on{border-color:var(--green);background:var(--green-soft);box-shadow:0 0 0 3px var(--green-soft)}
+.sn.on.gate{border-color:var(--orange);background:var(--orange-soft);box-shadow:0 0 0 3px var(--orange-soft)}
+.se{width:26px;text-align:center;color:var(--line-strong);font-size:18px;flex:none}
+.se.on{color:var(--green-deep);font-weight:700}
+.simdesc{margin-top:16px;border-left:3px solid var(--green);background:var(--green-soft);border-radius:0 10px 10px 0;padding:12px 16px;min-height:96px;font-size:14.5px}
+.simdesc .st{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green-deep)}
+.simctl{display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap}
+.simctl .prog{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+/* batching demo */
+.bat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-top:16px}
+.batctl{display:flex;gap:24px;flex-wrap:wrap;align-items:center}
+.batctl label{font-size:14px;font-weight:700}
+.batctl input[type=range]{width:200px;accent-color:var(--green-deep);vertical-align:middle}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:14px}
+.switch input{width:38px;height:22px;accent-color:var(--green-deep)}
+.batvis{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px;min-height:70px}
+.batch{border:1.5px dashed var(--green-deep);border-radius:10px;padding:8px;display:flex;gap:4px;flex-wrap:wrap;position:relative;background:var(--green-soft)}
+.batch.single{border-color:var(--line-strong);background:#FBFCFA}
+.batch .bl{position:absolute;top:-9px;left:8px;background:var(--panel);font-family:var(--mono);font-size:10px;color:var(--green-deep);padding:0 5px;border-radius:4px}
+.rq{width:16px;height:16px;border-radius:4px;background:var(--green);opacity:.9}
+.batch.single .rq{background:#9DB18F}
+.batstats{margin-top:14px;display:flex;gap:12px;flex-wrap:wrap}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 16px;background:#FCFDFB;min-width:150px}
+.stat .sv{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--green-deep)}
+.stat.o .sv{color:var(--orange-deep)}
+.stat .sl{font-size:12px;color:var(--muted)}
+.batmsg{margin-top:12px;font-size:14px}
+
+/* tabs */
+.tabs{margin-top:14px}
+.tabbar{display:flex;gap:6px;flex-wrap:wrap}
+.tabbar button{border:1.5px solid var(--line-strong);background:#fff;border-radius:999px 999px 0 0;border-bottom:none;padding:7px 16px;font-family:var(--mono);font-size:13px;cursor:pointer;color:var(--muted)}
+.tabbar button.on{background:var(--code-bg);color:#AEE96A;border-color:var(--code-bg);font-weight:700}
+.tabpane{display:none}
+.tabpane.on{display:block}
+.tabpane pre.code{margin-top:0;border-top-left-radius:0}
+
+/* pitfalls */
+.pit{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-top:14px;overflow:hidden}
+.pit summary{list-style:none;padding:14px 18px;cursor:pointer;font-weight:700;display:flex;gap:10px;align-items:baseline}
+.pit summary::-webkit-details-marker{display:none}
+.pit summary .sym{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--bad);font-weight:400}
+.pit[open]{border-color:var(--line-strong)}
+.pit .cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 18px 16px}
+@media (max-width:720px){.pit .cmp{grid-template-columns:1fr}}
+.pit .side{border-radius:10px;padding:12px 14px;font-size:13px}
+.pit .side.bad{background:var(--bad-soft);border:1px solid #ECC7C3}
+.pit .side.good{background:var(--ok-soft);border:1px solid #CBE3C0}
+.pit .side .h{font-family:var(--mono);font-weight:700;font-size:12px;margin-bottom:6px}
+.pit .side.bad .h{color:var(--bad)}
+.pit .side.good .h{color:var(--ok)}
+.pit .side pre{font-size:12.5px;line-height:1.6;overflow-x:auto;font-family:var(--mono);white-space:pre-wrap}
+.pit .clue{padding:0 18px 16px;font-size:13.5px;color:var(--muted)}
+.pit .clue b{color:var(--ink)}
+
+/* scope tables */
+table{border-collapse:collapse;width:100%;font-size:14px;margin:14px 0;background:var(--panel)}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:#EFF3EB;font-family:var(--mono);font-size:12.5px}
+td .y{color:var(--ok);font-weight:700}
+td .n{color:var(--bad);font-weight:700}
+.twrap{overflow-x:auto}
+.scope2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+@media (max-width:720px){.scope2{grid-template-columns:1fr}}
+.scope2 .sc{border-radius:12px;padding:16px 18px}
+.scope2 .sc.g{background:var(--ok-soft);border:1px solid #CBE3C0}
+.scope2 .sc.b{background:var(--orange-soft);border:1px solid #F3D2B8}
+.scope2 h4{margin-bottom:8px}
+.scope2 ul{padding-left:20px;font-size:14px}
+.scope2 li{margin:6px 0}
+
+/* checklist */
+.check{list-style:none;margin-top:12px}
+.check li{display:flex;gap:12px;align-items:baseline;padding:10px 0;border-bottom:1px dashed var(--line)}
+.check li::before{content:"→";font-family:var(--mono);color:var(--green-deep);font-weight:700}
+.check code{background:#EDF1EA;border-radius:5px;padding:0 6px;font-size:.9em}
+
+footer{border-top:1px solid var(--line);margin-top:70px;padding:24px 20px 40px;color:var(--muted);font-size:13px}
+footer .in{max-width:var(--maxw);margin:0 auto}
+</style>
+</head>
+<body>
+<nav class="topnav"><div class="in">
+  <span class="brand">Triton<b>@</b>PAI-EAS</span>
+  <a class="nl" href="#why">为什么</a>
+  <a class="nl" href="#repo">模型仓库</a>
+  <a class="nl" href="#deploy">部署主路径</a>
+  <a class="nl" href="#request">一次请求</a>
+  <a class="nl" href="#batching">Dynamic Batching</a>
+  <a class="nl" href="#pitfalls">常见坑</a>
+  <a class="nl" href="#scope">边界与取舍</a>
+  <a class="nl" href="#migrate">迁移速查</a>
+</div></nav>
+
+<header class="hero">
+  <span class="eyebrow">一文读懂 · PAI-EAS × NVIDIA Triton</span>
+  <h1>把一个模型目录,变成一个<span class="hl">能扛并发的在线推理服务</span></h1>
+  <p class="sub">Triton Inference Server 镜像部署要解决的事只有一件:你手里有训练好的模型文件(ONNX、TorchScript、TensorRT、SavedModel……),你想让它<b>按标准协议对外提供 HTTP/gRPC 推理接口</b>,还要吃满 GPU。做法是:模型按约定放进 OSS,写一份服务 JSON,让 EAS 用官方 <span class="kbd">tritonserver</span> 镜像把它跑起来。下面这条流水线就是全文的主线,点一下每个节点,或直接「运行一次部署」。</p>
+
+  <div class="pipe-wrap">
+    <div class="pipe-head">
+      <div class="pipe-title">部署流水线<span class="mono">model_repository → service.json → endpoint</span></div>
+      <div>
+        <button class="btn" id="runDeploy">▶ 运行一次部署</button>
+      </div>
+    </div>
+    <div class="pipe" id="pipe">
+      <button class="pnode" data-i="0">
+        <span class="tag">INPUT · OSS</span>
+        <span class="nm">模型仓库 model_repository</span>
+        <span class="ds">按 Triton 约定组织的目录:模型文件 + config.pbtxt,放在 OSS 上</span>
+      </button>
+      <span class="parrow">→</span>
+      <button class="pnode eas" data-i="1">
+        <span class="tag">DEPLOY · EAS</span>
+        <span class="nm">镜像部署 service.json</span>
+        <span class="ds">EAS 拉起官方 tritonserver 镜像,把 OSS 目录挂载成 /models</span>
+      </button>
+      <span class="parrow">→</span>
+      <button class="pnode" data-i="2">
+        <span class="tag">OUTPUT · ONLINE</span>
+        <span class="nm">在线服务 endpoint + token</span>
+        <span class="ds">对外暴露 KServe v2 协议接口,客户端带 token 调 /v2/models/…/infer</span>
+      </button>
+    </div>
+    <div class="pipe-note" id="pipeNote">点击任意节点查看它在整条链路里承担什么;「运行一次部署」会演示从建服务到模型 READY 的真实日志顺序。</div>
+    <div class="term" id="heroTerm" aria-live="polite"><span class="tl show dim"># 终端输出会出现在这里 —— 点「运行一次部署」</span></div>
+  </div>
+</header>
+
+<main>
+<!-- ================= why ================= -->
+<section id="why">
+  <div class="sec-eyebrow"><span class="eyebrow">01 · WHY</span></div>
+  <h2>它为什么出现:两个各管一段的问题</h2>
+  <p>把模型放上线,实际上要同时解决<strong>两层问题</strong>,而它们分别由 Triton 和 EAS 负责:</p>
+  <div class="chain">
+    <span class="cbox">训练框架<small>PyTorch / TF / …</small></span><span class="arr">→</span>
+    <span class="cbox">模型文件<small>model.onnx / model.pt</small></span><span class="arr">→</span>
+    <span class="cbox focus">Triton Server<small>推理运行时:加载、调度、batch</small></span><span class="arr">→</span>
+    <span class="cbox eas">PAI-EAS<small>服务化:机器、网关、token、扩缩容</small></span><span class="arr">→</span>
+    <span class="cbox">业务调用方<small>HTTP / gRPC 客户端</small></span>
+  </div>
+  <p><strong>Triton 管「推理这件事本身」。</strong>如果自己拿 Flask 包一层模型,很快会撞到:每个框架一套加载代码、单请求单前向导致 GPU 利用率极低、多模型抢卡没有调度、没有标准协议。Triton 是 NVIDIA 的开源推理服务框架,用统一的 backend 机制加载多种格式(<span class="kbd">onnxruntime</span>、<span class="kbd">pytorch(libtorch)</span>、<span class="kbd">tensorrt</span>、<span class="kbd">tensorflow</span>、<span class="kbd">python</span>…),内置 dynamic batching、并发实例、多模型管理,对外统一暴露 KServe v2 协议。</p>
+  <p><strong>EAS 管「让一个服务在生产里活着」。</strong>Triton 只是个进程,它不管你去哪找 GPU 机器、公网入口和鉴权怎么做、挂了谁拉起、流量大了怎么扩。EAS 的「镜像部署」方式正好补上:你声明镜像、启动命令、资源规格和存储挂载,EAS 负责实例调度、网关路由、token 鉴权、监控与扩缩容。</p>
+  <div class="note">一句话心智模型:<strong>Triton 是「推理引擎的壳」,EAS 是「服务的壳」</strong>。镜像部署 Triton = 把前者作为容器塞进后者。理解了这个分工,后面每个配置项都能对号入座:出现在 <code>config.pbtxt</code> 里的归 Triton 管,出现在 <code>service.json</code> 里的归 EAS 管。</div>
+  <p class="small">边界先说清:这套方案<strong>不负责训练</strong>、不负责把 PyTorch 代码变成模型文件(导出是你的事),也不内置业务前后处理——需要预处理就用 python backend / ensemble,或干脆换自定义镜像。超大 LLM 的推理如今通常走专门引擎(如 vLLM / BladeLLM 的部署方式)而不是经典 Triton 路线,见文末对比。</p>
+</section>
+
+<!-- ================= repo ================= -->
+<section id="repo">
+  <div class="sec-eyebrow"><span class="eyebrow">02 · MODEL REPOSITORY</span></div>
+  <h2>核心对象:一个约定俗成的目录</h2>
+  <p>Triton 启动时只做一件事:扫描 <span class="kbd">--model-repository</span> 指向的目录,<strong>目录结构本身就是配置</strong>。约定是三层:仓库 → 模型名 → 数字版本号,版本目录里放固定名字的模型文件。本文自始至终用同一个例子:一个 ResNet50 的 ONNX 模型。点左侧文件树里的每一项,看它为什么必须长这样。</p>
+  <div class="repo">
+    <div class="tree" id="tree" role="tablist" aria-label="模型仓库文件树">
+      <button class="ti" data-k="root"><span class="ic">▸</span> model_repository/</button>
+      <button class="ti" data-k="model">  <span class="ic">▸</span> resnet50/</button>
+      <button class="ti" data-k="config">    ▪ config.pbtxt</button>
+      <button class="ti" data-k="ver">    <span class="ic">▸</span> 1/</button>
+      <button class="ti" data-k="file">      ▪ model.onnx</button>
+      <button class="ti dim-i" tabindex="-1">      </button>
+      <button class="ti" data-k="more">  <span class="ic">▸</span> bert_ranker/  ← 多模型共存</button>
+    </div>
+    <div class="repo-view panel" id="repoView"></div>
+  </div>
+
+  <h3>config.pbtxt 逐行拆解(点任意高亮行)</h3>
+  <p class="small">这是 Triton 一侧最重要的一份文件:它向服务器声明「这个模型是什么、输入输出长什么样、怎么调度」。带绿色左边线的行都可以点。</p>
+  <div class="acode" id="cfgCode"></div>
+  <div class="anote" id="cfgNote"><span class="t">TIP</span><div>点上面代码里的某一行,这里会解释它为什么这么写、写错会怎样。</div></div>
+</section>
+
+<!-- ================= deploy ================= -->
+<section id="deploy">
+  <div class="sec-eyebrow"><span class="eyebrow">03 · DEPLOY PATH</span></div>
+  <h2>部署主路径:四步,从 OSS 到可调用</h2>
+  <p>每一步都写清「做什么 → 产出什么 → 怎么验证 → 哪里容易错」。全部走通后,你会得到一个带 token 的公网/内网 endpoint。</p>
+  <div class="steps">
+
+    <details class="step" open>
+      <summary>把模型仓库上传到 OSS<span class="out">产出:oss:// 路径</span></summary>
+      <div class="body">
+        <p>在本地按上一节的结构组织好目录,用 <span class="kbd">ossutil</span> 或控制台上传。OSS bucket 需与 EAS 服务<strong>同地域</strong>。</p>
+<pre class="code"><span class="c"># 本地目录 → OSS</span>
+ossutil cp -r ./model_repository \
+  oss://examplebucket/model_repository/</pre>
+        <div class="vrow"><span class="pill v">验证:ossutil ls 能看到 …/resnet50/1/model.onnx</span><span class="pill e">易错:漏传 config.pbtxt;目录层级多套或少套一层</span></div>
+      </div>
+    </details>
+
+    <details class="step">
+      <summary>写 service.json(EAS 一侧的全部声明)<span class="out">产出:service.json</span></summary>
+      <div class="body">
+        <p>三块内容:<strong>metadata</strong>(服务名/实例/资源)、<strong>containers</strong>(镜像+启动命令+端口)、<strong>storage</strong>(把 OSS 挂成容器内目录)。点任意高亮行看解释。</p>
+        <div class="acode" id="svcCode"></div>
+        <div class="anote" id="svcNote"><span class="t">TIP</span><div>点上面 JSON 里的某一行查看它的含义与易错点。</div></div>
+        <div class="note warn">最容易错的一致性:<code>storage.mount_path</code>、<code>command</code> 里的 <code>--model-repository</code>,必须指向同一个路径(本例都是 <code>/models</code>);<code>oss.path</code> 要指到「仓库层」,不是模型层。</div>
+      </div>
+    </details>
+
+    <details class="step">
+      <summary>用 eascmd 或控制台创建服务<span class="out">产出:Running 的服务</span></summary>
+      <div class="body">
+<pre class="code"><span class="c"># 命令行方式(控制台「自定义部署→镜像部署」等价)</span>
+eascmd create service.json
+
+<span class="c"># 部署过程 & 状态</span>
+eascmd desc triton_server_demo</pre>
+        <p>控制台路径:PAI 控制台 → 模型在线服务 EAS → 部署服务 → 自定义部署,镜像选官方 <span class="kbd">tritonserver</span>,其余字段与 JSON 一一对应。</p>
+        <div class="vrow"><span class="pill v">验证:服务状态变为 Running;实例日志里出现模型 READY 表格</span><span class="pill e">易错:GPU 规格没选/配额不足,服务卡在 Waiting</span></div>
+      </div>
+    </details>
+
+    <details class="step">
+      <summary>健康检查 + 发一条真实请求<span class="out">产出:第一条推理结果</span></summary>
+      <div class="body">
+        <p>endpoint 和 token 在服务详情页「查看调用信息」里。先探活,再推理:</p>
+<pre class="code"><span class="c"># 1) server 活着吗(HTTP 200 即 ready)</span>
+curl -H "Authorization: &lt;token&gt;" \
+  http://&lt;endpoint&gt;/api/predict/triton_server_demo/v2/health/ready
+
+<span class="c"># 2) 这个模型 READY 了吗</span>
+curl -H "Authorization: &lt;token&gt;" \
+  http://&lt;endpoint&gt;/api/predict/triton_server_demo/v2/models/resnet50/ready</pre>
+        <p>真实推理请求见下一节「一次请求的完整链路」和两种客户端写法。</p>
+        <div class="vrow"><span class="pill v">验证:两个 ready 都返回 200</span><span class="pill e">易错:漏了 /api/predict/&lt;服务名&gt; 前缀;token 没放 Authorization 头</span></div>
+      </div>
+    </details>
+  </div>
+</section>
+<!-- ================= request ================= -->
+<section id="request">
+  <div class="sec-eyebrow"><span class="eyebrow">04 · REQUEST LIFECYCLE</span></div>
+  <h2>一次请求的完整链路</h2>
+  <p>看懂一条请求从客户端到 GPU 再回来的每一跳,你就知道<strong>报错该去哪查</strong>:4xx 在网关或协议层,shape 错在 Triton 前端,慢在调度或算力。用「下一步」逐跳走一遍。</p>
+  <div class="sim">
+    <div class="simnodes" id="simNodes">
+      <div class="sn"><div class="snt">客户端</div><div class="snd">tritonclient / curl</div></div>
+      <div class="se">→</div>
+      <div class="sn gate"><div class="snt">EAS 网关</div><div class="snd">token · 路由</div></div>
+      <div class="se">→</div>
+      <div class="sn"><div class="snt">Triton HTTP</div><div class="snd">:8000 · v2 协议</div></div>
+      <div class="se">→</div>
+      <div class="sn"><div class="snt">Scheduler</div><div class="snd">队列 · batcher</div></div>
+      <div class="se">→</div>
+      <div class="sn"><div class="snt">Backend · GPU</div><div class="snd">onnxruntime</div></div>
+    </div>
+    <div class="simdesc" id="simDesc"></div>
+    <div class="simctl">
+      <button class="btn ghost" id="simPrev">← 上一步</button>
+      <button class="btn" id="simNext">下一步 →</button>
+      <span class="prog" id="simProg"></span>
+    </div>
+  </div>
+
+  <h3>同一条请求的两种客户端写法</h3>
+  <div class="tabs" id="cliTabs">
+    <div class="tabbar">
+      <button class="on" data-t="curl">curl(裸 KServe v2)</button>
+      <button data-t="py">Python tritonclient</button>
+    </div>
+    <div class="tabpane on" data-t="curl">
+<pre class="code">curl -X POST \
+  -H "Authorization: <b>&lt;token&gt;</b>" \
+  -H "Content-Type: application/json" \
+  http://<b>&lt;endpoint&gt;</b>/api/predict/<b>triton_server_demo</b>/v2/models/<b>resnet50</b>/infer \
+  -d '{
+    "inputs": [{
+      "name": "input",            <span class="c"># 必须等于 config.pbtxt 的 input.name</span>
+      "shape": [1, 3, 224, 224],  <span class="c"># 这里要带 batch 维!</span>
+      "datatype": "FP32",         <span class="c"># 协议写法,不是 TYPE_FP32</span>
+      "data": [0.1, 0.2, "..."]
+    }]
+  }'
+<span class="c"># 返回:{"model_name":"resnet50","outputs":[{"name":"output","shape":[1,1000],...}]}</span></pre>
+    </div>
+    <div class="tabpane" data-t="py">
+<pre class="code">import numpy as np
+import tritonclient.http as httpclient
+
+<span class="c"># url 不带 http:// 前缀;token 放到每个请求的 header 里</span>
+client = httpclient.InferenceServerClient(
+    url="<b>&lt;endpoint&gt;</b>/api/predict/<b>triton_server_demo</b>",
+    headers={"Authorization": "<b>&lt;token&gt;</b>"})
+
+x = np.random.rand(1, 3, 224, 224).astype(np.float32)
+inp = httpclient.InferInput("input", x.shape, "FP32")
+inp.set_data_from_numpy(x, binary_data=True)
+out = httpclient.InferRequestedOutput("output", binary_data=True)
+
+resp = client.infer(model_name="resnet50", inputs=[inp], outputs=[out])
+print(resp.as_numpy("output").shape)   <span class="c"># (1, 1000) → 部署成功</span></pre>
+      <p class="small" style="padding:0 4px">这段就是<strong>最小可验证例子</strong>:随机张量喂进去,拿到 (1, 1000) 的输出,说明「协议 → 网关 → 模型 → 返回」全链路正确。换成真实图片只是把 <code>np.random.rand</code> 换成预处理后的像素。</p>
+    </div>
+  </div>
+  <div class="note warn">gRPC 走 <span class="kbd">8001</span> 端口,需在 service.json 里显式声明并开启网关 gRPC 支持(如 <code>"metadata": {"enable_grpc": true}</code> 并把 <code>port</code> 指到 8001),否则只有 HTTP 可用。指标端口 <span class="kbd">8002</span>(Prometheus)同理。</div>
+</section>
+
+<!-- ================= batching ================= -->
+<section id="batching">
+  <div class="sec-eyebrow"><span class="eyebrow">05 · DYNAMIC BATCHING</span></div>
+  <h2>为什么值得用 Triton:dynamic batching 亲手试</h2>
+  <p>GPU 做一次 batch=8 的前向,耗时通常远小于做 8 次 batch=1。dynamic batcher 的做法:请求先进队列,在 <span class="kbd">max_queue_delay_microseconds</span> 的窗口内攒单,再按 <span class="kbd">max_batch_size</span> 打包执行。拖动滑杆、开关 batching,看同样的并发下 GPU 前向次数怎么变:</p>
+  <div class="bat">
+    <div class="batctl">
+      <label>并发请求数 <span class="mono" id="batN">12</span><br><input type="range" id="batRange" min="1" max="32" value="12" aria-label="并发请求数"></label>
+      <label class="switch"><input type="checkbox" id="batOn" checked> dynamic_batching(max_batch_size: 8)</label>
+    </div>
+    <div class="batvis" id="batVis" aria-live="polite"></div>
+    <div class="batstats">
+      <div class="stat"><div class="sv" id="stFwd">–</div><div class="sl">GPU 前向次数</div></div>
+      <div class="stat"><div class="sv" id="stAvg">–</div><div class="sl">平均每次前向 batch</div></div>
+      <div class="stat o"><div class="sv" id="stGain">–</div><div class="sl">相对不攒批的前向次数缩减</div></div>
+    </div>
+    <div class="batmsg" id="batMsg"></div>
+  </div>
+  <p class="small">注意取舍:攒批换吞吐的代价是每条请求最多多等一个 delay 窗口。<strong>延迟极端敏感</strong>(如单条请求要求 P99 几毫秒)或流量常年只有零星单条时,关掉 batching 反而更合适;这也是 <code>config.pbtxt</code> 把它做成可选块的原因。</p>
+</section>
+
+<!-- ================= pitfalls ================= -->
+<section id="pitfalls">
+  <div class="sec-eyebrow"><span class="eyebrow">06 · PITFALLS</span></div>
+  <h2>常见坑:错误写法 vs 正确写法</h2>
+  <p>下面每一条都是真实高频问题,按「症状」找最快。展开看对照与排查线索。</p>
+
+  <details class="pit">
+    <summary>版本目录不是纯数字<span class="sym">症状:模型静默不加载</span></summary>
+    <div class="cmp">
+      <div class="side bad"><div class="h">✗ 错误</div><pre>resnet50/
+├── config.pbtxt
+└── v1/            ← "v1"、"latest"
+    └── model.onnx    都会被忽略</pre></div>
+      <div class="side good"><div class="h">✓ 正确</div><pre>resnet50/
+├── config.pbtxt
+└── 1/             ← 必须是正整数
+    └── model.onnx    数字即版本号</pre></div>
+    </div>
+    <div class="clue"><b>排查线索:</b>服务是 Running,但 <code>/v2/models/resnet50/ready</code> 返回 4xx;实例日志的模型表里根本没有这个模型,或版本列为空。Triton 对非数字目录不报错、直接跳过,这是它最"安静"的坑。</div>
+  </details>
+
+  <details class="pit">
+    <summary>dims 里多写了 batch 维<span class="sym">症状:启动报 shape 校验错误</span></summary>
+    <div class="cmp">
+      <div class="side bad"><div class="h">✗ 错误</div><pre>max_batch_size: 8
+input [{
+  dims: [ 1, 3, 224, 224 ]
+}]   ← 首维 1 会被当成真实维度</pre></div>
+      <div class="side good"><div class="h">✓ 正确</div><pre>max_batch_size: 8
+input [{
+  dims: [ 3, 224, 224 ]
+}]   ← batch 维隐含,不写</pre></div>
+    </div>
+    <div class="clue"><b>规则:</b><code>max_batch_size &gt; 0</code> 时,dims 不含 batch 维;<code>max_batch_size: 0</code> 时模型不支持攒批,dims 写完整形状。可变维度用 <code>-1</code>(如变长文本 <code>dims: [ -1 ]</code>)。<b>排查线索:</b>日志出现 "model configuration ... unexpected shape" 一类错误,或请求时报 input shape 不匹配。</div>
+  </details>
+
+  <details class="pit">
+    <summary>模型文件名不符合 backend 约定<span class="sym">症状:加载失败 failed to load</span></summary>
+    <div class="cmp">
+      <div class="side bad"><div class="h">✗ 错误</div><pre>1/
+└── resnet50_v2_final.onnx</pre></div>
+      <div class="side good"><div class="h">✓ 正确(按 backend 定名)</div><pre>onnxruntime → model.onnx
+libtorch    → model.pt
+tensorrt    → model.plan
+tensorflow  → model.savedmodel/</pre></div>
+    </div>
+    <div class="clue"><b>排查线索:</b>日志报 "failed to load ... no model file found"。要用自定义文件名需在 config.pbtxt 里加 <code>default_model_filename</code>,否则老实用默认名。</div>
+  </details>
+
+  <details class="pit">
+    <summary>挂载路径与启动命令不一致<span class="sym">症状:server 起来了但 0 个模型</span></summary>
+    <div class="cmp">
+      <div class="side bad"><div class="h">✗ 错误</div><pre>"command": "tritonserver
+  --model-repository=/models"
+"storage": [{
+  "mount_path": "/model_repo", ←
+  "oss": {"path": "oss://b/model_repository/resnet50/"} ←
+}]</pre></div>
+      <div class="side good"><div class="h">✓ 正确</div><pre>"command": "tritonserver
+  --model-repository=/models"
+"storage": [{
+  "mount_path": "/models",
+  "oss": {"path": "oss://b/model_repository/"}
+}]  ← 指到仓库层,两处路径一致</pre></div>
+    </div>
+    <div class="clue"><b>排查线索:</b>启动日志的模型表为空表。两个方向都会翻车:mount_path 和 --model-repository 对不上;或 oss.path 指到了「模型层」,导致 Triton 把 <code>resnet50</code> 当仓库、把 <code>1/</code> 当模型名。</div>
+  </details>
+
+  <details class="pit">
+    <summary>调用 URL / 协议字段写错<span class="sym">症状:404 / 401 / 400</span></summary>
+    <div class="cmp">
+      <div class="side bad"><div class="h">✗ 错误</div><pre>POST http://&lt;endpoint&gt;/v2/models/resnet50/infer
+(少了 EAS 前缀 → 404)
+"datatype": "TYPE_FP32"  → 400
+不带 Authorization 头     → 401</pre></div>
+      <div class="side good"><div class="h">✓ 正确</div><pre>POST http://&lt;endpoint&gt;
+  /api/predict/&lt;服务名&gt;
+  /v2/models/resnet50/infer
+"datatype": "FP32"
+-H "Authorization: &lt;token&gt;"</pre></div>
+    </div>
+    <div class="clue"><b>心法:</b>URL = <b>EAS 的路由前缀</b>(/api/predict/服务名)+ <b>Triton 的协议路径</b>(/v2/…)。401/404 先怀疑前半段,400/422 先怀疑后半段(name/shape/datatype 是否与 config.pbtxt 一致)。<code>TYPE_FP32</code> 是 config.pbtxt 的写法,HTTP 协议里是 <code>FP32</code>。</div>
+  </details>
+</section>
+
+<!-- ================= scope ================= -->
+<section id="scope">
+  <div class="sec-eyebrow"><span class="eyebrow">07 · SCOPE & TRADEOFFS</span></div>
+  <h2>边界与取舍:什么时候选它,什么时候不选</h2>
+  <div class="scope2">
+    <div class="sc g"><h4>✓ 很适合</h4><ul>
+      <li>多个不同框架的中小模型要<strong>统一方式上线</strong>,不想每个都写一套服务代码</li>
+      <li>在线流量有并发,想靠 <strong>dynamic batching / 多实例</strong>吃满 GPU</li>
+      <li>希望走<strong>标准 KServe v2 协议</strong>,客户端与云厂商解耦、可迁移</li>
+      <li>一张卡上要<strong>同时服务多个模型</strong>(仓库里多放几个目录即可)</li>
+    </ul></div>
+    <div class="sc b"><h4>△ 慎用 / 不适合</h4><ul>
+      <li><strong>重前后处理、重业务逻辑</strong>:Triton 只吃张量。轻量的用 python backend / ensemble 拼进仓库,复杂的直接上自定义镜像</li>
+      <li><strong>大语言模型</strong>:优先 EAS 的 LLM 专用部署(vLLM / BladeLLM / SGLang 等),它们的 KV cache 与连续批处理是为 LLM 设计的</li>
+      <li><strong>模型还在频繁改接口</strong>的探索期:config.pbtxt 的强约定会变成负担,不如先用简单方式跑通</li>
+      <li>对<strong>单条请求延迟极端敏感</strong>且无并发:Triton 的调度收益发挥不出来</li>
+    </ul></div>
+  </div>
+
+  <h3>和相邻方案摆在一起看</h3>
+  <div class="twrap"><table>
+    <tr><th>维度</th><th>EAS 内置 processor</th><th>镜像部署 Triton(本文)</th><th>完全自定义镜像</th></tr>
+    <tr><td>你要准备什么</td><td>模型文件,选好 processor</td><td>模型仓库 + config.pbtxt + service.json</td><td>自己写服务代码 + 打镜像</td></tr>
+    <tr><td>多框架统一</td><td><span class="n">✗</span> 一种 processor 对一种格式</td><td><span class="y">✓</span> backend 机制天然支持</td><td>取决于你写的代码</td></tr>
+    <tr><td>dynamic batching / 并发实例</td><td>部分支持,能力固定</td><td><span class="y">✓</span> 配置即得</td><td>要自己实现</td></tr>
+    <tr><td>自由度(前后处理、任意协议)</td><td><span class="n">低</span></td><td>中(python backend / ensemble)</td><td><span class="y">最高</span></td></tr>
+    <tr><td>维护成本</td><td>最低</td><td>低:镜像官方维护,只管配置</td><td>高:安全补丁、依赖都归你</td></tr>
+  </table></div>
+  <p class="small">选型口诀:单模型图省事 → processor;多模型/要吞吐/要标准协议 → Triton 镜像;协议或逻辑高度定制 → 自定义镜像;LLM → 专用引擎。</p>
+</section>
+
+<!-- ================= migrate ================= -->
+<section id="migrate">
+  <div class="sec-eyebrow"><span class="eyebrow">08 · REUSE</span></div>
+  <h2>迁移速查:换成你自己的模型,只改这五处</h2>
+  <p>本文的 ResNet50 例子换成任何模型,变化点是固定的——这正是这套方案的价值:<strong>结构不变,填空即可</strong>。</p>
+  <ul class="check">
+    <li>模型目录名 = 对外的 model_name:<code>resnet50/</code> → <code>your_model/</code>,调用 URL 里的 <code>/v2/models/your_model/infer</code> 随之变化</li>
+    <li>模型文件:导出成某个 backend 支持的格式,按约定命名放进 <code>1/</code>(onnx → <code>model.onnx</code>,TorchScript → <code>model.pt</code>…)</li>
+    <li><code>config.pbtxt</code>:改 <code>platform</code>/<code>backend</code>、input/output 的 <code>name / data_type / dims</code>(用导出时的真实张量名;记住 batch 维规则)</li>
+    <li><code>service.json</code>:改服务名、GPU/内存规格、<code>oss.path</code>;镜像 tag 按需选择版本</li>
+    <li>客户端:改 endpoint、token、model_name 和 InferInput 的 name/shape/datatype——其余代码一行不动</li>
+  </ul>
+  <p class="small" style="margin-top:14px">官方文档(参数与镜像版本以此为准):<a href="https://www.alibabacloud.com/help/zh/pai/deploy-a-triton-server-model-service" rel="noopener">PAI · Triton Server 镜像部署</a> · <a href="https://github.com/triton-inference-server/server" rel="noopener">Triton Inference Server(GitHub)</a></p>
+</section>
+</main>
+
+<footer><div class="in">《一文读懂》· Triton Inference Server 镜像部署 @ PAI-EAS —— 单文件离线版。示例中的 bucket、endpoint、token 均为占位符,镜像版本以控制台可选列表为准。</div></footer>
+<script>
+(function(){
+"use strict";
+var $ = function(s,el){return (el||document).querySelector(s)};
+var $$ = function(s,el){return Array.prototype.slice.call((el||document).querySelectorAll(s))};
+
+/* ---------- hero pipeline ---------- */
+var pipeNotes = [
+  {cls:"", html:"<b>模型仓库</b>是 Triton 一侧的输入:一个按约定组织的目录(模型名 / 数字版本 / 固定文件名 + config.pbtxt),放在 OSS 上。它回答「有哪些模型、输入输出什么样、怎么调度」。详见第 02 节。"},
+  {cls:"eas", html:"<b>service.json</b> 是 EAS 一侧的输入:声明用哪个官方 tritonserver 镜像、启动命令、GPU 规格,以及把 OSS 目录挂载成容器里的 /models。它回答「这个进程跑在哪、怎么活下去」。详见第 03 节。"},
+  {cls:"", html:"<b>在线服务</b>是产出:EAS 分配 endpoint 与 token,对外暴露 Triton 的 KServe v2 协议接口。客户端只依赖标准协议,与底下是哪台机器无关。详见第 04 节。"}
+];
+var pnodes = $$("#pipe .pnode");
+var pipeNote = $("#pipeNote");
+pnodes.forEach(function(n){
+  n.addEventListener("click", function(){
+    pnodes.forEach(function(m){m.classList.remove("active")});
+    n.classList.add("active");
+    var i = +n.dataset.i;
+    pipeNote.className = "pipe-note " + pipeNotes[i].cls;
+    pipeNote.innerHTML = pipeNotes[i].html;
+  });
+});
+
+var termLines = [
+  {t:'$ ossutil cp -r ./model_repository oss://examplebucket/model_repository/', c:'cmd', node:0},
+  {t:'Succeed: Total 2 files uploaded. (config.pbtxt, 1/model.onnx)', c:'dim', node:0},
+  {t:'$ eascmd create service.json', c:'cmd', node:1},
+  {t:'[OK] Creating api gateway / waiting instances ... image: pai-eas/tritonserver:23.02-py3', c:'dim', node:1},
+  {t:'mount  oss://examplebucket/model_repository/  ->  /models', c:'dim', node:1},
+  {t:'> tritonserver --model-repository=/models', c:'cmd', node:1},
+  {t:'I0714 loading model "resnet50" version 1 (backend: onnxruntime)', c:'dim', node:1},
+  {t:'+----------+---------+--------+\n| Model    | Version | Status |\n| resnet50 | 1       | READY  |\n+----------+---------+--------+', c:'', node:1},
+  {t:'Started HTTPService at 0.0.0.0:8000', c:'dim', node:1},
+  {t:'[Running] endpoint: http://xxxx.<region>.pai-eas.aliyuncs.com/api/predict/triton_server_demo', c:'okc', node:2},
+  {t:'$ curl .../v2/health/ready   →  200 OK   ✔ 可以开始调用了', c:'okc', node:2}
+];
+var running = false;
+$("#runDeploy").addEventListener("click", function(){
+  if(running) return; running = true;
+  var term = $("#heroTerm"); term.innerHTML = "";
+  pnodes.forEach(function(m){m.classList.remove("lit","active")});
+  pipeNote.className = "pipe-note";
+  pipeNote.innerHTML = "正在演示:注意节点点亮的顺序,就是真实部署里事情发生的顺序。";
+  var i = 0;
+  function step(){
+    if(i >= termLines.length){
+      running = false;
+      pipeNote.innerHTML = "部署完成:<b>模型仓库(输入)→ EAS 拉起容器并挂载(过程)→ endpoint READY(产出)</b>。这三步分别对应下面第 02、03、04 节。";
+      return;
+    }
+    var L = termLines[i];
+    var el = document.createElement("span");
+    el.className = "tl" + (L.c ? " " + L.c : "");
+    el.textContent = L.t;
+    term.appendChild(el);
+    term.appendChild(document.createTextNode("\n"));
+    requestAnimationFrame(function(){ el.classList.add("show"); });
+    term.scrollTop = term.scrollHeight;
+    pnodes.forEach(function(m,mi){ m.classList.toggle("lit", mi === L.node); });
+    i++;
+    setTimeout(step, L.t.length > 80 ? 900 : 620);
+  }
+  step();
+});
+
+/* ---------- repo explorer ---------- */
+var repoViews = {
+  root: '<h4>model_repository/ —— 仓库层</h4><p class="why">Triton 启动参数 <code>--model-repository</code> 指向的就是这一层。它下面的<strong>每个一级子目录 = 一个可服务的模型</strong>,目录名就是对外的 model_name。想多模型共存,平级多放几个目录即可,不需要多个服务。</p><div class="note">EAS 侧对应:service.json 会把 OSS 上的这个目录挂载成容器内的 <code>/models</code>。<strong>oss.path 必须指到这一层</strong>,指深一层是高频翻车点(见第 06 节)。</div>',
+  model: '<h4>resnet50/ —— 模型层</h4><p class="why">目录名 <code>resnet50</code> 会出现在三个地方,且必须一致:① 调用 URL <code>/v2/models/resnet50/infer</code>;② config.pbtxt 里的 <code>name</code>(可省略,省略时以目录名为准);③ 客户端 <code>model_name</code> 参数。</p><p class="why">它下面固定放两类东西:一份 <code>config.pbtxt</code>,和若干个数字版本目录。</p>',
+  config: '<h4>config.pbtxt —— 模型的"接口声明"</h4><p class="why">告诉 Triton:用什么 backend 加载、输入输出张量的 name/类型/形状、最大 batch、怎么调度、放几个实例。它是 Triton 一侧最重要的文件——<strong>请求校验、攒批、报错信息全都以它为准</strong>。逐行拆解见本节下方。</p><p class="why small">部分 backend(如 TensorRT、SavedModel)能从模型文件自动推断配置,可省略此文件;但显式写出来永远是更可控的做法。</p>',
+  ver: '<h4>1/ —— 版本层</h4><p class="why">目录名<strong>必须是正整数</strong>,数字就是版本号。Triton 默认服务最新版本(数字最大者),可在 config.pbtxt 用 <code>version_policy</code> 改成同时服务多版本。</p><div class="note warn">写成 <code>v1/</code>、<code>latest/</code>、<code>2024-01/</code> 都不会报错——只会被<strong>静默忽略</strong>,模型永远不 READY。这是全套约定里最容易踩的坑。</div>',
+  file: '<h4>model.onnx —— 模型文件本体</h4><p class="why">文件名由 backend 约定死:<code>onnxruntime → model.onnx</code>,<code>libtorch → model.pt</code>,<code>tensorrt → model.plan</code>,<code>tensorflow → model.savedmodel/</code>(目录)。想用别的名字要在 config.pbtxt 里配 <code>default_model_filename</code>。</p><p class="why">这个文件怎么来?训练侧导出,例如 PyTorch:<code>torch.onnx.export(model, dummy_input, "model.onnx")</code>——导出时的输入输出张量名,就是 config.pbtxt 里要填的 name。</p>',
+  more: '<h4>bert_ranker/ —— 第二个模型</h4><p class="why">再放一个目录,同样的三层结构(比如 python backend 的 <code>model.py</code> 或另一个 onnx),重启后 Triton 就同时服务两个模型:<code>/v2/models/resnet50/infer</code> 和 <code>/v2/models/bert_ranker/infer</code>,共享同一张 GPU、同一个 endpoint。</p><p class="why">这就是「一张卡上多模型」的全部成本:多一个目录。调度隔离、实例数都可以在各自的 config.pbtxt 里独立设置。</p>'
+};
+var treeBtns = $$("#tree .ti[data-k]");
+function showRepo(k){
+  treeBtns.forEach(function(b){b.classList.toggle("on", b.dataset.k === k)});
+  $("#repoView").innerHTML = repoViews[k];
+}
+treeBtns.forEach(function(b){ b.addEventListener("click", function(){ showRepo(b.dataset.k); }); });
+showRepo("root");
+
+/* ---------- annotated code helper ---------- */
+function buildAcode(elId, noteId, lines, defaultNote){
+  var box = $("#" + elId), note = $("#" + noteId);
+  lines.forEach(function(L){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "ln" + (L.n ? " hot" : " plain");
+    if(!L.n) b.tabIndex = -1;
+    b.innerHTML = L.h;
+    if(L.n){
+      b.addEventListener("click", function(){
+        $$(".ln", box).forEach(function(x){x.classList.remove("sel")});
+        b.classList.add("sel");
+        note.innerHTML = '<span class="t">' + L.tag + '</span><div>' + L.n + '</div>';
+      });
+    }
+    box.appendChild(b);
+  });
+  if(defaultNote) note.innerHTML = defaultNote;
+}
+
+/* config.pbtxt */
+buildAcode("cfgCode","cfgNote",[
+ {h:'name: "resnet50"', tag:'name', n:'可省略(省略时取目录名),写了就<strong>必须与目录名一致</strong>,否则加载失败。它同时是调用 URL 和客户端里的 model_name。'},
+ {h:'platform: "onnxruntime_onnx"', tag:'platform / backend', n:'声明用哪个 backend 加载模型:onnx → <code>onnxruntime_onnx</code>,TorchScript → <code>pytorch_libtorch</code>,TensorRT → <code>tensorrt_plan</code>,SavedModel → <code>tensorflow_savedmodel</code>;自定义 Python 逻辑则写 <code>backend: "python"</code>。backend 决定了版本目录里模型文件的合法文件名。'},
+ {h:'max_batch_size: 8', tag:'max_batch_size', n:'Triton 允许攒到的最大 batch。<strong>关键联动规则:它 &gt; 0 时,下面 input/output 的 dims 不写 batch 维</strong>(运行时自动加在最前面);设为 0 表示模型不支持攒批,dims 要写完整形状。'},
+ {h:'input ['},
+ {h:'  {'},
+ {h:'    name: "input"', tag:'input.name', n:'必须等于模型文件里真实的输入张量名(导出 ONNX 时定的那个)。客户端请求里的 inputs[].name 也要与它一致,三处对不齐就是 400。不确定就用 <code>netron</code> 或 <code>onnx.load</code> 查看模型。'},
+ {h:'    data_type: TYPE_FP32', tag:'data_type', n:'config 里写 <code>TYPE_FP32</code>;但 HTTP 请求 JSON 里写 <code>"FP32"</code>——同一个类型两套写法,混用是高频 400 错误来源。'},
+ {h:'    dims: [ 3, 224, 224 ]', tag:'dims', n:'不含 batch 维(因为 max_batch_size &gt; 0)!请求时 shape 传 <code>[1,3,224,224]</code>,这里却只写 <code>[3,224,224]</code>。可变长度的维用 <code>-1</code>。'},
+ {h:'  }'},
+ {h:']'},
+ {h:'output ['},
+ {h:'  {'},
+ {h:'    name: "output"'},
+ {h:'    data_type: TYPE_FP32'},
+ {h:'    dims: [ 1000 ]', tag:'output.dims', n:'ResNet50 输出 1000 类 logits。同样不含 batch 维。请求返回的 outputs[].shape 会是 <code>[batch, 1000]</code>。'},
+ {h:'  }'},
+ {h:']'},
+ {h:'dynamic_batching {', tag:'dynamic_batching', n:'开启攒批调度:请求先入队,窗口内合并成大 batch 再前向,是 Triton 提升 GPU 吞吐的核心开关。不写这个块 = 不攒批,请求逐条执行。第 05 节可以亲手玩这个开关的效果。'},
+ {h:'  max_queue_delay_microseconds: 100', tag:'max_queue_delay', n:'为攒批愿意等的最长时间(微秒)。调大 → batch 更满、吞吐更高、单条延迟略增;调小 → 反之。这是吞吐 vs 延迟的核心旋钮。'},
+ {h:'}'},
+ {h:'instance_group [', tag:'instance_group', n:'模型的并发副本数与设备:<code>count: 2</code> 会在同一张卡上放两个执行实例,前向与数据拷贝可以流水线重叠;<code>KIND_CPU</code> 则跑在 CPU。多模型共卡时,各自在这里控制份额。'},
+ {h:'  { count: 1, kind: KIND_GPU }'},
+ {h:']'}
+], '<span class="t">TIP</span><div>点上面代码里带绿色边线的行,这里会解释它为什么这么写、写错会怎样。</div>');
+
+/* service.json */
+buildAcode("svcCode","svcNote",[
+ {h:'{'},
+ {h:'  "metadata": {'},
+ {h:'    "name": "triton_server_demo",', tag:'metadata.name', n:'服务名。会成为调用 URL 的一部分:<code>/api/predict/triton_server_demo/…</code>。创建后不可改名,改配置用 <code>eascmd modify</code>。'},
+ {h:'    "instance": 1,', tag:'instance', n:'服务实例数(不是模型实例数!)。EAS 网关会在多个实例间负载均衡;扩容改这里或配自动扩缩容。容器内模型的并发副本才归 config.pbtxt 的 instance_group 管——两层并发,分属两侧。'},
+ {h:'    "cpu": 4,'},
+ {h:'    "memory": 16000,'},
+ {h:'    "gpu": 1', tag:'gpu', n:'每个实例的 GPU 数。跑 GPU 推理必须 ≥1,忘写会退化成 CPU 推理甚至启动失败;机型/显卡型号在控制台资源配置里选。'},
+ {h:'  },'},
+ {h:'  "containers": ['},
+ {h:'    {'},
+ {h:'      "image": "eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/tritonserver:23.02-py3",', tag:'image', n:'官方维护的 Triton 镜像,地址随地域变化(cn-hangzhou 换成你的 region),tag 是 Triton 版本。用 PAI 侧镜像仓库拉取快且免公网;可选 tag 以控制台镜像列表为准。'},
+ {h:'      "command": "tritonserver --model-repository=/models",', tag:'command', n:'容器启动命令。<code>--model-repository</code> 必须等于下面 storage 的 mount_path。还可以追加参数,如 <code>--log-verbose=1</code>(排障)、<code>--model-control-mode=explicit</code>(手动控制加载)。'},
+ {h:'      "port": 8000', tag:'port', n:'EAS 网关把流量转发到容器的这个端口。Triton 约定:<b>8000</b> HTTP / <b>8001</b> gRPC / <b>8002</b> metrics。默认走 HTTP 就填 8000;要 gRPC 需另行开启(见第 04 节末尾提示)。'},
+ {h:'    }'},
+ {h:'  ],'},
+ {h:'  "storage": ['},
+ {h:'    {'},
+ {h:'      "mount_path": "/models",', tag:'mount_path', n:'OSS 在容器内呈现的路径。和 command 里的 --model-repository 是同一根绳上的两端,必须一致。'},
+ {h:'      "oss": {'},
+ {h:'        "path": "oss://examplebucket/model_repository/"', tag:'oss.path', n:'指向<strong>仓库层</strong>(model_repository/),不是模型层(…/resnet50/)。指深一层,Triton 会把版本目录当模型名,一个都加载不出来。bucket 需与服务同地域。'},
+ {h:'      }'},
+ {h:'    }'},
+ {h:'  ]'},
+ {h:'}'}
+], '<span class="t">TIP</span><div>点上面 JSON 里带绿色边线的行查看含义与易错点。整份文件的心智模型:metadata=要多少资源,containers=跑什么,storage=模型从哪来。</div>');
+
+/* ---------- request simulator ---------- */
+var simSteps = [
+ {n:[0], t:'STEP 1 · 客户端发出请求', d:'POST <code>http://&lt;endpoint&gt;/api/predict/triton_server_demo/v2/models/resnet50/infer</code>,header 带 <code>Authorization: &lt;token&gt;</code>,body 是 KServe v2 JSON(inputs 的 name/shape/datatype + 数据)。客户端只依赖标准协议,不知道底下是 Triton 还是别的实现。'},
+ {n:[1], t:'STEP 2 · EAS 网关:鉴权 + 路由', d:'网关校验 token(不对 → <b>401</b>,到不了 Triton),按服务名 <code>triton_server_demo</code> 找到服务(找不到 → <b>404</b>),在多个实例间负载均衡,把请求转发到选中容器的 <b>8000</b> 端口。限流、监控埋点也发生在这一跳——这些都是 EAS 的职责,Triton 毫不知情。'},
+ {n:[2], t:'STEP 3 · Triton HTTP 前端:协议校验', d:'解析 <code>/v2/models/resnet50/infer</code>:模型存在且 READY 吗?inputs 的 name / datatype / shape 与 config.pbtxt 一致吗?任何不匹配在这里就地返回 <b>400</b>,根本不会碰 GPU。所以「请求报 shape 错」永远先回头看 config.pbtxt。'},
+ {n:[3], t:'STEP 4 · Scheduler:入队 + 攒批', d:'请求进入 resnet50 的队列。dynamic batcher 在 <code>max_queue_delay_microseconds</code> 窗口内把多条请求合并成一个大 batch(不超过 max_batch_size),再分派给 instance_group 声明的某个模型实例。没开 dynamic_batching 就逐条直送。'},
+ {n:[4], t:'STEP 5 · Backend 执行前向', d:'onnxruntime backend 在 GPU 上跑一次前向,输入 <code>[batch,3,224,224]</code>,产出 <code>[batch,1000]</code>。多个 instance 时,拷贝与计算还能流水线并行。真正花在「推理」上的只有这一跳。'},
+ {n:[0,1,2,3,4], t:'STEP 6 · 结果原路返回', d:'输出按 batch 拆回各自请求,封装成 KServe v2 响应 → Triton HTTP → EAS 网关 → 客户端拿到 <code>outputs[].data</code>。<b>排障地图:401/404 查网关段,400 查协议段(对照 config.pbtxt),慢查调度与算力段。</b>'}
+];
+var simI = 0;
+var snEls = $$("#simNodes .sn"), seEls = $$("#simNodes .se");
+function renderSim(){
+  var s = simSteps[simI];
+  snEls.forEach(function(el,i){ el.classList.toggle("on", s.n.indexOf(i) >= 0); });
+  seEls.forEach(function(el,i){ el.classList.toggle("on", s.n.indexOf(i) >= 0 && s.n.indexOf(i+1) >= 0); });
+  $("#simDesc").innerHTML = '<span class="st">' + s.t + '</span><div>' + s.d + '</div>';
+  $("#simProg").textContent = (simI+1) + " / " + simSteps.length;
+  $("#simPrev").disabled = simI === 0;
+  $("#simNext").textContent = simI === simSteps.length-1 ? "回到第 1 步" : "下一步 →";
+}
+$("#simNext").addEventListener("click", function(){ simI = (simI+1) % simSteps.length; renderSim(); });
+$("#simPrev").addEventListener("click", function(){ if(simI>0){simI--; renderSim();} });
+renderSim();
+
+/* ---------- tabs ---------- */
+$$(".tabs").forEach(function(tabs){
+  $$(".tabbar button", tabs).forEach(function(b){
+    b.addEventListener("click", function(){
+      $$(".tabbar button", tabs).forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      $$(".tabpane", tabs).forEach(function(p){ p.classList.toggle("on", p.dataset.t === b.dataset.t); });
+    });
+  });
+});
+
+/* ---------- batching demo ---------- */
+var MAXB = 8;
+function renderBat(){
+  var n = +$("#batRange").value;
+  var on = $("#batOn").checked;
+  $("#batN").textContent = n;
+  var vis = $("#batVis"); vis.innerHTML = "";
+  var batches = [];
+  if(on){ for(var i=0;i<n;i+=MAXB) batches.push(Math.min(MAXB, n-i)); }
+  else  { for(var j=0;j<n;j++) batches.push(1); }
+  batches.forEach(function(sz,k){
+    var d = document.createElement("div");
+    d.className = "batch" + (sz===1 && !on ? " single" : "");
+    var lb = document.createElement("span");
+    lb.className = "bl";
+    lb.textContent = on ? ("batch " + (k+1) + " · size " + sz) : "size 1";
+    d.appendChild(lb);
+    for(var m=0;m<sz;m++){ var r=document.createElement("span"); r.className="rq"; d.appendChild(r); }
+    vis.appendChild(d);
+  });
+  var fwd = batches.length;
+  $("#stFwd").textContent = fwd;
+  $("#stAvg").textContent = (n/fwd).toFixed(1);
+  $("#stGain").textContent = on ? ("−" + Math.round((1 - fwd/n)*100) + "%") : "0%";
+  $("#batMsg").innerHTML = on
+    ? (n<=MAXB
+        ? "并发 ≤ max_batch_size,一个窗口全装下:<b>" + n + " 条请求 → 1 次前向</b>。GPU 只被打扰一次。"
+        : "调度器把 " + n + " 条请求折叠成 <b>" + fwd + "</b> 次前向(每批最多 " + MAXB + ")。前向次数少了,GPU 单位时间能吃下的请求就多了——这就是吞吐提升的来源。")
+    : "不攒批:" + n + " 条请求 = " + n + " 次前向,GPU 大部分时间在等 kernel 启动和数据搬运。并发一高,队列就排起来了。<b>把开关打开对比一下。</b>";
+}
+$("#batRange").addEventListener("input", renderBat);
+$("#batOn").addEventListener("change", renderBat);
+renderBat();
+})();
+</script>
+</body>
+</html>

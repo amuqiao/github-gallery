@@ -1,0 +1,44 @@
+schema_version: 2
+id: loss-functions
+hall: lab
+kind: knowledge_article
+title: 损失函数
+summary: 从回归/分类损失、交叉熵、MSE、目标函数，以及损失函数和评估指标的区别理解训练目标。
+source:
+  type: reference
+  url: https://en.wikipedia.org/wiki/Loss_function
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  domain: 机器学习基础
+  topics:
+    - 目标函数
+    - 交叉熵
+    - 均方误差
+    - 评估指标
+  audience:
+    - 自学者
+notes:
+  - id: loss-functions-explainer
+    title: 一文读懂损失函数 · 目标函数与评估指标
+    type: html
+    path: ./notes/loss-functions-explainer.html
+    summary: 从回归/分类损失、交叉熵、MSE、目标函数和评估指标区别理解训练优化目标。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Reference
+        url: https://en.wikipedia.org/wiki/Loss_function
+  - type: highlights
+    items:
+      - 损失函数把预测误差转化为可优化的训练信号。
+      - 回归、分类、排序和生成任务通常需要不同损失设计。
+      - 目标函数可以包含损失项、正则化项和其他约束项。
+  - type: use-cases
+    items:
+      - 区分 MSE、MAE、交叉熵和二分类交叉熵。
+      - 理解 logits、softmax、sigmoid 与交叉熵的配套关系。
+      - 判断训练损失和业务评估指标不一致时该如何分析。

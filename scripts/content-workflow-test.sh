@@ -15,9 +15,11 @@ initial_pollution_snapshot=""
 run_stamp=""
 github_item_id=""
 model_item_id=""
+knowledge_item_id=""
 model_collection_id=""
 markdown_note_id="quick-start"
 html_note_id="html-fragment"
+knowledge_note_id="knowledge-guide"
 imported_markdown_note_id="imported-markdown"
 published_html_note_id="published-guide"
 import_item_id=""
@@ -508,6 +510,7 @@ initialize_fixture_ids() {
   run_stamp="$(date +%Y%m%d%H%M%S)-$$"
   github_item_id="workflow-github-$run_stamp"
   model_item_id="workflow-model-$run_stamp"
+  knowledge_item_id="workflow-knowledge-$run_stamp"
   model_collection_id="workflow-models-$run_stamp"
   import_item_id="workflow-import-model-$run_stamp"
   import_collection_id="workflow-import-models-$run_stamp"
@@ -519,6 +522,8 @@ initialize_fixture_ids() {
 
 assert_published_routes_exist() {
   assert_copy_path_exists "dist/halls/github/items/$github_item_id/index.html"
+  assert_copy_path_exists "dist/halls/lab/items/$knowledge_item_id/index.html"
+  assert_copy_path_exists "dist/halls/lab/items/$knowledge_item_id/notes/$knowledge_note_id/index.html"
   assert_copy_path_exists "dist/halls/models/items/$model_item_id/index.html"
   assert_copy_path_exists "dist/halls/models/items/$model_item_id/notes/$markdown_note_id/index.html"
   assert_copy_path_exists "dist/halls/models/items/$model_item_id/notes/$html_note_id/index.html"
@@ -528,6 +533,8 @@ assert_published_routes_exist() {
 
 assert_published_routes_missing() {
   assert_copy_path_missing "dist/halls/github/items/$github_item_id/index.html"
+  assert_copy_path_missing "dist/halls/lab/items/$knowledge_item_id/index.html"
+  assert_copy_path_missing "dist/halls/lab/items/$knowledge_item_id/notes/$knowledge_note_id/index.html"
   assert_copy_path_missing "dist/halls/models/items/$model_item_id/index.html"
   assert_copy_path_missing "dist/halls/models/items/$model_item_id/notes/$markdown_note_id/index.html"
   assert_copy_path_missing "dist/halls/models/items/$model_item_id/notes/$html_note_id/index.html"
@@ -538,18 +545,22 @@ assert_published_routes_missing() {
 
 assert_public_indexes_include_fixtures() {
   assert_copy_file_contains "dist/halls/github/index.html" "$github_item_id"
+  assert_copy_file_contains "dist/halls/lab/index.html" "$knowledge_item_id"
   assert_copy_file_contains "dist/halls/models/index.html" "$model_item_id"
   assert_copy_file_contains "dist/halls/models/collections/index.html" "$model_collection_id"
 }
 
 assert_public_indexes_omit_fixtures() {
   assert_copy_file_not_contains "dist/halls/github/index.html" "$github_item_id"
+  assert_copy_file_not_contains "dist/halls/lab/index.html" "$knowledge_item_id"
   assert_copy_file_not_contains "dist/halls/models/index.html" "$model_item_id"
   assert_copy_file_not_contains "dist/halls/models/collections/index.html" "$model_collection_id"
 }
 
 assert_republished_content_rendered() {
   assert_copy_file_contains "dist/halls/github/items/$github_item_id/index.html" "WORKFLOW-SENTINEL-GITHUB-REPUBLISH"
+  assert_copy_file_contains "dist/halls/lab/items/$knowledge_item_id/index.html" "WORKFLOW-SENTINEL-KNOWLEDGE-REPUBLISH"
+  assert_copy_file_contains "dist/halls/lab/items/$knowledge_item_id/notes/$knowledge_note_id/index.html" "WORKFLOW-SENTINEL-KNOWLEDGE-NOTE"
   assert_copy_file_contains "dist/halls/models/items/$model_item_id/index.html" "WORKFLOW-SENTINEL-MODEL-REPUBLISH"
   assert_copy_file_contains "dist/halls/models/items/$model_item_id/notes/$markdown_note_id/index.html" "WORKFLOW-SENTINEL-MARKDOWN-NOTE"
   assert_copy_file_contains "dist/halls/models/items/$model_item_id/notes/$html_note_id/index.html" "WORKFLOW-SENTINEL-HTML-NOTE"
@@ -590,9 +601,15 @@ run_readonly_content_commands() {
   assert_copy_command_output_contains "list-pub-github" \
     $'published\tgithub\titem\t'"$github_item_id"$'\tWorkflow GitHub Fixture' \
     ./scripts/content.sh list published github
+  assert_copy_command_output_contains "list-pub-lab-knowledge" \
+    $'published\tlab\titem\t'"$knowledge_item_id"$'\tWorkflow Knowledge Fixture' \
+    ./scripts/content.sh list published lab
   assert_copy_command_output_contains "status-header" \
     $'state\thall\ttype\tid\tpath' \
     ./scripts/content.sh status models item "$model_item_id"
+  assert_copy_command_output_contains "status-knowledge" \
+    $'published\tlab\titem\t'"$knowledge_item_id"$'\tcatalog/content/published/lab/items/'"$knowledge_item_id" \
+    ./scripts/content.sh status lab item "$knowledge_item_id"
   assert_copy_command_output_contains "status-model" \
     $'published\tmodels\titem\t'"$model_item_id"$'\tcatalog/content/published/models/items/'"$model_item_id" \
     ./scripts/content.sh status models item "$model_item_id"
@@ -608,6 +625,10 @@ run_readonly_content_commands() {
     ./scripts/content.sh show models item "$model_item_id"
   assert_copy_command_output_contains "show-model-note" "notes:" \
     ./scripts/content.sh show models item "$model_item_id"
+  assert_copy_command_output_contains "show-knowledge-kind" "kind: knowledge_article" \
+    ./scripts/content.sh show lab item "$knowledge_item_id"
+  assert_copy_command_output_contains "show-knowledge-note" "$knowledge_note_id" \
+    ./scripts/content.sh show lab item "$knowledge_item_id"
   assert_copy_command_output_contains "show-collection-state" "# state: published" \
     ./scripts/content.sh show models collection "$model_collection_id"
   assert_copy_command_output_contains "show-collection-item" "item: $model_item_id" \
@@ -724,6 +745,7 @@ run_content_lifecycle() {
   initialize_fixture_ids
   event "FIXTURE" "github" "$github_item_id"
   event "FIXTURE" "model" "$model_item_id"
+  event "FIXTURE" "knowledge" "$knowledge_item_id"
   event "FIXTURE" "collection" "$model_collection_id"
 
   run_in_copy "github-new" \
@@ -759,6 +781,25 @@ run_content_lifecycle() {
     $'drafts\tmodels\titem\t'"$model_item_id"$'\tWorkflow Model Fixture' \
     ./scripts/content.sh list drafts models
 
+  run_in_copy "knowledge-new" \
+    ./scripts/content.sh item new lab knowledge_article "$knowledge_item_id" \
+      --title "Workflow Knowledge Fixture" \
+      --summary "用于验证知识文章内容工作流的临时条目。" \
+      --source-type manual \
+      --source-url "https://example.com/knowledge/$knowledge_item_id" \
+      --domain "Workflow Foundations" \
+      --topic "catalog-contract" \
+      --topic "rendering" \
+      --audience "test-runner"
+  assert_copy_path_exists "catalog/content/drafts/lab/items/$knowledge_item_id/item.yaml"
+  assert_copy_path_missing "dist/halls/lab/items/$knowledge_item_id/index.html"
+  assert_copy_command_output_contains "status-knowledge-draft" \
+    $'drafts\tlab\titem\t'"$knowledge_item_id"$'\tcatalog/content/drafts/lab/items/'"$knowledge_item_id" \
+    ./scripts/content.sh status lab item "$knowledge_item_id"
+  assert_copy_command_output_contains "list-draft-lab" \
+    $'drafts\tlab\titem\t'"$knowledge_item_id"$'\tWorkflow Knowledge Fixture' \
+    ./scripts/content.sh list drafts lab
+
   run_in_copy "note-md" \
     ./scripts/content.sh item note add models "$model_item_id" "$markdown_note_id" \
       --title "Quick Start" \
@@ -784,6 +825,18 @@ run_content_lifecycle() {
       --summary "验证从外部 Markdown 文件导入草稿 note。"
   assert_copy_path_exists "catalog/content/drafts/models/items/$model_item_id/notes/$imported_markdown_note_id.md"
   assert_copy_file_contains "catalog/content/drafts/models/items/$model_item_id/notes/$imported_markdown_note_id.md" "WORKFLOW-IMPORTED-MARKDOWN-NOTE"
+
+  write_copy_file ".tmp/note-sources/$knowledge_note_id.html" \
+    "<!doctype html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><title>Knowledge Guide</title></head><body><main>WORKFLOW-SENTINEL-KNOWLEDGE-NOTE</main></body></html>\n"
+  run_in_copy "knowledge-note-import-html" \
+    ./scripts/content.sh item note import lab "$knowledge_item_id" "$knowledge_note_id" \
+      --state drafts \
+      --file ".tmp/note-sources/$knowledge_note_id.html" \
+      --title "Knowledge Guide" \
+      --summary "验证知识文章可以导入 standalone HTML note。" \
+      --display standalone
+  assert_copy_path_exists "catalog/content/drafts/lab/items/$knowledge_item_id/notes/$knowledge_note_id.html"
+  assert_copy_file_contains "catalog/content/drafts/lab/items/$knowledge_item_id/notes/$knowledge_note_id.html" "WORKFLOW-SENTINEL-KNOWLEDGE-NOTE"
 
   before_path="$(copy_path_snapshot "catalog/content/drafts/models/items/$model_item_id")"
   write_copy_file ".tmp/note-sources/bad-site-fragment.html" \
@@ -832,6 +885,7 @@ run_content_lifecycle() {
     ./scripts/content.sh status models collection "$model_collection_id"
 
   run_in_copy "publish-git" ./scripts/content.sh publish github item "$github_item_id"
+  run_in_copy "publish-knowledge" ./scripts/content.sh publish lab item "$knowledge_item_id"
   run_in_copy "publish-model" ./scripts/content.sh publish models item "$model_item_id"
   run_in_copy "publish-col" ./scripts/content.sh publish models collection "$model_collection_id"
   run_in_copy "verify-release" ./scripts/verify.sh release
@@ -874,11 +928,13 @@ run_content_lifecycle() {
 
   run_in_copy "archive-col" ./scripts/content.sh archive models collection "$model_collection_id"
   run_in_copy "archive-model" ./scripts/content.sh archive models item "$model_item_id"
+  run_in_copy "archive-knowledge" ./scripts/content.sh archive lab item "$knowledge_item_id"
   run_in_copy "archive-git" ./scripts/content.sh archive github item "$github_item_id"
   run_in_copy "verify-archived" ./scripts/verify.sh release
   assert_published_routes_missing
   assert_public_indexes_omit_fixtures
   assert_copy_path_exists "catalog/content/archived/github/items/$github_item_id/item.yaml"
+  assert_copy_path_exists "catalog/content/archived/lab/items/$knowledge_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/archived/models/items/$model_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/archived/models/collections/$model_collection_id/collection.yaml"
   assert_copy_command_output_contains "status-model-archived" \
@@ -889,9 +945,11 @@ run_content_lifecycle() {
     ./scripts/content.sh list archived models
 
   run_in_copy "restore-model" ./scripts/content.sh restore models item "$model_item_id"
+  run_in_copy "restore-knowledge" ./scripts/content.sh restore lab item "$knowledge_item_id"
   run_in_copy "restore-col" ./scripts/content.sh restore models collection "$model_collection_id"
   run_in_copy "restore-git" ./scripts/content.sh restore github item "$github_item_id"
   assert_copy_path_exists "catalog/content/drafts/github/items/$github_item_id/item.yaml"
+  assert_copy_path_exists "catalog/content/drafts/lab/items/$knowledge_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/drafts/models/items/$model_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/drafts/models/collections/$model_collection_id/collection.yaml"
   assert_copy_command_output_contains "status-model-restored" \
@@ -900,6 +958,8 @@ run_content_lifecycle() {
 
   write_copy_file "catalog/content/drafts/github/items/$github_item_id/index.md" \
     "# Workflow GitHub Fixture\n\nWORKFLOW-SENTINEL-GITHUB-REPUBLISH\n"
+  write_copy_file "catalog/content/drafts/lab/items/$knowledge_item_id/index.md" \
+    "# Workflow Knowledge Fixture\n\nWORKFLOW-SENTINEL-KNOWLEDGE-REPUBLISH\n"
   write_copy_file "catalog/content/drafts/models/items/$model_item_id/index.md" \
     "# Workflow Model Fixture\n\nWORKFLOW-SENTINEL-MODEL-REPUBLISH\n"
   write_copy_file "catalog/content/drafts/models/items/$model_item_id/notes/$markdown_note_id.md" \
@@ -910,6 +970,7 @@ run_content_lifecycle() {
     "# Workflow Model Collection\n\nWORKFLOW-SENTINEL-COLLECTION-REPUBLISH\n"
 
   run_in_copy "republish-git" ./scripts/content.sh publish github item "$github_item_id"
+  run_in_copy "republish-knowledge" ./scripts/content.sh publish lab item "$knowledge_item_id"
   run_in_copy "republish-model" ./scripts/content.sh publish models item "$model_item_id"
   run_in_copy "republish-col" ./scripts/content.sh publish models collection "$model_collection_id"
   run_in_copy "verify-repub" ./scripts/verify.sh release
@@ -938,6 +999,7 @@ run_failure_idempotency_lifecycle() {
   local missing_ref_collection_path="catalog/content/drafts/models/collections/$missing_ref_collection_id"
   local planned_hall_path="catalog/content/drafts/music"
   local planned_item_path="$planned_hall_path/items/$planned_item_id"
+  local wrong_kind_option_item_id="workflow-knowledge-wrong-option-$run_stamp"
   local before_path
   local before_collection
   local before_archived
@@ -958,6 +1020,17 @@ run_failure_idempotency_lifecycle() {
       --format onnx \
       --runtime onnxruntime
   assert_copy_path_snapshot_unchanged "dup-item" "$published_model_path" "$before_path"
+
+  expect_copy_failure_contains "knowledge-wrong-option" "unknown option: --provider" \
+    ./scripts/content.sh item new lab knowledge_article "$wrong_kind_option_item_id" \
+      --title "Workflow Wrong Option Knowledge" \
+      --summary "知识文章误带模型参数应失败。" \
+      --source-type manual \
+      --source-url "https://example.com/knowledge/$wrong_kind_option_item_id" \
+      --domain "Workflow Foundations" \
+      --topic "catalog-contract" \
+      --provider "Workflow Lab"
+  assert_copy_path_missing "catalog/content/drafts/lab/items/$wrong_kind_option_item_id"
 
   before_parent="$(copy_path_snapshot "$draft_collections_parent_path")"
   expect_copy_failure_contains "missing-ref-col" "references unknown item" \

@@ -56,6 +56,15 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
   --access download \
   --format onnx \
   --runtime onnxruntime
+./scripts/content.sh item new lab knowledge_article activation-functions \
+  --title "Activation Functions" \
+  --summary "A focused knowledge article about nonlinearities and gradient flow." \
+  --source-type manual \
+  --source-url "https://example.com/activation-functions" \
+  --domain "Machine Learning Foundations" \
+  --topic "nonlinearity" \
+  --topic "gradient-flow" \
+  --audience "self-study"
 ./scripts/content.sh item note add models example-model quick-start \
   --title "Quick Start" \
   --summary "Quick start note." \

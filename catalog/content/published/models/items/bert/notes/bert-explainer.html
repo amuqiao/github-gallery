@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 BERT</title>
+<style>
+:root{
+  --paper:#EDF0F4;
+  --paper2:#E4E9EF;
+  --card:#FFFFFF;
+  --ink:#0F1B2D;
+  --ink2:#31435B;
+  --ink3:#65758B;
+  --line:#C7D2DE;
+  --line2:#DCE3EB;
+  --flow:#1E5CF0;      /* attention / data flow */
+  --flow-w:#E6EDFF;
+  --mask:#E0850F;      /* [MASK] / prediction */
+  --mask-w:#FBEBD1;
+  --cls:#7C3AED;       /* special tokens */
+  --cls-w:#EFE6FD;
+  --ok:#0E8A5F;
+  --no:#C4384A;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);line-height:1.75;font-size:16px;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:960px;margin:0 auto;padding:0 22px}
+h1,h2,h3{line-height:1.25;font-weight:700;letter-spacing:-.01em}
+code,.mono{font-family:var(--mono)}
+::selection{background:var(--mask);color:#fff}
+
+/* ---------- schematic frame ---------- */
+.eyebrow{
+  font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--flow);font-weight:600;display:flex;align-items:center;gap:10px;margin:0 0 14px;
+}
+.eyebrow::before{content:"";width:26px;height:1px;background:var(--flow)}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 30px;position:relative;overflow:hidden}
+.hero-grid{
+  position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(var(--line2) 1px,transparent 1px),linear-gradient(90deg,var(--line2) 1px,transparent 1px);
+  background-size:28px 28px;
+  mask-image:linear-gradient(180deg,#000,transparent 78%);
+}
+.hero .wrap{position:relative}
+.tag{font-family:var(--mono);font-size:12.5px;color:var(--ink3);letter-spacing:.05em}
+.hero h1{font-size:clamp(40px,8vw,74px);margin:.24em 0 .12em;letter-spacing:-.03em}
+.hero h1 b{color:var(--flow);font-weight:700}
+.lede{font-size:clamp(17px,2.4vw,20px);color:var(--ink2);max-width:44ch;margin:0}
+.spec-strip{
+  display:flex;flex-wrap:wrap;gap:0;margin-top:34px;border:1px solid var(--line);
+  border-radius:12px;overflow:hidden;background:var(--card);
+}
+.spec{flex:1 1 130px;padding:16px 18px;border-right:1px solid var(--line2)}
+.spec:last-child{border-right:0}
+.spec .k{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink3);text-transform:uppercase}
+.spec .v{font-size:22px;font-weight:700;margin-top:3px;letter-spacing:-.01em}
+.spec .v small{font-size:13px;color:var(--ink3);font-weight:500}
+
+/* ---------- hero pipeline ---------- */
+.railbox{margin-top:34px;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:22px 20px 18px}
+.railbox .cap{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--ink3);text-transform:uppercase;margin-bottom:16px}
+.rail{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.node{flex:1 1 0;min-width:120px;text-align:center;position:relative;padding:4px 6px}
+.node .stage{font-family:var(--mono);font-size:11px;color:var(--flow);letter-spacing:.05em}
+.node .box{
+  margin:8px auto 0;border:1.5px solid var(--line);border-radius:9px;padding:12px 8px;background:var(--paper);
+  font-weight:600;font-size:14px;min-height:58px;display:flex;flex-direction:column;justify-content:center;gap:3px;
+}
+.node .shape{font-family:var(--mono);font-size:11px;color:var(--ink3);font-weight:500}
+.node .arw{position:absolute;top:52%;right:-2px;color:var(--flow);font-size:18px;z-index:2}
+.node:last-child .arw{display:none}
+.node.hi .box{border-color:var(--flow);background:var(--flow-w)}
+
+/* ---------- sections ---------- */
+section{padding:56px 0;border-top:1px solid var(--line)}
+.sec-no{font-family:var(--mono);font-size:13px;color:var(--ink3);font-weight:600}
+h2{font-size:clamp(26px,4.4vw,36px);margin:.35em 0 .5em}
+h2 .em{color:var(--flow)}
+p{margin:0 0 16px}
+p.big{font-size:18px;color:var(--ink2)}
+.muted{color:var(--ink3)}
+strong{color:var(--ink)}
+.callout{border-left:3px solid var(--mask);background:var(--mask-w);padding:14px 18px;border-radius:0 8px 8px 0;margin:20px 0;font-size:15px}
+.callout b{color:#9a5a06}
+
+/* card */
+.card{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:22px 22px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:680px){.grid2{grid-template-columns:1fr}}
+
+/* token chips */
+.tok{display:inline-flex;align-items:center;font-family:var(--mono);font-size:13.5px;
+  padding:5px 9px;border-radius:7px;border:1.5px solid var(--line);background:var(--paper);margin:3px 3px;font-weight:600}
+.tok.sp{border-color:var(--cls);background:var(--cls-w);color:#5b21b6}
+.tok.sub{color:var(--ink3);border-style:dashed}
+.tok.mask{border-color:var(--mask);background:var(--mask-w);color:#9a5a06}
+.tok.pred{border-color:var(--ok);background:#e3f5ee;color:#0a6a49}
+
+/* buttons / controls */
+.btn{font-family:var(--mono);font-size:13px;font-weight:600;border:1.5px solid var(--line);background:var(--card);
+  color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer;transition:.15s;letter-spacing:.02em}
+.btn:hover{border-color:var(--flow);color:var(--flow)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.on:hover{color:#fff}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+
+/* pipeline stepper */
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}
+.step{flex:1 1 0;min-width:64px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:600;
+  padding:9px 4px;border:1.5px solid var(--line);border-radius:8px;cursor:pointer;background:var(--card);color:var(--ink3);transition:.15s}
+.step.on{background:var(--flow);border-color:var(--flow);color:#fff}
+.step .n{display:block;font-size:10px;opacity:.7}
+.stage-view{min-height:190px}
+.stage-view h4{font-size:16px;margin:0 0 6px;font-family:var(--sans)}
+.tensor{font-family:var(--mono);font-size:13px;background:var(--ink);color:#cfe0ff;padding:5px 10px;border-radius:6px;display:inline-block;margin:4px 0}
+.tensor b{color:#ffce7a}
+.hidden{display:none}
+
+/* attention matrix */
+.attn-wrap{overflow-x:auto}
+.attn{border-collapse:collapse;font-family:var(--mono);font-size:12px;margin:0 auto}
+.attn td,.attn th{width:34px;height:30px;text-align:center;border:1px solid var(--line2)}
+.attn th{color:var(--ink3);font-weight:600;background:var(--paper)}
+.attn td{color:transparent}
+.attn .rowh{color:var(--ink3);font-weight:600;background:var(--paper);width:auto;padding:0 8px;text-align:right}
+
+/* mlm playground */
+.mlm-sent{font-size:19px;line-height:2.4;margin:6px 0 18px;font-family:var(--sans)}
+.word{cursor:pointer;padding:2px 5px;border-radius:6px;border:1.5px solid transparent;transition:.12s;white-space:nowrap}
+.word:hover{background:var(--flow-w);border-color:var(--flow)}
+.word.masked{background:var(--mask-w);border-color:var(--mask);color:#9a5a06;font-family:var(--mono);font-weight:700}
+.preds{margin-top:6px}
+.pred-row{display:flex;align-items:center;gap:12px;margin:7px 0;font-family:var(--mono);font-size:14px}
+.pred-row .w{width:130px;text-align:right;font-weight:600}
+.pred-row .bar{height:22px;background:var(--flow);border-radius:5px;transition:width .5s ease}
+.pred-row:first-child .bar{background:var(--mask)}
+.pred-row .p{color:var(--ink3);font-size:12.5px}
+.hintline{font-size:13px;color:var(--ink3);font-family:var(--mono)}
+
+/* comparison table */
+.tbl-scroll{overflow-x:auto}
+table.cmp{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+table.cmp th,table.cmp td{border:1px solid var(--line);padding:11px 13px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--paper2);font-family:var(--mono);font-size:12px;letter-spacing:.03em;font-weight:600}
+table.cmp td:first-child{font-weight:600;background:#fafbfc}
+.pill{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600}
+.pill.y{background:#e3f5ee;color:var(--ok)}
+.pill.n{background:#fbe7ea;color:var(--no)}
+
+/* use/avoid */
+.ua{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:680px){.ua{grid-template-columns:1fr}}
+.ua .col{border:1px solid var(--line);border-radius:12px;padding:18px 20px;background:var(--card)}
+.ua h4{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.ua ul{margin:0;padding-left:2px;list-style:none}
+.ua li{padding:6px 0 6px 26px;position:relative;font-size:14.5px;border-top:1px solid var(--line2)}
+.ua li:first-child{border-top:0}
+.ua.g h4{color:var(--ok)} .ua.r h4{color:var(--no)}
+.col.g li::before{content:"✓";position:absolute;left:2px;color:var(--ok);font-weight:700}
+.col.r li::before{content:"✕";position:absolute;left:2px;color:var(--no);font-weight:700}
+
+/* code */
+pre{background:var(--ink);color:#e6ecf5;border-radius:12px;padding:18px 20px;overflow-x:auto;
+  font-family:var(--mono);font-size:13px;line-height:1.7;margin:16px 0}
+pre .c{color:#7b8ba6} pre .k{color:#ff9b6b} pre .s{color:#9ae6b4} pre .f{color:#7cc4ff}
+.filetree{font-family:var(--mono);font-size:13px;line-height:1.9;color:var(--ink2)}
+.filetree .fn{color:var(--flow);font-weight:600}
+.filetree .sz{color:var(--ink3)}
+
+/* faq */
+.faq{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);margin-top:16px}
+.faq details{border-top:1px solid var(--line2)}
+.faq details:first-child{border-top:0}
+.faq summary{cursor:pointer;padding:15px 20px;font-weight:600;font-size:15px;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-family:var(--mono);color:var(--flow);font-size:20px}
+.faq details[open] summary::after{content:"−"}
+.faq .a{padding:0 20px 16px;color:var(--ink2);font-size:14.5px}
+.faq .a code{background:var(--paper2);padding:1px 5px;border-radius:4px;font-size:13px}
+
+footer{border-top:1px solid var(--line);padding:36px 0 60px;color:var(--ink3);font-size:13px}
+footer .mono{font-size:12px}
+a{color:var(--flow)}
+
+@media (prefers-reduced-motion: reduce){*{transition:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="hero-grid"></div>
+  <div class="wrap">
+    <div class="tag">Bidirectional Encoder Representations from Transformers · Google AI · 2018</div>
+    <h1><b>BERT</b> 把一句话<br>读成机器能理解的向量</h1>
+    <p class="lede">它不生成文字，只做一件事：为句子里的每个词，算出一个「读懂了上下文」的表示，供下游任务使用。</p>
+
+    <div class="spec-strip">
+      <div class="spec"><div class="k">任务类型</div><div class="v">编码理解 <small>encoder</small></div></div>
+      <div class="spec"><div class="k">输入</div><div class="v">文本 <small>≤512 token</small></div></div>
+      <div class="spec"><div class="k">输出</div><div class="v">向量 <small>768 维/词</small></div></div>
+      <div class="spec"><div class="k">参数量</div><div class="v">110M <small>base</small></div></div>
+    </div>
+
+    <div class="railbox">
+      <div class="cap">核心数据流 · 悬停查看每一步的张量形状</div>
+      <div class="rail" id="hero-rail">
+        <div class="node" data-i="0"><div class="stage">01 原始输入</div><div class="box">一句话<div class="shape">"the cat sat"</div></div><span class="arw">→</span></div>
+        <div class="node" data-i="1"><div class="stage">02 分词</div><div class="box">Token IDs<div class="shape">[101, 1996, …]</div></div><span class="arw">→</span></div>
+        <div class="node" data-i="2"><div class="stage">03 嵌入</div><div class="box">词向量<div class="shape">[L, 768]</div></div><span class="arw">→</span></div>
+        <div class="node" data-i="3"><div class="stage">04 编码器 ×12</div><div class="box">双向注意力<div class="shape">[L, 768]</div></div><span class="arw">→</span></div>
+        <div class="node" data-i="4"><div class="stage">05 输出</div><div class="box">上下文向量<div class="shape">[L, 768]</div></div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ 1. 为什么出现 ============ -->
+<section id="why">
+  <div class="wrap">
+    <div class="eyebrow">Why · 它为什么出现</div>
+    <div class="sec-no">01</div>
+    <h2>同一个词，<span class="em">在不同句子里意思不同</span></h2>
+    <p class="big">早期的词向量（Word2Vec、GloVe）给每个词一个<strong>固定</strong>的向量：不管上下文，"bank" 永远是同一个数字。BERT 要解决的正是这件事——让表示随上下文变化。</p>
+
+    <div class="card" style="margin:22px 0">
+      <div class="controls" id="ctx-ctrl">
+        <button class="btn on" data-s="0">句子 A：river bank</button>
+        <button class="btn" data-s="1">句子 B：bank account</button>
+      </div>
+      <div class="mono" style="font-size:15px;margin-bottom:10px" id="ctx-sent">She sat by the river <span class="tok mask">bank</span> .</div>
+      <div style="font-size:14px;line-height:2">
+        <div><span class="muted">Word2Vec 给出的 "bank"：</span> <span class="tok" id="w2v">[0.21, -0.44, 0.08, …]</span> <span class="muted">← 两句话完全相同</span></div>
+        <div style="margin-top:6px"><span class="muted">BERT 给出的 "bank"：</span> <span class="tok" id="bert-vec">[0.63, 0.05, -0.71, …]</span> <span class="muted" id="ctx-note">← 结合了 river，指「河岸」</span></div>
+      </div>
+    </div>
+
+    <p>为得到这种「上下文相关」的表示，BERT 做了当时的关键突破：<strong>深层双向</strong>。它之前的方案要么是单向的（GPT 只能从左往右看），要么是浅层拼接的（ELMo 用两个方向的 LSTM 各看一半再拼起来）。BERT 让每个词在每一层都能<strong>同时看到左右所有词</strong>。</p>
+    <div class="callout"><b>一句话定位：</b>BERT = 只保留 Transformer 的 encoder，用「完形填空」式的预训练，学出深层双向的上下文表示。它是「理解器」，不是「生成器」。</div>
+  </div>
+</section>
+
+<!-- ============ 2. 输入输出 ============ -->
+<section id="io">
+  <div class="wrap">
+    <div class="eyebrow">I/O · 输入怎么来，输出是什么</div>
+    <div class="sec-no">02</div>
+    <h2>输入：<span class="em">拼装</span>；输出：<span class="em">每个位置一个向量</span></h2>
+    <p class="big">文本进不了神经网络，得先切成 token、查成 ID，再加上位置和句子归属信息。点下面的例子看 WordPiece 怎么切词。</p>
+
+    <div class="card" style="margin:20px 0">
+      <div class="controls" id="tok-ctrl">
+        <button class="btn on" data-s="0">playing football</button>
+        <button class="btn" data-s="1">unbelievable results</button>
+        <button class="btn" data-s="2">句子对（NSP）</button>
+      </div>
+      <div class="hintline">① WordPiece 分词 · <span style="color:var(--cls)">■</span> 特殊 token · 虚线框 = 子词（## 表示接在前一个词后面）</div>
+      <div id="tok-out" style="margin:12px 0 4px"></div>
+      <div class="hintline" style="margin-top:14px">② 每个 token 的向量 = 三种嵌入相加，再过 LayerNorm：</div>
+      <div style="margin-top:8px;font-size:14px">
+        <span class="tok">token embedding</span> <span style="color:var(--flow)">+</span>
+        <span class="tok">segment embedding <span class="muted">(句 A=0 / 句 B=1)</span></span> <span style="color:var(--flow)">+</span>
+        <span class="tok">position embedding <span class="muted">(0…511)</span></span>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:16px">输出 A · 每个词的向量</h3>
+        <p style="margin:0;font-size:14.5px">形状 <span class="tensor"><b>[序列长度 L, 768]</b></span>。每个位置都是一个「读懂上下文后」的 768 维向量，用于 <strong>NER、抽取式问答</strong>（判断每个 token 是不是答案边界）等逐词任务。</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;font-size:16px">输出 B · [CLS] 位置的向量</h3>
+        <p style="margin:0;font-size:14.5px">序列第一个位置 <span class="tok sp">[CLS]</span> 的向量常被当作<strong>整句表示</strong>，接一个分类头做<strong>情感分析、句子分类</strong>等整句任务。</p>
+      </div>
+    </div>
+    <div class="callout"><b>常见误区：</b>未经微调时，原始 <code>[CLS]</code> 向量并不是好的「句向量」，直接拿来算句子相似度效果很差。需要句向量请用 <b>Sentence-BERT</b> 或 mean-pooling。</div>
+  </div>
+</section>
+
+<!-- ============ 3. 数据流 pipeline ============ -->
+<section id="flow">
+  <div class="wrap">
+    <div class="eyebrow">Data flow · 数据在模型里怎么走</div>
+    <div class="sec-no">03</div>
+    <h2>从文本到向量，<span class="em">追踪每一步的形状</span></h2>
+    <p class="big">点下面的阶段，看数据在每一步变成什么、形状怎么变化。以 BERT-base 处理一句 8 个 token 的话为例。</p>
+
+    <div class="card" style="margin-top:20px">
+      <div class="steps" id="flow-steps">
+        <div class="step on" data-i="0"><span class="n">01</span>分词</div>
+        <div class="step" data-i="1"><span class="n">02</span>嵌入</div>
+        <div class="step" data-i="2"><span class="n">03</span>自注意力</div>
+        <div class="step" data-i="3"><span class="n">04</span>前馈层</div>
+        <div class="step" data-i="4"><span class="n">05</span>×12 堆叠</div>
+        <div class="step" data-i="5"><span class="n">06</span>输出</div>
+      </div>
+      <div class="stage-view" id="flow-view"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. 编码器内部 + 注意力 ============ -->
+<section id="attn">
+  <div class="wrap">
+    <div class="eyebrow">Inside · 编码器一层里发生了什么</div>
+    <div class="sec-no">04</div>
+    <h2>双向注意力：<span class="em">每个词都看向所有词</span></h2>
+    <p class="big">这是 BERT 与 GPT 最本质的区别。下面矩阵的每一行是一个词，格子越蓝表示它对某个词的注意力越强。BERT 里<strong>整张表都可以点亮</strong>；GPT 只能点亮下三角（不能看未来）。</p>
+
+    <div class="card" style="margin-top:20px">
+      <div class="controls" id="mask-ctrl">
+        <button class="btn on" data-m="bert">BERT · 双向（看全部）</button>
+        <button class="btn" data-m="gpt">GPT · 单向（只看左边）</button>
+      </div>
+      <div class="attn-wrap"><table class="attn" id="attn-tbl"></table></div>
+      <p class="hintline" style="margin-top:14px" id="attn-note">"it" 这一行可以关注到右边的 "tired"，从而知道 "it" 指代 "cat"——这需要向右看。</p>
+    </div>
+
+    <div class="grid2" style="margin-top:18px">
+      <div class="card"><h3 style="margin-top:0;font-size:15px">一层 = 两个子模块</h3>
+        <p style="margin:0;font-size:14px">① <strong>Multi-Head Self-Attention</strong>（base 有 12 个头，各看不同关系）→ ② <strong>Feed-Forward</strong>（768→3072→768）。每个子模块外都套 <strong>残差连接 + LayerNorm</strong>。</p></div>
+      <div class="card"><h3 style="margin-top:0;font-size:15px">堆 12 层的意义</h3>
+        <p style="margin:0;font-size:14px">浅层偏向<strong>语法、局部搭配</strong>，深层偏向<strong>语义、指代、任务相关</strong>信息。层层叠加，表示越来越「懂意思」。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5. 训练 vs 推理 + MLM playground ============ -->
+<section id="train">
+  <div class="wrap">
+    <div class="eyebrow">Train vs. Infer · 训练学什么，推理算什么</div>
+    <div class="sec-no">05</div>
+    <h2>预训练靠<span class="em">完形填空</span>自学，再微调到具体任务</h2>
+    <p class="big">BERT 没有人工标注就能学：随机盖住 15% 的词（<span class="tok mask">[MASK]</span>），让模型根据两边的上下文猜回来。这就是 <strong>Masked Language Model (MLM)</strong>。点句子里的任意词，把它盖住试试。</p>
+
+    <div class="card" style="margin:20px 0">
+      <div class="hintline">👇 点击句子里的词来遮盖它，看 BERT 预测什么（预测为 bert-base-uncased 的典型结果，用于演示）</div>
+      <div class="mlm-sent" id="mlm-sent"></div>
+      <div class="controls" id="mlm-ctrl">
+        <button class="btn on" data-s="0">例句 1</button>
+        <button class="btn" data-s="1">例句 2</button>
+        <button class="btn" data-s="2">例句 3</button>
+      </div>
+      <div class="preds" id="mlm-preds"><p class="hintline">↑ 点一个词看预测结果</p></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:16px">阶段一 · 预训练 <span class="muted mono" style="font-size:12px">（一次，很贵）</span></h3>
+        <p style="font-size:14px;margin:0 0 8px">在海量无标注文本上学通用语言能力：</p>
+        <p style="font-size:14px;margin:0"><strong>MLM</strong>：填被盖住的词（15% 中 80% 换 <code>[MASK]</code>、10% 换随机词、10% 不变）。<br><strong>NSP</strong>：判断句 B 是否紧接句 A（后续 RoBERTa 证明这步可去掉）。<br><span class="muted">数据：BooksCorpus + English Wikipedia（约 33 亿词）。</span></p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;font-size:16px">阶段二 · 微调 & 推理 <span class="muted mono" style="font-size:12px">（便宜，你来做）</span></h3>
+        <p style="font-size:14px;margin:0 0 8px"><strong>微调</strong>：接一个小任务头，用少量标注数据在几个 epoch 内训练完，主干权重也一起微调。<br><strong>推理</strong>：只做一次前向传播，不再更新权重。</p>
+        <p style="font-size:14px;margin:0" class="muted">影响结果的关键：预训练权重版本（uncased/cased/多语言）、最大长度、微调数据质量、任务头设计。</p>
+      </div>
+    </div>
+    <div class="callout"><b>为什么 MLM 不等于会写作？</b>MLM 是「已知两边、填中间一个空」，不是「从左往右逐字生成」。所以 BERT 不能像 GPT 那样连续生成流畅文本——这是架构决定的，不是训练不够。</div>
+  </div>
+</section>
+
+<!-- ============ 6. 对比与边界 ============ -->
+<section id="compare">
+  <div class="wrap">
+    <div class="eyebrow">Compare · 相近模型与边界</div>
+    <div class="sec-no">06</div>
+    <h2>它在模型家族里的<span class="em">坐标</span></h2>
+
+    <div class="tbl-scroll">
+    <table class="cmp">
+      <thead><tr><th>模型</th><th>结构</th><th>方向</th><th>擅长</th><th>能生成文本?</th></tr></thead>
+      <tbody>
+        <tr><td>Word2Vec / GloVe</td><td>查表</td><td>无上下文</td><td>词相似度</td><td><span class="pill n">否</span></td></tr>
+        <tr><td>ELMo</td><td>双向 LSTM</td><td>浅层双向</td><td>上下文词向量</td><td><span class="pill n">否</span></td></tr>
+        <tr><td><strong>BERT</strong></td><td>Transformer encoder</td><td><strong>深层双向</strong></td><td>分类 / NER / 抽取问答</td><td><span class="pill n">否</span></td></tr>
+        <tr><td>GPT</td><td>Transformer decoder</td><td>单向（左→右）</td><td>生成 / 对话</td><td><span class="pill y">是</span></td></tr>
+        <tr><td>T5 / BART</td><td>encoder-decoder</td><td>双向编 + 单向解</td><td>翻译 / 摘要</td><td><span class="pill y">是</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3 style="font-size:17px;margin:28px 0 10px">BERT 自己的变体</h3>
+    <div class="tbl-scroll">
+    <table class="cmp">
+      <thead><tr><th>变体</th><th>改了什么</th><th>换来什么</th></tr></thead>
+      <tbody>
+        <tr><td>BERT-large</td><td>24 层 / 1024 隐藏 / 16 头，340M 参数</td><td>更强，但更慢更吃显存</td></tr>
+        <tr><td>RoBERTa</td><td>去掉 NSP、更多数据、动态 mask、更大 batch</td><td>同结构下效果更好</td></tr>
+        <tr><td>ALBERT</td><td>跨层参数共享 + 词嵌入分解</td><td>参数大幅减少</td></tr>
+        <tr><td>DistilBERT</td><td>知识蒸馏压缩</td><td>小 40% / 快 60% / 保留约 97% 效果</td></tr>
+        <tr><td>ELECTRA</td><td>用「判断词是否被替换」代替 MLM</td><td>训练更高效</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3 style="font-size:17px;margin:30px 0 10px">该不该用 BERT？</h3>
+    <div class="ua">
+      <div class="col g"><h4>✓ 适合</h4><ul>
+        <li>文本分类、情感分析、意图识别</li>
+        <li>命名实体识别（NER）、序列标注</li>
+        <li>抽取式问答（从原文划出答案）</li>
+        <li>语义检索的编码器（配 Sentence-BERT）</li>
+        <li>有一定标注数据、追求准确率的理解任务</li>
+      </ul></div>
+      <div class="col r"><h4>✕ 不适合</h4><ul>
+        <li>写文章、对话、续写等<strong>生成</strong>任务 → 用 GPT 类</li>
+        <li>翻译 / 摘要等序列到序列 → 用 T5 / BART</li>
+        <li>超长文档（&gt;512 token 需截断或换 Longformer）</li>
+        <li>想直接零样本用作句向量（需微调或用 SBERT）</li>
+        <li>极低延迟 / 端侧场景（可考虑 DistilBERT）</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 7. 最小实践 ============ -->
+<section id="practice">
+  <div class="wrap">
+    <div class="eyebrow">Hands-on · 最小可运行示例</div>
+    <div class="sec-no">07</div>
+    <h2>三行代码看到它的<span class="em">真实输出</span></h2>
+    <p class="big">用 Hugging Face <code>transformers</code>，先看 MLM 填空，再看拿到的向量形状。</p>
+
+    <pre><span class="c"># pip install transformers torch</span>
+<span class="k">from</span> transformers <span class="k">import</span> pipeline, AutoTokenizer, AutoModel
+<span class="k">import</span> torch
+
+<span class="c"># ① 直接体验预训练目标：完形填空</span>
+fill = pipeline(<span class="s">"fill-mask"</span>, model=<span class="s">"bert-base-uncased"</span>)
+<span class="k">print</span>(fill(<span class="s">"The man went to the [MASK] to buy milk."</span>)[<span class="s">0</span>])
+<span class="c"># → {'token_str': 'store', 'score': 0.52, ...}</span>
+
+<span class="c"># ② 取出每个词的上下文向量</span>
+tok = AutoTokenizer.from_pretrained(<span class="s">"bert-base-uncased"</span>)
+model = AutoModel.from_pretrained(<span class="s">"bert-base-uncased"</span>)
+
+x = tok(<span class="s">"the cat sat on the mat"</span>, return_tensors=<span class="s">"pt"</span>)
+<span class="k">with</span> torch.no_grad():
+    out = model(**x)
+
+<span class="k">print</span>(out.last_hidden_state.shape)  <span class="c"># torch.Size([1, 8, 768])</span>
+<span class="c">#   1 = batch, 8 = [CLS]+6词+[SEP], 768 = 每词向量维度</span>
+cls_vec = out.last_hidden_state[:, <span class="s">0</span>]     <span class="c"># [CLS] → 整句表示 [1, 768]</span></pre>
+
+    <div class="grid2" style="margin-top:6px">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:15px">模型文件长什么样</h3>
+        <div class="filetree">
+          bert-base-uncased/<br>
+          ├─ <span class="fn">config.json</span> <span class="sz">层数/维度/头数等超参</span><br>
+          ├─ <span class="fn">pytorch_model.bin</span> <span class="sz">~440MB 权重</span><br>
+          ├─ <span class="fn">vocab.txt</span> <span class="sz">30,522 个 WordPiece</span><br>
+          └─ <span class="fn">tokenizer_config.json</span> <span class="sz">分词器设置</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;font-size:15px">部署与工程取舍</h3>
+        <p style="margin:0;font-size:14px">生产上常做：<strong>ONNX / TorchScript 导出</strong>加速、<strong>量化（int8）</strong>降显存、按最大长度<strong>截断/分桶</strong>、GPU 批处理提吞吐。延迟敏感就换 <strong>DistilBERT</strong> 或 ALBERT。</p>
+      </div>
+    </div>
+
+    <h3 style="font-size:17px;margin:30px 0 8px">还想问的几件事</h3>
+    <div class="faq">
+      <details open><summary>为什么最大长度是 512？</summary><div class="a">位置嵌入是<strong>学出来的</strong>，只训练了 0–511 共 512 个位置。超过就没有对应的位置向量。想处理长文本得截断、滑窗，或改用 Longformer / BigBird 这类稀疏注意力模型。</div></details>
+      <details><summary>uncased 和 cased 选哪个？</summary><div class="a"><code>uncased</code> 会把文本转小写、去重音，适合大小写不重要的任务；<code>cased</code> 保留大小写，做 <strong>NER</strong> 等对大小写敏感的任务更好（如区分 <code>Apple</code> 公司 vs <code>apple</code> 水果）。</div></details>
+      <details><summary>[MASK] 只在预训练出现，微调/推理时还有吗？</summary><div class="a">没有。<code>[MASK]</code> 只是预训练 MLM 的工具。这会造成「预训练见得到、下游见不到」的<strong>不匹配</strong>——所以原论文里 15% 被选中的词只有 80% 真换成 <code>[MASK]</code>，另 10% 换随机词、10% 保持原样，缓解这个差距。</div></details>
+      <details><summary>微调需要多少数据和算力？</summary><div class="a">远小于预训练。常见任务几千到几万条标注、单张消费级 GPU 跑几个 epoch（几分钟到几小时）即可。这正是「预训练一次、到处微调」范式省钱的地方。</div></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="mono" style="color:var(--ink2);font-weight:600">一文读懂 · BERT</div>
+    <p style="margin:8px 0 0">Devlin et al., 2018《BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding》。本页数值与预测为教学演示，实际结果取决于具体权重与输入；离线单文件，可自由保存分享。</p>
+  </div>
+</footer>
+
+<script>
+/* ---------- hero rail hover ---------- */
+(function(){
+  const shapes=["原始字符串","查词表 → 整数 ID","三种嵌入相加 [L,768]","12 层双向注意力，形状不变","供下游任务使用"];
+  document.querySelectorAll('#hero-rail .node').forEach(n=>{
+    n.addEventListener('mouseenter',()=>{
+      document.querySelectorAll('#hero-rail .node').forEach(x=>x.classList.remove('hi'));
+      n.classList.add('hi');
+    });
+  });
+})();
+
+/* ---------- contextual embedding toggle ---------- */
+(function(){
+  const data=[
+    {sent:'She sat by the river <span class="tok mask">bank</span> .', vec:'[0.63, 0.05, -0.71, …]', note:'← 结合了 river，指「河岸」'},
+    {sent:'I need to check my <span class="tok mask">bank</span> account .', vec:'[-0.18, 0.52, 0.30, …]', note:'← 结合了 account，指「银行」'}
+  ];
+  const ctrl=document.getElementById('ctx-ctrl');
+  ctrl.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    ctrl.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    const d=data[+b.dataset.s];
+    document.getElementById('ctx-sent').innerHTML=d.sent;
+    document.getElementById('bert-vec').textContent=d.vec;
+    document.getElementById('ctx-note').textContent=d.note;
+  });
+})();
+
+/* ---------- tokenizer demo ---------- */
+(function(){
+  const sp=t=>`<span class="tok sp">${t}</span>`;
+  const tk=t=>`<span class="tok">${t}</span>`;
+  const sub=t=>`<span class="tok sub">${t}</span>`;
+  const ex=[
+    [sp('[CLS]'),tk('play'),sub('##ing'),tk('football'),sp('[SEP]')],
+    [sp('[CLS]'),tk('un'),sub('##bel'),sub('##ie'),sub('##vable'),tk('results'),sp('[SEP]')],
+    [sp('[CLS]'),tk('how'),tk('are'),tk('you'),sp('[SEP]'),tk('i'),tk("'"),sub('##m'),tk('fine'),sp('[SEP]')]
+  ];
+  const ctrl=document.getElementById('tok-ctrl'),out=document.getElementById('tok-out');
+  const render=i=>out.innerHTML=ex[i].join(' ');
+  render(0);
+  ctrl.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    ctrl.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    render(+b.dataset.s);
+  });
+})();
+
+/* ---------- flow stepper ---------- */
+(function(){
+  const stages=[
+    {h:'01 · 分词 Tokenize',b:'原始文本切成 WordPiece token，两端加 <span class="tok sp">[CLS]</span>…<span class="tok sp">[SEP]</span>，再查表成整数 ID。',t:'输入: "the cat sat …" → IDs shape <b>[1, 8]</b>'},
+    {h:'02 · 嵌入 Embedding',b:'每个 ID 查出 token 嵌入，加上 position 与 segment 嵌入，过 LayerNorm。这里维度第一次变成 768。',t:'[1, 8] → <b>[1, 8, 768]</b>'},
+    {h:'03 · 自注意力 Self-Attention',b:'每个词生成 Query/Key/Value，与序列里<strong>所有</strong>词计算注意力权重并加权求和。12 个头并行。形状不变。',t:'[1, 8, 768] → attention → <b>[1, 8, 768]</b>'},
+    {h:'04 · 前馈层 Feed-Forward',b:'逐位置的两层全连接：先升到 3072 维、GELU 激活，再降回 768。残差 + LayerNorm 收尾。',t:'[1, 8, 768] → 3072 → <b>[1, 8, 768]</b>'},
+    {h:'05 · 堆叠 ×12',b:'第 03、04 步合成「一层 encoder」，BERT-base 把它重复 12 次。表示逐层从语法走向语义。形状始终不变。',t:'12 层后仍是 <b>[1, 8, 768]</b>'},
+    {h:'06 · 输出 Output',b:'最后一层的隐藏状态即结果：每个 token 一个 768 维上下文向量。<span class="tok sp">[CLS]</span> 位置常作整句表示。',t:'last_hidden_state = <b>[1, 8, 768]</b>'}
+  ];
+  const steps=document.getElementById('flow-steps'),view=document.getElementById('flow-view');
+  const render=i=>{const s=stages[i];view.innerHTML=`<h4>${s.h}</h4><p style="font-size:14.5px">${s.b}</p><div class="tensor">${s.t}</div>`;};
+  render(0);
+  steps.addEventListener('click',e=>{
+    const el=e.target.closest('.step'); if(!el)return;
+    steps.querySelectorAll('.step').forEach(x=>x.classList.remove('on')); el.classList.add('on');
+    render(+el.dataset.i);
+  });
+})();
+
+/* ---------- attention matrix ---------- */
+(function(){
+  const words=['the','cat','sat','because','it','was','tired'];
+  // symmetric-ish attention strengths (0..1); "it"->"cat"/"tired" strong
+  const base={
+    'it':{'cat':.9,'tired':.85,'was':.4,'it':.5,'the':.2,'sat':.3,'because':.2},
+    'cat':{'cat':.6,'the':.5,'sat':.6,'tired':.3},
+    'tired':{'it':.6,'was':.6,'cat':.4,'tired':.5},
+    'sat':{'cat':.7,'sat':.5,'the':.3},
+    'was':{'it':.4,'tired':.6,'was':.5},
+    'because':{'because':.5,'sat':.4,'was':.4},
+    'the':{'cat':.6,'the':.5}
+  };
+  const tbl=document.getElementById('attn-tbl');
+  let mode='bert';
+  function val(r,c){
+    const ri=words.indexOf(r), ci=words.indexOf(c);
+    if(mode==='gpt'&&ci>ri) return null; // cannot look right
+    let v=(base[r]&&base[r][c])||0.12;
+    return v;
+  }
+  function render(){
+    let h='<tr><th></th>'+words.map(w=>`<th>${w}</th>`).join('')+'</tr>';
+    words.forEach(r=>{
+      h+=`<tr><td class="rowh">${r}</td>`;
+      words.forEach(c=>{
+        const v=val(r,c);
+        if(v===null){h+=`<td style="background:#f2f4f7"></td>`;}
+        else{const a=(0.08+v*0.9).toFixed(2);h+=`<td style="background:rgba(30,92,240,${a})"></td>`;}
+      });
+      h+='</tr>';
+    });
+    tbl.innerHTML=h;
+  }
+  render();
+  const ctrl=document.getElementById('mask-ctrl'),note=document.getElementById('attn-note');
+  ctrl.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    ctrl.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    mode=b.dataset.m; render();
+    note.innerHTML = mode==='bert'
+      ? '"it" 这一行可以关注到右边的 "tired"，从而知道 "it" 指代 "cat"——这需要<strong>向右看</strong>。'
+      : '灰色格子被屏蔽：GPT 只能看左边，"it" 看不到后面的 "tired"，指代推理更难。';
+  });
+})();
+
+/* ---------- MLM playground ---------- */
+(function(){
+  const examples=[
+    {words:['The','man','went','to','the','store','to','buy','milk','.'],
+     preds:{5:[['store',.52],['shop',.13],['market',.08],['bar',.03],['office',.02]],
+            8:[['milk',.41],['groceries',.11],['bread',.07],['food',.05],['some',.03]],
+            1:[['man',.44],['boy',.12],['woman',.09],['guy',.06],['kid',.03]]}},
+    {words:['She','sat','on','the','river','bank','and','watched','the','water','.'],
+     preds:{5:[['bank',.61],['edge',.09],['bed',.06],['side',.05],['shore',.04]],
+            9:[['water',.47],['river',.10],['boats',.06],['waves',.05],['sky',.03]],
+            1:[['sat',.38],['stood',.14],['lay',.09],['waited',.05],['stayed',.04]]}},
+    {words:['Paris','is','the','capital','of','France','.'],
+     preds:{5:[['France',.83],['Europe',.03],['Italy',.02],['Spain',.02],['Germany',.01]],
+            3:[['capital',.71],['heart',.05],['centre',.04],['city',.03],['home',.02]],
+            0:[['Paris',.34],['London',.11],['Rome',.08],['Berlin',.06],['Madrid',.04]]}}
+  ];
+  let cur=0, maskedIdx=null;
+  const sentEl=document.getElementById('mlm-sent'),predEl=document.getElementById('mlm-preds'),ctrl=document.getElementById('mlm-ctrl');
+
+  function renderSent(){
+    const ex=examples[cur];
+    sentEl.innerHTML=ex.words.map((w,i)=>{
+      if(/^[.,]$/.test(w)) return `<span> ${w}</span>`;
+      const cls='word'+(i===maskedIdx?' masked':'');
+      const label=i===maskedIdx?'[MASK]':w;
+      return `<span class="${cls}" data-i="${i}">${label}</span>`;
+    }).join(' ');
+  }
+  function renderPreds(){
+    const ex=examples[cur];
+    if(maskedIdx===null||!ex.preds[maskedIdx]){
+      predEl.innerHTML='<p class="hintline">↑ 点一个词看预测结果（部分词有演示数据）</p>';return;
+    }
+    const rows=ex.preds[maskedIdx];
+    predEl.innerHTML='<div class="hintline" style="margin-bottom:8px">Top-5 预测（softmax 概率）：</div>'+
+      rows.map(([w,p])=>`<div class="pred-row"><span class="w">${w}</span><div class="bar" style="width:${(p*100*0.9+4).toFixed(0)}%"></div><span class="p">${(p*100).toFixed(0)}%</span></div>`).join('');
+  }
+  sentEl.addEventListener('click',e=>{
+    const el=e.target.closest('.word'); if(!el)return;
+    const i=+el.dataset.i;
+    maskedIdx=(maskedIdx===i)?null:i;
+    renderSent();renderPreds();
+  });
+  ctrl.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    ctrl.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    cur=+b.dataset.s; maskedIdx=null; renderSent();renderPreds();
+  });
+  renderSent();renderPreds();
+})();
+</script>
+</body>
+</html>

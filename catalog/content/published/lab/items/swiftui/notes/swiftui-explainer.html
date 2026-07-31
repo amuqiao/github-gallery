@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 SwiftUI — 面向 AI Coding 的开发心智模型</title>
+<style>
+:root{
+  --bg:#17181c; --panel:#232429; --panel2:#2b2d33; --inset:#1d1e23;
+  --line:#3a3c44; --line-soft:#2e3036;
+  --text:#e9e9ec; --dim:#9a9ca6; --faint:#6e707a;
+  --swift:#f05138; --swift-soft:rgba(240,81,56,.14);
+  --kw:#fc5fa3; --typ:#6bdfff; --str:#ff8170; --num:#d9c97c; --com:#7f8c98; --fn:#78d3b6; --attr:#ffa14f;
+  --ok:#5fd07a; --warn:#ffb340;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"PingFang SC",monospace;
+  --r:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.75;-webkit-font-smoothing:antialiased}
+::selection{background:var(--swift-soft)}
+a{color:var(--typ);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:.88em;background:var(--inset);border:1px solid var(--line-soft);border-radius:5px;padding:.1em .4em;color:#f2c9a0;white-space:nowrap}
+strong{color:#fff;font-weight:600}
+button{font-family:var(--sans)}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--swift);outline-offset:2px}
+
+/* ===== 布局:左侧导航 + 主内容 ===== */
+.wrap{display:grid;grid-template-columns:224px minmax(0,1fr);max-width:1240px;margin:0 auto}
+nav.toc{position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 8px 40px 20px;border-right:1px solid var(--line-soft);font-size:13px}
+nav.toc .brand{font-family:var(--mono);color:var(--swift);font-size:12px;letter-spacing:.08em;margin-bottom:18px;display:block}
+nav.toc a{display:block;color:var(--dim);padding:5px 10px;border-radius:6px;border-left:2px solid transparent;line-height:1.4;margin:1px 0}
+nav.toc a:hover{color:var(--text);background:var(--panel);text-decoration:none}
+nav.toc a.on{color:#fff;border-left-color:var(--swift);background:var(--panel)}
+nav.toc .grp{color:var(--faint);font-size:10px;letter-spacing:.14em;text-transform:uppercase;margin:16px 10px 4px;font-family:var(--mono)}
+main{padding:0 44px 120px;min-width:0}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  nav.toc{display:none}
+  main{padding:0 18px 90px}
+}
+
+section{margin-top:96px;scroll-margin-top:24px}
+.eyebrow{font-family:var(--mono);font-size:12px;color:var(--swift);letter-spacing:.1em;margin-bottom:10px}
+h2{font-size:30px;font-weight:700;letter-spacing:-.01em;line-height:1.25;margin-bottom:14px}
+h3{font-size:19px;font-weight:650;margin:36px 0 10px;letter-spacing:-.01em}
+p.lead{color:var(--dim);font-size:17px;max-width:46em}
+p{max-width:46em;margin-bottom:12px}
+p.note{color:var(--dim);font-size:14px}
+ul.plain{max-width:46em;margin:0 0 14px 1.2em;color:var(--text)}
+ul.plain li{margin-bottom:8px}
+ul.plain li::marker{color:var(--swift)}
+
+/* ===== Hero ===== */
+header.hero{padding:64px 0 0}
+.hero h1{font-size:clamp(38px,6vw,58px);font-weight:800;letter-spacing:-.03em;line-height:1.08}
+.hero h1 .sw{color:var(--swift)}
+.hero .sub{color:var(--dim);font-size:18px;max-width:44em;margin:18px 0 8px}
+.hero .meta{font-family:var(--mono);font-size:12.5px;color:var(--faint);margin-bottom:34px}
+.hero .meta b{color:var(--num);font-weight:500}
+.formula{font-family:var(--mono);font-size:14px;color:var(--dim);margin:0 0 14px}
+.formula em{color:var(--typ);font-style:normal}
+
+/* ===== Xcode 窗口(签名元素) ===== */
+.xcode{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.xcode .titlebar{display:flex;align-items:center;gap:8px;background:#2a2b31;border-bottom:1px solid var(--line);padding:10px 14px;font-family:var(--mono);font-size:12px;color:var(--faint)}
+.dot{width:11px;height:11px;border-radius:50%}
+.dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
+.xcode .titlebar .fname{margin-left:10px;color:var(--dim)}
+.xcode .split{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+@media (max-width:760px){.xcode .split{grid-template-columns:1fr}}
+.editor{padding:18px 20px;font-family:var(--mono);font-size:13.5px;line-height:1.85;overflow-x:auto;background:var(--panel)}
+.editor .ln{display:block;white-space:pre}
+.editor .hl,.editor .hl2{background:var(--swift-soft);border-radius:4px;margin:0 -6px;padding:0 6px}
+.k{color:var(--kw)}.t{color:var(--typ)}.s{color:var(--str)}.n{color:var(--num)}.c{color:var(--com)}.f{color:var(--fn)}.a{color:var(--attr)}
+.statebadge{display:inline-block;font-size:11px;background:var(--swift);color:#fff;border-radius:10px;padding:0 8px;margin-left:10px;vertical-align:1px;font-weight:600}
+.canvas{background:var(--inset);border-left:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px 16px;gap:12px}
+@media (max-width:760px){.canvas{border-left:none;border-top:1px solid var(--line)}}
+.canvas .cap{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.08em}
+.iphone{width:210px;background:#000;border-radius:34px;border:3px solid #3c3d44;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.55)}
+.screen{background:linear-gradient(180deg,#0e2740,#0a1522);border-radius:24px;height:340px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;position:relative;overflow:hidden}
+.screen .notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:70px;height:16px;background:#000;border-radius:10px}
+.screen .apptitle{font-size:13px;color:#8fb8d8;letter-spacing:.06em}
+.screen .cups{font-size:34px;letter-spacing:2px;min-height:44px;display:flex;flex-wrap:wrap;justify-content:center;max-width:170px}
+.screen .cnt{font-size:15px;color:#fff;font-weight:600}
+.screen .cnt span{color:#7cc7ff;font-variant-numeric:tabular-nums}
+.tapbtn{background:#0a84ff;color:#fff;border:none;border-radius:12px;padding:9px 22px;font-size:14px;font-weight:600;cursor:pointer}
+.tapbtn:active{transform:scale(.96)}
+.resetbtn{background:none;border:none;color:#6f8296;font-size:12px;cursor:pointer;text-decoration:underline}
+.hero .below{display:flex;gap:10px;align-items:flex-start;margin-top:14px;flex-wrap:wrap}
+.hero .below .tip{font-size:13.5px;color:var(--dim);max-width:40em}
+.hero .below .tip b{color:var(--swift)}
+
+/* ===== 代码块(静态) ===== */
+pre.code{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;font-family:var(--mono);font-size:13px;line-height:1.8;overflow-x:auto;margin:14px 0}
+pre.code .cm{color:var(--com)}
+.codehead{font-family:var(--mono);font-size:11.5px;color:var(--faint);background:var(--panel2);border:1px solid var(--line);border-bottom:none;border-radius:var(--r) var(--r) 0 0;padding:7px 14px;margin-top:14px;display:flex;justify-content:space-between}
+.codehead + pre.code{margin-top:0;border-radius:0 0 var(--r) var(--r)}
+
+/* ===== 目录树 ===== */
+.treewrap{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:14px;margin:18px 0}
+@media (max-width:760px){.treewrap{grid-template-columns:1fr}}
+.tree{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 10px;font-family:var(--mono);font-size:13px;line-height:2}
+.tree button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--dim);font-family:var(--mono);font-size:13px;padding:2px 10px;border-radius:6px;cursor:pointer;white-space:pre}
+.tree button:hover{background:var(--panel2);color:var(--text)}
+.tree button.on{background:var(--swift-soft);color:#fff}
+.tree .dirlabel{color:var(--faint);padding:2px 10px;white-space:pre}
+.treedesc{background:var(--inset);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;font-size:14.5px}
+.treedesc h4{font-family:var(--mono);font-size:13px;color:var(--swift);margin-bottom:8px}
+.treedesc p{font-size:14.5px;color:var(--text);margin-bottom:8px;max-width:none}
+.treedesc .role{display:inline-block;font-size:11px;font-family:var(--mono);color:var(--typ);border:1px solid var(--line);border-radius:20px;padding:1px 10px;margin-bottom:10px}
+
+/* ===== Tabs(状态管理) ===== */
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 0}
+.tabs button{background:var(--panel);border:1px solid var(--line);color:var(--dim);font-family:var(--mono);font-size:12.5px;padding:7px 14px;border-radius:8px 8px 0 0;border-bottom:none;cursor:pointer}
+.tabs button.on{background:var(--panel2);color:var(--swift);border-color:var(--line);position:relative}
+.tabpane{display:none;background:var(--panel2);border:1px solid var(--line);border-radius:0 var(--r) var(--r) var(--r);padding:20px 22px}
+.tabpane.on{display:block}
+.tabpane .use{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+@media (max-width:700px){.tabpane .use{grid-template-columns:1fr}}
+.tabpane .use div{background:var(--inset);border:1px solid var(--line-soft);border-radius:8px;padding:12px 14px;font-size:13.5px}
+.tabpane .use b{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.1em;margin-bottom:6px}
+.tabpane .use .yes b{color:var(--ok)}
+.tabpane .use .no b{color:var(--warn)}
+.tabpane pre.code{background:var(--panel);margin-bottom:0}
+.tabpane p{max-width:none;font-size:14.5px}
+
+/* ===== 决策流/图 ===== */
+.flow{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin:16px 0;overflow-x:auto}
+.flow svg{display:block;min-width:640px;width:100%;height:auto}
+.flow text{font-family:var(--mono)}
+
+/* ===== 对照表 ===== */
+.search{width:100%;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:14px;padding:9px 14px;margin:14px 0 10px;font-family:var(--sans)}
+.search::placeholder{color:var(--faint)}
+table.map{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0 8px}
+table.map th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--faint);text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);text-transform:uppercase}
+table.map td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+table.map td:first-child{color:#fff;white-space:nowrap}
+table.map td:nth-child(2){font-family:var(--mono);font-size:12.5px;color:var(--typ)}
+table.map td:nth-child(3){color:var(--dim);font-size:13.5px}
+table.map tr:hover td{background:var(--panel)}
+.count{font-family:var(--mono);font-size:12px;color:var(--faint)}
+
+/* ===== 选择边界卡片 ===== */
+.pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin:16px 0}
+.pick .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+.pick .card h4{font-family:var(--mono);font-size:13.5px;color:var(--typ);margin-bottom:4px}
+.pick .card .ver{font-family:var(--mono);font-size:10.5px;color:var(--num);margin-bottom:8px}
+.pick .card p{font-size:13.5px;color:var(--dim);margin-bottom:6px;max-width:none}
+.pick .card p b{color:var(--text);font-weight:600}
+
+/* ===== 误说法 ===== */
+.fix{display:grid;grid-template-columns:1fr;gap:10px;margin:16px 0}
+.fix .row{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:16px}
+@media (max-width:700px){.fix .row{grid-template-columns:1fr}}
+.fix .bad{color:var(--dim);font-size:14px}
+.fix .bad::before{content:"✗ ";color:var(--str);font-weight:700}
+.fix .good{font-size:14px}
+.fix .good::before{content:"✓ ";color:var(--ok);font-weight:700}
+
+/* ===== Prompt 改写 ===== */
+.pwrap{margin:16px 0}
+.ptoggle{display:flex;gap:0;margin-bottom:-1px;position:relative;z-index:1}
+.ptoggle button{background:var(--panel);border:1px solid var(--line);color:var(--dim);font-size:13px;padding:8px 18px;cursor:pointer;font-family:var(--mono)}
+.ptoggle button:first-child{border-radius:8px 0 0 0}
+.ptoggle button:last-child{border-radius:0 8px 0 0;border-left:none}
+.ptoggle button.on{background:var(--panel2);color:#fff;border-bottom-color:var(--panel2)}
+.pbody{background:var(--panel2);border:1px solid var(--line);border-radius:0 var(--r) var(--r) var(--r);padding:18px 20px;font-size:14px;line-height:1.85}
+.pbody .vague{color:var(--dim);font-style:normal}
+.pbody .term{color:var(--typ);font-family:var(--mono);font-size:.92em}
+.pbody .loc{color:var(--num);font-family:var(--mono);font-size:.92em}
+.pbody ol{margin-left:1.3em}
+.pbody ol li{margin-bottom:6px}
+
+.divider{border:none;border-top:1px solid var(--line-soft);margin:60px 0 0}
+footer{margin-top:80px;padding-top:24px;border-top:1px solid var(--line-soft);font-family:var(--mono);font-size:12px;color:var(--faint);line-height:2}
+.kbd{font-family:var(--mono);font-size:.85em;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 6px;background:var(--panel2);color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc" aria-label="目录">
+  <span class="brand">SwiftUI.md</span>
+  <div class="grp">心智模型</div>
+  <a href="#mental">View = f(State)</a>
+  <a href="#task">从一个真实任务开始</a>
+  <a href="#structure">项目结构与入口</a>
+  <div class="grp">工程维度</div>
+  <a href="#state">状态管理</a>
+  <a href="#nav">导航与页面跳转</a>
+  <a href="#data">数据流与异步</a>
+  <a href="#persist">持久化怎么选</a>
+  <a href="#lifecycle">生命周期与副作用</a>
+  <div class="grp">术语与表达</div>
+  <a href="#glossary">需求 → 术语对照表</a>
+  <a href="#version">版本边界</a>
+  <a href="#prompt">AI Coding 提示词</a>
+  <a href="#wrong">常见误说法</a>
+  <a href="#verify">验证与测试</a>
+</nav>
+<main>
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <p class="eyebrow">一文读懂 · UI 框架 · Apple 平台</p>
+  <h1>Swift<span class="sw">UI</span><br>你不写界面，你声明状态</h1>
+  <p class="sub">SwiftUI 是 Apple 官方的<strong>声明式 UI 框架</strong>，用一套 Swift 代码构建 iPhone、iPad、Mac、Watch 的界面。这篇文章不教你背 API，而是帮你建立开发心智模型：需求放进哪个文件、状态归谁管、用什么词跟 AI 描述你要的东西。</p>
+  <p class="meta">面向 <b>Swift 5.9+</b> / <b>iOS 17+</b> / <b>Xcode 15+</b> · 涉及 iOS 16 及更早写法时会单独标注</p>
+  <p class="formula">body 是纯描述 · <em>UI = f(State)</em> · 改数据，不改界面</p>
+
+  <div class="xcode" id="heroDemo">
+    <div class="titlebar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="fname">WaterView.swift — 试着点右边手机里的按钮</span>
+    </div>
+    <div class="split">
+      <div class="editor" aria-label="SwiftUI 代码">
+<span class="ln"><span class="k">import</span> <span class="t">SwiftUI</span></span>
+<span class="ln"> </span>
+<span class="ln"><span class="k">struct</span> <span class="t">WaterView</span>: <span class="t">View</span> {</span>
+<span class="ln hl" id="stateLine">    <span class="a">@State</span> <span class="k">private var</span> cups = <span class="n" id="codeCups">0</span><span class="statebadge">状态源</span></span>
+<span class="ln"> </span>
+<span class="ln">    <span class="k">var</span> body: <span class="k">some</span> <span class="t">View</span> {</span>
+<span class="ln">        <span class="t">VStack</span>(spacing: <span class="n">16</span>) {</span>
+<span class="ln">            <span class="t">Text</span>(<span class="s">"今天喝了 \(cups) 杯水"</span>)</span>
+<span class="ln">            <span class="t">Button</span>(<span class="s">"喝一杯 💧"</span>) {</span>
+<span class="ln hl2">                cups += <span class="n">1</span>  <span class="c">// 只改数据</span></span>
+<span class="ln">            }</span>
+<span class="ln">        }</span>
+<span class="ln">    }</span>
+<span class="ln">}</span>
+      </div>
+      <div class="canvas">
+        <span class="cap">▷ PREVIEW · 实时预览</span>
+        <div class="iphone">
+          <div class="screen">
+            <div class="notch"></div>
+            <div class="apptitle">喝水打卡</div>
+            <div class="cups" id="cupIcons" aria-hidden="true"></div>
+            <div class="cnt">今天喝了 <span id="cupNum">0</span> 杯水</div>
+            <button class="tapbtn" id="drinkBtn">喝一杯 💧</button>
+            <button class="resetbtn" id="resetBtn">重置状态</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="below">
+    <p class="tip"><b>看到了吗:</b>按钮里没有任何"更新界面"的代码,它只做了 <code>cups += 1</code>。<code>@State</code> 变了,SwiftUI 自动重算 <code>body</code>,界面跟着变。这就是你要建立的第一个直觉——<strong>永远描述"界面长什么样",永远不要命令"界面怎么改"</strong>。</p>
+  </div>
+</header>
+
+<!-- ================= 心智模型 ================= -->
+<section id="mental">
+  <p class="eyebrow">01 · 心智模型</p>
+  <h2>View 是状态的函数,不是要操纵的对象</h2>
+  <p class="lead">如果你写过 jQuery、Android View 或 UIKit,请先卸下"拿到控件引用 → 调它的方法改它"的习惯。SwiftUI 里没有 <code>label.setText()</code>,也没有 <code>findViewById</code>。</p>
+  <ul class="plain">
+    <li><strong>View 是轻量 struct,不是控件实例。</strong>每个界面都是一个遵循 <code>View</code> 协议的 struct,它的 <code>body</code> 属性返回"此刻界面应该长什么样"的描述。struct 会被频繁地销毁重建,这很便宜、很正常。</li>
+    <li><strong>状态是唯一的真相来源(Source of Truth)。</strong>数据存在 <code>@State</code>、<code>@Observable</code> 模型等地方;界面永远由数据推导出来。你改数据,框架负责 diff 和刷新。</li>
+    <li><strong>修饰符(Modifier)链式描述样式与行为。</strong>没有 CSS,没有样式表。<code>.padding()</code>、<code>.font(.title)</code>、<code>.onTapGesture { }</code> 这些方法每次返回一个新的包装 View,顺序有意义:<code>.padding().background(.red)</code> 和 <code>.background(.red).padding()</code> 效果不同。</li>
+    <li><strong>布局靠容器组合,不靠坐标。</strong>竖排用 <code>VStack</code>、横排 <code>HStack</code>、叠放 <code>ZStack</code>、留白 <code>Spacer</code>。你几乎不写 frame 坐标,而是描述"这些东西怎么摆在一起"。</li>
+  </ul>
+  <div class="codehead"><span>心智对比 · 命令式 vs 声明式</span><span>ContentView.swift</span></div>
+  <pre class="code"><span class="c">// ✗ UIKit 思维:拿到控件,命令它变化</span>
+<span class="c">// countLabel.text = "\(count)"   ← SwiftUI 没有这种操作</span>
+
+<span class="c">// ✓ SwiftUI 思维:声明界面与数据的关系,然后只改数据</span>
+<span class="t">Text</span>(<span class="s">"共 \(items.count) 条"</span>)          <span class="c">// 声明:文本 = 数据的投影</span>
+items.append(newItem)                 <span class="c">// 行为:只动数据,UI 自动更新</span></pre>
+  <p class="note">这个模型和 React 高度同构:View ≈ 函数组件,<code>@State</code> ≈ useState,Modifier ≈ props/样式。如果你熟 React,迁移成本主要在术语而不是思想。</p>
+</section>
+
+<!-- ================= 真实任务 ================= -->
+<section id="task">
+  <p class="eyebrow">02 · 从一个真实任务开始</p>
+  <h2>需求:做一个记账 App「钱迹Lite」</h2>
+  <p class="lead">与其罗列 API,不如看一个完整需求如何落进 SwiftUI 工程。需求是:记录每笔支出(金额、分类、备注),列表展示,可新增、可删除,数据要存下来,下次打开还在。</p>
+  <p>这个需求在 SwiftUI 生态里会被拆解成:</p>
+  <ul class="plain">
+    <li><strong>数据模型</strong> → 一个 <code>@Model</code> 类 <code>Expense</code>(SwiftData 负责持久化)</li>
+    <li><strong>列表页</strong> → <code>ExpenseListView</code>,用 <code>List</code> + <code>@Query</code> 读数据,<code>.onDelete</code> 支持滑动删除</li>
+    <li><strong>新增页</strong> → <code>AddExpenseView</code>,用 <code>Form</code> + <code>TextField</code> + <code>Picker</code>,以 <code>.sheet</code> 弹出</li>
+    <li><strong>入口</strong> → <code>MoneyLiteApp.swift</code> 里挂上 <code>modelContainer</code>,声明第一个窗口显示列表页</li>
+    <li><strong>验证</strong> → Xcode Preview 实时看 UI;<code>⌘R</code> 跑模拟器;单元测试验证模型逻辑</li>
+  </ul>
+  <p>点击下面目录树里的文件,看每个文件承担什么职责 👇</p>
+  <div class="treewrap">
+    <div class="tree" role="listbox" aria-label="项目目录树">
+      <span class="dirlabel">MoneyLite/</span>
+      <button data-f="app" class="on"> ├ MoneyLiteApp.swift</button>
+      <span class="dirlabel"> ├ Models/</span>
+      <button data-f="model"> │  └ Expense.swift</button>
+      <span class="dirlabel"> ├ Views/</span>
+      <button data-f="list"> │  ├ ExpenseListView.swift</button>
+      <button data-f="add"> │  ├ AddExpenseView.swift</button>
+      <button data-f="row"> │  └ ExpenseRow.swift</button>
+      <span class="dirlabel"> ├ Assets.xcassets/</span>
+      <button data-f="assets"> │  (图标·颜色·图片)</button>
+      <button data-f="tests"> └ MoneyLiteTests/</button>
+    </div>
+    <div class="treedesc" id="treeDesc"></div>
+  </div>
+  <p class="note">SwiftUI 对目录没有硬性约定(不像 Next.js 的文件路由),<code>Models/</code>、<code>Views/</code> 只是社区习惯。真正有约束力的是 Xcode 工程文件(<code>.xcodeproj</code>)把哪些文件编进 target——所以跟 AI 说"新建文件"时,记得说明"加入 app target"。</p>
+</section>
+
+<!-- ================= 项目结构与入口 ================= -->
+<section id="structure">
+  <p class="eyebrow">03 · 项目结构与入口</p>
+  <h2>程序从 @main 开始,窗口由 Scene 声明</h2>
+  <p class="lead">SwiftUI App 没有 <code>main()</code> 函数,也没有 storyboard。入口是一个标了 <code>@main</code> 的 struct,它遵循 <code>App</code> 协议,body 返回 <strong>Scene</strong>(场景)——最常用的 Scene 是 <code>WindowGroup</code>,代表"一组主窗口"。</p>
+  <div class="codehead"><span>App 入口 · 全工程唯一的 @main</span><span>MoneyLiteApp.swift</span></div>
+  <pre class="code"><span class="k">import</span> <span class="t">SwiftUI</span>
+<span class="k">import</span> <span class="t">SwiftData</span>
+
+<span class="a">@main</span>
+<span class="k">struct</span> <span class="t">MoneyLiteApp</span>: <span class="t">App</span> {
+    <span class="k">var</span> body: <span class="k">some</span> <span class="t">Scene</span> {
+        <span class="t">WindowGroup</span> {
+            <span class="t">ExpenseListView</span>()          <span class="c">// 根视图:App 打开看到的第一屏</span>
+        }
+        .<span class="f">modelContainer</span>(for: <span class="t">Expense</span>.<span class="k">self</span>)  <span class="c">// 注入 SwiftData 数据库</span>
+    }
+}</pre>
+  <h3>层级关系:App → Scene → View</h3>
+  <ul class="plain">
+    <li><code>App</code>:进程级入口,放全局依赖注入(数据库容器、全局设置)。整个工程只有一个。</li>
+    <li><code>Scene</code>:窗口级。iPhone 上通常感知不到,iPad/Mac 上一个 App 可开多窗口。除 <code>WindowGroup</code> 外还有 <code>Settings</code>(Mac 设置窗)、<code>MenuBarExtra</code>(Mac 菜单栏)等。</li>
+    <li><code>View</code>:界面本体,99% 的代码写在这层。</li>
+  </ul>
+  <h3>和 UIKit 的边界(维护老项目会遇到)</h3>
+  <p>2019 年之前的 Apple UI 框架叫 <strong>UIKit</strong>(命令式,ViewController + storyboard)。两者可以互嵌:SwiftUI 里包 UIKit 组件用 <code>UIViewRepresentable</code>,UIKit 里嵌 SwiftUI 用 <code>UIHostingController</code>。跟 AI 交流时务必说清你的项目是"纯 SwiftUI"还是"UIKit 混编",生成的代码结构完全不同。</p>
+</section>
+<!-- ================= 状态管理 ================= -->
+<section id="state">
+  <p class="eyebrow">04 · 状态管理</p>
+  <h2>状态归谁管:五个属性包装器的分工</h2>
+  <p class="lead">SwiftUI 的状态工具都是<strong>属性包装器</strong>(以 <code>@</code> 开头的注解)。选错包装器是新手(和被模糊指挥的 AI)最常见的 bug 来源。核心问题只有一个:<strong>这份数据的"所有权"在哪里?</strong></p>
+  <div class="tabs" role="tablist">
+    <button class="on" data-t="t1" role="tab">@State</button>
+    <button data-t="t2" role="tab">@Binding</button>
+    <button data-t="t3" role="tab">@Observable</button>
+    <button data-t="t4" role="tab">@Environment</button>
+    <button data-t="t5" role="tab">@AppStorage</button>
+  </div>
+
+  <div class="tabpane on" id="t1">
+    <p><strong>视图私有的简单状态。</strong>本视图拥有、本视图修改,生命周期跟着视图走。适合开关、输入草稿、计数这类"界面自己的小事"。</p>
+    <pre class="code"><span class="a">@State</span> <span class="k">private var</span> isOn = <span class="k">false</span>
+<span class="a">@State</span> <span class="k">private var</span> keyword = <span class="s">""</span>   <span class="c">// 配合 TextField 的输入草稿</span></pre>
+    <div class="use">
+      <div class="yes"><b>什么时候用</b>值类型(Bool/String/Int/小 struct)、只影响当前视图及其子树、退出页面就可以丢弃的状态。永远加 <code>private</code>。</div>
+      <div class="no"><b>不要拿它做什么</b>不要存跨页面共享的数据、不要存业务模型列表、不要从外部初始化它当参数用(那是 @Binding 或普通 let 的活)。</div>
+    </div>
+  </div>
+
+  <div class="tabpane" id="t2">
+    <p><strong>借来的读写权。</strong>子视图不拥有数据,但需要修改父视图的 <code>@State</code>。父传子时加 <code>$</code> 前缀取得绑定:<code>ChildView(isOn: $isOn)</code>。系统控件全靠它工作。</p>
+    <pre class="code"><span class="k">struct</span> <span class="t">SettingsRow</span>: <span class="t">View</span> {
+    <span class="a">@Binding</span> <span class="k">var</span> isOn: <span class="t">Bool</span>          <span class="c">// 不拥有,只是能读写</span>
+    <span class="k">var</span> body: <span class="k">some</span> <span class="t">View</span> {
+        <span class="t">Toggle</span>(<span class="s">"夜间模式"</span>, isOn: <span class="a">$isOn</span>)  <span class="c">// $ = 取绑定而非取值</span>
+    }
+}</pre>
+    <div class="use">
+      <div class="yes"><b>什么时候用</b>子组件要双向修改父状态:自定义输入控件、可复用的表单行、弹层里的确认操作回写。</div>
+      <div class="no"><b>不要拿它做什么</b>只读展示用普通 <code>let</code> 就够了;跨很多层传 Binding 会变成"钻孔",该升级成 @Observable 模型 + @Environment。</div>
+    </div>
+  </div>
+
+  <div class="tabpane" id="t3">
+    <p><strong>共享的业务模型(iOS 17+ 主流方案)。</strong>把业务状态和逻辑放进一个 <code>@Observable</code> class,多个视图观察同一个实例;哪个视图读了哪个属性,只有那个属性变化时它才刷新——细粒度、高性能。</p>
+    <pre class="code"><span class="a">@Observable</span> <span class="k">class</span> <span class="t">CartModel</span> {
+    <span class="k">var</span> items: [<span class="t">Product</span>] = []
+    <span class="k">var</span> total: <span class="t">Double</span> { items.reduce(<span class="n">0</span>) { $0 + $1.price } }
+    <span class="k">func</span> <span class="f">add</span>(_ p: <span class="t">Product</span>) { items.append(p) }
+}
+
+<span class="c">// 视图里:谁创建谁用 @State 持有(iOS 17 写法)</span>
+<span class="a">@State</span> <span class="k">private var</span> cart = <span class="t">CartModel</span>()</pre>
+    <div class="use">
+      <div class="yes"><b>什么时候用</b>跨视图共享的业务状态、带方法的领域逻辑、需要和网络/数据库交互的 ViewModel 层。</div>
+      <div class="no"><b>不要拿它做什么</b>iOS 17+ 新项目别再用旧三件套 <code>ObservableObject</code> / <code>@StateObject</code> / <code>@ObservedObject</code> / <code>@Published</code>——那是 16 及更早的写法,详见「版本边界」。</div>
+    </div>
+  </div>
+
+  <div class="tabpane" id="t4">
+    <p><strong>依赖注入通道。</strong>祖先视图放进环境,任意深度的后代直接取用,不用一层层传参。既能读系统值(深色模式、动态字号),也能注入自己的模型。</p>
+    <pre class="code"><span class="c">// 注入(通常在 App 入口或根视图)</span>
+<span class="t">ExpenseListView</span>().<span class="f">environment</span>(cart)
+
+<span class="c">// 任意后代读取</span>
+<span class="a">@Environment</span>(<span class="t">CartModel</span>.<span class="k">self</span>) <span class="k">private var</span> cart
+<span class="a">@Environment</span>(\.colorScheme) <span class="k">private var</span> scheme  <span class="c">// 系统值:深/浅色</span>
+<span class="a">@Environment</span>(\.dismiss) <span class="k">private var</span> dismiss     <span class="c">// 关闭当前弹层/页面</span></pre>
+    <div class="use">
+      <div class="yes"><b>什么时候用</b>App 级共享模型(用户会话、购物车)、读系统环境、在弹层里拿 <code>dismiss</code> 关闭自己。</div>
+      <div class="no"><b>不要拿它做什么</b>不要什么都塞环境——只被一两个视图用的数据直接传参更清晰;忘了注入会直接崩溃,测试和 Preview 里要记得补 <code>.environment(...)</code>。</div>
+    </div>
+  </div>
+
+  <div class="tabpane" id="t5">
+    <p><strong>直通 UserDefaults 的轻量偏好。</strong>读写自动持久化、自动刷新 UI,一行顶三行。本质是 key-value 明文存储。</p>
+    <pre class="code"><span class="a">@AppStorage</span>(<span class="s">"hasSeenOnboarding"</span>) <span class="k">private var</span> hasSeenOnboarding = <span class="k">false</span>
+<span class="a">@AppStorage</span>(<span class="s">"currency"</span>) <span class="k">private var</span> currency = <span class="s">"CNY"</span></pre>
+    <div class="use">
+      <div class="yes"><b>什么时候用</b>用户偏好、开关、上次选中的 tab、是否看过引导页——小而简单的标量。</div>
+      <div class="no"><b>不要拿它做什么</b>不存业务数据列表(用 SwiftData)、不存密码 token(用 Keychain)、不存大对象。</div>
+    </div>
+  </div>
+
+  <h3>30 秒决策</h3>
+  <div class="flow">
+    <svg viewBox="0 0 760 250" role="img" aria-label="状态管理决策流程图">
+      <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#6e707a"/></marker></defs>
+      <g font-size="12" fill="#e9e9ec">
+        <rect x="10" y="100" width="150" height="50" rx="8" fill="#2b2d33" stroke="#3a3c44"/>
+        <text x="85" y="122" text-anchor="middle">这份数据</text><text x="85" y="138" text-anchor="middle">只有当前视图关心?</text>
+        <line x1="160" y1="112" x2="230" y2="60" stroke="#6e707a" marker-end="url(#ar)"/>
+        <text x="185" y="75" fill="#5fd07a" font-size="11">是</text>
+        <line x1="160" y1="138" x2="230" y2="190" stroke="#6e707a" marker-end="url(#ar)"/>
+        <text x="185" y="185" fill="#ffb340" font-size="11">否,要共享</text>
+        <rect x="232" y="35" width="170" height="50" rx="8" fill="#2b2d33" stroke="#3a3c44"/>
+        <text x="317" y="57" text-anchor="middle">子组件要改它吗?</text>
+        <text x="317" y="73" text-anchor="middle" fill="#9a9ca6" font-size="11">改→传 $binding</text>
+        <line x1="402" y1="60" x2="470" y2="60" stroke="#6e707a" marker-end="url(#ar)"/>
+        <rect x="472" y="35" width="270" height="50" rx="8" fill="rgba(240,81,56,.14)" stroke="#f05138"/>
+        <text x="607" y="57" text-anchor="middle" fill="#ffb0a0" font-family="monospace">@State(+ @Binding 下发)</text>
+        <text x="607" y="73" text-anchor="middle" fill="#9a9ca6" font-size="11">视图私有 · 值类型 · private</text>
+        <rect x="232" y="165" width="170" height="50" rx="8" fill="#2b2d33" stroke="#3a3c44"/>
+        <text x="317" y="187" text-anchor="middle">是"偏好开关"还是</text>
+        <text x="317" y="203" text-anchor="middle">"业务模型/逻辑"?</text>
+        <line x1="402" y1="180" x2="470" y2="150" stroke="#6e707a" marker-end="url(#ar)"/>
+        <text x="420" y="158" fill="#9a9ca6" font-size="11">偏好</text>
+        <line x1="402" y1="200" x2="470" y2="220" stroke="#6e707a" marker-end="url(#ar)"/>
+        <text x="420" y="222" fill="#9a9ca6" font-size="11">业务</text>
+        <rect x="472" y="125" width="270" height="42" rx="8" fill="#2b2d33" stroke="#3a3c44"/>
+        <text x="607" y="151" text-anchor="middle" fill="#6bdfff" font-family="monospace">@AppStorage(UserDefaults)</text>
+        <rect x="472" y="197" width="270" height="50" rx="8" fill="#2b2d33" stroke="#3a3c44"/>
+        <text x="607" y="218" text-anchor="middle" fill="#6bdfff" font-family="monospace">@Observable class</text>
+        <text x="607" y="236" text-anchor="middle" fill="#9a9ca6" font-size="11">跨页共享再 + @Environment 注入</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<!-- ================= 导航 ================= -->
+<section id="nav">
+  <p class="eyebrow">05 · 导航与页面跳转</p>
+  <h2>「页面跳转」在这里叫什么</h2>
+  <p class="lead">SwiftUI 没有 Router 配置文件,导航是<strong>数据驱动</strong>的:栈是一个数组,push 就是往数组里 append 一个值。三种主要形态对应三种中文需求:</p>
+  <ul class="plain">
+    <li><strong>层级推进(左滑进入详情页)</strong> → <code>NavigationStack</code> + <code>NavigationLink</code> / <code>navigationDestination</code></li>
+    <li><strong>模态弹出(从底部升起的临时页)</strong> → <code>.sheet</code>(半屏可下滑关闭)/ <code>.fullScreenCover</code>(全屏)</li>
+    <li><strong>平级切换(底部标签栏)</strong> → <code>TabView</code> + <code>.tabItem</code></li>
+  </ul>
+  <div class="codehead"><span>典型导航:列表 → 详情,值驱动</span><span>ExpenseListView.swift</span></div>
+  <pre class="code"><span class="t">NavigationStack</span>(path: <span class="a">$path</span>) {          <span class="c">// path: [Expense] — 栈即数组</span>
+    <span class="t">List</span>(expenses) { expense <span class="k">in</span>
+        <span class="t">NavigationLink</span>(value: expense) {  <span class="c">// 点击 = 把值推进 path</span>
+            <span class="t">ExpenseRow</span>(expense: expense)
+        }
+    }
+    .<span class="f">navigationTitle</span>(<span class="s">"账单"</span>)
+    .<span class="f">navigationDestination</span>(for: <span class="t">Expense</span>.<span class="k">self</span>) { expense <span class="k">in</span>
+        <span class="t">ExpenseDetailView</span>(expense: expense)  <span class="c">// 值的类型 → 目标页面</span>
+    }
+}</pre>
+  <p><strong>弹层同样是状态驱动:</strong><code>.sheet(isPresented: $showingAdd) { AddExpenseView() }</code>——没有 <code>present()</code> 方法可调,把 <code>showingAdd</code> 设为 true 弹层就出现,弹层内部用 <code>@Environment(\.dismiss)</code> 关闭自己。深链、返回多级、程序化跳转,全都通过操作 <code>path</code> 数组实现。</p>
+  <p class="note">⚠️ 版本边界:<code>NavigationStack</code> 是 iOS 16+ 的方案;老代码里的 <code>NavigationView</code> 已废弃,让 AI 生成新代码时明确说"用 NavigationStack"。</p>
+</section>
+
+<!-- ================= 数据流与异步 ================= -->
+<section id="data">
+  <p class="eyebrow">06 · 数据流与异步</p>
+  <h2>网络请求:async/await + .task</h2>
+  <p class="lead">现代 SwiftUI 的异步主路径是 Swift 并发(<code>async/await</code>),不是回调也不是 Combine。三件套:<code>URLSession</code> 发请求、<code>Codable</code> 解 JSON、<code>.task</code> 修饰符把异步任务绑到视图生命周期上。</p>
+  <div class="codehead"><span>完整链路:模型 → 请求 → 视图状态机</span><span>RateView.swift</span></div>
+  <pre class="code"><span class="k">struct</span> <span class="t">Rate</span>: <span class="t">Codable</span> { <span class="k">let</span> currency: <span class="t">String</span>; <span class="k">let</span> value: <span class="t">Double</span> }
+
+<span class="k">enum</span> <span class="t">LoadState</span> { <span class="k">case</span> loading, loaded([<span class="t">Rate</span>]), failed(<span class="t">Error</span>) }
+
+<span class="k">struct</span> <span class="t">RateView</span>: <span class="t">View</span> {
+    <span class="a">@State</span> <span class="k">private var</span> state: <span class="t">LoadState</span> = .loading
+
+    <span class="k">var</span> body: <span class="k">some</span> <span class="t">View</span> {
+        <span class="t">Group</span> {
+            <span class="k">switch</span> state {                   <span class="c">// UI 是加载状态的函数</span>
+            <span class="k">case</span> .loading:        <span class="t">ProgressView</span>(<span class="s">"加载中…"</span>)
+            <span class="k">case</span> .loaded(<span class="k">let</span> r):  <span class="t">List</span>(r, id: \.currency) { <span class="t">Text</span>(<span class="s">"\($0.currency) \($0.value)"</span>) }
+            <span class="k">case</span> .failed:         <span class="t">ContentUnavailableView</span>(<span class="s">"加载失败"</span>, systemImage: <span class="s">"wifi.slash"</span>)
+            }
+        }
+        .<span class="f">task</span> {                              <span class="c">// 视图出现时启动,消失时自动取消</span>
+            <span class="k">do</span> {
+                <span class="k">let</span> (data, _) = <span class="k">try await</span> <span class="t">URLSession</span>.shared.<span class="f">data</span>(from: url)
+                state = .loaded(<span class="k">try</span> <span class="t">JSONDecoder</span>().<span class="f">decode</span>([<span class="t">Rate</span>].<span class="k">self</span>, from: data))
+            } <span class="k">catch</span> { state = .failed(error) }
+        }
+    }
+}</pre>
+  <ul class="plain">
+    <li><strong>错误处理的惯用法</strong>:把「加载中/成功/失败」建模成一个 enum 状态机,而不是散落的 <code>isLoading</code> + <code>errorMessage</code> 布尔汤。空态/错误态用 <code>ContentUnavailableView</code>(iOS 17+)。</li>
+    <li><strong>项目大了以后</strong>:请求逻辑从视图里抽出去,进 <code>@Observable</code> 的 ViewModel 或独立的 <code>APIClient</code> service;视图只消费状态。这条分层习惯直接决定 AI 生成代码的可维护性。</li>
+    <li><strong>后台任务边界</strong>:App 切后台后代码基本被冻结,长任务不是开线程能解决的——真正的后台刷新走 <code>BackgroundTasks</code> 框架(<code>BGAppRefreshTask</code>),推送走 APNs,别让 AI 用 <code>Timer</code> 假装后台任务。</li>
+  </ul>
+</section>
+
+<!-- ================= 持久化 ================= -->
+<section id="persist">
+  <p class="eyebrow">07 · 持久化怎么选</p>
+  <h2>「把数据存下来」的四条路线</h2>
+  <p class="lead">这是需求最容易说糊、AI 最容易选错的地方。四种方案各管一段,选择边界很清晰:</p>
+  <div class="pick">
+    <div class="card">
+      <h4>@AppStorage / UserDefaults</h4>
+      <p class="ver">全版本 · 明文 plist</p>
+      <p><b>存:</b>用户偏好、开关、小标量。</p>
+      <p><b>别存:</b>列表数据、敏感信息、大于几 KB 的东西。</p>
+    </div>
+    <div class="card">
+      <h4>SwiftData</h4>
+      <p class="ver">iOS 17+ · 推荐的结构化存储</p>
+      <p><b>存:</b>业务对象和关系(账单、笔记、待办)。<code>@Model</code> 声明模型、<code>@Query</code> 在视图里查询、<code>modelContext.insert/delete</code> 写入,schema 变更做 Migration。</p>
+      <p><b>别存:</b>图片视频等大文件本体(存文件,库里存路径)。</p>
+    </div>
+    <div class="card">
+      <h4>Core Data</h4>
+      <p class="ver">全版本 · SwiftData 的前身</p>
+      <p><b>用在:</b>需要支持 iOS 16-、或接手的老项目。概念对应:<code>NSManagedObject</code>≈@Model,<code>@FetchRequest</code>≈@Query。新项目不选它。</p>
+    </div>
+    <div class="card">
+      <h4>Keychain / FileManager</h4>
+      <p class="ver">全版本</p>
+      <p><b>Keychain:</b>token、密码等敏感凭证(系统加密,无官方 SwiftUI 包装,常用 KeychainAccess 库)。</p>
+      <p><b>FileManager:</b>导出文件、图片缓存,写进 Documents / Caches 目录。</p>
+    </div>
+  </div>
+  <div class="codehead"><span>SwiftData 最小闭环:声明 → 查询 → 写入</span><span>Expense.swift / ExpenseListView.swift</span></div>
+  <pre class="code"><span class="a">@Model</span> <span class="k">class</span> <span class="t">Expense</span> {                       <span class="c">// 声明即建表</span>
+    <span class="k">var</span> amount: <span class="t">Double</span>; <span class="k">var</span> category: <span class="t">String</span>; <span class="k">var</span> date: <span class="t">Date</span>
+    <span class="f">init</span>(amount: <span class="t">Double</span>, category: <span class="t">String</span>, date: <span class="t">Date</span> = .now) { … }
+}
+
+<span class="c">// 视图里</span>
+<span class="a">@Query</span>(sort: \<span class="t">Expense</span>.date, order: .reverse) <span class="k">var</span> expenses: [<span class="t">Expense</span>]
+<span class="a">@Environment</span>(\.modelContext) <span class="k">private var</span> context
+
+context.<span class="f">insert</span>(<span class="t">Expense</span>(amount: <span class="n">28</span>, category: <span class="s">"咖啡"</span>))  <span class="c">// 写入,@Query 自动刷新列表</span></pre>
+</section>
+
+<!-- ================= 生命周期 ================= -->
+<section id="lifecycle">
+  <p class="eyebrow">08 · 生命周期与副作用</p>
+  <h2>没有 viewDidLoad,只有「出现·变化·消失」</h2>
+  <p class="lead">View struct 随时重建,所以 SwiftUI 不谈对象生命周期,只给你几个挂副作用的时机点:</p>
+  <ul class="plain">
+    <li><code>.task { }</code> — 视图出现时跑异步任务,视图消失<strong>自动取消</strong>。加载数据的首选,优于 onAppear。</li>
+    <li><code>.onAppear { } / .onDisappear { }</code> — 同步副作用:埋点、开始/停止动画。</li>
+    <li><code>.onChange(of: value) { old, new in }</code> — 监听某个状态变化后做事(iOS 17 起回调带新旧两值)。</li>
+    <li><code>@Environment(\.scenePhase)</code> — App 级前后台切换(<code>.active / .inactive / .background</code>),在这里保存草稿、暂停计时。</li>
+  </ul>
+  <p class="note">直觉校准:「页面加载时请求接口」对应 <code>.task</code>,不是 init。View 的 <code>init</code> 会被调用很多次,别在里面做任何重活或副作用。</p>
+</section>
+<!-- ================= 术语对照表 ================= -->
+<section id="glossary">
+  <p class="eyebrow">09 · 需求 → 术语对照表</p>
+  <h2>你想要的东西,在 SwiftUI 里叫什么</h2>
+  <p class="lead">跟 AI 描述需求时,用右边这列词,生成质量立刻上一个台阶。支持搜索:</p>
+  <input class="search" id="glosSearch" type="search" placeholder="搜索:弹窗 / 列表 / 下拉刷新 / Picker…" aria-label="搜索术语表">
+  <table class="map" id="glosTable">
+    <thead><tr><th>中文需求</th><th>SwiftUI 术语</th><th>要点</th></tr></thead>
+    <tbody>
+      <tr><td>弹窗(带按钮的提示)</td><td>.alert</td><td>标题+按钮的系统警告框;由 Bool 状态触发</td></tr>
+      <tr><td>底部弹出的半屏页</td><td>.sheet + .presentationDetents</td><td>可下滑关闭;detents 控制半屏/全高</td></tr>
+      <tr><td>底部动作菜单</td><td>.confirmationDialog</td><td>"拍照/从相册选/取消"这类选项单</td></tr>
+      <tr><td>Toast / 轻提示</td><td>无原生组件 → overlay 自定义</td><td>SwiftUI 没有 Toast,常用 .overlay + 延时隐藏,或第三方库</td></tr>
+      <tr><td>列表</td><td>List / ForEach</td><td>List 自带滚动和单元格样式;数据要 Identifiable</td></tr>
+      <tr><td>滑动删除 / 拖动排序</td><td>.onDelete / .onMove</td><td>挂在 ForEach 上;编辑模式配 EditButton</td></tr>
+      <tr><td>下拉刷新</td><td>.refreshable</td><td>闭包是 async 的,天然配 await</td></tr>
+      <tr><td>无限滚动 / 加载更多</td><td>.onAppear(最后一行触发)</td><td>没有专用 API,惯用法是检测末行出现</td></tr>
+      <tr><td>设置页那种表单</td><td>Form + Section</td><td>自动获得 iOS 设置风格的分组样式</td></tr>
+      <tr><td>输入框</td><td>TextField / SecureField</td><td>绑定 $text;密码用 SecureField;多行用 TextEditor</td></tr>
+      <tr><td>下拉选择 / 单选</td><td>Picker</td><td>.pickerStyle 切换菜单/滚轮/分段(segmented)样式</td></tr>
+      <tr><td>开关</td><td>Toggle</td><td>绑定 $isOn</td></tr>
+      <tr><td>日期选择</td><td>DatePicker</td><td>displayedComponents 选日期/时间</td></tr>
+      <tr><td>按钮</td><td>Button("文案") { 动作 }</td><td>样式用 .buttonStyle(.borderedProminent) 等</td></tr>
+      <tr><td>图片(本地/网络)</td><td>Image / AsyncImage</td><td>网络图用 AsyncImage(url:),带 placeholder</td></tr>
+      <tr><td>图标</td><td>Image(systemName:) — SF Symbols</td><td>系统自带 6000+ 矢量图标,如 "trash"、"plus.circle"</td></tr>
+      <tr><td>网格 / 瀑布流</td><td>LazyVGrid / Grid</td><td>Lazy 系列按需加载,长列表必用</td></tr>
+      <tr><td>页面跳转(推进)</td><td>NavigationStack + NavigationLink</td><td>值驱动;目标由 navigationDestination 声明</td></tr>
+      <tr><td>底部标签栏</td><td>TabView + .tabItem</td><td>平级页面切换</td></tr>
+      <tr><td>顶部导航栏按钮</td><td>.toolbar + ToolbarItem</td><td>placement 指定左/右/底部位置</td></tr>
+      <tr><td>搜索框</td><td>.searchable(text: $query)</td><td>挂在 NavigationStack 内的列表上</td></tr>
+      <tr><td>加载转圈</td><td>ProgressView</td><td>带 value 参数就是进度条</td></tr>
+      <tr><td>空状态页</td><td>ContentUnavailableView</td><td>iOS 17+;搜索无结果有专用 .search 变体</td></tr>
+      <tr><td>动画</td><td>withAnimation { } / .animation</td><td>包住状态修改,UI 变化自动带过渡</td></tr>
+      <tr><td>手势</td><td>.onTapGesture / .gesture(DragGesture())</td><td>点击/长按/拖拽/缩放都是 Gesture</td></tr>
+      <tr><td>自适应深色模式</td><td>@Environment(\.colorScheme) + Asset 颜色</td><td>颜色定义在 Assets 里配双色,自动切换</td></tr>
+      <tr><td>组件复用</td><td>抽 struct View / ViewModifier</td><td>超过 ~50 行或复用两次就抽出去</td></tr>
+      <tr><td>权限申请(相机/定位/通知)</td><td>Info.plist 描述 + 对应框架请求</td><td>如定位 = CoreLocation;没写 plist 描述会直接闪退</td></tr>
+    </tbody>
+  </table>
+  <p class="count" id="glosCount"></p>
+</section>
+
+<!-- ================= 版本边界 ================= -->
+<section id="version">
+  <p class="eyebrow">10 · 版本边界</p>
+  <h2>新旧写法分水岭:AI 最容易生成过时代码的三处</h2>
+  <p class="lead">SwiftUI 每年随 iOS 大版本演进,训练语料里混着大量旧写法。让 AI 生成代码前,先声明目标版本;看到下面左列的写法,要意识到那是旧方案:</p>
+  <div class="fix">
+    <div class="row">
+      <div class="bad"><code>ObservableObject</code> + <code>@Published</code> + <code>@StateObject</code> / <code>@ObservedObject</code> / <code>@EnvironmentObject</code>(iOS 16-)</div>
+      <div class="good">iOS 17+ 用 <code>@Observable</code> 宏:类上一个注解搞定,视图里 <code>@State</code> 持有、<code>@Environment</code> 注入,刷新粒度更细、性能更好。</div>
+    </div>
+    <div class="row">
+      <div class="bad"><code>NavigationView</code>(已 deprecated)</div>
+      <div class="good">iOS 16+ 用 <code>NavigationStack</code>(单栈)或 <code>NavigationSplitView</code>(iPad/Mac 分栏),支持 path 数组做程序化导航和深链。</div>
+    </div>
+    <div class="row">
+      <div class="bad">Core Data(<code>NSPersistentContainer</code>、<code>@FetchRequest</code>)用于新项目</div>
+      <div class="good">iOS 17+ 新项目用 <code>SwiftData</code>(<code>@Model</code> / <code>@Query</code>);Core Data 仅用于兼容老系统或维护存量代码。</div>
+    </div>
+  </div>
+  <p class="note">同理:异步优先 <code>async/await</code> 而非 Combine 或回调;预览用 <code>#Preview { }</code> 宏而非旧的 <code>PreviewProvider</code> struct。跟 AI 说一句「目标 iOS 17,用 @Observable 和 SwiftData,不要 ObservableObject 和 Core Data」,能消掉一大半过时代码。</p>
+</section>
+
+<!-- ================= AI Coding ================= -->
+<section id="prompt">
+  <p class="eyebrow">11 · AI Coding 提示词</p>
+  <h2>把模糊需求翻译成 SwiftUI 的语言</h2>
+  <p class="lead">同一个需求,两种说法,产出质量天差地别。好 prompt 的配方:<strong>版本约定 + 文件位置 + 框架术语 + 状态流 + 分层边界 + 错误处理 + 验证方式</strong>。点击切换对比:</p>
+
+  <div class="pwrap">
+    <div class="ptoggle"><button class="on" data-p="p1a">✗ 模糊说法</button><button data-p="p1b">✓ 工程说法</button></div>
+    <div class="pbody" id="p1a">
+      <p class="vague">"帮我做个记账功能,能加账单,能看列表,数据别丢。"</p>
+    </div>
+    <div class="pbody" id="p1b" hidden>
+      <ol>
+        <li>目标 <span class="loc">iOS 17+ / Swift 5.9</span>,纯 SwiftUI 新项目,持久化用 <span class="term">SwiftData</span>,不要 Core Data 和 ObservableObject。</li>
+        <li>在 <span class="loc">Models/Expense.swift</span> 定义 <span class="term">@Model</span> 类 Expense:amount(Double)、category(String)、note(String?)、date(Date)。</li>
+        <li>在 <span class="loc">Views/ExpenseListView.swift</span> 用 <span class="term">List</span> + <span class="term">@Query</span>(按 date 倒序)展示;<span class="term">.onDelete</span> 滑动删除;空态用 <span class="term">ContentUnavailableView</span>。</li>
+        <li>导航栏 <span class="term">.toolbar</span> 放 + 按钮,点击置 <span class="term">@State</span> showingAdd = true,以 <span class="term">.sheet</span> 弹出 <span class="loc">Views/AddExpenseView.swift</span>:<span class="term">Form</span> 含 TextField(金额,<span class="term">.keyboardType(.decimalPad)</span>)、Picker(分类)、保存时经 <span class="term">modelContext.insert</span> 写入并 <span class="term">dismiss</span>;金额 ≤ 0 时保存按钮 <span class="term">.disabled</span>。</li>
+        <li>入口 <span class="loc">MoneyLiteApp.swift</span> 挂 <span class="term">.modelContainer(for: Expense.self)</span>。每个视图给一个 <span class="term">#Preview</span>(用内存容器 mock 数据),我会用 Preview 和模拟器验证。</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="pwrap">
+    <div class="ptoggle"><button class="on" data-p="p2a">✗ 模糊说法</button><button data-p="p2b">✓ 工程说法</button></div>
+    <div class="pbody" id="p2a">
+      <p class="vague">"列表从接口拉数据,加个加载中和失败重试,顺便支持下拉刷新。"</p>
+    </div>
+    <div class="pbody" id="p2b" hidden>
+      <ol>
+        <li>分层:在 <span class="loc">Services/RateClient.swift</span> 写一个 struct,方法 <span class="term">func fetchRates() async throws -> [Rate]</span>,内部用 <span class="term">URLSession</span> + <span class="term">JSONDecoder</span>;Rate 遵循 <span class="term">Codable, Identifiable</span>。视图层不直接碰 URLSession。</li>
+        <li>视图状态建模为 enum <span class="term">LoadState { loading, loaded([Rate]), failed(Error) }</span>,存在 <span class="term">@Observable</span> 的 RateModel 里,不要 isLoading 布尔散装。</li>
+        <li>视图用 <span class="term">switch</span> 渲染三态:loading → <span class="term">ProgressView</span>;failed → <span class="term">ContentUnavailableView</span> + 重试 Button(重新调 load);首载挂 <span class="term">.task</span>,下拉刷新挂 <span class="term">.refreshable</span>,两者复用同一个 async 方法。</li>
+        <li>网络错误和解码错误都要 catch 进 failed 态,不许 <span class="term">try!</span>;验证方式:给 RateClient 留协议口子以便测试替身(mock),并附一条 XCTest 用例验证 JSON 解码。</li>
+      </ol>
+    </div>
+  </div>
+
+  <h3>可直接复用的开场白模板</h3>
+  <div class="codehead"><span>粘贴后按需填空</span><span>prompt-template.txt</span></div>
+  <pre class="code">目标平台:iOS 17+,Swift 5.9,纯 SwiftUI(无 UIKit 混编)
+技术选型:状态用 @Observable + @State/@Environment;导航用 NavigationStack;
+        持久化用 SwiftData;异步用 async/await;不要 ObservableObject / 
+        NavigationView / Core Data / Combine
+文件组织:Models/ Views/ Services/ 三层;视图不直接发网络请求
+需求:〔用上面对照表里的术语描述:哪个页面、什么组件、状态怎么流、
+      错误怎么处理〕
+验证:每个视图带 #Preview;关键逻辑给 XCTest 用例</pre>
+</section>
+
+<!-- ================= 误说法 ================= -->
+<section id="wrong">
+  <p class="eyebrow">12 · 常见误说法</p>
+  <h2>这些描述会把 AI 带偏</h2>
+  <div class="fix">
+    <div class="row">
+      <div class="bad">"给这个 div 加个样式 / 改下 CSS"</div>
+      <div class="good">SwiftUI 没有 div 和 CSS。说:"给这个 <code>VStack</code> 加 <code>.padding()</code> 和 <code>.background(...)</code> modifier",样式即修饰符链。</div>
+    </div>
+    <div class="row">
+      <div class="bad">"点击后更新一下那个文本控件的内容"</div>
+      <div class="good">说:"点击后修改 <code>@State</code> 变量 xxx,Text 里插值显示它"。命令式的"更新控件"会诱导 AI 写出反模式。</div>
+    </div>
+    <div class="row">
+      <div class="bad">"弹一个 Toast 提示成功"</div>
+      <div class="good">SwiftUI 无原生 Toast。说:"用 <code>.overlay</code> 自定义一个 2 秒后消失的提示条",或明确要 <code>.alert</code>。</div>
+    </div>
+    <div class="row">
+      <div class="bad">"把用户数据放到全局变量里"</div>
+      <div class="good">说:"建一个 <code>@Observable</code> 的 SessionModel,在 App 入口用 <code>.environment()</code> 注入,子视图用 <code>@Environment</code> 读取"。</div>
+    </div>
+    <div class="row">
+      <div class="bad">"onClick 事件里…" / "监听 onChange 事件"</div>
+      <div class="good">按钮动作是 <code>Button("…") { }</code> 的尾随闭包;任意视图点击是 <code>.onTapGesture</code>;监听状态变化才是 <code>.onChange(of:)</code>。</div>
+    </div>
+    <div class="row">
+      <div class="bad">"页面初始化的时候(init)去请求接口"</div>
+      <div class="good">说:"在 <code>.task</code> 里请求"。View 的 init 会被反复调用,放副作用是经典 bug。</div>
+    </div>
+    <div class="row">
+      <div class="bad">"数据库随便,存本地就行"</div>
+      <div class="good">明确路线:偏好 → <code>@AppStorage</code>;业务对象 → <code>SwiftData</code>;凭证 → Keychain;文件 → FileManager。"随便"通常换来 UserDefaults 存万物。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 验证 ================= -->
+<section id="verify">
+  <p class="eyebrow">13 · 验证与测试</p>
+  <h2>怎么确认 AI 写的代码是对的</h2>
+  <ul class="plain">
+    <li><strong>Xcode Preview(最快回路)</strong>:每个 View 文件底部写 <code>#Preview { MyView() }</code>,右侧画布实时渲染、可交互,不用启动整个 App。让 AI"给每个视图带 #Preview 和 mock 数据"是最划算的一句要求。</li>
+    <li><strong>模拟器运行</strong>:<span class="kbd">⌘R</span> 编译运行到 iOS Simulator,验证完整流程;<span class="kbd">⌘U</span> 跑全部测试。</li>
+    <li><strong>单元测试</strong>:<code>XCTest</code>(或 Xcode 16 的 Swift Testing)测模型与 service 逻辑;给 service 定义 protocol,测试时注入替身(mock)。UI 流程用 <code>XCUITest</code>,但性价比低,优先把逻辑抽出视图来测。</li>
+    <li><strong>命令行构建</strong>(CI 用):<code>xcodebuild -scheme MoneyLite -destination 'platform=iOS Simulator,name=iPhone 15' build test</code>。</li>
+    <li><strong>发布链路</strong>:Archive → App Store Connect → TestFlight 内测 → 审核上架。个人调试免费,真机分发需要 Apple Developer Program($99/年)。</li>
+  </ul>
+  <footer>
+    <div>一文读懂 SwiftUI · 面向 Swift 5.9+ / iOS 17+ / Xcode 15+ 编写,涉及旧版本处已标注</div>
+    <div>单文件离线可用 · 术语、API、文件名保留英文以便直接用于 AI coding 对话</div>
+  </footer>
+</section>
+</main>
+</div>
+
+<script>
+/* ===== Hero 计数器演示 ===== */
+(function(){
+  var n=0,num=document.getElementById('cupNum'),code=document.getElementById('codeCups'),icons=document.getElementById('cupIcons');
+  function render(){num.textContent=n;code.textContent=n;icons.textContent='💧'.repeat(Math.min(n,10));}
+  document.getElementById('drinkBtn').addEventListener('click',function(){n++;render();});
+  document.getElementById('resetBtn').addEventListener('click',function(){n=0;render();});
+  render();
+})();
+
+/* ===== 目录树 ===== */
+(function(){
+  var desc={
+    app:{role:'App 入口 · Scene 声明',h:'MoneyLiteApp.swift',t:'全工程唯一的 @main。声明 WindowGroup(第一屏显示哪个 View),并在这里做 App 级依赖注入——挂 .modelContainer(for: Expense.self) 让整个 App 都能读写数据库。全局环境注入(如用户会话)也放这里。'},
+    model:{role:'数据模型 · SwiftData @Model',h:'Models/Expense.swift',t:'定义业务对象:@Model class Expense { amount, category, note, date }。这个注解同时完成"定义类型"和"声明数据库表"两件事。字段增删属于 schema 变更,正式上线后要考虑 Migration。'},
+    list:{role:'页面视图 · 列表 + 导航',h:'Views/ExpenseListView.swift',t:'主列表页。@Query 按日期倒序取全部账单,List + ForEach 渲染,.onDelete 滑动删除,.toolbar 放"+"按钮,@State showingAdd 控制 .sheet 弹出新增页。NavigationStack 也包在这一层。'},
+    add:{role:'页面视图 · 表单弹层',h:'Views/AddExpenseView.swift',t:'以 sheet 形式弹出的新增页:Form 里放 TextField(金额)、Picker(分类)、TextField(备注)。保存 = modelContext.insert(expense) 然后 @Environment(\\.dismiss) 关闭自己。输入不合法时保存按钮 .disabled(true)。'},
+    row:{role:'可复用组件',h:'Views/ExpenseRow.swift',t:'单行账单的展示组件,只接收一个 Expense 用 let 只读展示,不持有状态。当一段 UI 超过约 50 行或被复用两次,就抽成这样的小 View——这也是让 AI 生成可维护代码的关键指令:"把行内容抽成 ExpenseRow"。'},
+    assets:{role:'资源目录',h:'Assets.xcassets',t:'App 图标、自定义颜色(可配深/浅双色实现暗黑模式)、图片资源。代码里用 Image("logo")、Color("BrandOrange") 按名字引用。系统图标不放这里——直接用 SF Symbols:Image(systemName: "trash")。'},
+    tests:{role:'测试 target',h:'MoneyLiteTests/',t:'XCTest 单元测试放这里,独立于 app target。测模型计算、service 逻辑;SwiftData 可用内存容器(isStoredInMemoryOnly)做测试替身,不污染真实数据。⌘U 运行。'}
+  };
+  var box=document.getElementById('treeDesc'),btns=document.querySelectorAll('.tree button');
+  function show(k){var d=desc[k];box.innerHTML='<span class="role">'+d.role+'</span><h4>'+d.h+'</h4><p>'+d.t+'</p>';}
+  btns.forEach(function(b){b.addEventListener('click',function(){btns.forEach(function(x){x.classList.remove('on')});b.classList.add('on');show(b.dataset.f);});});
+  show('app');
+})();
+
+/* ===== 状态管理 tabs ===== */
+(function(){
+  var tabs=document.querySelectorAll('.tabs button'),panes=document.querySelectorAll('.tabpane');
+  tabs.forEach(function(b){b.addEventListener('click',function(){
+    tabs.forEach(function(x){x.classList.remove('on')});panes.forEach(function(p){p.classList.remove('on')});
+    b.classList.add('on');document.getElementById(b.dataset.t).classList.add('on');
+  });});
+})();
+
+/* ===== 术语表搜索 ===== */
+(function(){
+  var input=document.getElementById('glosSearch'),rows=document.querySelectorAll('#glosTable tbody tr'),count=document.getElementById('glosCount');
+  function upd(){
+    var q=input.value.trim().toLowerCase(),n=0;
+    rows.forEach(function(r){var hit=!q||r.textContent.toLowerCase().indexOf(q)>-1;r.style.display=hit?'':'none';if(hit)n++;});
+    count.textContent='显示 '+n+' / '+rows.length+' 条';
+  }
+  input.addEventListener('input',upd);upd();
+})();
+
+/* ===== prompt 切换 ===== */
+document.querySelectorAll('.ptoggle').forEach(function(tg){
+  var btns=tg.querySelectorAll('button');
+  btns.forEach(function(b){b.addEventListener('click',function(){
+    btns.forEach(function(x){x.classList.remove('on');document.getElementById(x.dataset.p).hidden=true;});
+    b.classList.add('on');document.getElementById(b.dataset.p).hidden=false;
+  });});
+});
+
+/* ===== 目录高亮 ===== */
+(function(){
+  var links=document.querySelectorAll('nav.toc a'),map={};
+  links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});
+  var obs=new IntersectionObserver(function(es){
+    es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('on')});var a=map[e.target.id];if(a)a.classList.add('on');}});
+  },{rootMargin:'-15% 0px -70% 0px'});
+  document.querySelectorAll('section[id]').forEach(function(s){obs.observe(s);});
+})();
+</script>
+</body>
+</html>

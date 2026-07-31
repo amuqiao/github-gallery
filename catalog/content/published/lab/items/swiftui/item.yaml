@@ -1,0 +1,44 @@
+schema_version: 2
+id: swiftui
+hall: lab
+kind: knowledge_article
+title: SwiftUI
+summary: Apple 平台的声明式 UI 框架，通过状态驱动视图更新和组合式组件构建 iOS、macOS 等界面。
+source:
+  type: documentation
+  url: https://developer.apple.com/xcode/swiftui/
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  domain: Apple 开发
+  topics:
+    - 声明式 UI
+    - 状态驱动
+    - 组件组合
+    - 跨 Apple 平台
+  audience:
+    - 自学者
+notes:
+  - id: swiftui-explainer
+    title: 一文读懂 SwiftUI · 声明式 UI 与状态驱动
+    type: html
+    path: ./notes/swiftui-explainer.html
+    summary: 从声明式视图、状态绑定、布局、生命周期和 Apple 平台集成理解 SwiftUI 的开发模型。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Documentation
+        url: https://developer.apple.com/xcode/swiftui/
+  - type: highlights
+    items:
+      - 声明式描述 UI，由状态变化驱动视图重新计算。
+      - 通过 View、modifier、layout、binding 和 environment 组合界面。
+      - 可覆盖 iOS、macOS、watchOS、tvOS 和 visionOS 等 Apple 平台。
+  - type: use-cases
+    items:
+      - 建立 SwiftUI 与 UIKit/AppKit 开发模型的区别。
+      - 学习状态管理、导航、布局、动画和平台适配。
+      - 为 Apple 平台 app 原型或长期项目选择 UI 技术路线。

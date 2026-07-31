@@ -1,0 +1,47 @@
+schema_version: 2
+id: triton-inference-server
+hall: lab
+kind: github_project
+title: NVIDIA Triton Inference Server
+summary: 模型推理服务框架，支持把 PyTorch、ONNX、TensorRT 等模型统一封装为可部署的在线推理服务。
+source:
+  type: github
+  url: https://github.com/triton-inference-server/server
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/triton-inference-server/server
+  category: infrastructure
+  tags:
+    - inference
+    - machine-learning
+    - toolkit
+  maintenance_status: unknown
+  languages:
+    - C++
+notes:
+  - id: triton-pai-eas-overview
+    title: 一文读懂 Triton 镜像部署 · PAI-EAS 与推理服务
+    type: html
+    path: ./notes/triton-pai-eas-overview.html
+    summary: 从镜像构建、模型仓库、Triton Server 和 PAI-EAS 服务化部署理解推理服务链路。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/triton-inference-server/server
+      - label: Documentation
+        url: https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/
+  - type: highlights
+    items:
+      - 统一托管多框架模型推理服务。
+      - 支持模型仓库、后端运行时、动态 batching 和多实例并发。
+      - 常用于 GPU 推理、容器镜像部署和平台托管服务。
+  - type: use-cases
+    items:
+      - 学习模型服务化和推理运行时的基础结构。
+      - 梳理 Triton 镜像、模型配置和 PAI-EAS 部署之间的关系。
+      - 对比直接脚本推理、框架服务和专用推理服务器的边界。

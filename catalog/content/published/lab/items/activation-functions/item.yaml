@@ -1,0 +1,44 @@
+schema_version: 2
+id: activation-functions
+hall: lab
+kind: knowledge_article
+title: 激活函数
+summary: 从非线性、Sigmoid/Tanh/ReLU/GELU/Softmax、梯度稳定性和输出层选择理解激活函数。
+source:
+  type: reference
+  url: https://en.wikipedia.org/wiki/Activation_function
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  domain: 机器学习基础
+  topics:
+    - 非线性
+    - 梯度流
+    - 神经网络
+    - 输出层
+  audience:
+    - 自学者
+notes:
+  - id: activation-functions-explainer
+    title: 一文读懂激活函数 · 非线性与梯度流
+    type: html
+    path: ./notes/activation-functions-explainer.html
+    summary: 从非线性、Sigmoid/Tanh/ReLU/GELU/Softmax、梯度消失和输出层选择理解激活函数。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Reference
+        url: https://en.wikipedia.org/wiki/Activation_function
+  - type: highlights
+    items:
+      - 激活函数为神经网络引入非线性表达能力。
+      - 不同函数会影响梯度流、饱和区、稀疏性和数值稳定性。
+      - 输出层激活函数需要与任务语义和损失函数配套选择。
+  - type: use-cases
+    items:
+      - 理解为什么深层网络不能只堆线性层。
+      - 比较 Sigmoid、Tanh、ReLU、GELU 和 Softmax 的适用位置。
+      - 排查梯度消失、死亡 ReLU 和输出概率解释问题。

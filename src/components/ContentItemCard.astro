@@ -10,18 +10,23 @@ interface Props {
 }
 
 const { item, note, headingLevel = 3, order } = Astro.props;
-const profile = item.profile;
-const isAiModel = "provider" in profile;
 const sourceLabel = item.source.type;
 let kindLabel: string;
 let primaryFacts: string[];
 let tagPreview: string[];
 
-if (isAiModel) {
+if (item.kind === "ai_model") {
+  const profile = item.profile;
   kindLabel = "模型";
   primaryFacts = [profile.provider, profile.formats.join(" · "), profile.runtimes.join(" · ")];
   tagPreview = profile.tasks.slice(0, 4);
+} else if (item.kind === "knowledge_article") {
+  const profile = item.profile;
+  kindLabel = "知识";
+  primaryFacts = [profile.domain, sourceLabel];
+  tagPreview = profile.topics.slice(0, 4);
 } else {
+  const profile = item.profile;
   const taxonomy = await getTaxonomyCatalog();
   kindLabel = getCategory(taxonomy, profile.category).label;
   primaryFacts = [profile.languages?.[0], profile.license].filter((fact): fact is string => Boolean(fact));

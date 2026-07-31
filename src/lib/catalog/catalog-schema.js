@@ -223,6 +223,14 @@ export const aiModelProfileSchema = z
   })
   .strict();
 
+export const knowledgeArticleProfileSchema = z
+  .object({
+    domain: nonEmptyString,
+    topics: z.array(nonEmptyString).min(1).max(8),
+    audience: z.array(nonEmptyString).min(1).max(6).optional()
+  })
+  .strict();
+
 const contentItemBaseSchema = z
   .object({
     schema_version: z.literal(2),
@@ -246,6 +254,10 @@ export const contentItemConfigSchema = z.discriminatedUnion("kind", [
   contentItemBaseSchema.extend({
     kind: z.literal("ai_model"),
     profile: aiModelProfileSchema
+  }),
+  contentItemBaseSchema.extend({
+    kind: z.literal("knowledge_article"),
+    profile: knowledgeArticleProfileSchema
   })
 ]);
 

@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Temporal：Durable Execution 的心智模型</title>
+<style>
+:root{
+  --bg:#12161C; --panel:#1A212B; --panel2:#151B23; --line:#2B3542; --line2:#3A4756;
+  --ink:#E9E4D8; --muted:#98A2B0; --dim:#6B7684;
+  --amber:#E5A84B; --amber-d:#8C6526;
+  --teal:#57C7A6; --teal-d:#2C6D5B;
+  --blue:#8FA8E8; --blue-d:#44548C;
+  --violet:#B78CDF; --violet-d:#5E4380;
+  --red:#E0685A; --red-d:#7C3A32;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,"Liberation Mono",monospace;
+  --serif:"Noto Serif SC","Source Han Serif SC","Songti SC",SimSun,Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.85;font-size:16px;
+  background-image:linear-gradient(180deg,#141A22 0%,#12161C 340px);}
+.wrap{max-width:1000px;margin:0 auto;padding:0 22px}
+a{color:var(--amber)}
+::selection{background:var(--amber-d);color:#fff}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:4px}
+
+/* ---------- typography ---------- */
+h1,h2,h3,h4{font-family:var(--serif);font-weight:700;line-height:1.35;margin:0 0 .5em}
+h1{font-size:clamp(1.7rem,4.4vw,2.6rem);letter-spacing:.02em}
+h2{font-size:clamp(1.35rem,3vw,1.8rem);margin-top:.4em}
+h3{font-size:1.13rem;color:var(--ink);margin-top:1.6em}
+p{margin:.9em 0}
+strong{color:#fff}
+code{font-family:var(--mono);font-size:.86em;background:#0D1218;border:1px solid var(--line);border-radius:5px;padding:.08em .35em;color:#E8D9B8}
+pre{background:#0C1117;border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto;line-height:1.62;font-size:.83rem}
+pre code{background:none;border:none;padding:0;color:#D5DBE4;font-size:1em}
+.k{color:#C792EA}.s{color:#9ECE8C}.f{color:#82AAFF}.cm{color:#5E6B7C;font-style:italic}.n{color:#F0B35E}.t{color:#7FDBCA}
+ul,ol{padding-left:1.4em}
+li{margin:.35em 0}
+li::marker{color:var(--amber)}
+hr{border:none;border-top:1px solid var(--line);margin:2em 0}
+
+/* ---------- section scaffold: event-ledger eyebrows ---------- */
+section.evt{padding:3.2rem 0 1.4rem;border-top:1px dashed var(--line)}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:.76rem;letter-spacing:.06em;color:var(--amber);margin-bottom:.9rem}
+.eyebrow::before{content:"";width:9px;height:9px;border:2px solid var(--amber);border-radius:2px;transform:rotate(45deg);flex:none}
+.eyebrow .id{color:var(--dim)}
+.lede{color:var(--muted);font-size:1.02rem}
+.callout{border:1px solid var(--line);border-left:3px solid var(--amber);background:var(--panel2);border-radius:0 10px 10px 0;padding:12px 18px;margin:1.3em 0}
+.callout.teal{border-left-color:var(--teal)}
+.callout.red{border-left-color:var(--red)}
+.callout p{margin:.4em 0}
+
+/* ---------- panels / controls ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:1.5em 0}
+.panel-title{font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.panel-title::after{content:"";flex:1;border-top:1px solid var(--line)}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.btnrow .lbl{font-size:.78rem;color:var(--dim);align-self:center;font-family:var(--mono);margin-right:2px}
+.btn{font-family:var(--sans);font-size:.84rem;color:var(--muted);background:var(--panel2);border:1px solid var(--line);
+  border-radius:999px;padding:6px 14px;cursor:pointer;transition:all .15s}
+.btn:hover{color:var(--ink);border-color:var(--line2)}
+.btn[aria-pressed="true"]{color:#14181E;background:var(--amber);border-color:var(--amber);font-weight:600}
+.btn.tealbtn[aria-pressed="true"]{background:var(--teal);border-color:var(--teal)}
+.btn.ghost{border-style:dashed}
+.ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.ctrl .step-ind{font-family:var(--mono);font-size:.8rem;color:var(--dim);margin-left:auto}
+.caption{min-height:3.2em;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;
+  font-size:.92rem;color:var(--ink);margin-top:12px}
+.caption b{color:var(--amber)}
+.hint{font-size:.8rem;color:var(--dim);margin-top:8px}
+
+/* ---------- node graph ---------- */
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;row-gap:14px;margin:6px 0}
+.node{position:relative;flex:1 1 120px;min-width:118px;background:var(--panel2);border:1.5px solid var(--line);border-radius:11px;
+  padding:10px 10px 9px;cursor:pointer;text-align:center;transition:border-color .2s, box-shadow .2s, transform .2s}
+.node .nm{font-weight:600;font-size:.88rem;display:block}
+.node .rl{font-family:var(--mono);font-size:.66rem;color:var(--dim);display:block;margin-top:2px;letter-spacing:.04em}
+.node[data-role]::before{content:"";position:absolute;top:-1.5px;left:14px;right:14px;height:3px;border-radius:3px;opacity:.8}
+.node[data-role="client"]::before{background:var(--blue)}
+.node[data-role="service"]::before{background:var(--amber)}
+.node[data-role="queue"]::before{background:var(--violet)}
+.node[data-role="worker"]::before{background:var(--teal)}
+.node[data-role="code"]::before{background:linear-gradient(90deg,var(--teal),var(--amber))}
+.node.on{transform:translateY(-2px)}
+.node.on[data-role="client"]{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue),0 6px 22px -8px var(--blue)}
+.node.on[data-role="service"]{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber),0 6px 22px -8px var(--amber)}
+.node.on[data-role="queue"]{border-color:var(--violet);box-shadow:0 0 0 1px var(--violet),0 6px 22px -8px var(--violet)}
+.node.on[data-role="worker"],.node.on[data-role="code"]{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal),0 6px 22px -8px var(--teal)}
+.node.dead{border-color:var(--red)!important;box-shadow:0 0 0 1px var(--red)!important;opacity:.65}
+.node.dead::after{content:"✕ crash";position:absolute;right:8px;top:6px;font-family:var(--mono);font-size:.62rem;color:var(--red)}
+.arr{flex:0 0 26px;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:1.05rem;user-select:none}
+.arr.on{color:var(--amber)}
+
+/* ---------- event history tape (signature) ---------- */
+.tapewrap{margin-top:14px;border:1px solid var(--amber-d);border-radius:10px;background:#171512;padding:9px 12px 10px;position:relative}
+.tapewrap .tapelbl{font-family:var(--mono);font-size:.68rem;color:var(--amber);letter-spacing:.12em;margin-bottom:7px;display:flex;gap:8px;align-items:center}
+.tapewrap .tapelbl::before{content:"▮▮";letter-spacing:-2px;opacity:.6}
+.tape{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;min-height:30px;counter-reset:ev}
+.chip{counter-increment:ev;flex:none;font-family:var(--mono);font-size:.7rem;color:#EBD9AE;background:#221C10;
+  border:1px solid var(--amber-d);border-radius:6px;padding:3px 9px 3px 7px;white-space:nowrap;animation:pop .25s ease}
+.chip::before{content:counter(ev,decimal-leading-zero) " ";color:var(--dim)}
+.chip.fail{color:#F3B0A8;background:#241412;border-color:var(--red-d)}
+.chip.sig{color:#CBB2EE;background:#1B1424;border-color:var(--violet-d)}
+.chip.ok{color:#B9E8CF;background:#12211B;border-color:var(--teal-d)}
+.tape .empty{font-family:var(--mono);font-size:.72rem;color:var(--dim);align-self:center}
+@keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* vertical event list */
+.evlist{display:flex;flex-direction:column;gap:5px;max-height:330px;overflow-y:auto;counter-reset:ev;padding-right:4px}
+.evlist .chip{white-space:normal;font-size:.74rem;padding:5px 10px 5px 8px}
+.evlist .chip.click{cursor:pointer}
+.evlist .chip.click:hover{border-color:var(--amber)}
+.evlist .chip.sel{outline:1.5px solid var(--amber)}
+
+/* ---------- info box ---------- */
+.infobox{margin-top:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);padding:12px 15px;font-size:.88rem;display:none}
+.infobox.show{display:block}
+.infobox h4{font-family:var(--sans);font-size:.95rem;margin:0 0 6px}
+.infobox .row{display:flex;gap:10px;margin:5px 0;align-items:baseline}
+.infobox .tag{flex:none;font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;border-radius:4px;padding:1px 7px;margin-top:2px}
+.tag.own{color:var(--teal);border:1px solid var(--teal-d)}
+.tag.not{color:var(--red);border:1px solid var(--red-d)}
+.tag.his{color:var(--amber);border:1px solid var(--amber-d)}
+
+/* ---------- hero ---------- */
+header.hero{padding:3.4rem 0 2.4rem}
+.kicker{font-family:var(--mono);font-size:.76rem;letter-spacing:.22em;color:var(--teal);margin-bottom:14px}
+.hero .thesis{font-family:var(--serif);font-size:clamp(1.02rem,2.2vw,1.22rem);color:#F4EFE3;border:1px solid var(--amber-d);
+  background:linear-gradient(180deg,#1D1A12,#171512);border-radius:12px;padding:16px 20px;margin:1.4rem 0 1.6rem;line-height:1.9}
+.hero .thesis .q{color:var(--amber)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-family:var(--mono);font-size:.7rem;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* ---------- tables ---------- */
+.tblwrap{overflow-x:auto;margin:1.3em 0}
+table.cmp{border-collapse:collapse;width:100%;font-size:.87rem;min-width:640px}
+table.cmp th{font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);
+  text-align:left;padding:9px 12px;border-bottom:2px solid var(--amber-d);background:#181510}
+table.cmp td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink)}
+table.cmp td:first-child{font-weight:600;white-space:nowrap}
+table.cmp tr:hover td{background:#1B222C}
+table.cmp .y{color:var(--teal)}table.cmp .n2{color:var(--red)}table.cmp .m{color:var(--muted)}
+
+/* ---------- code panel with pointer (§4) ---------- */
+.player4{display:grid;grid-template-columns:1.05fr .95fr;gap:14px}
+.codebox{background:#0C1117;border:1px solid var(--line);border-radius:10px;padding:12px 0;font-family:var(--mono);font-size:.76rem;overflow-x:auto}
+.codebox .ln{display:flex;padding:1px 12px;white-space:pre;color:#C7CFDA}
+.codebox .ln .no{width:2.2em;color:#3E4A57;flex:none}
+.codebox .ln.hot{background:#2A2410;box-shadow:inset 3px 0 0 var(--amber)}
+.codebox .ln .cm{color:#5E6B7C}
+.lanebar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.lane{font-family:var(--mono);font-size:.68rem;padding:4px 10px;border-radius:6px;border:1px solid var(--line);color:var(--dim)}
+.lane.on{color:#14181E;font-weight:700}
+.lane.on[data-l="client"]{background:var(--blue);border-color:var(--blue)}
+.lane.on[data-l="service"]{background:var(--amber);border-color:var(--amber)}
+.lane.on[data-l="queue"]{background:var(--violet);border-color:var(--violet)}
+.lane.on[data-l="worker"]{background:var(--teal);border-color:var(--teal)}
+.lane.on[data-l="idle"]{background:var(--dim);border-color:var(--dim)}
+
+/* ---------- quiz ---------- */
+.qline{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin:7px 0;
+  font-family:var(--mono);font-size:.78rem;background:var(--panel2)}
+.qline .txt{flex:1;min-width:200px}
+.qline .pick{display:flex;gap:6px}
+.pick button{font-family:var(--mono);font-size:.68rem;border-radius:6px;border:1px solid var(--line);background:none;color:var(--dim);padding:3px 9px;cursor:pointer}
+.pick button[aria-pressed="true"].wf{background:var(--amber);border-color:var(--amber);color:#14181E;font-weight:700}
+.pick button[aria-pressed="true"].act{background:var(--teal);border-color:var(--teal);color:#14181E;font-weight:700}
+.qline.good{border-color:var(--teal)}
+.qline.bad{border-color:var(--red)}
+.qline .why{flex-basis:100%;font-family:var(--sans);font-size:.8rem;color:var(--muted);display:none;margin-top:4px}
+.qline.good .why,.qline.bad .why{display:block}
+.qline.good .why::before{content:"✓ ";color:var(--teal)}
+.qline.bad .why::before{content:"✕ ";color:var(--red)}
+
+.card-q{border:1px solid var(--line);border-radius:11px;background:var(--panel2);padding:13px 15px;margin:10px 0}
+.card-q .sc{font-size:.9rem;margin-bottom:8px}
+.card-q .opts{display:flex;flex-wrap:wrap;gap:7px}
+.card-q .opts .btn{font-size:.78rem;padding:4px 12px}
+.card-q .fb{display:none;font-size:.83rem;margin-top:9px;padding-top:8px;border-top:1px dashed var(--line)}
+.card-q.done .fb{display:block}
+.card-q .opts .btn.right{background:var(--teal);border-color:var(--teal);color:#14181E;font-weight:600}
+.card-q .opts .btn.wrong{background:var(--red);border-color:var(--red);color:#fff}
+
+/* ---------- sliders ---------- */
+.sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px 18px;margin-bottom:10px}
+.sl{font-size:.8rem;color:var(--muted)}
+.sl label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.72rem}
+.sl output{color:var(--amber)}
+input[type=range]{width:100%;accent-color:var(--amber);height:22px}
+input[type=checkbox]{accent-color:var(--teal);width:15px;height:15px}
+
+/* ---------- retry timeline ---------- */
+.tl{position:relative;background:#0C1117;border:1px solid var(--line);border-radius:10px;padding:34px 14px 26px;overflow-x:auto}
+.tl-inner{position:relative;height:66px;min-width:560px}
+.tl-axis{position:absolute;left:0;right:0;bottom:18px;border-top:1px solid var(--line2)}
+.tl-seg{position:absolute;top:14px;height:22px;border-radius:5px;font-family:var(--mono);font-size:.62rem;display:flex;align-items:center;justify-content:center;color:#14181E;font-weight:700;white-space:nowrap;padding:0 4px;overflow:hidden}
+.tl-seg.run{background:var(--teal)}
+.tl-seg.fail{background:var(--red);color:#fff}
+.tl-seg.tmo{background:var(--amber)}
+.tl-gap{position:absolute;top:22px;height:6px;border-bottom:2px dotted var(--dim)}
+.tl-tick{position:absolute;bottom:0;font-family:var(--mono);font-size:.6rem;color:var(--dim);transform:translateX(-50%)}
+.tl-hb{position:absolute;top:6px;width:2px;height:8px;background:#fff;opacity:.75}
+.verdict{margin-top:10px;font-family:var(--mono);font-size:.8rem}
+.verdict.ok{color:var(--teal)}.verdict.no{color:var(--red)}
+
+/* ---------- worker sim ---------- */
+.simgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end}
+.wdots{display:flex;flex-wrap:wrap;gap:7px;min-height:30px;margin:8px 0}
+.wdot{width:22px;height:22px;border-radius:6px;background:var(--teal-d);border:1px solid var(--teal);position:relative}
+.wdot::after{content:"";position:absolute;inset:5px;border-radius:3px;background:var(--teal);animation:poll 1.2s infinite alternate}
+@keyframes poll{from{opacity:.25}to{opacity:1}}
+.backlogbar{height:20px;border:1px solid var(--line2);border-radius:6px;background:#0C1117;overflow:hidden}
+.backlogbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--violet),var(--red));width:0%;transition:width .35s}
+.simnum{font-family:var(--mono);font-size:.76rem;color:var(--muted);margin-top:6px}
+.simnum b{color:var(--amber)}
+
+/* ---------- misc ---------- */
+details.mis{border:1px solid var(--line);border-radius:10px;background:var(--panel2);margin:9px 0;padding:0}
+details.mis summary{cursor:pointer;padding:11px 15px;font-weight:600;font-size:.92rem;list-style:none;position:relative;padding-left:38px}
+details.mis summary::before{content:"✕";position:absolute;left:14px;color:var(--red);font-family:var(--mono)}
+details.mis[open] summary{border-bottom:1px dashed var(--line)}
+details.mis .bd{padding:10px 16px 13px;font-size:.9rem;color:var(--muted)}
+details.mis .bd b{color:var(--teal)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.minicol{border:1px solid var(--line);border-radius:10px;padding:12px 15px;background:var(--panel2);font-size:.86rem}
+.minicol h4{margin:0 0 8px;font-family:var(--sans);font-size:.9rem}
+.minicol.badcol{border-color:var(--red-d)}
+.minicol.goodcol{border-color:var(--teal-d)}
+.minicol ol{margin:.3em 0;padding-left:1.3em}
+footer{border-top:1px dashed var(--line);margin-top:3rem;padding:2rem 0 3rem;color:var(--dim);font-size:.82rem;font-family:var(--mono)}
+.toc{display:flex;flex-wrap:wrap;gap:7px;margin:1.4rem 0 0}
+.toc a{font-family:var(--mono);font-size:.72rem;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 11px}
+.toc a:hover{color:var(--amber);border-color:var(--amber-d)}
+
+@media (max-width:760px){
+  .player4{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+  .simgrid{grid-template-columns:1fr}
+  .flow .node{min-width:100px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+<!-- ================= HERO ================= -->
+<header class="hero">
+<div class="wrap">
+  <div class="kicker">DURABLE EXECUTION · 入门全局视角</div>
+  <h1>一文读懂 Temporal</h1>
+  <p class="lede">这里说的 Temporal 是 <strong>Temporal.io</strong> —— 一个 durable execution / workflow orchestration 平台（不是 JavaScript 的 <code>Temporal</code> 日期时间 API）。本文用一个订单流程贯穿始终，帮你建立它的心智模型：什么问题、什么抽象、谁负责什么、什么时候该用。</p>
+  <div class="thesis"><span class="q">「</span>Temporal 的核心不是排队执行任务，而是把业务流程的进度写进 Event History，让代码在失败后能按历史恢复到正确状态。<span class="q">」</span></div>
+
+  <div class="panel" id="hero-sim">
+    <div class="panel-title">执行链路模拟器 · Client → Service → Task Queue → Worker → Event History</div>
+    <div class="btnrow"><span class="lbl">故障场景</span>
+      <button class="btn scn" data-scn="normal" aria-pressed="true">正常执行</button>
+      <button class="btn scn" data-scn="crash" aria-pressed="false">Worker crash</button>
+      <button class="btn scn" data-scn="net" aria-pressed="false">网络故障</button>
+      <button class="btn scn" data-scn="tmo" aria-pressed="false">Activity timeout</button>
+      <button class="btn scn" data-scn="exh" aria-pressed="false">重试耗尽</button>
+      <button class="btn scn" data-scn="restart" aria-pressed="false">进程重启</button>
+    </div>
+    <div class="btnrow"><span class="lbl">消息类型</span>
+      <button class="btn tealbtn scn" data-scn="signal" aria-pressed="false">Signal</button>
+      <button class="btn tealbtn scn" data-scn="query" aria-pressed="false">Query</button>
+      <button class="btn tealbtn scn" data-scn="update" aria-pressed="false">Update</button>
+    </div>
+
+    <div class="flow" id="hero-flow">
+      <div class="node" data-node="client" data-role="client" tabindex="0"><span class="nm">Client</span><span class="rl">发起 / 查询</span></div>
+      <div class="arr">→</div>
+      <div class="node" data-node="service" data-role="service" tabindex="0"><span class="nm">Temporal Service</span><span class="rl">持久化 · 调度</span></div>
+      <div class="arr">→</div>
+      <div class="node" data-node="queue" data-role="queue" tabindex="0"><span class="nm">Task Queue</span><span class="rl">Worker polling</span></div>
+      <div class="arr">→</div>
+      <div class="node" data-node="worker" data-role="worker" tabindex="0"><span class="nm">Worker</span><span class="rl">你部署的进程</span></div>
+      <div class="arr">→</div>
+      <div class="node" data-node="code" data-role="code" tabindex="0"><span class="nm">Workflow / Activity 代码</span><span class="rl">你写的业务逻辑</span></div>
+    </div>
+    <div class="tapewrap">
+      <div class="tapelbl">EVENT HISTORY —— append-only，由 Temporal Service 持久化，是流程的事实来源</div>
+      <div class="tape" id="hero-tape"><span class="empty">（还没有事件，点「下一步」开始）</span></div>
+    </div>
+
+    <div class="caption" id="hero-cap">选一个场景，然后用「下一步」逐步观察请求、任务和事件如何流动。也可以直接点击上面的节点，看它负责什么、不负责什么。</div>
+    <div class="ctrl">
+      <button class="btn" id="hero-prev">← 上一步</button>
+      <button class="btn" id="hero-next">下一步 →</button>
+      <button class="btn" id="hero-play">▶ 自动播放</button>
+      <button class="btn ghost" id="hero-reset">重置</button>
+      <span class="step-ind" id="hero-ind">0 / 0</span>
+    </div>
+    <div class="infobox" id="hero-info"></div>
+    <div class="legend">
+      <span><i style="background:var(--blue)"></i>Client</span>
+      <span><i style="background:var(--amber)"></i>Temporal Service / Event History</span>
+      <span><i style="background:var(--violet)"></i>Task Queue</span>
+      <span><i style="background:var(--teal)"></i>Worker / 你的代码</span>
+      <span><i style="background:var(--red)"></i>失败事件</span>
+    </div>
+  </div>
+
+  <nav class="toc" aria-label="目录">
+    <a href="#s1">01 问题</a><a href="#s2">02 Durable Execution</a><a href="#s3">03 概念地图</a><a href="#s4">04 一次执行</a><a href="#s5">05 History &amp; Replay</a><a href="#s6">06 Determinism</a><a href="#s7">07 Workflow vs Activity</a><a href="#s8">08 Worker &amp; Task Queue</a><a href="#s9">09 Retry / Timeout</a><a href="#s10">10 Signal / Query / Update</a><a href="#s11">11 Timer / Schedule / Child</a><a href="#s12">12 和替代方案的区别</a><a href="#s13">13 架构分工</a><a href="#s14">14 可观测性</a><a href="#s15">15 什么时候用</a><a href="#s16">16 常见误区</a><a href="#s17">17 最小代码</a><a href="#s18">18 速查表</a>
+  </nav>
+</div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 1 ================= -->
+<section class="evt" id="s1">
+  <div class="eyebrow"><span class="id">01</span> ProblemStatement</div>
+  <h2>先理解：Temporal 到底解决什么问题</h2>
+  <p>从一个再普通不过的业务流程说起——<strong>用户下单之后发生的事</strong>：</p>
+  <pre><code>PlaceOrder → ReserveInventory → ChargePayment → WaitForShipmentSignal → ShipOrder → SendReceipt</code></pre>
+  <p>预订库存要调库存服务，扣款要调支付网关，发货要等仓库系统回调（可能几小时后才来），最后还要发收据邮件。类似的还有用户 onboarding、退款审批、数据处理管道——它们的共同点是：</p>
+  <ul>
+    <li><strong>跨多个服务和外部系统</strong>：库存、支付、仓库、邮件，每一个都可能抽风；</li>
+    <li><strong>持续时间长</strong>：几秒、几小时、几天，甚至「等用户 30 天后续费」这种量级；</li>
+    <li><strong>中间步骤会失败</strong>：超时、网络抖动、下游 503、重复投递，还可能需要人工或外部事件介入；</li>
+    <li><strong>必须可恢复、可查询、可审计、可重试</strong>：客服要能查到「这单卡在哪一步」，事故后要能从断点继续，而不是从头重跑或者干脆丢单。</li>
+  </ul>
+  <h3>为什么普通做法会越写越复杂</h3>
+  <p>大多数团队的演化路径是：先写同步代码 → 加消息队列解耦 → 加 cron 扫表补偿 → 在数据库里加 <code>status</code> 字段记录进度。每一步都合理，最终却拼出一个难以维护的系统：</p>
+  <ul>
+    <li><strong>状态散落在多处</strong>——一部分在 DB 的 status 字段，一部分在队列里的消息，一部分在某个进程的内存中；</li>
+    <li><strong>重试和幂等逻辑到处都是</strong>——每个消费者都要自己写退避重试、去重、死信处理；</li>
+    <li><strong>失败恢复路径几乎无法测试</strong>——「进程在扣款成功但没记账之间崩了怎么办」这类分支很少被覆盖；</li>
+    <li><strong>流程进度难以可靠重建</strong>——排障时只能靠捞日志、拼消息、猜状态机走到了哪。</li>
+  </ul>
+  <p>本质问题是：<strong>「流程走到哪一步了」这个状态没有一个单一、可靠、可恢复的事实来源。</strong></p>
+  <div class="callout"><p><strong>Temporal 的一句话心智模型：</strong>用普通代码描述业务流程，由 Temporal 负责持久化进度、调度任务、失败恢复和长时间运行。你写「流程长什么样」，它保证「流程一定按这个样子走完或明确失败」。</p></div>
+</section>
+
+<!-- ================= 2 ================= -->
+<section class="evt" id="s2">
+  <div class="eyebrow"><span class="id">02</span> DurableExecution</div>
+  <h2>Durable Execution：Temporal 的核心抽象</h2>
+  <p><strong>Durable execution（持久化执行）</strong>的意思是：你可以像写普通函数一样写一个长流程——顺序调用、if/else、循环、<code>await sleep(30天)</code> ——而这个函数的<strong>执行进度本身被持久化</strong>了。进程崩溃、机器重启、网络断掉，函数都能「接着上次的位置」继续，而不是从头再来或永远丢失。</p>
+  <div class="panel">
+    <div class="panel-title">run → record event → crash → replay history → continue</div>
+    <div class="ctrl" style="margin-top:0">
+      <button class="btn" id="de-next">下一步 →</button>
+      <button class="btn ghost" id="de-reset">重置</button>
+      <span class="step-ind" id="de-ind">0 / 5</span>
+    </div>
+    <div class="flow" id="de-flow" style="margin-top:12px">
+      <div class="node" data-de="0" data-role="code"><span class="nm">① run</span><span class="rl">代码正常推进</span></div>
+      <div class="arr">→</div>
+      <div class="node" data-de="1" data-role="service"><span class="nm">② record event</span><span class="rl">每个决定落入 History</span></div>
+      <div class="arr">→</div>
+      <div class="node" data-de="2" data-role="worker"><span class="nm">③ crash</span><span class="rl">Worker 进程死掉</span></div>
+      <div class="arr">→</div>
+      <div class="node" data-de="3" data-role="service"><span class="nm">④ replay history</span><span class="rl">新 Worker 按事件回放</span></div>
+      <div class="arr">→</div>
+      <div class="node" data-de="4" data-role="code"><span class="nm">⑤ continue</span><span class="rl">从断点继续</span></div>
+    </div>
+    <div class="caption" id="de-cap">点「下一步」，看一次崩溃恢复的完整生命周期。</div>
+  </div>
+  <h3>它不是内存快照</h3>
+  <p>一个常见的想当然：「Temporal 大概是把进程内存 dump 下来，崩了再载入」。<strong>不是。</strong>Temporal 从不保存你的进程内存、栈或变量本身。它保存的是一份 <strong>Event History</strong> ——「这个流程发生过什么」的事件序列：Workflow 启动了、某个 Activity 被安排并返回了结果 X、某个 Timer 到期了、某个 Signal 到达了。</p>
+  <p>恢复时，新的 Worker 把你的 Workflow 代码<strong>重新从第一行跑一遍</strong>；每当代码走到「调用 Activity」「等 Timer」这类点位，SDK 发现 History 里已经有对应结果，就直接回放结果、不再真正执行外部操作。代码沿着同样的路径快速「重演」到崩溃前的位置，内部变量因此被重建——然后从那里真正继续。这就是 <strong>replay</strong>，第 5、6 章会展开它的机制和它对代码的约束。</p>
+  <h3>这如何改变后端心智模型</h3>
+  <ul>
+    <li><strong>你写的是流程代码</strong>：业务顺序、分支、等待，直接用编程语言表达，不再翻译成状态机表或 DAG 配置；</li>
+    <li><strong>Temporal 维护流程状态和执行历史</strong>：进度不在你的内存里，也不在你手写的 status 字段里；</li>
+    <li><strong>Worker 可以挂掉再回来</strong>：Worker 是无状态的执行器，它的死活不影响流程的存亡，只影响流程推进的快慢。</li>
+  </ul>
+</section>
+<!-- ================= 3 ================= -->
+<section class="evt" id="s3">
+  <div class="eyebrow"><span class="id">03</span> ConceptMap</div>
+  <h2>最小概念地图：Temporal 的核心对象</h2>
+  <p>Temporal 的术语不多，但它们是<strong>分层协作</strong>的，不是并列名词。按「谁在哪一层、和谁打交道」来记：</p>
+  <div class="panel">
+    <div class="panel-title">点击任意对象，查看它负责什么 / 不负责什么 / 与相邻对象的关系</div>
+    <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:6px">应用层 —— 你写、你调用</div>
+    <div class="flow">
+      <div class="node cm" data-cm="tclient" data-role="client" tabindex="0"><span class="nm">Temporal Client</span><span class="rl">start / signal / query…</span></div>
+      <div class="arr">·</div>
+      <div class="node cm" data-cm="wfdef" data-role="code" tabindex="0"><span class="nm">Workflow Definition</span><span class="rl">流程代码</span></div>
+      <div class="arr">·</div>
+      <div class="node cm" data-cm="act" data-role="code" tabindex="0"><span class="nm">Activity</span><span class="rl">外部副作用</span></div>
+    </div>
+    <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin:10px 0 6px">运行层 —— 你部署、Temporal 分发</div>
+    <div class="flow">
+      <div class="node cm" data-cm="worker" data-role="worker" tabindex="0"><span class="nm">Worker</span><span class="rl">跑你的代码</span></div>
+      <div class="arr">⇄</div>
+      <div class="node cm" data-cm="tq" data-role="queue" tabindex="0"><span class="nm">Task Queue</span><span class="rl">任务分发</span></div>
+      <div class="arr">·</div>
+      <div class="node cm" data-cm="wfexec" data-role="code" tabindex="0"><span class="nm">Workflow Execution</span><span class="rl">一次运行实例</span></div>
+    </div>
+    <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin:10px 0 6px">平台层 —— Temporal Service（自托管或 Temporal Cloud）</div>
+    <div class="flow">
+      <div class="node cm" data-cm="svc" data-role="service" tabindex="0"><span class="nm">Temporal Service</span><span class="rl">持久化 · 调度 · 状态</span></div>
+      <div class="arr">·</div>
+      <div class="node cm" data-cm="hist" data-role="service" tabindex="0"><span class="nm">Event History</span><span class="rl">事实来源</span></div>
+      <div class="arr">·</div>
+      <div class="node cm" data-cm="ns" data-role="service" tabindex="0"><span class="nm">Namespace</span><span class="rl">隔离边界</span></div>
+    </div>
+    <div class="infobox" id="cm-info"></div>
+  </div>
+  <p>先记住三条最容易混淆的关系：<strong>Workflow Definition 是代码，Workflow Execution 是一次运行</strong>（类似类与实例）；<strong>Worker 是你部署的进程，Temporal Service 不运行你的代码</strong>；<strong>Task Queue 只是分发任务的通道，流程状态在 Event History 里</strong>，不在队列里。</p>
+</section>
+
+<!-- ================= 4 ================= -->
+<section class="evt" id="s4">
+  <div class="eyebrow"><span class="id">04</span> WorkflowTaskStarted</div>
+  <h2>一次 Workflow 是如何跑起来的</h2>
+  <p>还是那个订单流程。下面的「执行播放器」会同步展示四件事：<strong>当前活跃的组件</strong>（顶部色条）、<strong>业务代码执行到哪一行</strong>（左）、<strong>Event History 长出了什么</strong>（右）、以及每一步的解说。</p>
+  <div class="panel">
+    <div class="panel-title">执行播放器 · orderWorkflow 的一生</div>
+    <div class="lanebar" id="p4-lanes">
+      <span class="lane" data-l="client">Client</span>
+      <span class="lane" data-l="service">Temporal Service</span>
+      <span class="lane" data-l="queue">Task Queue</span>
+      <span class="lane" data-l="worker">Worker</span>
+      <span class="lane" data-l="idle">（无 Worker 参与）</span>
+    </div>
+    <div class="player4">
+      <div class="codebox" id="p4-code"></div>
+      <div>
+        <div class="tapelbl" style="font-family:var(--mono);font-size:.68rem;color:var(--amber);letter-spacing:.1em;margin-bottom:6px">EVENT HISTORY</div>
+        <div class="evlist" id="p4-ev"><span class="empty" style="font-family:var(--mono);font-size:.72rem;color:var(--dim)">（空）</span></div>
+      </div>
+    </div>
+    <div class="caption" id="p4-cap">点「下一步」开始。注意：Workflow 代码并不是连续运行的——它以一个个 Workflow Task 的形式被「唤醒、推进、挂起」。</div>
+    <div class="ctrl">
+      <button class="btn" id="p4-prev">← 上一步</button>
+      <button class="btn" id="p4-next">下一步 →</button>
+      <button class="btn" id="p4-play">▶ 自动播放</button>
+      <button class="btn ghost" id="p4-reset">重置</button>
+      <span class="step-ind" id="p4-ind">0 / 0</span>
+    </div>
+  </div>
+  <p>把这条链路读顺，你就理解了 Temporal 的运行时形态：</p>
+  <ol>
+    <li><strong>Client 发起</strong> Workflow Execution，Temporal Service 写下第一个事件并安排一个 Workflow Task；</li>
+    <li><strong>Worker 从 Task Queue poll 到 Workflow Task</strong>，运行你的 Workflow 代码，直到代码做出下一个「决定」——安排 Activity、开 Timer、启动 Child Workflow，或停下来等 Signal；</li>
+    <li>这个决定交回 Service，<strong>落成事件</strong>；如果是 Activity，Service 再生成 Activity Task 放进 Task Queue；</li>
+    <li><strong>Worker poll 到 Activity Task，真正执行外部操作</strong>（HTTP、DB、支付网关），结果写回 Event History；</li>
+    <li>Service 据此安排新的 Workflow Task，<strong>Workflow 依据历史继续推进</strong>；循环往复，直到完成、失败、取消，或继续长期等待。</li>
+  </ol>
+  <div class="callout"><p>注意「等待发货 Signal」那一步：Workflow 停在 <code>await</code> 上时，<strong>没有任何进程在为它空转</strong>——没有线程阻塞、没有轮询。它只是 Service 里的一条持久化状态，等几天都不消耗 Worker 资源。</p></div>
+</section>
+
+<!-- ================= 5 ================= -->
+<section class="evt" id="s5">
+  <div class="eyebrow"><span class="id">05</span> HistoryReplayed</div>
+  <h2>Event History 与 Replay：为什么能恢复</h2>
+  <p><strong>Event History 是一份 append-only 的事实记录</strong>：只追加、不修改，按顺序记下这个 Workflow Execution 发生过的一切。它不是「顺便打的日志」，而是 Temporal 恢复执行的<strong>唯一依据</strong>。</p>
+  <div class="panel">
+    <div class="panel-title">Event History 浏览器 · 点击事件，看它记录什么、replay 时如何被使用</div>
+    <div class="grid2">
+      <div class="evlist" id="eh-list" style="max-height:380px"></div>
+      <div class="infobox show" id="eh-info" style="margin-top:0"><h4>点左侧任意事件</h4><p style="margin:0;color:var(--muted);font-size:.85rem">每个事件都会显示：它由谁写入、包含什么信息、replay 时代码走到对应位置会发生什么。</p></div>
+    </div>
+  </div>
+  <h3>Replay 到底在做什么</h3>
+  <p>当 Worker 崩溃、重启，或 Workflow 长时间等待后被再次唤醒时，接手的 Worker 手里只有两样东西：你的 <strong>Workflow 代码</strong> 和这份 <strong>Event History</strong>。它做的事叫 replay：</p>
+  <ul>
+    <li><strong>重新运行代码</strong>：从 Workflow 函数第一行开始执行；</li>
+    <li><strong>已发生的结果从 History 回放</strong>：代码走到 <code>await reserveInventory()</code>，SDK 在 History 里找到 <code>ActivityTaskCompleted</code>，直接把当时的返回值塞回去，<strong>不会再调一次库存服务</strong>；Timer、Signal、随机数、时间取值同理；</li>
+    <li><strong>走到 History 尽头，才开始真正执行新东西</strong>：代码越过最后一个已记录事件后，接下来的 Activity 才会被真正安排。</li>
+  </ul>
+  <p>replay 的目的只有一个：<strong>重建 Workflow 的内部状态</strong>（局部变量、走到哪个分支、等在哪个 await 上），从而让 Worker 崩溃后能继续、让进程重启和代码部署不打断流程、让「跑几个月的 Workflow」成为可能。</p>
+  <div class="grid2">
+    <div class="minicol badcol"><h4>普通进程崩溃</h4>
+      <ol><li>变量、调用栈、进度全在内存里</li><li>进程死亡 → 内存清零</li><li>「扣款成功但没发货」这种中间态<strong>永久丢失</strong></li><li>只能靠捞日志 + 人工修数据恢复</li></ol></div>
+    <div class="minicol goodcol"><h4>Temporal Workflow 恢复</h4>
+      <ol><li>每个决定和结果已作为事件落盘</li><li>Worker 死亡 → History 完好无损</li><li>新 Worker replay History，<strong>重建到崩溃前的确切状态</strong></li><li>从断点继续，外部副作用不重复执行</li></ol></div>
+  </div>
+</section>
+<!-- ================= 6 ================= -->
+<section class="evt" id="s6">
+  <div class="eyebrow"><span class="id">06</span> DeterminismRequired</div>
+  <h2>Determinism：为什么 Workflow 代码不能随便写</h2>
+  <p>Replay 有一个前提：<strong>同一份 Event History 回放时，代码必须做出一模一样的决策序列</strong>。如果第一次运行时代码安排了 Activity A，replay 时却因为「现在是周末」走了另一个分支去安排 Activity B，SDK 就无法把历史对上号——Workflow 会报 non-determinism 错误，无法正确恢复。</p>
+  <p>所以 Workflow 代码必须是 <strong>deterministic（确定性）</strong>的。这意味着<strong>不要在 Workflow 函数里直接做</strong>这些事：</p>
+  <ul>
+    <li>读<strong>当前时间</strong>（<code>Date.now()</code>、<code>time.Now()</code>）——每次 replay 都不一样；</li>
+    <li>取<strong>随机数</strong>、生成随机 UUID；</li>
+    <li>发<strong>网络请求</strong>、直接调<strong>数据库</strong>——这是副作用，replay 时会重复执行；</li>
+    <li>读<strong>外部可变状态</strong>：环境变量、全局单例、文件、共享内存；</li>
+    <li>依赖语言层面的非确定行为（比如无序 map 的遍历顺序、真实线程并发）。</li>
+  </ul>
+  <p>这些事情不是不能做，而是<strong>要么放进 Activity</strong>（结果会被记录并回放），<strong>要么用 SDK 提供的 replay-safe 版本</strong>：Workflow 专用的当前时间（如 <code>workflow.now()</code>）、durable 的 <code>sleep</code>/Timer、<code>sideEffect</code>/确定性随机数，以及升级代码用的 versioning / patching API。</p>
+  <div class="panel">
+    <div class="panel-title">Determinism 检测卡 · 逐行判断：留在 Workflow，还是移到 Activity / 换 replay-safe API？</div>
+    <div id="det-quiz"></div>
+    <div class="ctrl">
+      <button class="btn" id="det-check">检查答案</button>
+      <button class="btn ghost" id="det-reset">重来</button>
+      <span class="step-ind" id="det-score"></span>
+    </div>
+    <p class="hint">判定标准：这一行在两次 replay 中会不会产生不同的值或副作用？会 → 它不属于 Workflow 本体。</p>
+  </div>
+</section>
+
+<!-- ================= 7 ================= -->
+<section class="evt" id="s7">
+  <div class="eyebrow"><span class="id">07</span> ActivityTaskScheduled</div>
+  <h2>Workflow vs Activity：编排与副作用的边界</h2>
+  <div class="grid2">
+    <div class="minicol" style="border-color:var(--amber-d)"><h4 style="color:var(--amber)">Workflow 负责「编排」</h4>
+      <ul style="margin:0"><li>决定步骤顺序、分支、循环</li><li>保存业务流程状态（局部变量即状态）</li><li>等待：Signal、Timer、条件</li><li>安排 Activity、Timer、Child Workflow</li><li>根据结果决定下一步（含补偿逻辑）</li></ul></div>
+    <div class="minicol" style="border-color:var(--teal-d)"><h4 style="color:var(--teal)">Activity 负责「干活」</h4>
+      <ul style="margin:0"><li>执行外部 I/O：HTTP、DB、message broker、payment API</li><li>做一切可能失败、超时、需要重试的副作用</li><li>可配置 retry policy 与各类 timeout</li><li>长任务可以 heartbeat 汇报进度</li><li><strong>应设计为 idempotent（幂等）</strong>——因为它可能被重试</li></ul></div>
+  </div>
+  <p>一个粗暴但好用的判断口径：<strong>「如果这行代码执行两次会出问题（重复扣款）或产生不同结果（当前时间），它就该是 Activity。」</strong></p>
+  <div class="panel">
+    <div class="panel-title">对比器 · 这段逻辑该放在哪？（点 WF 或 ACT）</div>
+    <div id="wa-quiz"></div>
+  </div>
+  <div class="tblwrap"><table class="cmp">
+    <tr><th>维度</th><th>Workflow</th><th>Activity</th><th>普通函数</th><th>队列任务 (queue job)</th></tr>
+    <tr><td>职责</td><td>编排多步流程、维护流程状态</td><td>执行单个外部副作用</td><td>进程内计算</td><td>异步执行一件事</td></tr>
+    <tr><td>崩溃后</td><td class="y">按 History replay 恢复到断点</td><td class="y">按 retry policy 自动重试</td><td class="n2">状态丢失</td><td class="m">消息可能重投，进度需自管</td></tr>
+    <tr><td>允许副作用</td><td class="n2">否（必须 deterministic）</td><td class="y">是（这就是它存在的意义）</td><td class="y">是</td><td class="y">是</td></tr>
+    <tr><td>可运行时长</td><td class="y">秒 → 数月/数年</td><td class="m">受 timeout 配置约束，heartbeat 可支撑长任务</td><td class="n2">进程生命周期内</td><td class="m">通常要求短，超时被杀</td></tr>
+    <tr><td>重试语义</td><td class="m">流程级：代码里显式写补偿/重跑</td><td class="y">声明式 retry policy，由 Service 计时调度</td><td class="n2">手写</td><td class="m">手写或框架简单重投</td></tr>
+    <tr><td>进度可查询</td><td class="y">Query / Web UI / History</td><td class="y">attempts、heartbeat 可见</td><td class="n2">无</td><td class="m">通常只有成功/失败</td></tr>
+  </table></div>
+</section>
+
+<!-- ================= 8 ================= -->
+<section class="evt" id="s8">
+  <div class="eyebrow"><span class="id">08</span> TaskDispatched</div>
+  <h2>Worker、Task Queue 与调度路径</h2>
+  <p><strong>Worker 是你部署和运行的进程</strong>——一个普通的服务，里面注册了 Workflow 和 Activity 代码。它不对外提供接口，只做一件事：<strong>长轮询（poll）Task Queue</strong>，拿到任务、执行、上报结果。Temporal Service 从不主动连接你的 Worker，这让 Worker 可以跑在任何能出网的环境里（内网、K8s、笔记本）。</p>
+  <p>任务分发路径是固定的四步：<strong>Service 产生 Task →放进 Task Queue → Worker poll 到 → 执行并回报</strong>。Task 分两种：</p>
+  <ul>
+    <li><strong>Workflow Task</strong>：「把这个 Workflow 的代码推进到下一个决策点」——执行的是编排逻辑；</li>
+    <li><strong>Activity Task</strong>：「真正去执行这个外部副作用」——调 HTTP、写 DB 的就是它。</li>
+  </ul>
+  <div class="panel">
+    <div class="panel-title">Worker 扩缩容模拟 · 拖动滑块，观察 backlog 与吞吐</div>
+    <div class="simgrid">
+      <div>
+        <div class="sl"><label>Worker 数量 <output id="sim-wn">3</output></label>
+          <input type="range" id="sim-workers" min="0" max="8" value="3" step="1"></div>
+        <div class="wdots" id="sim-dots"></div>
+        <div class="sl"><label>任务到达速率 <output id="sim-rn">6</output> tasks/s</label>
+          <input type="range" id="sim-rate" min="1" max="16" value="6" step="1"></div>
+        <div class="ctrl" style="margin-top:6px"><button class="btn" id="sim-kill">✕ 杀掉一个 Worker</button></div>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--violet);letter-spacing:.1em;margin-bottom:6px">TASK QUEUE BACKLOG</div>
+        <div class="backlogbar"><i id="sim-bar"></i></div>
+        <div class="simnum" id="sim-num"></div>
+        <div class="caption" id="sim-cap" style="min-height:4.6em"></div>
+      </div>
+    </div>
+  </div>
+  <p>三个工程要点：</p>
+  <ul>
+    <li><strong>扩容 = 加 Worker</strong>：每个 Worker 处理能力有限（这里假设 2 tasks/s），到达速率超过总能力时 backlog 增长，加 Worker 即可消化；</li>
+    <li><strong>Task Queue 可以用来路由</strong>：GPU 任务一个队列、普通任务一个队列，不同 Worker 组各 poll 各的；</li>
+    <li><strong>Worker 挂掉 ≠ Workflow 丢失</strong>：上面按「杀掉一个 Worker」试试——流程状态在 Service 的 Event History 里，任务只是暂时没人领，等 Worker 回来（或超时后重新入队）就继续。Worker 是牛，流程是账本；牛病了换一头，账本还在。</li>
+  </ul>
+</section>
+<!-- ================= 9 ================= -->
+<section class="evt" id="s9">
+  <div class="eyebrow"><span class="id">09</span> ActivityTaskFailed → Retrying</div>
+  <h2>Retry、Timeout、Heartbeat：失败如何被建模</h2>
+  <p>Temporal 不只是「自动重试」，而是把失败处理变成<strong>可配置、可观察的执行语义</strong>——你声明策略，Service 负责计时、调度和记账。核心配置有四个：</p>
+  <ul>
+    <li><strong>Retry Policy</strong>：失败后如何重试——初始间隔、退避倍数、最大间隔、最大尝试次数（Activity 默认无限重试，直到超时上限或被取消）；</li>
+    <li><strong>Start-To-Close Timeout</strong>：<strong>单次尝试</strong>从开始执行到必须结束的最长时间，几乎总是应该设置；</li>
+    <li><strong>Schedule-To-Start Timeout</strong>：任务从入队到被某个 Worker 领走的最长等待——用于检测「没有 Worker 在干活」；</li>
+    <li><strong>Schedule-To-Close Timeout</strong>：整个 Activity Execution（含所有重试）的总耗时上限。</li>
+  </ul>
+  <p><strong>Heartbeat</strong> 是给长 Activity 用的：执行中定期向 Service 汇报「我还活着，进度到 X」。配合 heartbeat timeout，可以在几秒内发现卡死的 Worker 并触发重试，而不用等漫长的 Start-To-Close；重试的新尝试还能读到上次的 heartbeat details，从进度 X 继续而不是从零开始。</p>
+  <div class="panel">
+    <div class="panel-title">Retry / Timeout 时间线 · 调参数，看这个 Activity Execution 的命运</div>
+    <div class="sliders">
+      <div class="sl"><label>前几次尝试注定失败 <output id="rt-failn">2</output> 次</label><input type="range" id="rt-fail" min="0" max="5" value="2"></div>
+      <div class="sl"><label>maximumAttempts <output id="rt-maxn">4</output></label><input type="range" id="rt-max" min="1" max="6" value="4"></div>
+      <div class="sl"><label>initialInterval <output id="rt-intn">2</output>s（backoff ×2）</label><input type="range" id="rt-int" min="1" max="8" value="2"></div>
+      <div class="sl"><label>startToCloseTimeout <output id="rt-stcn">6</output>s</label><input type="range" id="rt-stc" min="2" max="15" value="6"></div>
+      <div class="sl"><label>单次实际耗时 <output id="rt-durn">4</output>s</label><input type="range" id="rt-dur" min="1" max="15" value="4"></div>
+      <div class="sl" style="align-self:center"><label style="justify-content:flex-start;gap:8px"><input type="checkbox" id="rt-hb"> 显示 heartbeat（每 1s）</label></div>
+    </div>
+    <div class="tl"><div class="tl-inner" id="rt-tl"></div></div>
+    <div class="verdict" id="rt-verdict"></div>
+    <p class="hint">试试：① 把「实际耗时」拖到超过 startToCloseTimeout，看每次尝试都变成 timeout；② 把「注定失败次数」调到 ≥ maximumAttempts，看重试耗尽后 Workflow 收到最终失败。</p>
+  </div>
+  <div class="callout red"><p><strong>幂等是你的责任。</strong>Activity「至少执行一次」而不是「恰好一次」——网络分区时，副作用可能已发生但结果没能上报，重试就会再来一遍。扣款、发货、发邮件这类操作必须用幂等键、去重表或对账机制兜住，否则「自动重试」会变成「自动重复扣款」。</p></div>
+</section>
+
+<!-- ================= 10 ================= -->
+<section class="evt" id="s10">
+  <div class="eyebrow"><span class="id">10</span> WorkflowExecutionSignaled</div>
+  <h2>Signal、Query、Update：运行中的 Workflow 如何交互</h2>
+  <p>Workflow 一旦启动就可能跑几天，外界不可能只在启动时给它一次输入。三种交互方式，按「是否改状态 / 是否有返回值」区分：</p>
+  <div class="panel">
+    <div class="panel-title">Signal / Query / Update 对照器（订单流程示例）</div>
+    <div class="btnrow">
+      <button class="btn squ" data-squ="signal" aria-pressed="true">Signal · 修改收货地址</button>
+      <button class="btn squ" data-squ="query" aria-pressed="false">Query · 查看订单状态</button>
+      <button class="btn squ" data-squ="update" aria-pressed="false">Update · 申请取消订单</button>
+    </div>
+    <div class="flow" id="squ-flow">
+      <div class="node" data-sq="client" data-role="client"><span class="nm">Client</span><span class="rl">发起</span></div>
+      <div class="arr" id="squ-a1">→</div>
+      <div class="node" data-sq="service" data-role="service"><span class="nm">Temporal Service</span><span class="rl">路由 / 记录</span></div>
+      <div class="arr" id="squ-a2">→</div>
+      <div class="node" data-sq="worker" data-role="worker"><span class="nm">Worker · Workflow 代码</span><span class="rl">处理</span></div>
+    </div>
+    <div class="caption" id="squ-cap"></div>
+    <div class="tapewrap" style="margin-top:10px"><div class="tapelbl">写入 EVENT HISTORY 的内容</div><div class="tape" id="squ-tape"></div></div>
+  </div>
+  <div class="tblwrap"><table class="cmp">
+    <tr><th>消息类型</th><th>改变状态</th><th>返回结果</th><th>写入 History</th><th>适用场景</th></tr>
+    <tr><td>Signal</td><td class="y">是</td><td class="n2">否（异步，fire-and-forget）</td><td class="y">是（WorkflowExecutionSignaled）</td><td>外部事件推动流程：仓库已发货、用户改地址、审批通过</td></tr>
+    <tr><td>Query</td><td class="n2">否（只读，不得有副作用）</td><td class="y">是（同步返回）</td><td class="n2">否</td><td>看当前进度：订单到哪一步了、购物车里有什么</td></tr>
+    <tr><td>Update</td><td class="y">是（可先校验再执行）</td><td class="y">是（同步返回结果）</td><td class="y">是（Update Accepted / Completed）</td><td>「请求 + 要答复」：申请取消订单，返回是否接受</td></tr>
+  </table></div>
+  <p>记忆口诀：<strong>Signal 是「扔进去一个事件」，Query 是「往里看一眼」，Update 是「递交一份要盖章回执的申请」。</strong>Query 因为不改状态、不进 History，所以再频繁也不会让历史膨胀；但它需要 Worker 在线来回答（必要时 Worker 会先 replay 重建状态再作答）。</p>
+</section>
+
+<!-- ================= 11 ================= -->
+<section class="evt" id="s11">
+  <div class="eyebrow"><span class="id">11</span> TimerStarted</div>
+  <h2>Timer、Schedule、Child Workflow：长流程如何组合</h2>
+  <ul>
+    <li><strong>Timer</strong>——在 Workflow 里 <code>await sleep("30 days")</code>。这不是线程 sleep：Timer 是 Service 里的持久化事件，<strong>不依赖任何 Worker 进程活着</strong>；30 天里 Worker 可以升级、重启一百次，到点后 Service 照样触发 <code>TimerFired</code>，Workflow 继续。与普通 <code>sleep</code> 的区别：普通 sleep 占着线程且进程一死就没了。</li>
+    <li><strong>Schedule</strong>——按计划<strong>定期启动新的 Workflow Execution</strong>（每天凌晨跑对账流程）。与 cron 的区别：cron 只负责「到点执行一条命令」，错过就错过、跑挂了不知道；Schedule 启动的是完整 Workflow，带重试、可查历史、可配置错过后的补跑与重叠策略。</li>
+    <li><strong>Child Workflow</strong>——从一个 Workflow 里启动另一个 Workflow。与普通函数调用的区别：Child 有<strong>自己独立的 Event History、超时与重试语义和失败边界</strong>。适合拆分复杂流程（每个包裹一个配送子流程）、隔离失败（子流程失败不必拖垮父流程）、绕开单个 History 过长的问题。</li>
+  </ul>
+  <div class="panel">
+    <div class="panel-title">组合视图 · parent / child / timer / schedule</div>
+    <svg viewBox="0 0 860 300" role="img" aria-label="Schedule 定期启动 parent workflow，parent 内含 timer 并派生 child workflow" style="width:100%;height:auto;font-family:var(--mono)">
+      <defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#98A2B0"/></marker></defs>
+      <!-- schedule -->
+      <rect x="20" y="20" width="190" height="52" rx="9" fill="#151B23" stroke="#B78CDF"/>
+      <text x="115" y="42" text-anchor="middle" fill="#B78CDF" font-size="13">Schedule</text>
+      <text x="115" y="60" text-anchor="middle" fill="#6B7684" font-size="10">every day @ 02:00</text>
+      <line x1="115" y1="72" x2="115" y2="108" stroke="#98A2B0" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+      <text x="128" y="96" fill="#6B7684" font-size="10">start new execution</text>
+      <!-- parent lane -->
+      <rect x="20" y="112" width="820" height="70" rx="9" fill="#151B23" stroke="#E5A84B"/>
+      <text x="34" y="132" fill="#E5A84B" font-size="12">Parent Workflow Execution</text>
+      <rect x="34" y="142" width="120" height="28" rx="6" fill="#221C10" stroke="#8C6526"/><text x="94" y="160" text-anchor="middle" fill="#EBD9AE" font-size="10">reserve + charge</text>
+      <rect x="170" y="142" width="150" height="28" rx="6" fill="#10151C" stroke="#57C7A6" stroke-dasharray="5 3"/><text x="245" y="160" text-anchor="middle" fill="#57C7A6" font-size="10">Timer: sleep(7d)</text>
+      <text x="245" y="196" text-anchor="middle" fill="#6B7684" font-size="9">TimerStarted … 期间无 Worker 占用 … TimerFired</text>
+      <rect x="336" y="142" width="140" height="28" rx="6" fill="#221C10" stroke="#8C6526"/><text x="406" y="160" text-anchor="middle" fill="#EBD9AE" font-size="10">start child ↓</text>
+      <rect x="620" y="142" width="180" height="28" rx="6" fill="#221C10" stroke="#8C6526"/><text x="710" y="160" text-anchor="middle" fill="#EBD9AE" font-size="10">await child result → 收尾</text>
+      <line x1="490" y1="156" x2="612" y2="156" stroke="#98A2B0" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+      <text x="551" y="149" text-anchor="middle" fill="#6B7684" font-size="9">await</text>
+      <!-- child -->
+      <line x1="406" y1="170" x2="406" y2="212" stroke="#98A2B0" marker-end="url(#ah)"/>
+      <rect x="240" y="216" width="420" height="62" rx="9" fill="#151B23" stroke="#57C7A6"/>
+      <text x="254" y="236" fill="#57C7A6" font-size="12">Child Workflow：shipmentWorkflow(包裹#1)</text>
+      <text x="254" y="256" fill="#6B7684" font-size="10">独立 Event History · 独立 timeout/retry · 失败边界隔离</text>
+      <line x1="660" y1="240" x2="700" y2="184" stroke="#98A2B0" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+    </svg>
+  </div>
+</section>
+
+<!-- ================= 12 ================= -->
+<section class="evt" id="s12">
+  <div class="eyebrow"><span class="id">12</span> NotAQueueNotACron</div>
+  <h2>Temporal 与常见替代方案的区别</h2>
+  <p>Temporal 经常被错认成某个单一组件。边界如下——注意每一行里两者<strong>解决的层次不同</strong>，很多时候是互补而非二选一：</p>
+  <div class="tblwrap"><table class="cmp">
+    <tr><th>对比</th><th>它负责什么</th><th>Temporal 的差别</th></tr>
+    <tr><td>Message queue<br><span class="m" style="font-weight:400;font-size:.78rem">Kafka / RabbitMQ / SQS</span></td><td>可靠地<strong>传递</strong>任务和消息</td><td>队列不知道「流程」的存在：多步状态、重试编排、超时、恢复、查询进度都要消费者自己写。Temporal 持久化流程状态、调度任务、内建 retry/恢复，并保留可查询的执行历史。Temporal 内部的 Task Queue 只是它的分发机制之一。</td></tr>
+    <tr><td>Cron</td><td><strong>定时触发</strong>一次执行</td><td>cron 触发之后就不管了：跑挂、跑重、跑丢都无感知。Temporal 的 Schedule 触发的是带状态、可重试、可审计的长流程；且 Temporal 的主战场是「长流程本身」，定时只是入口之一。</td></tr>
+    <tr><td>Airflow</td><td><strong>数据工作流</strong>的 DAG 调度：批处理、ETL、按天分区的任务图</td><td>Airflow 面向数据管道，DAG 结构静态、以调度周期为中心。Temporal 面向<strong>业务应用</strong>的 durable execution：流程即代码，支持任意分支/循环/等待外部事件、毫秒级启动、百万级并发实例（每个订单一个 execution）。</td></tr>
+    <tr><td>BPMN / Camunda</td><td><strong>图形化流程建模</strong>与执行</td><td>BPMN 用图描述流程，适合业务人员参与建模；表达复杂逻辑要在图和代码间来回映射。Temporal 直接用通用语言写流程：版本控制、测试、code review 走软件工程的老路。</td></tr>
+    <tr><td>手写 saga / 状态机<br><span class="m" style="font-weight:400;font-size:.78rem">DB status 字段 + 补偿</span></td><td>灵活，无新依赖</td><td>手写方案要自己解决：状态持久化与一致性、崩溃恢复、重试退避、超时扫描、幂等去重、可观测——每个流程都重造一遍。Temporal 把这些收进统一运行时 + Event History；代价是引入新组件和 determinism 约束（第 15 章）。</td></tr>
+  </table></div>
+  <div class="panel">
+    <div class="panel-title">自检卡 · 这个场景最像哪个工具的主场？</div>
+    <div id="sc-cards"></div>
+  </div>
+</section>
+<!-- ================= 13 ================= -->
+<section class="evt" id="s13">
+  <div class="eyebrow"><span class="id">13</span> ResponsibilityBoundary</div>
+  <h2>架构视角：谁持久化，谁执行，谁调度</h2>
+  <p>入门阶段不需要深入 Temporal Service 的内部实现，但值得看一眼它的骨架，把「责任落在谁头上」钉死：</p>
+  <div class="panel">
+    <svg viewBox="0 0 880 250" role="img" aria-label="Client 经 Frontend、History、Matching 服务到 Task Queue、Worker，事件持久化到数据库" style="width:100%;height:auto;font-family:var(--mono)">
+      <defs><marker id="ah2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#98A2B0"/></marker></defs>
+      <rect x="14" y="90" width="110" height="52" rx="9" fill="#151B23" stroke="#8FA8E8"/><text x="69" y="112" text-anchor="middle" fill="#8FA8E8" font-size="12">Client</text><text x="69" y="130" text-anchor="middle" fill="#6B7684" font-size="9">SDK / tctl / UI</text>
+      <rect x="164" y="14" width="428" height="222" rx="12" fill="none" stroke="#8C6526" stroke-dasharray="6 4"/>
+      <text x="178" y="34" fill="#E5A84B" font-size="11">Temporal Service（自托管 或 Temporal Cloud）</text>
+      <rect x="184" y="90" width="112" height="52" rx="9" fill="#221C10" stroke="#E5A84B"/><text x="240" y="112" text-anchor="middle" fill="#EBD9AE" font-size="11">Frontend</text><text x="240" y="129" text-anchor="middle" fill="#6B7684" font-size="9">API 入口 / 路由</text>
+      <rect x="330" y="52" width="112" height="52" rx="9" fill="#221C10" stroke="#E5A84B"/><text x="386" y="74" text-anchor="middle" fill="#EBD9AE" font-size="11">History</text><text x="386" y="91" text-anchor="middle" fill="#6B7684" font-size="9">状态机 / 写事件</text>
+      <rect x="330" y="146" width="112" height="52" rx="9" fill="#221C10" stroke="#E5A84B"/><text x="386" y="168" text-anchor="middle" fill="#EBD9AE" font-size="11">Matching</text><text x="386" y="185" text-anchor="middle" fill="#6B7684" font-size="9">Task Queue 分发</text>
+      <rect x="474" y="146" width="100" height="52" rx="9" fill="#1B1424" stroke="#B78CDF"/><text x="524" y="168" text-anchor="middle" fill="#CBB2EE" font-size="11">Task Queue</text><text x="524" y="185" text-anchor="middle" fill="#6B7684" font-size="9">逻辑队列</text>
+      <rect x="640" y="146" width="110" height="52" rx="9" fill="#12211B" stroke="#57C7A6"/><text x="695" y="168" text-anchor="middle" fill="#B9E8CF" font-size="11">Worker</text><text x="695" y="185" text-anchor="middle" fill="#6B7684" font-size="9">你部署的进程</text>
+      <rect x="640" y="40" width="228" height="52" rx="9" fill="#0C1117" stroke="#3A4756"/><text x="754" y="62" text-anchor="middle" fill="#E9E4D8" font-size="11">Persistence（DB）</text><text x="754" y="79" text-anchor="middle" fill="#6B7684" font-size="9">Cassandra / MySQL / PostgreSQL</text>
+      <line x1="124" y1="116" x2="180" y2="116" stroke="#98A2B0" marker-end="url(#ah2)"/>
+      <line x1="296" y1="104" x2="326" y2="86" stroke="#98A2B0" marker-end="url(#ah2)"/>
+      <line x1="296" y1="128" x2="326" y2="160" stroke="#98A2B0" marker-end="url(#ah2)"/>
+      <line x1="442" y1="172" x2="470" y2="172" stroke="#98A2B0" marker-end="url(#ah2)"/>
+      <line x1="636" y1="172" x2="578" y2="172" stroke="#57C7A6" marker-end="url(#ah2)"/>
+      <text x="607" y="164" text-anchor="middle" fill="#57C7A6" font-size="9">poll</text>
+      <line x1="442" y1="66" x2="636" y2="66" stroke="#E5A84B" marker-end="url(#ah2)"/>
+      <text x="539" y="58" text-anchor="middle" fill="#E5A84B" font-size="9">Event History 落盘</text>
+      <line x1="695" y1="142" x2="620" y2="108 " stroke="#6B7684" stroke-dasharray="4 3" marker-end="url(#ah2)"/>
+      <text x="686" y="120" fill="#6B7684" font-size="9">结果上报</text>
+    </svg>
+  </div>
+  <div class="tblwrap"><table class="cmp">
+    <tr><th>谁</th><th>负责</th></tr>
+    <tr><td>开发者（你）</td><td>Workflow Definition、Activity Definition、Worker 的部署与扩缩容、Client 调用、<strong>幂等设计和业务语义</strong>（包括业务级失败的补偿逻辑）</td></tr>
+    <tr><td>Temporal Service</td><td>Workflow Execution 状态、Event History 写入、Workflow/Activity Task 的生成与调度、retry / timeout / timer 的计时执行、replay 所需的一切恢复语义</td></tr>
+    <tr><td>数据库（Persistence）</td><td>物理持久化：事件历史、当前状态、Task、可见性元数据。由 Service 独占访问，你的代码不直接碰它</td></tr>
+  </table></div>
+</section>
+
+<!-- ================= 14 ================= -->
+<section class="evt" id="s14">
+  <div class="eyebrow"><span class="id">14</span> VisibilityRecordUpserted</div>
+  <h2>可观测性与运维入口</h2>
+  <p>Event History 带来一个副产品：<strong>可观测性几乎是免费的</strong>。Temporal Web UI 开箱即可查看每个 Workflow Execution 的：当前状态（Running / Completed / Failed / …）、完整 Event History 时间线、每个 Activity 的 <strong>attempts 次数与失败原因堆栈</strong>、输入输出 payload、pending 中的 Activity 和 Timer。排障时不再拼日志——直接打开这条 execution，看它卡在哪个事件上。</p>
+  <p><strong>Visibility / Search Attributes</strong> 解决另一个问题：几百万条 execution 里怎么找到目标？你可以给 Workflow 打上自定义可检索属性（如 <code>customerId</code>、<code>orderAmount</code>、<code>region</code>），然后用类 SQL 语法筛选：「所有金额大于 1 万、状态为 Running、卡了超过 1 天的订单流程」。运营巡检、客服排查、审计取证都走这个入口。</p>
+  <h3>生产采用清单（入门先知道有这些事）</h3>
+  <ul>
+    <li><strong>Namespace 隔离</strong>：按团队 / 环境 / 业务域划分 Workflow、Task Queue、配置与可见性边界；</li>
+    <li><strong>Retention</strong>：已结束的 execution 的 History 保留多久，影响存储与审计；</li>
+    <li><strong>Worker 部署与扩缩容</strong>：Worker 是你的服务，容量规划、灰度、监控（poll 成功率、task 延迟）都归你；</li>
+    <li><strong>SDK 版本与 Workflow 代码演进</strong>：跑了一半的老 execution 还要按老逻辑 replay，改代码要用 versioning / patching 或 Worker Versioning 策略；</li>
+    <li><strong>数据加密与 payload converter</strong>：业务数据会存进 Event History，敏感字段应通过自定义 payload codec 加密后再落盘；</li>
+    <li><strong>Temporal Cloud vs self-host</strong>：自托管要运维 Service 集群和数据库；Cloud 把平台层外包，Worker 仍然跑在你自己的环境里。</li>
+  </ul>
+</section>
+
+<!-- ================= 15 ================= -->
+<section class="evt" id="s15">
+  <div class="eyebrow"><span class="id">15</span> AdoptionDecision</div>
+  <h2>工程实践：什么时候适合用 Temporal</h2>
+  <div class="grid2">
+    <div class="minicol goodcol"><h4>适合</h4><ul style="margin:0">
+      <li>长时间业务流程（分钟 → 数月）</li><li>多步骤、跨服务、有外部副作用</li><li>需要可靠重试、可恢复、可查询、可审计</li><li>人工审批、等待外部事件、补偿（saga）逻辑</li><li>典型场景：订单履约、支付与退款、用户 onboarding、订阅计费、基础设施编排</li></ul></div>
+    <div class="minicol badcol"><h4>不适合或未必需要</h4><ul style="margin:0">
+      <li>极简单的 fire-and-forget 异步任务（发个通知就完）</li><li>纯 CPU 短任务、无流程状态需求</li><li>只需要低延迟同步 RPC 的调用路径</li><li>团队暂时无法接受新的运行时与编程约束</li></ul></div>
+  </div>
+  <p><strong>采用成本要说清楚</strong>：需要理解并遵守 determinism 约束（第 6 章）、为每个 Activity 设计幂等（第 9 章）、部署和运维 Worker 舰队、处理 Workflow 代码的版本演进，以及搭建或购买 Temporal Service 本身。这些都不难，但都不是零。</p>
+  <div class="panel">
+    <div class="panel-title">采用判断器 · 勾选你的流程特征</div>
+    <div class="grid2">
+      <div id="ad-fit"></div>
+      <div id="ad-anti"></div>
+    </div>
+    <div class="caption" id="ad-verdict" style="min-height:5em"></div>
+  </div>
+</section>
+
+<!-- ================= 16 ================= -->
+<section class="evt" id="s16">
+  <div class="eyebrow"><span class="id">16</span> MisconceptionDetected</div>
+  <h2>常见误区与反例</h2>
+  <details class="mis"><summary>「Temporal 就是一个（高级）消息队列」</summary><div class="bd">队列传递任务，不理解流程。<b>Temporal 的核心资产是每个流程的状态与 Event History</b>：多步编排、durable timer、replay 恢复、按属性检索 execution，这些都在队列的能力之外。Task Queue 只是它内部的分发部件。</div></details>
+  <details class="mis"><summary>「Temporal 就是 cron」</summary><div class="bd">Schedule 确实能定时启动流程，但那只是入口。<b>cron 触发后不负责执行的可靠性</b>；Temporal 负责的恰恰是触发之后那段又长又容易失败的路。</div></details>
+  <details class="mis"><summary>「Workflow 里可以随便调用外部 API」</summary><div class="bd">不行。Workflow 代码会被 replay 反复执行，直接调外部 API 会<b>重复产生副作用、并破坏 determinism</b>。所有外部 I/O 放进 Activity，由 History 记录结果、replay 时回放。</div></details>
+  <details class="mis"><summary>「Worker 挂了，Workflow 就丢了」</summary><div class="bd">正相反。流程状态在 Temporal Service 的 Event History 里，<b>Worker 只是无状态执行器</b>。Worker 全挂只会让流程暂停推进，Worker 回来后 replay 继续。</div></details>
+  <details class="mis"><summary>「Event History 就是日志而已，和恢复关系不大」</summary><div class="bd">History 不是给人看的副产品，而是<b>恢复机制的核心输入</b>：replay 靠它回放每个已完成步骤的结果，重建 Workflow 内部状态。删掉日志系统照常跑；删掉 History，流程无法恢复。</div></details>
+  <details class="mis"><summary>「Activity 会自动重试，所以不需要幂等」</summary><div class="bd">恰恰因为会自动重试，才<b>必须幂等</b>。「执行成功但结果没上报」时重试会重复执行副作用。扣款要幂等键，发货要去重，邮件要防重发。</div></details>
+  <details class="mis"><summary>「用了 Temporal，所有失败都会自动消失」</summary><div class="bd">Temporal 消化的是<b>基础设施层面的失败</b>（崩溃、超时、网络抖动）。<b>业务层面的失败</b>——支付被拒、库存不足、审批驳回——仍然需要你在 Workflow 里显式建模：分支、补偿（退款、释放库存）、人工介入。</div></details>
+  <details class="mis"><summary>「Temporal 只能跑短任务」</summary><div class="bd">相反，长流程才是主场：Timer 可以等几个月，execution 可以跑一年，等待期间不占用任何 Worker 资源；超长流程还可用 <code>Continue-As-New</code> 滚动开新 History。</div></details>
+  <details class="mis"><summary>「用了 Temporal 就不需要数据库 / 业务状态了」</summary><div class="bd">Temporal 管的是<b>流程状态</b>（这单走到哪一步）。订单金额、库存数量、用户资料这些<b>领域数据</b>仍然属于你的业务数据库；Activity 负责读写它们。两者是分工，不是替代。</div></details>
+</section>
+<!-- ================= 17 ================= -->
+<section class="evt" id="s17">
+  <div class="eyebrow"><span class="id">17</span> MinimalExample</div>
+  <h2>最小代码示例（TypeScript SDK）</h2>
+  <p>四段代码对应四个角色。目标是服务理解，不是生产项目——省略了错误分类、测试和部署细节。</p>
+
+  <h3>① Workflow —— 编排逻辑，只能写确定性代码</h3>
+<pre><code><span class="cm">// workflows.ts —— 运行在 Worker 里，会被 replay 反复执行</span>
+<span class="k">import</span> { proxyActivities, defineSignal, defineQuery,
+         setHandler, condition } <span class="k">from</span> <span class="s">'@temporalio/workflow'</span>;
+<span class="k">import type</span> * <span class="k">as</span> acts <span class="k">from</span> <span class="s">'./activities'</span>;
+
+<span class="cm">// 通过 proxy 调 Activity，并在这里声明 timeout / retry 策略</span>
+<span class="k">const</span> { reserveInventory, chargePayment, shipOrder, sendReceipt } =
+  <span class="f">proxyActivities</span>&lt;<span class="t">typeof</span> acts&gt;({
+    startToCloseTimeout: <span class="s">'30 seconds'</span>,
+    retry: { initialInterval: <span class="s">'1s'</span>, backoffCoefficient: <span class="n">2</span>, maximumAttempts: <span class="n">5</span> },
+  });
+
+<span class="k">export const</span> shipmentSignal = <span class="f">defineSignal</span>(<span class="s">'shipmentReady'</span>);
+<span class="k">export const</span> statusQuery   = <span class="f">defineQuery</span>&lt;<span class="t">string</span>&gt;(<span class="s">'status'</span>);
+
+<span class="k">export async function</span> <span class="f">orderWorkflow</span>(orderId: <span class="t">string</span>) {
+  <span class="k">let</span> status = <span class="s">'PLACED'</span>;                 <span class="cm">// 局部变量就是流程状态，replay 时自动重建</span>
+  <span class="k">let</span> shipped = <span class="k">false</span>;
+  <span class="f">setHandler</span>(statusQuery, () =&gt; status);  <span class="cm">// Query：只读，不写 History</span>
+  <span class="f">setHandler</span>(shipmentSignal, () =&gt; { shipped = <span class="k">true</span>; });
+
+  <span class="cm">// ✗ 这里不能：Date.now() / Math.random() / fetch() / 直接查 DB</span>
+  <span class="cm">// ✓ 不确定操作与外部 I/O 一律进 Activity</span>
+  <span class="k">await</span> <span class="f">reserveInventory</span>(orderId);  status = <span class="s">'RESERVED'</span>;
+  <span class="k">await</span> <span class="f">chargePayment</span>(orderId);     status = <span class="s">'PAID'</span>;
+  <span class="k">await</span> <span class="f">condition</span>(() =&gt; shipped);   <span class="cm">// durable 等待 Signal，可等数天，不占线程</span>
+  <span class="k">await</span> <span class="f">shipOrder</span>(orderId);         status = <span class="s">'SHIPPED'</span>;
+  <span class="k">await</span> <span class="f">sendReceipt</span>(orderId);
+  <span class="k">return</span> (status = <span class="s">'DONE'</span>);
+}</code></pre>
+
+  <h3>② Activity —— 外部副作用，普通代码，必须考虑幂等</h3>
+<pre><code><span class="cm">// activities.ts —— 普通异步函数，可以自由做 I/O</span>
+<span class="k">export async function</span> <span class="f">chargePayment</span>(orderId: <span class="t">string</span>) {
+  <span class="cm">// 用 orderId 作为幂等键：重试时支付网关不会重复扣款</span>
+  <span class="k">await</span> paymentGateway.<span class="f">charge</span>({ idempotencyKey: orderId, orderId });
+}
+<span class="k">export async function</span> <span class="f">reserveInventory</span>(orderId: <span class="t">string</span>) { <span class="cm">/* 调库存服务 */</span> }
+<span class="k">export async function</span> <span class="f">shipOrder</span>(orderId: <span class="t">string</span>)        { <span class="cm">/* 调仓库系统 */</span> }
+<span class="k">export async function</span> <span class="f">sendReceipt</span>(orderId: <span class="t">string</span>)      { <span class="cm">/* 发邮件   */</span> }</code></pre>
+
+  <h3>③ Worker —— 你部署的进程，poll Task Queue</h3>
+<pre><code><span class="cm">// worker.ts —— 部署几份都行；挂掉不影响流程存亡</span>
+<span class="k">import</span> { Worker } <span class="k">from</span> <span class="s">'@temporalio/worker'</span>;
+<span class="k">import</span> * <span class="k">as</span> activities <span class="k">from</span> <span class="s">'./activities'</span>;
+
+<span class="k">const</span> worker = <span class="k">await</span> Worker.<span class="f">create</span>({
+  workflowsPath: <span class="k">require</span>.<span class="f">resolve</span>(<span class="s">'./workflows'</span>),
+  activities,
+  taskQueue: <span class="s">'orders'</span>,   <span class="cm">// 只处理这条 Task Queue 上的任务</span>
+});
+<span class="k">await</span> worker.<span class="f">run</span>();        <span class="cm">// 开始长轮询</span></code></pre>
+
+  <h3>④ Client —— 启动、Signal、Query</h3>
+<pre><code><span class="cm">// client.ts —— 在任何服务里（如 API 网关）调用</span>
+<span class="k">import</span> { Client } <span class="k">from</span> <span class="s">'@temporalio/client'</span>;
+<span class="k">import</span> { orderWorkflow, shipmentSignal, statusQuery } <span class="k">from</span> <span class="s">'./workflows'</span>;
+
+<span class="k">const</span> client = <span class="k">new</span> <span class="f">Client</span>();
+<span class="k">const</span> handle = <span class="k">await</span> client.workflow.<span class="f">start</span>(orderWorkflow, {
+  taskQueue: <span class="s">'orders'</span>,
+  workflowId: <span class="s">'order-1001'</span>,       <span class="cm">// 业务 ID 即 Workflow ID，天然去重</span>
+  args: [<span class="s">'order-1001'</span>],
+});
+
+<span class="k">console</span>.<span class="f">log</span>(<span class="k">await</span> handle.<span class="f">query</span>(statusQuery));  <span class="cm">// → "PAID"（同步读状态）</span>
+<span class="k">await</span> handle.<span class="f">signal</span>(shipmentSignal);            <span class="cm">// 仓库回调 → 流程继续</span></code></pre>
+
+  <h3>⑤ 一次失败重试在 Event History 里的样子</h3>
+<pre><code>17  ActivityTaskScheduled   chargePayment  (retryPolicy: max 5)
+18  ActivityTaskStarted      attempt=1
+    <span class="cm">-- Worker 报告失败：PaymentGatewayTimeout --</span>
+    <span class="cm">-- attempt=1 失败详情记录在 pending activity 状态中，Service 按 1s 退避安排重试 --</span>
+19  ActivityTaskStarted      attempt=2
+20  ActivityTaskCompleted    result={"txnId":"pay_88231"}   <span class="cm">// 第 2 次成功</span>
+21  WorkflowTaskScheduled    <span class="cm">// 唤醒 Workflow，代码从 await chargePayment 处继续</span></code></pre>
+  <p class="hint">Go / Python / Java SDK 的形态几乎一一对应：<code>workflow.ExecuteActivity</code>、<code>@activity.defn</code> 等，心智模型完全相同。</p>
+</section>
+
+<!-- ================= 18 ================= -->
+<section class="evt" id="s18">
+  <div class="eyebrow"><span class="id">18</span> CheatSheet</div>
+  <h2>Temporal 概念与职责速查表</h2>
+  <div class="tblwrap"><table class="cmp">
+    <tr><th>概念</th><th>一句话职责</th><th>它不负责 / 最易混淆点</th></tr>
+    <tr><td>Durable Execution</td><td>代码执行进度被持久化，崩溃后按历史恢复继续</td><td>不是内存快照；靠 Event History + replay</td></tr>
+    <tr><td>Temporal Service</td><td>持久化 History、维护状态、生成与调度 Task、执行 timer/retry 计时</td><td>不运行你的业务代码</td></tr>
+    <tr><td>Temporal Client</td><td>start / signal / query / update / cancel / terminate Workflow</td><td>不执行流程本身</td></tr>
+    <tr><td>Workflow Definition</td><td>你写的流程代码（编排、状态、等待）</td><td>必须 deterministic，不做外部 I/O</td></tr>
+    <tr><td>Workflow Execution</td><td>某次实际运行的流程实例，有唯一 Workflow ID</td><td>≠ Definition；一份代码百万实例</td></tr>
+    <tr><td>Activity</td><td>执行外部副作用与不确定操作，可配 retry/timeout/heartbeat</td><td>至少一次执行 → 必须设计幂等</td></tr>
+    <tr><td>Worker</td><td>你部署的进程：poll Task Queue，执行 Workflow/Activity 代码</td><td>无状态；挂掉 ≠ 流程丢失</td></tr>
+    <tr><td>Task Queue</td><td>分发 Workflow Task / Activity Task 给 Worker 的逻辑队列</td><td>不存流程状态；不是「Temporal 就是队列」的证据</td></tr>
+    <tr><td>Event History</td><td>append-only 事实来源；replay 的输入；审计与排障的依据</td><td>不是普通日志，删了就无法恢复</td></tr>
+    <tr><td>Replay / Determinism</td><td>重跑代码 + 回放历史结果，重建内部状态</td><td>不重复执行已记录的副作用；要求代码确定性</td></tr>
+    <tr><td>Retry Policy / Timeout</td><td>声明式失败语义：间隔、退避、次数、四类超时</td><td>不消化业务失败；补偿要自己建模</td></tr>
+    <tr><td>Signal / Query / Update</td><td>写事件（异步）/ 读状态（不入史）/ 校验式变更（有返回）</td><td>Query 不得有副作用；Signal 无返回值</td></tr>
+    <tr><td>Timer / Schedule / Child WF</td><td>durable 等待 / 定期启动流程 / 子流程隔离与组合</td><td>≠ sleep / cron / 函数调用</td></tr>
+    <tr><td>Namespace</td><td>隔离 Workflow、Task Queue、配置与可见性</td><td>—</td></tr>
+    <tr><td>Visibility / Search Attributes</td><td>按自定义属性检索、筛选 execution</td><td>用于找到流程，不是流程状态本身</td></tr>
+  </table></div>
+  <div class="callout teal"><p><strong>收束回主线：</strong>Temporal 让长时间、易失败、多步骤的业务流程可靠运行，方式是——你用普通代码写流程（Workflow），把副作用装进可重试的 Activity，由你部署的 Worker 执行；Temporal Service 把每一步写进 append-only 的 Event History，任何组件崩溃后都能 replay 历史、恢复到正确状态继续。<strong>排队只是手段，历史才是核心。</strong></p></div>
+  <p class="hint">下一步可以深入的专题：具体语言 SDK 的用法与测试、Worker 部署与调优、Workflow 版本升级（patching / Worker Versioning）、可观测性接入、Nexus 跨 Namespace 调用。本文的心智模型在那些专题里全部适用。</p>
+</section>
+
+</main>
+<footer><div class="wrap">EVENT 19 · DocumentCompleted — 本页为单文件离线交互文档 · 图示为教学简化，以 Temporal 官方文档为准</div></footer>
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id)};
+function els(sel,root){return Array.prototype.slice.call((root||document).querySelectorAll(sel))}
+function chip(t,k){var s=document.createElement('span');s.className='chip'+(k?' '+k:'');s.textContent=t;return s}
+
+/* ============ HERO SIMULATOR ============ */
+var HERO_SCN={
+normal:[
+ {c:'<b>① 发起。</b>Client 调用 <code>client.workflow.start(orderWorkflow)</code>。Temporal Service 写下第一批事件，并安排一个 Workflow Task。',hl:['client','service'],ev:[{t:'WorkflowExecutionStarted'},{t:'WorkflowTaskScheduled'}]},
+ {c:'<b>② 入队。</b>Workflow Task 进入 Task Queue，等待某个 Worker 认领。此刻还没有任何业务代码在运行。',hl:['service','queue']},
+ {c:'<b>③ 认领。</b>Worker 长轮询（poll）Task Queue 拿到 Workflow Task，开始执行 orderWorkflow 代码。',hl:['queue','worker','code'],ev:[{t:'WorkflowTaskStarted'}]},
+ {c:'<b>④ 决策。</b>代码跑到 <code>await reserveInventory()</code>：Workflow 向 Service 提交「安排这个 Activity」的决定，然后挂起。注意——外部调用还没发生。',hl:['code','worker','service'],ev:[{t:'WorkflowTaskCompleted'},{t:'ActivityTaskScheduled: reserveInventory'}]},
+ {c:'<b>⑤ 干活。</b>Activity Task 入队 → Worker poll 到 → <b>真正调用库存服务</b>。外部副作用只发生在 Activity 里。',hl:['queue','worker','code'],ev:[{t:'ActivityTaskStarted'}]},
+ {c:'<b>⑥ 记账。</b>Activity 成功，返回值被 Service 写进 Event History，并安排新的 Workflow Task 唤醒流程。',hl:['worker','service'],ev:[{t:'ActivityTaskCompleted',k:'ok'},{t:'WorkflowTaskScheduled'}]},
+ {c:'<b>⑦ 循环推进。</b>同样的节奏走完 chargePayment、等待发货 Signal、shipOrder、sendReceipt——每一步的决定与结果都落成事件。',hl:['worker','code','service'],ev:[{t:'ActivityTaskCompleted: chargePayment',k:'ok'},{t:'WorkflowExecutionSignaled: 发货',k:'sig'},{t:'ActivityTaskCompleted: shipOrder',k:'ok'}]},
+ {c:'<b>⑧ 完成。</b>Workflow 返回结果，终态事件落盘。这份 History 从此是这单流程完整、可审计的事实记录。',hl:['service'],ev:[{t:'WorkflowExecutionCompleted',k:'ok'}]}
+],
+crash:[
+ {c:'流程已推进过半：库存已预订，Worker 正在执行 <code>chargePayment</code> 这个 Activity。',hl:['worker','code'],ev:[{t:'WorkflowExecutionStarted'},{t:'ActivityTaskCompleted: reserveInventory',k:'ok'},{t:'ActivityTaskStarted: chargePayment attempt=1'}]},
+ {c:'<b>💥 Worker 进程崩溃</b>（OOM / 宕机 / 被误杀）。它内存里的一切都没了——但请注意：<b>Event History 完好无损</b>，它在 Service 那边。',hl:[],dead:true},
+ {c:'Service 迟迟等不到结果，按 Start-To-Close timeout 判定这次尝试失败，并依 retry policy 重新调度 Activity Task。<b>没有人工介入。</b>',hl:['service','queue'],dead:true,ev:[{t:'attempt=1 → TimedOut（记入重试状态）',k:'fail'}]},
+ {c:'另一个（或重启后的）Worker poll 到任务。它对这条流程一无所知——不要紧。',hl:['queue','worker']},
+ {c:'<b>Replay。</b>新 Worker 重跑 orderWorkflow 代码：走到 <code>reserveInventory</code> 时，History 里已有结果，直接回放——<b>不会重复预订库存</b>。几毫秒内代码「快进」到崩溃前的位置。',hl:['worker','code','service']},
+ {c:'状态重建完成，chargePayment 重新真实执行（幂等键保证不重复扣款）。',hl:['worker','code'],ev:[{t:'ActivityTaskStarted: chargePayment attempt=2'}]},
+ {c:'成功。流程继续走完剩余步骤。对业务而言，这次崩溃只是「慢了一拍」。',hl:['service'],ev:[{t:'ActivityTaskCompleted',k:'ok'},{t:'WorkflowExecutionCompleted',k:'ok'}]}
+],
+net:[
+ {c:'流程推进到扣款：Worker poll 到 chargePayment 的 Activity Task，开始调用支付网关。',hl:['queue','worker','code'],ev:[{t:'WorkflowExecutionStarted'},{t:'ActivityTaskScheduled: chargePayment'},{t:'ActivityTaskStarted attempt=1'}]},
+ {c:'<b>网络故障：</b>请求超时 / 连接被重置。Worker 捕获异常，把失败上报给 Service。',hl:['worker','service'],ev:[{t:'attempt=1 → Failed: ConnectionReset',k:'fail'}]},
+ {c:'Service 按 retry policy（如 initialInterval=1s，×2 退避）<b>负责计时</b>，到点重新把 Activity Task 放回 Task Queue。重试逻辑不用你写。',hl:['service','queue']},
+ {c:'第二次尝试成功，结果写入 History。中间失败详情保留在重试状态里，可在 Web UI 看到 attempts=2。',hl:['worker','service'],ev:[{t:'ActivityTaskStarted attempt=2'},{t:'ActivityTaskCompleted',k:'ok'}]},
+ {c:'<b>Workflow 代码对这一切毫无感知</b>——它只看到 <code>await chargePayment()</code> 正常返回了。失败被建模在平台层。',hl:['code','service'],ev:[{t:'WorkflowTaskScheduled'}]}
+],
+tmo:[
+ {c:'chargePayment 被调度，配置了 <code>startToCloseTimeout: 6s</code>。Worker 领到任务开始执行。',hl:['service','queue','worker'],ev:[{t:'WorkflowExecutionStarted'},{t:'ActivityTaskScheduled (startToClose=6s)'},{t:'ActivityTaskStarted attempt=1'}]},
+ {c:'支付网关 hang 住：请求既不成功也不报错，Worker 傻等中……',hl:['worker','code']},
+ {c:'<b>6 秒到。</b>Service 单方面判定该次尝试超时失败——即便 Worker 稍后返回结果，也不再被接受。timeout 是「单次尝试」的止损线。',hl:['service'],ev:[{t:'attempt=1 → StartToClose TimedOut',k:'fail'}]},
+ {c:'retry policy 接管：退避后重试，第二次 2 秒返回，成功。',hl:['queue','worker'],ev:[{t:'ActivityTaskStarted attempt=2'},{t:'ActivityTaskCompleted',k:'ok'}]},
+ {c:'流程继续。若不设 startToCloseTimeout，卡死的调用可能让流程无限期悬停——<b>几乎所有 Activity 都应设置它</b>。',hl:['service','code'],ev:[{t:'WorkflowTaskScheduled'}]}
+],
+exh:[
+ {c:'chargePayment 被调度，<code>maximumAttempts: 3</code>。第一次尝试：银行卡被风控冻结，失败。',hl:['worker','service'],ev:[{t:'WorkflowExecutionStarted'},{t:'ActivityTaskScheduled (max=3)'},{t:'attempt=1 → Failed: CardFrozen',k:'fail'}]},
+ {c:'退避后第二次尝试：仍然失败。',hl:['queue','worker'],ev:[{t:'attempt=2 → Failed: CardFrozen',k:'fail'}]},
+ {c:'第三次尝试失败——<b>重试耗尽</b>。这时才写入最终的 ActivityTaskFailed 事件。',hl:['worker','service'],ev:[{t:'attempt=3 → Failed',k:'fail'},{t:'ActivityTaskFailed（最终）',k:'fail'}]},
+ {c:'Workflow 的 <code>await</code> 抛出 ActivityFailure。<b>接下来怎么办是你的业务决策</b>：Temporal 不会替你决定。这里代码选择走补偿分支。',hl:['code','worker'],ev:[{t:'WorkflowTaskScheduled'}]},
+ {c:'补偿 Activity 执行：释放已预订的库存、通知用户支付失败。这就是用代码写 saga。',hl:['worker','service'],ev:[{t:'ActivityTaskCompleted: releaseInventory',k:'ok'}]},
+ {c:'流程以明确的业务结果收束（订单标记为支付失败）。<b>基础设施失败被自动消化，业务失败被显式建模</b>——这是两回事。',hl:['service'],ev:[{t:'WorkflowExecutionCompleted: PAYMENT_FAILED',k:'ok'}]}
+],
+restart:[
+ {c:'流程已完成扣款，正停在 <code>await condition(() => shipped)</code> 等仓库发货——可能要等两天。此刻<b>没有任何代码在运行</b>，它只是 Service 里的一条持久化状态。',hl:['service'],ev:[{t:'WorkflowExecutionStarted'},{t:'ActivityTaskCompleted: reserveInventory',k:'ok'},{t:'ActivityTaskCompleted: chargePayment',k:'ok'},{t:'WorkflowTaskCompleted（挂起等待）'}]},
+ {c:'<b>运维发布新版本：所有 Worker 滚动重启。</b>一段时间内一个 Worker 都没有。',hl:[],dead:true},
+ {c:'流程毫发无损——Worker 是无状态执行器，它的死活只影响推进速度，不影响流程存亡。',hl:['service'],dead:true},
+ {c:'新版本 Worker 上线，恢复 poll。',hl:['queue','worker']},
+ {c:'仓库系统回调 → Signal 到达并写入 History。',hl:['client','service'],ev:[{t:'WorkflowExecutionSignaled: shipmentReady',k:'sig'}]},
+ {c:'Service 调度 Workflow Task；新 Worker <b>replay</b> 历史重建状态（旧结果直接回放），条件满足，继续执行 shipOrder。',hl:['queue','worker','code'],ev:[{t:'WorkflowTaskScheduled'},{t:'ActivityTaskScheduled: shipOrder'}]},
+ {c:'流程走完。进程重启、部署、扩缩容对 in-flight 流程都是无感的。',hl:['service'],ev:[{t:'WorkflowExecutionCompleted',k:'ok'}]}
+],
+signal:[
+ {c:'<b>Signal = 异步扔进一个事件。</b>订单还没发货，用户改了收货地址。Client 调用 <code>handle.signal(updateAddress, 新地址)</code>。',hl:['client','service']},
+ {c:'Service <b>立即把 Signal 追加进 History</b>——不需要任何 Worker 在线——调用方即刻返回。Signal 没有返回值。',hl:['service'],ev:[{t:'WorkflowExecutionSignaled: updateAddress',k:'sig'}]},
+ {c:'Service 调度 Workflow Task；Worker poll 到后，signal handler 执行，更新 Workflow 内部的 <code>address</code> 变量。',hl:['queue','worker','code'],ev:[{t:'WorkflowTaskScheduled'}]},
+ {c:'后续的 shipOrder 用的就是新地址。<b>小结：改状态 ✓ · 返回结果 ✗ · 写入 History ✓</b>。',hl:['code']}
+],
+query:[
+ {c:'<b>Query = 往里看一眼。</b>客服打开订单详情页，Client 调用 <code>handle.query(statusQuery)</code>。',hl:['client','service']},
+ {c:'Service 把 Query 转给持有该 Workflow 的 Worker；若 Worker 缓存里没有这条流程，会先 replay History 重建状态再回答。',hl:['service','worker','code']},
+ {c:'handler 同步返回 <code>"PAID"</code>。<b>History 里什么都没写</b>——Query 是只读的，handler 里不允许有副作用。',hl:['worker','client']},
+ {c:'所以监控面板每秒轮询也不会让 History 膨胀。<b>小结：改状态 ✗ · 返回结果 ✓ · 写入 History ✗</b>（但需要 Worker 在线作答）。',hl:['client']}
+],
+update:[
+ {c:'<b>Update = 递交一份要盖章回执的申请。</b>用户点「取消订单」，Client 调用 <code>handle.executeUpdate(cancelOrder)</code> 并等待结果。',hl:['client','service']},
+ {c:'Worker 先跑 <b>validator</b>：如果已经发货，请求被直接拒绝，<b>不在 History 留痕</b>，Client 收到拒绝原因。',hl:['worker','code']},
+ {c:'本单还没发货，校验通过：Update 被接受并执行——释放库存、把流程状态标为取消。接受与完成都写入 History。',hl:['worker','code','service'],ev:[{t:'WorkflowExecutionUpdateAccepted',k:'sig'},{t:'WorkflowExecutionUpdateCompleted',k:'sig'}]},
+ {c:'Client 同步拿到 <code>{accepted: true}</code>。<b>小结：改状态 ✓ · 返回结果 ✓ · 写入 History ✓</b>——像 Signal+Query 的合体，且可先校验。',hl:['client']}
+]};
+
+var HERO_INFO={
+client:{h:'Client —— 流程的遥控器',own:'从你的任意服务中 start / signal / query / update / cancel / terminate Workflow，等待结果。',not:'不执行任何 Workflow/Activity 代码；不持久化任何状态；调用完就可以下线。',his:'它发起的 start / signal / update 会被 Service 记录为事件；query 不会。'},
+service:{h:'Temporal Service —— 持久化与调度的大脑',own:'持久化 Event History（唯一写入者）、维护每条 Workflow Execution 的状态、生成并调度 Workflow/Activity Task、执行 timer 与 retry 的计时。可自托管，也可用 Temporal Cloud。',not:'不运行你的业务代码——代码永远在你自己的 Worker 里执行。',his:'一切生效的状态变化都由它写入 History。'},
+queue:{h:'Task Queue —— 分发通道',own:'承接 Service 生成的 Workflow Task 与 Activity Task，等 Worker 长轮询领取；可按业务或资源类型分多条队列做路由。',not:'不保存流程状态（状态在 Event History）；不是通用消息总线。',his:'任务的 Scheduled / Started 记录由 Service 写入 History，队列本身不写。'},
+worker:{h:'Worker —— 你部署的无状态执行器',own:'poll Task Queue；执行 Workflow Task（推进编排决策）和 Activity Task（真实外部操作）；把结果上报 Service。扩容 = 多部署几个。',not:'不持久化任何东西。挂掉只影响推进速度，不影响流程存亡。',his:'它上报的每个决定与结果由 Service 落成事件。'},
+code:{h:'Workflow / Activity 代码 —— 你的业务逻辑',own:'Workflow 部分：确定性地编排步骤、维护流程状态、等待事件。Activity 部分：执行外部副作用（HTTP/DB/支付），可重试、需幂等。',not:'不负责自我持久化和调度——写「发生什么」，不写「怎么恢复」。',his:'Workflow 做出的每个决定、Activity 的每个最终结果，都会进入 History。'}};
+
+var heroScn='normal',heroI=0,heroTimer=null;
+function heroSteps(){return HERO_SCN[heroScn]}
+function heroRender(){
+  var steps=heroSteps(),n=steps.length;
+  els('#hero-flow .node').forEach(function(nd){nd.classList.remove('on','dead')});
+  var tape=$('hero-tape');tape.innerHTML='';
+  if(heroI===0){tape.innerHTML='<span class="empty">（还没有事件，点「下一步」开始）</span>';
+    $('hero-cap').innerHTML='场景：<b>'+heroName(heroScn)+'</b>。点「下一步」逐步观察。也可以点击任意节点查看它的职责边界。';}
+  else{
+    var st=steps[heroI-1];
+    st.hl.forEach(function(k){var nd=document.querySelector('#hero-flow .node[data-node="'+k+'"]');if(nd)nd.classList.add('on')});
+    if(st.dead){document.querySelector('#hero-flow .node[data-node="worker"]').classList.add('dead')}
+    var evs=[];for(var i=0;i<heroI;i++){(steps[i].ev||[]).forEach(function(e){evs.push(e)})}
+    if(evs.length===0)tape.innerHTML='<span class="empty">（尚无事件写入）</span>';
+    evs.forEach(function(e){tape.appendChild(chip(e.t,e.k))});
+    tape.scrollLeft=tape.scrollWidth;
+    $('hero-cap').innerHTML=st.c;
+  }
+  $('hero-ind').textContent=heroI+' / '+n;
+}
+function heroName(k){var m={normal:'正常执行',crash:'Worker crash',net:'网络故障',tmo:'Activity timeout',exh:'重试耗尽',restart:'进程重启',signal:'Signal',query:'Query',update:'Update'};return m[k]}
+function heroStop(){if(heroTimer){clearInterval(heroTimer);heroTimer=null;$('hero-play').textContent='▶ 自动播放'}}
+els('#hero-sim .scn').forEach(function(b){b.addEventListener('click',function(){
+  heroStop();els('#hero-sim .scn').forEach(function(x){x.setAttribute('aria-pressed','false')});
+  b.setAttribute('aria-pressed','true');heroScn=b.dataset.scn;heroI=0;heroRender();
+  $('hero-info').classList.remove('show');
+})});
+$('hero-next').addEventListener('click',function(){heroStop();if(heroI<heroSteps().length)heroI++;heroRender()});
+$('hero-prev').addEventListener('click',function(){heroStop();if(heroI>0)heroI--;heroRender()});
+$('hero-reset').addEventListener('click',function(){heroStop();heroI=0;heroRender()});
+$('hero-play').addEventListener('click',function(){
+  if(heroTimer){heroStop();return}
+  if(heroI>=heroSteps().length)heroI=0;
+  $('hero-play').textContent='⏸ 暂停';
+  heroTimer=setInterval(function(){
+    if(heroI<heroSteps().length){heroI++;heroRender()}else heroStop();
+  },2000);
+});
+els('#hero-flow .node').forEach(function(nd){
+  function show(){var d=HERO_INFO[nd.dataset.node];if(!d)return;
+    $('hero-info').innerHTML='<h4>'+d.h+'</h4>'
+    +'<div class="row"><span class="tag own">负责</span><span>'+d.own+'</span></div>'
+    +'<div class="row"><span class="tag not">不负责</span><span>'+d.not+'</span></div>'
+    +'<div class="row"><span class="tag his">History</span><span>'+d.his+'</span></div>';
+    $('hero-info').classList.add('show');}
+  nd.addEventListener('click',show);
+  nd.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();show()}});
+});
+heroRender();
+
+/* ============ §2 durable execution stepper ============ */
+var DE_CAP=[
+'<b>① run。</b>Workflow 正常执行：库存已预订、扣款完成，正等待发货。局部变量 status="PAID" 活在 Worker 内存里。',
+'<b>② record event。</b>其实从第一步起，每个决定和结果就已经作为事件持久化了——此刻 History 里已有十来个事件。内存里的变量只是它的「投影」。',
+'<b>③ crash。</b>Worker 进程死亡，内存清零，status 变量没了。如果这是普通服务，这单就成了悬案。',
+'<b>④ replay history。</b>新 Worker 拿到同一份代码 + 同一份 History，从第一行重跑；每个 await 的结果从历史里回放（不重复调外部系统），几毫秒内「快进」到崩溃前的位置，status 重新等于 "PAID"。',
+'<b>⑤ continue。</b>内部状态重建完毕，越过 History 尽头，开始真实执行新步骤。恢复完成——这就是 durable execution。'];
+var deI=0;
+function deRender(){
+  els('#de-flow .node').forEach(function(nd,i){nd.classList.toggle('on',deI>0&&i===deI-1);nd.classList.toggle('dead',deI===3&&i===2)});
+  $('de-cap').innerHTML=deI===0?'点「下一步」，看一次崩溃恢复的完整生命周期。':DE_CAP[deI-1];
+  $('de-ind').textContent=deI+' / 5';
+}
+$('de-next').addEventListener('click',function(){deI=deI<5?deI+1:5;deRender()});
+$('de-reset').addEventListener('click',function(){deI=0;deRender()});
+deRender();
+
+/* ============ §3 concept map ============ */
+var CM={
+tclient:{h:'Temporal Client',own:'从你的任意服务连接 Temporal Service：start / signal / query / update / cancel / terminate Workflow，获取执行结果。',not:'不执行 Workflow/Activity 代码；不长驻、不轮询。',rel:'与 Temporal Service 对话；它与 Task Queue、Worker 没有直接联系。'},
+wfdef:{h:'Workflow Definition',own:'你写的流程代码：顺序、分支、循环、等待，安排 Activity / Timer / Child Workflow。',not:'不做外部 I/O 与不确定操作（determinism 约束，见第 6 章）。',rel:'被 Worker 加载执行；每次 start 会产生一个 Workflow Execution 实例。'},
+act:{h:'Activity',own:'执行外部副作用：HTTP、DB、发邮件、调支付网关；可配置 retry、timeout、heartbeat。',not:'不负责编排顺序；不保证「恰好一次」→ 必须设计幂等。',rel:'由 Workflow 安排，经 Task Queue 分发给 Worker 执行，结果写回 Event History。'},
+worker:{h:'Worker',own:'你部署的进程：poll Task Queue，执行 Workflow Task（推进决策）与 Activity Task（真实干活），上报结果。',not:'不持久化任何流程状态；挂掉不丢流程。',rel:'上游是 Task Queue；代码来自你的部署包；结果交给 Temporal Service。'},
+tq:{h:'Task Queue',own:'承接 Service 生成的任务，供 Worker 长轮询领取；可按业务/资源划分多条实现路由与隔离。',not:'不存储流程状态；不是通用消息总线。',rel:'由 Service 的 Matching 组件管理；Worker 是它唯一的消费者。'},
+wfexec:{h:'Workflow Execution',own:'一次具体运行：唯一 Workflow ID、独立 Event History、独立生命周期（Running / Completed / Failed / Canceled…）。',not:'不等于代码本身——同一个 Definition 可以同时跑一百万个 Execution。',rel:'由 Client start 创建；状态由 Temporal Service 维护。'},
+svc:{h:'Temporal Service',own:'持久化 Event History、维护每条 Execution 的状态、生成/调度 Task、执行 timer 与 retry 计时。自托管或 Temporal Cloud。',not:'不运行你的业务代码；不理解你的领域数据。',rel:'下接数据库（Persistence），上接 Client 与 Worker。'},
+hist:{h:'Event History',own:'append-only 记录一条 Execution 发生过的一切；replay 的输入；审计与排障的依据。',not:'不是可有可无的日志——删掉它流程就无法恢复；也不是你的领域数据库。',rel:'由 Service 独家写入；Worker 在 replay 时读取它。'},
+ns:{h:'Namespace',own:'隔离 Workflow、Task Queue、配置（如 retention）与可见性查询的逻辑边界，常按团队 / 环境 / 业务域划分。',not:'不提供物理资源隔离（自托管时集群仍是共享的）。',rel:'上面所有对象都归属于某个 Namespace。'}};
+els('.node.cm').forEach(function(nd){
+  function show(){var d=CM[nd.dataset.cm];if(!d)return;
+    els('.node.cm').forEach(function(x){x.classList.remove('on')});nd.classList.add('on');
+    $('cm-info').innerHTML='<h4>'+d.h+'</h4>'
+    +'<div class="row"><span class="tag own">负责</span><span>'+d.own+'</span></div>'
+    +'<div class="row"><span class="tag not">不负责</span><span>'+d.not+'</span></div>'
+    +'<div class="row"><span class="tag his">关系</span><span>'+d.rel+'</span></div>';
+    $('cm-info').classList.add('show');}
+  nd.addEventListener('click',show);
+  nd.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();show()}});
+});
+
+/* ============ §4 execution player ============ */
+var P4CODE=[
+"export async function orderWorkflow(order) {",
+"  let status = 'PLACED'; let shipped = false;",
+"  setHandler(shipmentSignal, () => shipped = true);",
+"  await reserveInventory(order);   // Activity",
+"  status = 'RESERVED';",
+"  await chargePayment(order);      // Activity",
+"  status = 'PAID';",
+"  await condition(() => shipped);  // 等 Signal",
+"  await shipOrder(order);          // Activity",
+"  await sendReceipt(order);        // Activity",
+"  return 'DONE';",
+"}"];
+var P4=[
+{c:'<b>启动。</b>Client 调用 start(orderWorkflow, {taskQueue:"orders"})。Service 写入首批事件，安排第一个 Workflow Task。',l:['client','service'],ln:null,ev:[{t:'WorkflowExecutionStarted'},{t:'WorkflowTaskScheduled'}]},
+{c:'Workflow Task 进入 Task Queue「orders」。',l:['service','queue'],ln:null},
+{c:'Worker poll 到任务，开始执行代码：初始化局部变量、注册 Signal handler。<b>局部变量就是流程状态。</b>',l:['queue','worker'],ln:1,ev:[{t:'WorkflowTaskStarted'}]},
+{c:'代码走到第一处 <code>await reserveInventory()</code>：Workflow 把「安排这个 Activity」的决定交回 Service，然后挂起。',l:['worker','service'],ln:3,ev:[{t:'WorkflowTaskCompleted'},{t:'ActivityTaskScheduled: reserveInventory'}]},
+{c:'Activity Task 入队 → Worker poll 到 → <b>真正调用库存服务</b>（外部副作用发生在这里，且只在这里）。',l:['queue','worker'],ln:3,ev:[{t:'ActivityTaskStarted'}]},
+{c:'库存预订成功，返回值写入 History；Service 调度新的 Workflow Task 唤醒流程。',l:['worker','service'],ln:3,ev:[{t:'ActivityTaskCompleted',k:'ok'},{t:'WorkflowTaskScheduled'}]},
+{c:'Worker 推进 Workflow：status = "RESERVED"，随即走到 chargePayment，同样的「决定 → 入队 → 执行」节奏。',l:['worker'],ln:5,ev:[{t:'ActivityTaskScheduled: chargePayment'}]},
+{c:'扣款 Activity 成功（失败会怎样？见第 9 章的 retry 语义）。status = "PAID"。',l:['worker','service'],ln:6,ev:[{t:'ActivityTaskCompleted',k:'ok'}]},
+{c:'代码走到 <code>await condition(() => shipped)</code>：还没有 Signal，Workflow 挂起。<b>从此刻起没有任何进程为它运行</b>——不占线程、不轮询。',l:['idle','service'],ln:7,ev:[{t:'WorkflowTaskCompleted（等待中）'}]},
+{c:'……两天过去了。期间 Worker 随便重启、发版、扩缩容，这条流程只是 Service 里一行安静的持久化状态。',l:['idle'],ln:7},
+{c:'仓库系统回调你的 API → Client 发送 shipmentSignal。Service 把它追加进 History。',l:['client','service'],ln:2,ev:[{t:'WorkflowExecutionSignaled: shipmentReady',k:'sig'}]},
+{c:'Service 调度 Workflow Task。Worker（可能是全新的进程）<b>replay 历史重建状态</b>：reserve/charge 的结果直接回放，shipped 变为 true，条件满足。',l:['queue','worker'],ln:7,ev:[{t:'WorkflowTaskScheduled'}]},
+{c:'继续执行 shipOrder、sendReceipt 两个 Activity，各自「调度 → 执行 → 记账」。',l:['worker','service'],ln:8,ev:[{t:'ActivityTaskCompleted: shipOrder',k:'ok'},{t:'ActivityTaskCompleted: sendReceipt',k:'ok'}]},
+{c:'<code>return "DONE"</code> —— 终态事件落盘，流程完成。整段 History 永远可查、可审计。',l:['service'],ln:10,ev:[{t:'WorkflowExecutionCompleted',k:'ok'}]}];
+var p4I=0,p4Timer=null;
+(function initCode(){var box=$('p4-code');P4CODE.forEach(function(line,i){
+  var d=document.createElement('div');d.className='ln';d.dataset.i=i;
+  var no=document.createElement('span');no.className='no';no.textContent=i+1;
+  var t=document.createElement('span');
+  var m=line.split('//');t.textContent=m[0];d.appendChild(no);d.appendChild(t);
+  if(m[1]){var c=document.createElement('span');c.className='cm';c.textContent='//'+m[1];d.appendChild(c)}
+  box.appendChild(d);})})();
+function p4Render(){
+  els('#p4-lanes .lane').forEach(function(l){l.classList.remove('on')});
+  els('#p4-code .ln').forEach(function(l){l.classList.remove('hot')});
+  var list=$('p4-ev');list.innerHTML='';
+  if(p4I===0){list.innerHTML='<span style="font-family:var(--mono);font-size:.72rem;color:var(--dim)">（空）</span>';
+    $('p4-cap').innerHTML='点「下一步」开始。注意：Workflow 代码并不是连续运行的——它以一个个 Workflow Task 的形式被「唤醒、推进、挂起」。';}
+  else{var st=P4[p4I-1];
+    st.l.forEach(function(k){var l=document.querySelector('#p4-lanes .lane[data-l="'+k+'"]');if(l)l.classList.add('on')});
+    if(st.ln!==null&&st.ln!==undefined){var ln=document.querySelector('#p4-code .ln[data-i="'+st.ln+'"]');if(ln)ln.classList.add('hot')}
+    var evs=[];for(var i=0;i<p4I;i++){(P4[i].ev||[]).forEach(function(e){evs.push(e)})}
+    evs.forEach(function(e){list.appendChild(chip(e.t,e.k))});
+    list.scrollTop=list.scrollHeight;
+    $('p4-cap').innerHTML=st.c;}
+  $('p4-ind').textContent=p4I+' / '+P4.length;
+}
+function p4Stop(){if(p4Timer){clearInterval(p4Timer);p4Timer=null;$('p4-play').textContent='▶ 自动播放'}}
+$('p4-next').addEventListener('click',function(){p4Stop();if(p4I<P4.length)p4I++;p4Render()});
+$('p4-prev').addEventListener('click',function(){p4Stop();if(p4I>0)p4I--;p4Render()});
+$('p4-reset').addEventListener('click',function(){p4Stop();p4I=0;p4Render()});
+$('p4-play').addEventListener('click',function(){
+  if(p4Timer){p4Stop();return}
+  if(p4I>=P4.length)p4I=0;
+  $('p4-play').textContent='⏸ 暂停';
+  p4Timer=setInterval(function(){if(p4I<P4.length){p4I++;p4Render()}else p4Stop()},2300);
+});
+p4Render();
+
+/* ============ §5 event history browser ============ */
+var EH=[
+{t:'WorkflowExecutionStarted',k:'',who:'Service（应 Client 请求）写入',what:'Workflow 类型、输入参数、Task Queue 名、超时与 retry 配置。整条 History 的第一个事件。',rp:'replay 的起点：代码从第一行执行，输入参数从这里回放。'},
+{t:'WorkflowTaskScheduled',k:'',who:'Service 写入',what:'「该让 Workflow 代码推进一步了」——启动、Activity 完成、Signal 到达后都会安排它。',rp:'调度记账，不直接对应你的代码行。'},
+{t:'WorkflowTaskStarted / Completed',k:'',who:'Worker 领取 / 交回，Service 记录',what:'Completed 里带着这次推进中代码做出的全部 command：安排了哪些 Activity、开了哪些 Timer。',rp:'determinism 校验点：replay 时代码做出的决定必须与这里记录的一致，否则报 non-determinism 错误。'},
+{t:'ActivityTaskScheduled: chargePayment',k:'',who:'Service 写入（依据 Workflow 的 command）',what:'Activity 类型、输入、Task Queue、retry policy 与各 timeout。',rp:'代码走到对应 await 时与此事件配对。'},
+{t:'ActivityTaskStarted (attempt=1)',k:'',who:'Service 记录',what:'某个 Worker 领走了这个 Activity。attempt 计数从这里可见。',rp:'不影响代码路径。'},
+{t:'ActivityTaskCompleted → result',k:'ok',who:'Worker 上报，Service 写入',what:'Activity 的返回值（payload 本体存进 History）。',rp:'<b>恢复不重复副作用的关键</b>：replay 时 await 直接返回这里存的值，绝不再调一次支付网关。'},
+{t:'TimerStarted → TimerFired',k:'',who:'Service 写入并负责计时',what:'durable 定时：sleep("7 days") 的开始与到期。',rp:'replay 时已到期的 sleep 立即返回，未到期的继续等。Timer 不依赖任何 Worker 活着。'},
+{t:'WorkflowExecutionSignaled',k:'sig',who:'Service 写入（应外部 Signal）',what:'Signal 名与 payload（如新的收货地址）。',rp:'handler 在 replay 中以同样顺序收到同样 payload——外部事件也是确定的。'},
+{t:'ActivityTaskFailed（重试耗尽）',k:'fail',who:'Service 写入',what:'最终失败的错误类型与堆栈。中间失败保存在重试状态中，不单独成事件。',rp:'replay 时 await 抛出同样的 ActivityFailure，代码走进同一个 catch / 补偿分支。'},
+{t:'WorkflowExecutionCompleted',k:'ok',who:'Service 写入',what:'Workflow 的返回值。终态事件，之后 History 按 retention 策略保留供查询审计。',rp:'有它就不会再有 replay——流程已收束。'}];
+(function(){var list=$('eh-list');
+EH.forEach(function(e,i){var c=chip(e.t,(e.k||'')+' click');c.tabIndex=0;
+  function show(){els('#eh-list .chip').forEach(function(x){x.classList.remove('sel')});c.classList.add('sel');
+    $('eh-info').innerHTML='<h4>'+e.t+'</h4>'
+    +'<div class="row"><span class="tag own">谁写入</span><span>'+e.who+'</span></div>'
+    +'<div class="row"><span class="tag his">记录什么</span><span>'+e.what+'</span></div>'
+    +'<div class="row"><span class="tag not">replay 时</span><span>'+e.rp+'</span></div>';}
+  c.addEventListener('click',show);
+  c.addEventListener('keydown',function(ev){if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();show()}});
+  list.appendChild(c);});})();
+
+/* ============ §6 determinism quiz ============ */
+var DET=[
+{code:"const total = items.reduce((s, i) => s + i.price, 0)",ans:'wf',why:'纯计算：同样输入永远得到同样结果，放在 Workflow 里完全安全。'},
+{code:"const now = Date.now()",ans:'act',why:'每次 replay 取到的时间都不同 → 破坏确定性。用 SDK 的 workflow.now()（记录在 History 中）或放进 Activity。'},
+{code:"const resp = await fetch('https://api.pay.com/charge')",ans:'act',why:'外部副作用 + 结果不确定。replay 会重复扣款。必须是 Activity。'},
+{code:"if (order.amount > 10000) { needReview = true }",ans:'wf',why:'基于确定输入的分支判断，正是 Workflow 编排逻辑的本体。'},
+{code:"const id = Math.random().toString(36).slice(2)",ans:'act',why:'随机数每次 replay 都不同。用 SDK 的确定性随机 / sideEffect（结果会被记录），或在 Activity 里生成。'},
+{code:"await sleep('7 days')   // SDK 提供的 workflow sleep",ans:'wf',why:'这是 durable Timer，replay-safe：SDK 把它记录为 TimerStarted 事件，与线程 sleep 完全不同。'},
+{code:"const flag = process.env.FEATURE_FLAG",ans:'act',why:'外部可变状态：两次 replay（可能在不同机器、不同版本）读到的值可能不同。'},
+{code:"await db.orders.update({ id, status: 'PAID' })",ans:'act',why:'直接数据库写入是副作用，replay 会重复执行。包进 Activity。'}];
+(function(){var box=$('det-quiz');
+DET.forEach(function(q,i){var d=document.createElement('div');d.className='qline';
+  d.innerHTML='<span class="txt">'+q.code.replace(/</g,'&lt;')+'</span>'
+  +'<span class="pick"><button class="wf" aria-pressed="false">Workflow</button><button class="act" aria-pressed="false">→ Activity / replay-safe API</button></span>'
+  +'<span class="why">'+q.why+'</span>';
+  d.dataset.ans=q.ans;box.appendChild(d);
+  els('.pick button',d).forEach(function(b){b.addEventListener('click',function(){
+    els('.pick button',d).forEach(function(x){x.setAttribute('aria-pressed','false')});
+    b.setAttribute('aria-pressed','true');d.classList.remove('good','bad');})});});
+$('det-check').addEventListener('click',function(){var ok=0,done=0;
+  els('#det-quiz .qline').forEach(function(d){
+    var sel=d.querySelector('.pick button[aria-pressed="true"]');
+    d.classList.remove('good','bad');if(!sel)return;done++;
+    var pick=sel.classList.contains('wf')?'wf':'act';
+    if(pick===d.dataset.ans){d.classList.add('good');ok++}else d.classList.add('bad');});
+  $('det-score').textContent=done<DET.length?'先把 '+DET.length+' 行都选完（已选 '+done+'）':'得分 '+ok+' / '+DET.length;});
+$('det-reset').addEventListener('click',function(){
+  els('#det-quiz .qline').forEach(function(d){d.classList.remove('good','bad');
+    els('.pick button',d).forEach(function(x){x.setAttribute('aria-pressed','false')})});
+  $('det-score').textContent='';});})();
+
+/* ============ §7 workflow vs activity quiz ============ */
+var WA=[
+{txt:'决定「支付失败 3 次后转人工审核」',ans:'wf',why:'这是编排决策：根据结果选择流程走向，属于 Workflow。'},
+{txt:'调用支付网关扣款',ans:'act',why:'外部副作用，可能失败、需重试、必须幂等 —— Activity 的标准画像。'},
+{txt:'等待 7 天试用期结束',ans:'wf',why:'用 durable Timer 在 Workflow 中等待；等待本身是编排的一部分，不占用 Worker。'},
+{txt:'发送订单确认邮件',ans:'act',why:'外部 I/O。注意防重发：重试可能让它执行多次。'},
+{txt:'维护「当前进行到哪一步」的 status 变量',ans:'wf',why:'Workflow 的局部变量就是流程状态，由 replay 负责重建。'},
+{txt:'调用汇率接口获取今日汇率',ans:'act',why:'网络请求 + 结果随时间变化（不确定），必须经 Activity 把结果固化进 History。'},
+{txt:'支付失败后，决定先退款、再释放库存的补偿顺序',ans:'wf',why:'补偿的「顺序与条件」是编排（saga 逻辑写在 Workflow 里）；退款、释放库存这两个动作本身则是 Activity。'},
+{txt:'把发货结果写入订单数据库',ans:'act',why:'数据库写入是副作用。Temporal 管流程状态，领域数据仍由你的库经 Activity 维护。'}];
+(function(){var box=$('wa-quiz');
+WA.forEach(function(q){var d=document.createElement('div');d.className='qline';
+  d.innerHTML='<span class="txt" style="font-family:var(--sans);font-size:.86rem">'+q.txt+'</span>'
+  +'<span class="pick"><button class="wf" aria-pressed="false">WF</button><button class="act" aria-pressed="false">ACT</button></span>'
+  +'<span class="why">'+q.why+'</span>';
+  box.appendChild(d);
+  els('.pick button',d).forEach(function(b){b.addEventListener('click',function(){
+    els('.pick button',d).forEach(function(x){x.setAttribute('aria-pressed','false')});
+    b.setAttribute('aria-pressed','true');
+    var pick=b.classList.contains('wf')?'wf':'act';
+    d.classList.remove('good','bad');d.classList.add(pick===q.ans?'good':'bad');})});});})();
+
+/* ============ §8 worker sim ============ */
+(function(){
+var workers=3,rate=6,backlog=0;
+function dots(){var w=$('sim-dots');w.innerHTML='';for(var i=0;i<workers;i++){var d=document.createElement('span');d.className='wdot';w.appendChild(d)}}
+function sync(){$('sim-wn').textContent=workers;$('sim-workers').value=workers;$('sim-rn').textContent=rate;dots()}
+$('sim-workers').addEventListener('input',function(){workers=+this.value;sync()});
+$('sim-rate').addEventListener('input',function(){rate=+this.value;sync()});
+$('sim-kill').addEventListener('click',function(){if(workers>0){workers--;sync()}});
+setInterval(function(){
+  var cap=workers*2;
+  backlog=Math.max(0,Math.min(60,backlog+(rate-cap)*0.4));
+  $('sim-bar').style.width=(backlog/60*100)+'%';
+  $('sim-num').innerHTML='到达 <b>'+rate+'</b> tasks/s · 消化能力 <b>'+cap+'</b> tasks/s（每 Worker 2/s）· backlog <b>'+backlog.toFixed(0)+'</b> tasks';
+  var msg;
+  if(workers===0)msg='<b>0 个 Worker 在 poll。</b>任务积压——但注意：所有 Workflow 的状态安然存放在 Event History 里，一个都不会丢。Worker 回来后从积压处继续消化。';
+  else if(rate>cap)msg='到达速率超过总消化能力，backlog 持续增长：<b>该加 Worker 了</b>（横向扩容即可，无需迁移任何状态）。';
+  else if(backlog>1)msg='消化能力充足，正在清空积压。追平后回到稳态。';
+  else msg='稳态：Worker 长轮询「即取即走」，队列几乎为空。这是健康集群的常态。';
+  $('sim-cap').innerHTML=msg;
+},400);
+sync();})();
+
+/* ============ §9 retry / timeout timeline ============ */
+(function(){
+function render(){
+  var failN=+$('rt-fail').value,maxA=+$('rt-max').value,itv=+$('rt-int').value,
+      stc=+$('rt-stc').value,dur=+$('rt-dur').value,hb=$('rt-hb').checked;
+  $('rt-failn').textContent=failN;$('rt-maxn').textContent=maxA;$('rt-intn').textContent=itv;
+  $('rt-stcn').textContent=stc;$('rt-durn').textContent=dur;
+  var segs=[],t=0,i,outcome='exhausted',doneAt=0;
+  for(i=1;i<=maxA;i++){
+    var isTmo=dur>stc, len=isTmo?stc:dur, ok=!isTmo&&i>failN;
+    segs.push({s:t,e:t+len,kind:ok?'run':(isTmo?'tmo':'fail'),lbl:'#'+i+(ok?' ✓':(isTmo?' timeout':' ✕'))});
+    t+=len;
+    if(ok){outcome='ok';doneAt=t;break}
+    if(i<maxA){var gap=itv*Math.pow(2,i-1);segs.push({s:t,e:t+gap,kind:'gap',lbl:gap+'s'});t+=gap}
+  }
+  var total=Math.max(t,1),pps=Math.max(6,Math.min(34,760/total));
+  var W=total*pps;var box=$('rt-tl');box.style.width=Math.max(560,W)+'px';box.innerHTML='';
+  var ax=document.createElement('div');ax.className='tl-axis';box.appendChild(ax);
+  var tick=Math.max(1,Math.ceil(total/9));
+  for(var s=0;s<=total;s+=tick){var tk=document.createElement('span');tk.className='tl-tick';tk.style.left=(s*pps)+'px';tk.textContent=s+'s';box.appendChild(tk)}
+  segs.forEach(function(g){
+    if(g.kind==='gap'){var d=document.createElement('div');d.className='tl-gap';d.style.left=(g.s*pps)+'px';d.style.width=((g.e-g.s)*pps)+'px';d.title='retry 退避 '+g.lbl;box.appendChild(d);return}
+    var d2=document.createElement('div');d2.className='tl-seg '+g.kind;d2.style.left=(g.s*pps)+'px';d2.style.width=Math.max(20,(g.e-g.s)*pps)+'px';d2.textContent=g.lbl;box.appendChild(d2);
+    if(hb){for(var h=1;h<(g.e-g.s);h++){var m=document.createElement('span');m.className='tl-hb';m.style.left=((g.s+h)*pps)+'px';box.appendChild(m)}}
+  });
+  var v=$('rt-verdict');
+  if(dur>stc&&failN<maxA){/* timeouts count as failures anyway */}
+  if(outcome==='ok'){v.className='verdict ok';v.textContent='✓ ActivityTaskCompleted @ '+doneAt+'s —— Workflow 的 await 正常返回，代码毫无感知地继续。'}
+  else{v.className='verdict no';v.textContent='✕ '+maxA+' 次尝试全部失败（'+(dur>stc?'每次都撞上 startToCloseTimeout':'重试耗尽')+'）→ 写入最终 ActivityTaskFailed，Workflow 的 await 抛出 ActivityFailure，由你的代码决定补偿或失败。'}
+}
+['rt-fail','rt-max','rt-int','rt-stc','rt-dur'].forEach(function(id){$(id).addEventListener('input',render)});
+$('rt-hb').addEventListener('change',render);
+render();})();
+
+/* ============ §10 signal/query/update ============ */
+var SQU={
+signal:{cap:'<b>Signal · 修改收货地址。</b>Client 异步投递事件 → Service <b>立即写入 History 并返回</b>（Worker 不在线也能发，无返回值）→ 下一个 Workflow Task 中 handler 更新内部变量。<b>改状态 ✓ · 返回结果 ✗ · 写入 History ✓</b>',a1:'⟶',a2:'⟶',hl:['client','service','worker'],chips:[{t:'WorkflowExecutionSignaled: updateAddress',k:'sig'}]},
+query:{cap:'<b>Query · 查看订单状态。</b>Client 同步询问 → Service 转给持有该流程的 Worker（必要时先 replay 重建状态）→ handler 只读地返回 "PAID"。<b>改状态 ✗ · 返回结果 ✓ · 写入 History ✗</b>（handler 不允许副作用；需要 Worker 在线作答）',a1:'⟷',a2:'⟷',hl:['client','service','worker'],chips:[]},
+update:{cap:'<b>Update · 申请取消订单。</b>Client 同步请求 → Worker 先跑 validator（已发货则拒绝且不留痕）→ 校验通过则执行变更并<b>同步返回结果</b> {accepted:true}。<b>改状态 ✓ · 返回结果 ✓ · 写入 History ✓</b>',a1:'⟷',a2:'⟷',hl:['client','service','worker'],chips:[{t:'WorkflowExecutionUpdateAccepted',k:'sig'},{t:'WorkflowExecutionUpdateCompleted',k:'sig'}]}};
+function squRender(k){var d=SQU[k];
+  els('.btn.squ').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.squ===k))});
+  els('#squ-flow .node').forEach(function(n){n.classList.toggle('on',d.hl.indexOf(n.dataset.sq)>=0)});
+  $('squ-a1').textContent=d.a1;$('squ-a2').textContent=d.a2;
+  $('squ-a1').className='arr on';$('squ-a2').className='arr on';
+  $('squ-cap').innerHTML=d.cap;
+  var tape=$('squ-tape');tape.innerHTML='';
+  if(d.chips.length===0)tape.innerHTML='<span class="empty">（Query 不写入任何事件 —— 这就是它可以被高频调用的原因）</span>';
+  d.chips.forEach(function(c){tape.appendChild(chip(c.t,c.k))});}
+els('.btn.squ').forEach(function(b){b.addEventListener('click',function(){squRender(b.dataset.squ)})});
+squRender('signal');
+
+/* ============ §12 self-check cards ============ */
+var SC_OPTS=['Message queue','Cron','Temporal','Airflow','普通 RPC'];
+var SC=[
+{sc:'每天 02:00 触发一次日志清理脚本；偶尔跑失败了，下次再跑就行。',ok:1,why:'轻量定时 + 对可靠性无要求 = cron 的主场。引入 Temporal 属于杀鸡用牛刀（若之后要求「必须成功且可追溯」，再考虑 Schedule + Workflow）。'},
+{sc:'服务 A 把用户点击事件发给服务 B 做异步统计，丢一两条无所谓。',ok:0,why:'单向、无状态、允许丢失的事件传递——message queue 足矣，不存在需要恢复的「流程」。'},
+{sc:'用户发起退款：校验 → 冻结额度 → 调支付渠道（可能 3 天才有结果）→ 通知用户；任何一步失败都要可靠补偿，客服要能查进度。',ok:2,why:'长时间 + 多步骤 + 外部副作用 + 等待外部结果 + 可查询可补偿 —— Temporal 的标准画像。'},
+{sc:'每天凌晨把数仓 200 张表按依赖关系跑一遍 ETL，产出报表。',ok:3,why:'以数据集和调度周期为中心的 DAG 批处理 —— Airflow / 数据编排工具的主场。'},
+{sc:'前端请求实时获取商品详情，要求 P99 < 50ms。',ok:4,why:'低延迟同步调用路径。Temporal 的每一步都要经过持久化与调度，天然不为这种场景服务。'},
+{sc:'用户注册后的 30 天 onboarding：第 1 天发欢迎邮件，第 7 天检查活跃度，不活跃则发优惠券并等待兑换事件。',ok:2,why:'每个用户一条长流程，durable Timer + Signal + 可审计 —— 用 cron 扫表也能拼出来，但 Temporal 让它变成 20 行顺序代码。'}];
+(function(){var box=$('sc-cards');
+SC.forEach(function(q){var d=document.createElement('div');d.className='card-q';
+  var oh='';SC_OPTS.forEach(function(o,i){oh+='<button class="btn" data-i="'+i+'">'+o+'</button>'});
+  d.innerHTML='<div class="sc">'+q.sc+'</div><div class="opts">'+oh+'</div><div class="fb"></div>';
+  box.appendChild(d);
+  els('.opts .btn',d).forEach(function(b){b.addEventListener('click',function(){
+    if(d.classList.contains('done'))return;d.classList.add('done');
+    var pick=+b.dataset.i;
+    els('.opts .btn',d).forEach(function(x,i){if(i===q.ok)x.classList.add('right');else if(i===pick)x.classList.add('wrong')});
+    d.querySelector('.fb').innerHTML=(pick===q.ok?'<b style="color:var(--teal)">答对了。</b>':'<b style="color:var(--red)">更合适的答案：'+SC_OPTS[q.ok]+'。</b>')+' '+q.why;})});});})();
+
+/* ============ §15 adoption judge ============ */
+(function(){
+var FIT=['流程跨多个服务或外部系统','持续数分钟到数天以上（或需长期等待）','中间失败必须可靠恢复，不能丢单','需要等待人工审批或外部事件','需要按实例查询进度、审计执行历史'];
+var ANTI=['单步 fire-and-forget，丢了也无妨','纯 CPU 短任务，没有流程状态','核心诉求是低延迟同步调用（RPC）','团队短期无法引入新运行时 / 学习 determinism'];
+function mk(box,arr,cls,title){var h='<div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:6px">'+title+'</div>';
+  arr.forEach(function(t,i){h+='<label style="display:flex;gap:9px;align-items:flex-start;font-size:.86rem;margin:7px 0;cursor:pointer"><input type="checkbox" class="'+cls+'" data-t="'+t+'" style="margin-top:5px"> <span>'+t+'</span></label>'});
+  $(box).innerHTML=h;}
+mk('ad-fit',FIT,'ad-f','流程特征（越多越适合）');mk('ad-anti',ANTI,'ad-a','反向信号');
+function verdict(){
+  var f=els('.ad-f').filter(function(x){return x.checked}),a=els('.ad-a').filter(function(x){return x.checked});
+  var v=$('ad-verdict'),msg;
+  if(f.length===0&&a.length===0){v.innerHTML='勾选左右两栏的特征，这里会给出判断与理由。';return}
+  var fw=f.map(function(x){return '「'+x.dataset.t+'」'}).join('、');
+  var aw=a.map(function(x){return '「'+x.dataset.t+'」'}).join('、');
+  if(f.length>=3&&a.length<=1)msg='<b style="color:var(--teal)">很适合引入 Temporal。</b>'+fw+' 正是 durable execution 的目标场景：这些需求手写实现的成本（状态机 + 重试 + 补偿 + 排障）通常远高于学习 Temporal。'+(a.length?'注意反向信号 '+aw+'——评估是否能在试点中化解。':'')+'建议从一条最痛的流程开始试点，同时预算 determinism 学习、Activity 幂等设计与 Worker 运维的成本。';
+  else if(f.length>=1&&a.length>=2)msg='<b style="color:var(--amber)">收益存在，但阻力不小。</b>匹配点：'+fw+'；阻力：'+aw+'。建议先用更简单的手段（队列 + 幂等消费者 / DB 状态字段）撑住，等流程复杂度或可靠性要求上来、或团队有余力引入新运行时时再迁移。';
+  else if(f.length===0)msg='<b style="color:var(--red)">暂时不需要。</b>你勾选的都是反向信号（'+aw+'）：用队列、cron 或普通 RPC 这些更轻的组件即可，别为不存在的流程状态付运行时成本。';
+  else msg='<b style="color:var(--amber)">可能适合，取决于权重。</b>匹配点：'+fw+'。如果这些流程出错的业务代价高（丢单、重复扣款、人工修数据），Temporal 的确定性收益会很快覆盖采用成本；否则可以再等等。';
+  v.innerHTML=msg;}
+els('.ad-f,.ad-a').forEach(function(x){x.addEventListener('change',verdict)});
+verdict();})();
+
+})();
+</script>
+</body>
+</html>
