@@ -13,6 +13,7 @@ copy_dir=""
 initial_status=""
 initial_pollution_snapshot=""
 run_stamp=""
+run_date=""
 github_item_id=""
 model_item_id=""
 knowledge_item_id=""
@@ -508,6 +509,7 @@ run_copy_smoke() {
 
 initialize_fixture_ids() {
   run_stamp="$(date +%Y%m%d%H%M%S)-$$"
+  run_date="$(date +%Y-%m-%d)"
   github_item_id="workflow-github-$run_stamp"
   model_item_id="workflow-model-$run_stamp"
   knowledge_item_id="workflow-knowledge-$run_stamp"
@@ -659,7 +661,7 @@ write_import_item_payload() {
   local note_marker="$3"
 
   write_copy_file ".tmp/import-batches/$batch_id/items/models/$import_item_id/item.yaml" \
-    "schema_version: 2\nid: $import_item_id\nhall: models\nkind: ai_model\ntitle: Workflow Import Model\nsummary: 用于验证 import batch item 草稿写入的临时模型。\nsource:\n  type: manual\n  url: https://example.com/models/$import_item_id\nbody:\n  type: markdown\n  path: ./index.md\nnotes:\n  - id: import-note\n    title: Import Note\n    type: markdown\n    path: ./notes/import-note.md\n    summary: 验证 import batch 携带 Markdown note。\n    display: site\nprofile:\n  provider: Workflow Lab\n  modalities:\n    input:\n      - audio\n    output:\n      - audio\n  tasks:\n    - source-separation\n  access:\n    - download\n  formats:\n    - onnx\n  runtimes:\n    - onnxruntime\n"
+    "schema_version: 2\nid: $import_item_id\nhall: models\nkind: ai_model\ntitle: Workflow Import Model\nsummary: 用于验证 import batch item 草稿写入的临时模型。\nadded_at: '$run_date'\nsource:\n  type: manual\n  url: https://example.com/models/$import_item_id\nbody:\n  type: markdown\n  path: ./index.md\nnotes:\n  - id: import-note\n    title: Import Note\n    type: markdown\n    path: ./notes/import-note.md\n    summary: 验证 import batch 携带 Markdown note。\n    added_at: '$run_date'\n    display: site\nprofile:\n  provider: Workflow Lab\n  modalities:\n    input:\n      - audio\n    output:\n      - audio\n  tasks:\n    - source-separation\n  access:\n    - download\n  formats:\n    - onnx\n  runtimes:\n    - onnxruntime\n"
   write_copy_file ".tmp/import-batches/$batch_id/items/models/$import_item_id/index.md" \
     "# Workflow Import Model\n\n$body_marker\n"
   write_copy_file ".tmp/import-batches/$batch_id/items/models/$import_item_id/notes/import-note.md" \

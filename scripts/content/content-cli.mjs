@@ -12,13 +12,14 @@ const contentRoot = path.join(rootDir, "catalog", "content");
 const hallsRoot = path.join(rootDir, "catalog", "halls");
 const lockDir = path.join(rootDir, ".data", "catalog-write.lock");
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const contentTypes = new Set(["item", "collection"]);
 const contentKinds = {
   item: "items",
   collection: "collections"
 };
 const contentStates = ["drafts", "published", "archived"];
-const writeCommands = new Set(["item", "collection", "publish", "archive", "restore"]);
+const writeCommands = new Set(["item", "collection", "metadata", "publish", "archive", "restore"]);
 let lockHeld = false;
 let signalRollback;
 
@@ -64,12 +65,38 @@ function assertId(id, label = "id") {
   }
 }
 
+function todayIsoDate() {
+  const now = new Date();
+  const year = String(now.getFullYear()).padStart(4, "0");
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function assertDate(value, label) {
+  if (!datePattern.test(value)) {
+    die(`${label} must use YYYY-MM-DD: ${value}`);
+  }
+
+  const [year, month, day] = value.split("-").map((segment) => Number.parseInt(segment, 10));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    die(`${label} must be a valid date: ${value}`);
+  }
+}
+
 function usage() {
   console.log(`用法：
-  ./scripts/content.sh item new <hall> <github_project|ai_model|knowledge_article> <id> [options]
-  ./scripts/content.sh item note add <hall> <id> <note-id> [options]
-  ./scripts/content.sh item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>]
+  ./scripts/content.sh item new <hall> <github_project|ai_model|knowledge_article> <id> [options] [--added-at YYYY-MM-DD]
+  ./scripts/content.sh item note add <hall> <id> <note-id> [options] [--added-at YYYY-MM-DD]
+  ./scripts/content.sh item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>] [--added-at YYYY-MM-DD]
   ./scripts/content.sh item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
+  ./scripts/content.sh metadata stamp-missing [drafts|published|archived] [--date YYYY-MM-DD]
   ./scripts/content.sh collection new <hall> <id> --title <title> --summary <summary> --item <id> [--item <id> ...]
   ./scripts/content.sh publish <hall> <item|collection> <id>
   ./scripts/content.sh archive <hall> <item|collection> <id>
@@ -149,6 +176,12 @@ function requiredOption(options, name) {
   }
 
   return values[0];
+}
+
+function addedAtFromOptions(options, name = "added-at") {
+  const value = optionalOption(options, name) ?? todayIsoDate();
+  assertDate(value, `--${name}`);
+  return value;
 }
 
 async function withCatalogWriteLock(operation) {
@@ -360,6 +393,12 @@ function htmlDocumentSkeleton(title) {
 function assertContentState(state) {
   if (!["drafts", "published"].includes(state)) {
     die("--state must be drafts or published");
+  }
+}
+
+function assertAnyContentState(state) {
+  if (!contentStates.includes(state)) {
+    die(`state must be one of ${contentStates.join(", ")}: ${state}`);
   }
 }
 
@@ -591,6 +630,7 @@ function assertRepeatedIds(values, label) {
 function buildItemConfig(hall, kind, id, options) {
   const title = requiredOption(options, "title");
   const summary = requiredOption(options, "summary");
+  const addedAt = addedAtFromOptions(options);
 
   if (kind === "github_project") {
     const repo = requiredOption(options, "repo");
@@ -626,6 +666,7 @@ function buildItemConfig(hall, kind, id, options) {
       kind,
       title,
       summary,
+      added_at: addedAt,
       source: {
         type: "github",
         url: repo
@@ -683,6 +724,7 @@ function buildItemConfig(hall, kind, id, options) {
       kind,
       title,
       summary,
+      added_at: addedAt,
       source: {
         type: requiredOption(options, "source-type"),
         url: requiredOption(options, "source-url")
@@ -718,6 +760,7 @@ function buildItemConfig(hall, kind, id, options) {
       kind,
       title,
       summary,
+      added_at: addedAt,
       source: {
         type: requiredOption(options, "source-type"),
         url: requiredOption(options, "source-url")
@@ -734,7 +777,7 @@ function buildItemConfig(hall, kind, id, options) {
 }
 
 function itemNewAllowedOptions(kind) {
-  const commonOptions = ["title", "summary"];
+  const commonOptions = ["title", "summary", "added-at"];
 
   if (kind === "github_project") {
     return new Set([
@@ -826,6 +869,18 @@ async function readYamlObject(filePath, label) {
   return { raw, config };
 }
 
+function readNotesArrayOrDie(config, itemId) {
+  if (!Object.hasOwn(config, "notes")) {
+    return [];
+  }
+
+  if (!Array.isArray(config.notes)) {
+    die(`${itemId} notes must be an array`);
+  }
+
+  return config.notes;
+}
+
 async function addItemNote(args) {
   const [hall, itemId, noteId, ...rest] = args;
   if (!hall || !itemId || !noteId) {
@@ -838,7 +893,7 @@ async function addItemNote(args) {
 
   const { options, positionals } = parseOptions(
     rest,
-    new Set(["title", "summary", "format", "display"])
+    new Set(["title", "summary", "format", "display", "added-at"])
   );
   if (positionals.length > 0) {
     die(`unexpected arguments for item note add: ${positionals.join(" ")}`);
@@ -846,6 +901,7 @@ async function addItemNote(args) {
 
   const title = requiredOption(options, "title");
   const summary = requiredOption(options, "summary");
+  const addedAt = addedAtFromOptions(options);
   const format = requiredOption(options, "format");
   if (!["markdown", "html"].includes(format)) {
     die("--format must be markdown or html");
@@ -854,7 +910,7 @@ async function addItemNote(args) {
   const { directory } = await findExistingBundle(hall, "item", itemId, ["drafts"]);
   const itemPath = path.join(directory, "item.yaml");
   const { raw, config } = await readYamlObject(itemPath, `${itemId} item.yaml`);
-  const notes = Array.isArray(config.notes) ? config.notes : [];
+  const notes = readNotesArrayOrDie(config, itemId);
 
   if (notes.some((note) => note.id === noteId)) {
     die(`${itemId} already has note: ${noteId}`, 3);
@@ -876,6 +932,7 @@ async function addItemNote(args) {
     type: format,
     path: relativeNotePath,
     summary,
+    added_at: addedAt,
     display: "site"
   };
 
@@ -924,7 +981,7 @@ async function importItemNote(args) {
 
   const { options, positionals } = parseOptions(
     rest,
-    new Set(["state", "file", "title", "summary", "display"])
+    new Set(["state", "file", "title", "summary", "display", "added-at"])
   );
   if (positionals.length > 0) {
     die(`unexpected arguments for item note import: ${positionals.join(" ")}`);
@@ -935,6 +992,7 @@ async function importItemNote(args) {
 
   const title = requiredOption(options, "title");
   const summary = requiredOption(options, "summary");
+  const addedAt = addedAtFromOptions(options);
   const source = await readNoteSourceFile(requiredOption(options, "file"));
   const display = optionalOption(options, "display");
   const displayConfig = resolveImportedNoteDisplay(source, display);
@@ -943,7 +1001,7 @@ async function importItemNote(args) {
   const { directory } = await findExistingBundle(hall, "item", itemId, [state]);
   const itemPath = path.join(directory, "item.yaml");
   const { raw, config } = await readYamlObject(itemPath, `${itemId} item.yaml`);
-  const notes = Array.isArray(config.notes) ? config.notes : [];
+  const notes = readNotesArrayOrDie(config, itemId);
 
   if (notes.some((note) => note.id === noteId)) {
     die(`${itemId} already has note: ${noteId}`, 3);
@@ -966,6 +1024,7 @@ async function importItemNote(args) {
     type: source.type,
     path: relativeNotePath,
     summary,
+    added_at: addedAt,
     ...displayConfig
   };
 
@@ -1019,7 +1078,7 @@ async function replaceItemNote(args) {
   await assertActiveHall(hall);
   const { directory } = await findExistingBundle(hall, "item", itemId, [state]);
   const { config } = await readYamlObject(path.join(directory, "item.yaml"), `${itemId} item.yaml`);
-  const notes = Array.isArray(config.notes) ? config.notes : [];
+  const notes = readNotesArrayOrDie(config, itemId);
   const note = notes.find((entry) => entry.id === noteId);
 
   if (!note) {
@@ -1107,6 +1166,89 @@ async function createCollection(args) {
   }
 
   event("CREATED", id, path.relative(rootDir, targetDir));
+}
+
+async function stampMissingMetadata(args) {
+  const { options, positionals } = parseOptions(args, new Set(["date"]));
+  if (positionals.length > 1) {
+    die(`unexpected arguments for metadata stamp-missing: ${positionals.join(" ")}`);
+  }
+
+  const state = positionals[0];
+  if (state) {
+    assertAnyContentState(state);
+  }
+
+  const addedAt = addedAtFromOptions(options, "date");
+  const states = state ? [state] : contentStates;
+  const changes = [];
+
+  for (const currentState of states) {
+    const stateDirectory = path.join(contentRoot, currentState);
+    const halls = await readDirectoriesIfExists(stateDirectory);
+
+    for (const hall of halls) {
+      await assertActiveHall(hall);
+      const itemsDirectory = path.join(stateDirectory, hall, contentKinds.item);
+      const itemIds = await readDirectoriesIfExists(itemsDirectory);
+
+      for (const itemId of itemIds) {
+        const itemPath = path.join(itemsDirectory, itemId, "item.yaml");
+        const { raw, config } = await readYamlObject(itemPath, `${itemId} item.yaml`);
+        let changed = false;
+
+        if (!Object.hasOwn(config, "added_at")) {
+          config.added_at = addedAt;
+          changed = true;
+        }
+
+        if (Object.hasOwn(config, "notes")) {
+          for (const note of readNotesArrayOrDie(config, itemId)) {
+            if (!note || typeof note !== "object" || Array.isArray(note)) {
+              die(`${itemId} notes must contain YAML objects`);
+            }
+
+            if (!Object.hasOwn(note, "added_at")) {
+              note.added_at = addedAt;
+              changed = true;
+            }
+          }
+        }
+
+        if (changed) {
+          changes.push({ state: currentState, itemPath, config, raw });
+        }
+      }
+    }
+  }
+
+  if (changes.length === 0) {
+    event("UNCHANGED", "metadata", "no missing added_at fields");
+    return;
+  }
+
+  const rollback = async () => {
+    for (const change of changes.slice().reverse()) {
+      await fs.writeFile(change.itemPath, change.raw, "utf8");
+    }
+  };
+
+  try {
+    signalRollback = rollback;
+    for (const change of changes) {
+      await writeYaml(change.itemPath, change.config);
+    }
+    validateCatalog(changes.some((change) => change.state === "published") ? "release" : "catalog");
+  } catch (error) {
+    await rollback();
+    throw error;
+  } finally {
+    if (signalRollback === rollback) {
+      signalRollback = undefined;
+    }
+  }
+
+  event("UPDATED", "metadata", `stamped missing added_at in ${changes.length} item file(s)`);
 }
 
 async function moveBundle(args, fromState, toState, validationCommand, action) {
@@ -1274,6 +1416,11 @@ async function runCommand() {
 
   if (scope === "collection" && command === "new") {
     await createCollection(args);
+    return;
+  }
+
+  if (scope === "metadata" && command === "stamp-missing") {
+    await stampMissingMetadata(args);
     return;
   }
 

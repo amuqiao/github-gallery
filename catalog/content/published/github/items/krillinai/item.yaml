@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: KrillinAI
 summary: 以 Go 单可执行文件分发的轻量级视频翻译和配音工具。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/krillinai/KrillinAI

@@ -4,6 +4,7 @@ hall: lab
 kind: github_project
 title: Redis
 summary: 高性能内存数据结构存储，常用于缓存、计数、排行榜、会话和实时数据访问。
+added_at: '2026-07-14'
 source:
   type: github
   url: https://github.com/redis/redis
@@ -25,6 +26,7 @@ notes:
     type: html
     path: ./notes/redis-explainer.html
     summary: 从内存数据结构、缓存、持久化、过期淘汰和典型使用场景理解 Redis 的核心价值。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
   - id: redis-list-stream
@@ -32,6 +34,7 @@ notes:
     type: html
     path: ./notes/redis-list-stream.html
     summary: 对比 Redis List 与 Stream 的数据结构、消费模型、阻塞读取、消费组和适用边界。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

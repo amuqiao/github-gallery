@@ -4,6 +4,7 @@ hall: lab
 kind: github_project
 title: taskiq
 summary: Python 异步分布式任务队列框架，用 broker、worker 和 async task 组织后台任务执行链路。
+added_at: '2026-07-31'
 source:
   type: github
   url: https://github.com/taskiq-python/taskiq
@@ -25,6 +26,7 @@ notes:
     type: html
     path: ./notes/taskiq-explainer.html
     summary: 从 broker、worker、async task、依赖注入和结果后端理解 taskiq 的异步任务执行链路。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

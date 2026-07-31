@@ -4,6 +4,7 @@ hall: lab
 kind: github_project
 title: NVIDIA Triton Inference Server
 summary: 模型推理服务框架，支持把 PyTorch、ONNX、TensorRT 等模型统一封装为可部署的在线推理服务。
+added_at: '2026-07-31'
 source:
   type: github
   url: https://github.com/triton-inference-server/server
@@ -26,6 +27,7 @@ notes:
     type: html
     path: ./notes/triton-pai-eas-overview.html
     summary: 从镜像构建、模型仓库、Triton Server 和 PAI-EAS 服务化部署理解推理服务链路。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

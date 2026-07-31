@@ -19,7 +19,7 @@ async function assertNavigationRoutes(site: SiteConfig): Promise<void> {
   const halls = new Map((await getAllHalls()).map((hall) => [hall.id, hall]));
 
   for (const item of site.navigation) {
-    if (item.href === "/") {
+    if (item.href === "/" || item.href === "/search/" || item.href === "/recent/") {
       continue;
     }
 

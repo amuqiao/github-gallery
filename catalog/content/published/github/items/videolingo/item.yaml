@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: VideoLingo
 summary: 面向视频字幕翻译和配音流程的 Web UI，侧重多步骤 LLM 翻译。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/Huanshere/VideoLingo

@@ -4,6 +4,7 @@ hall: lab
 kind: github_project
 title: Docker
 summary: 容器打包与运行平台，用镜像、容器、网络和卷把应用环境变成可复现的交付物。
+added_at: '2026-07-14'
 source:
   type: github
   url: https://github.com/moby/moby
@@ -25,6 +26,7 @@ notes:
     type: html
     path: ./notes/docker-explainer.html
     summary: 从 Dockerfile、镜像分层、容器进程、volume、network 和单机运行边界理解 Docker。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

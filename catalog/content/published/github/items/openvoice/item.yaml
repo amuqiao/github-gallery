@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: OpenVoice
 summary: 面向即时声音克隆的开源项目，关注音色克隆和风格控制。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/myshell-ai/OpenVoice

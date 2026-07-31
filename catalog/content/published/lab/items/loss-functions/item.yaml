@@ -4,6 +4,7 @@ hall: lab
 kind: knowledge_article
 title: 损失函数
 summary: 从回归/分类损失、交叉熵、MSE、目标函数，以及损失函数和评估指标的区别理解训练目标。
+added_at: '2026-07-31'
 source:
   type: reference
   url: https://en.wikipedia.org/wiki/Loss_function
@@ -25,6 +26,7 @@ notes:
     type: html
     path: ./notes/loss-functions-explainer.html
     summary: 从回归/分类损失、交叉熵、MSE、目标函数和评估指标区别理解训练优化目标。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

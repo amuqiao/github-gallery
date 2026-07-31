@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: Amphion
 summary: 面向音频、音乐和语音生成研究开发的开源工具集。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/open-mmlab/Amphion

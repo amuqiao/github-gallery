@@ -4,6 +4,7 @@ hall: lab
 kind: knowledge_article
 title: Temporal
 summary: Temporal.io durable execution 平台，用 Event History、Workflow、Activity 和 Worker 让长时间、多步骤业务流程可靠运行。
+added_at: '2026-07-31'
 source:
   type: documentation
   url: https://docs.temporal.io/
@@ -26,6 +27,7 @@ notes:
     type: html
     path: ./notes/temporal-processes-die-workflows-live.html
     summary: 用订单流程和故障恢复演示理解 Temporal 如何让多步骤业务流程在进程崩溃、重启和长时间等待后继续运行。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
   - id: temporal-durable-execution-mental-model
@@ -33,6 +35,7 @@ notes:
     type: html
     path: ./notes/temporal-durable-execution-mental-model.html
     summary: 从 Temporal.io、Event History、Replay、Determinism、Workflow、Activity、Worker 和 Task Queue 建立 durable execution 的全局心智模型。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

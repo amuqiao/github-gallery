@@ -4,6 +4,7 @@ hall: lab
 kind: github_project
 title: uv
 summary: Python 一体化包和项目管理工具，用高速解析、锁文件、虚拟环境和工具运行统一工程工作流。
+added_at: '2026-07-14'
 source:
   type: github
   url: https://github.com/astral-sh/uv
@@ -25,6 +26,7 @@ notes:
     type: html
     path: ./notes/uv-explainer.html
     summary: 从 pyproject.toml、uv.lock、虚拟环境、全局缓存、uv run 和 uvx 理解 uv 的工程工作流。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

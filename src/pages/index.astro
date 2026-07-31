@@ -3,25 +3,30 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContentCollectionCard from "@/components/ContentCollectionCard.astro";
 import ContentItemCard from "@/components/ContentItemCard.astro";
 import HallCard from "@/components/HallCard.astro";
+import SearchEntryCard from "@/components/SearchEntryCard.astro";
+import EmptyState from "@/components/ui/EmptyState.astro";
 import {
   getPublishedContentCollections,
   getPublishedContentItems,
   getPublishedContentItemsByHallAndKind
 } from "@/lib/catalog/content";
 import { getAllHalls } from "@/lib/catalog/halls";
+import { getRecentPublishedEntries } from "@/lib/catalog/search";
 import { getSiteConfig } from "@/lib/catalog/site";
 
-const [site, collections, halls, publishedItems, models] = await Promise.all([
+const [site, collections, halls, publishedItems, models, recentEntries] = await Promise.all([
   getSiteConfig(),
   getPublishedContentCollections(),
   getAllHalls(),
   getPublishedContentItems(),
-  getPublishedContentItemsByHallAndKind("models", "ai_model")
+  getPublishedContentItemsByHallAndKind("models", "ai_model"),
+  getRecentPublishedEntries()
 ]);
 const itemCountByHall = publishedItems.reduce<Record<string, number>>((counts, item) => {
   counts[item.hall] = (counts[item.hall] ?? 0) + 1;
   return counts;
 }, {});
+const recentPreview = recentEntries.slice(0, 6);
 ---
 
 <BaseLayout title="Gallery Platform" site={site}>
@@ -49,9 +54,30 @@ const itemCountByHall = publishedItems.reduce<Record<string, number>>((counts, i
     </div>
   </section>
 
-  <section class="gallery-section" aria-labelledby="model-feature-title">
+  <section class="gallery-section" aria-labelledby="recent-title">
     <div class="editorial-section-head">
       <span class="editorial-section-head__index">02</span>
+      <h2 class="editorial-section-head__title" id="recent-title">最近新增</h2>
+      <span class="editorial-section-head__hint">{recentEntries.length} 条已收录</span>
+    </div>
+    {
+      recentPreview.length > 0 ? (
+        <div class="search-entry-grid">
+          {recentPreview.map((entry) => <SearchEntryCard entry={entry} />)}
+        </div>
+      ) : (
+        <EmptyState message="当前还没有可展示的最近新增内容。" />
+      )
+    }
+    <div class="platform-home__actions">
+      <a class="editorial-button" href="/recent/">查看全部新增</a>
+      <a class="editorial-button editorial-button--outline" href="/search/">搜索全部索引</a>
+    </div>
+  </section>
+
+  <section class="gallery-section" aria-labelledby="model-feature-title">
+    <div class="editorial-section-head">
+      <span class="editorial-section-head__index">03</span>
       <h2 class="editorial-section-head__title" id="model-feature-title">模型样例</h2>
       <span class="editorial-section-head__hint">{models.length} 个模型</span>
     </div>
@@ -62,7 +88,7 @@ const itemCountByHall = publishedItems.reduce<Record<string, number>>((counts, i
 
   <section class="gallery-section" id="collections" aria-labelledby="collections-heading">
     <div class="editorial-section-head">
-      <span class="editorial-section-head__index">03</span>
+      <span class="editorial-section-head__index">04</span>
       <h2 class="editorial-section-head__title" id="collections-heading">精选专题</h2>
       <span class="editorial-section-head__hint">{collections.length} 个专题</span>
     </div>

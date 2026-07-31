@@ -4,6 +4,7 @@ hall: lab
 kind: github_project
 title: Kubernetes
 summary: 容器编排系统，用声明式 API、控制循环、调度和服务发现管理多节点应用运行状态。
+added_at: '2026-07-14'
 source:
   type: github
   url: https://github.com/kubernetes/kubernetes
@@ -25,6 +26,7 @@ notes:
     type: html
     path: ./notes/kubernetes-control-loop.html
     summary: 从声明式 API、期望状态、实际状态、调谐循环、调度和 Service 理解 Kubernetes 的编排模型。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
   - id: kubernetes-explainer
@@ -32,6 +34,7 @@ notes:
     type: html
     path: ./notes/kubernetes-explainer.html
     summary: 从期望状态、API Server、etcd、Scheduler、Controller、kubelet、Pod 和 Service 理解 K8s。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

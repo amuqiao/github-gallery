@@ -4,6 +4,7 @@ hall: models
 kind: ai_model
 title: Diffusion Models
 summary: 通过逐步加噪与逐步去噪进行生成建模的模型家族，是图像、视频、音频和结构生成的重要范式。
+added_at: '2026-07-31'
 source:
   type: paper
   url: https://arxiv.org/abs/2006.11239
@@ -34,6 +35,7 @@ notes:
     type: html
     path: ./notes/diffusion-models-overview.html
     summary: 从前向加噪、反向去噪、DDPM/DDIM/SDE/Latent Diffusion 到具体产品理解扩散模型家族。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

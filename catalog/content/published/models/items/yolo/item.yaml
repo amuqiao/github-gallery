@@ -4,6 +4,7 @@ hall: models
 kind: ai_model
 title: YOLO
 summary: 实时目标检测模型家族，把候选框定位和类别预测合并为一次前向推理。
+added_at: '2026-07-14'
 source:
   type: paper
   url: https://arxiv.org/abs/1506.02640
@@ -31,6 +32,7 @@ notes:
     type: html
     path: ./notes/yolo-explainer.html
     summary: 从单阶段检测、网格预测、NMS、版本演进和部署取舍理解 YOLO 目标检测模型家族。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

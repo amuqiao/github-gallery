@@ -4,6 +4,7 @@ hall: models
 kind: ai_model
 title: Transformer
 summary: 基于 self-attention 的序列建模架构，是机器翻译、BERT、GPT 和现代大模型的重要基础。
+added_at: '2026-07-14'
 source:
   type: paper
   url: https://arxiv.org/abs/1706.03762
@@ -32,6 +33,7 @@ notes:
     type: html
     path: ./notes/transformer-explainer.html
     summary: 从 self-attention、encoder-decoder、训练与推理差异和 BERT/GPT 家谱理解原版 Transformer。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

@@ -4,6 +4,7 @@ hall: lab
 kind: github_project
 title: Apache Kafka
 summary: 分布式事件流平台，用追加日志、分区和消费组支撑高吞吐消息、日志与流处理链路。
+added_at: '2026-07-14'
 source:
   type: github
   url: https://github.com/apache/kafka
@@ -26,6 +27,7 @@ notes:
     type: html
     path: ./notes/kafka-explainer.html
     summary: 从追加日志、topic、partition、consumer group 和保留策略理解 Kafka 的事件流模型。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

@@ -4,6 +4,7 @@ hall: models
 kind: ai_model
 title: TimesNet
 summary: 面向时间序列分析的通用骨干模型，把一维序列折成二维表示并用 2D 卷积建模周期变化。
+added_at: '2026-07-14'
 source:
   type: github
   url: https://github.com/thuml/Time-Series-Library
@@ -34,6 +35,7 @@ notes:
     type: html
     path: ./notes/timesnet-explainer.html
     summary: 从 FFT 找周期、1D 到 2D 折叠、TimesBlock 和多任务头理解 TimesNet 的时间序列建模思路。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

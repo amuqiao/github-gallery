@@ -4,6 +4,7 @@ hall: models
 kind: ai_model
 title: BERT
 summary: 基于 Transformer encoder 的双向语言表示模型，是理解编码器式预训练、掩码语言建模和下游微调的重要基线。
+added_at: '2026-07-31'
 source:
   type: paper
   url: https://arxiv.org/abs/1810.04805
@@ -32,6 +33,7 @@ notes:
     type: html
     path: ./notes/bert-explainer.html
     summary: 从 Transformer Encoder、MLM、NSP、预训练到微调理解 BERT 的模型结构和适用边界。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

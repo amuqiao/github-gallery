@@ -4,6 +4,7 @@ hall: lab
 kind: knowledge_article
 title: SwiftUI
 summary: Apple 平台的声明式 UI 框架，通过状态驱动视图更新和组合式组件构建 iOS、macOS 等界面。
+added_at: '2026-07-31'
 source:
   type: documentation
   url: https://developer.apple.com/xcode/swiftui/
@@ -25,6 +26,7 @@ notes:
     type: html
     path: ./notes/swiftui-explainer.html
     summary: 从声明式视图、状态绑定、布局、生命周期和 Apple 平台集成理解 SwiftUI 的开发模型。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: pyVideoTrans
 summary: 桌面端视频翻译配音工具，串联 ASR、翻译、TTS、字幕和音频流程。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/jianchang512/pyvideotrans
@@ -31,6 +32,7 @@ notes:
     type: html
     path: ./notes/pyVideoTrans1.html
     summary: 沿着数据链视角，从 L0-L4 分层解析 pyVideoTrans 的视频翻译配音九阶段流程、核心模块设计与适用场景。
+    added_at: '2026-07-09'
     display: standalone
     html_mode: document
   - id: pyvideotrans-one-page
@@ -38,6 +40,7 @@ notes:
     type: html
     path: ./notes/pyVideoTrans2.html
     summary: 全方位解析 pyVideoTrans 的核心功能、九阶段流水线、工作模式、内部架构、引擎生态与安装使用指南。
+    added_at: '2026-07-09'
     display: standalone
     html_mode: document
 blocks:

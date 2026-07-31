@@ -3,6 +3,10 @@ description: A contract-driven static gallery platform for curated projects, mod
 navigation:
   - label: 展馆入口
     href: /
+  - label: 搜索
+    href: /search/
+  - label: 最近新增
+    href: /recent/
   - label: GitHub 展馆
     href: /halls/github/
   - label: 模型展馆

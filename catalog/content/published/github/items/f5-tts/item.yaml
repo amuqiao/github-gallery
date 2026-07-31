@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: F5-TTS
 summary: 基于 flow matching 的文本转语音项目，适合零样本音色合成实验。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/SWivid/F5-TTS

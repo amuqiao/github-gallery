@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: Linly-Dubbing
 summary: 集成语音分离、说话人识别和唇形同步组件的视频配音研究流程。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/Kedreamix/Linly-Dubbing

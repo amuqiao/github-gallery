@@ -4,6 +4,7 @@ hall: lab
 kind: knowledge_article
 title: 梯度与反向传播
 summary: 从导数、偏导数、链式法则、计算图、梯度流，以及梯度消失/爆炸理解神经网络训练。
+added_at: '2026-07-31'
 source:
   type: reference
   url: https://en.wikipedia.org/wiki/Backpropagation
@@ -25,6 +26,7 @@ notes:
     type: html
     path: ./notes/gradients-backpropagation-explainer.html
     summary: 从导数、偏导数、链式法则、计算图、梯度流和梯度消失/爆炸理解反向传播。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

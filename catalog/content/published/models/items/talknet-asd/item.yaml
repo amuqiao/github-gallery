@@ -4,6 +4,7 @@ hall: models
 kind: ai_model
 title: TalkNet-ASD
 summary: 用于主动说话人检测的音视频模型，结合音频、视觉时序编码和跨模态注意力判断画面中谁在说话。
+added_at: '2026-07-31'
 source:
   type: github
   url: https://github.com/TaoRuijie/TalkNet_ASD
@@ -32,6 +33,7 @@ notes:
     type: html
     path: ./notes/talknet-asd-explainer.html
     summary: 从音频编码、视觉编码、跨模态交互和长时序证据理解 TalkNet-ASD 的主动说话人检测链路。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

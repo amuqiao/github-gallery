@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: RVC
 summary: 基于检索的语音转换 WebUI，用于训练和应用音色转换模型。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI

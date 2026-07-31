@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: XTTS
 summary: 通过 Coqui TTS 工具集使用的声音克隆和文本转语音模型系列。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/coqui-ai/TTS

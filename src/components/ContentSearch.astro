@@ -1,0 +1,324 @@
+---
+import SearchEntryCard from "@/components/SearchEntryCard.astro";
+
+interface SearchEntry {
+  id: string;
+  type: "item" | "note";
+  hall: string;
+  kind: string;
+  title: string;
+  summary: string;
+  route: string;
+  added_at: string;
+  parentTitle?: string;
+  labels: string[];
+  searchText: string;
+}
+
+interface Props {
+  entries: SearchEntry[];
+}
+
+const { entries } = Astro.props;
+const rootId = "content-search";
+const inputId = `${rootId}-input`;
+const countId = `${rootId}-count`;
+const listId = `${rootId}-list`;
+const emptyId = `${rootId}-empty`;
+const dataId = `${rootId}-data`;
+const serializedEntries = JSON.stringify(entries).replaceAll("</", "<\\/");
+---
+
+<section class="gallery-section search-shell" aria-labelledby="search-results-title">
+  <div class="editorial-section-head">
+    <span class="editorial-section-head__index">01</span>
+    <h2 class="editorial-section-head__title" id="search-results-title">检索索引</h2>
+    <span class="editorial-section-head__hint">title / summary / labels / searchText</span>
+  </div>
+
+  <form class="search-shell__panel" role="search">
+    <label class="search-shell__label" for={inputId}>输入关键词</label>
+    <div class="search-shell__field-row">
+      <input
+        class="search-shell__input"
+        id={inputId}
+        name="q"
+        type="search"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="例如 react、agent、embedding、benchmark"
+      />
+      <p class="search-shell__count" id={countId} aria-live="polite">共 {entries.length} 条结果</p>
+    </div>
+  </form>
+
+  <div class="search-entry-grid" id={listId}>
+    {entries.map((entry) => <SearchEntryCard entry={entry} />)}
+  </div>
+  <p class="search-shell__empty" id={emptyId} hidden>没有匹配结果，试试标题、标签或关键词片段。</p>
+</section>
+
+<script is:inline type="application/json" id={dataId} set:html={serializedEntries}></script>
+<script
+  is:inline
+  data-input-id={inputId}
+  data-count-id={countId}
+  data-list-id={listId}
+  data-empty-id={emptyId}
+  data-data-id={dataId}
+>
+  const currentScript = document.currentScript;
+
+  if (!(currentScript instanceof HTMLScriptElement)) {
+    throw new Error("ContentSearch 无法读取脚本上下文。");
+  }
+
+  const input = document.getElementById(currentScript.dataset.inputId ?? "");
+  const count = document.getElementById(currentScript.dataset.countId ?? "");
+  const list = document.getElementById(currentScript.dataset.listId ?? "");
+  const empty = document.getElementById(currentScript.dataset.emptyId ?? "");
+  const dataElement = document.getElementById(currentScript.dataset.dataId ?? "");
+
+  if (!(input instanceof HTMLInputElement) || !count || !list || !empty || !dataElement?.textContent) {
+    throw new Error("ContentSearch 缺少必要的 DOM 节点或序列化索引数据。");
+  }
+
+  const rawEntries = JSON.parse(dataElement.textContent);
+  const normalizedEntries = rawEntries.map((entry, index) => {
+    const labels = Array.isArray(entry.labels) ? entry.labels : [];
+
+    return {
+      ...entry,
+      labels,
+      _index: index,
+      _normalized: {
+        title: normalize(entry.title),
+        summary: normalize(entry.summary),
+        labels: labels.map((label) => normalize(label)),
+        searchText: normalize(entry.searchText),
+        all: normalize([entry.title, entry.summary, labels.join(" "), entry.searchText].join(" "))
+      }
+    };
+  });
+
+  const query = new URL(window.location.href).searchParams.get("q")?.trim() ?? "";
+
+  if (query) {
+    input.value = query;
+  }
+
+  render(query);
+
+  input.addEventListener("input", (event) => {
+    const nextQuery = event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : "";
+    render(nextQuery);
+    syncUrl(nextQuery);
+  });
+
+  input.form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+
+  function normalize(value) {
+    return String(value ?? "")
+      .toLocaleLowerCase("zh-CN")
+      .normalize("NFKC")
+      .replace(/[\s\-_/|·:：,，.。()[\]{}]+/g, " ")
+      .trim();
+  }
+
+  function fuzzySubsequence(needle, haystack) {
+    if (!needle || !haystack) {
+      return false;
+    }
+
+    let cursor = 0;
+
+    for (const character of haystack) {
+      if (character === needle[cursor]) {
+        cursor += 1;
+      }
+
+      if (cursor === needle.length) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function matchTerm(term, entry) {
+    if (!term) {
+      return 0;
+    }
+
+    if (entry._normalized.title.includes(term)) {
+      return 18;
+    }
+
+    if (entry._normalized.labels.some((label) => label.includes(term))) {
+      return 15;
+    }
+
+    if (entry._normalized.summary.includes(term)) {
+      return 11;
+    }
+
+    if (entry._normalized.searchText.includes(term) || entry._normalized.all.includes(term)) {
+      return 9;
+    }
+
+    if (fuzzySubsequence(term, entry._normalized.title)) {
+      return 6;
+    }
+
+    if (
+      entry._normalized.labels.some((label) => fuzzySubsequence(term, label)) ||
+      fuzzySubsequence(term, entry._normalized.searchText)
+    ) {
+      return 4;
+    }
+
+    return null;
+  }
+
+  function scoreEntry(queryValue, entry) {
+    const normalizedQuery = normalize(queryValue);
+
+    if (!normalizedQuery) {
+      return 0;
+    }
+
+    const terms = normalizedQuery.split(" ").filter(Boolean);
+    let score = entry._normalized.all.includes(normalizedQuery) ? 24 : 0;
+
+    for (const term of terms) {
+      const termScore = matchTerm(term, entry);
+
+      if (termScore === null) {
+        return null;
+      }
+
+      score += termScore;
+    }
+
+    if (entry._normalized.title.startsWith(normalizedQuery)) {
+      score += 8;
+    }
+
+    return score;
+  }
+
+  function render(queryValue) {
+    const normalizedQuery = normalize(queryValue);
+    const results = normalizedQuery
+      ? normalizedEntries
+          .map((entry) => ({ entry, score: scoreEntry(normalizedQuery, entry) }))
+          .filter((result) => result.score !== null)
+          .sort((left, right) => right.score - left.score || left.entry._index - right.entry._index)
+          .map((result) => result.entry)
+      : normalizedEntries;
+
+    list.replaceChildren(...results.map((entry) => renderEntry(entry)));
+    count.textContent = normalizedQuery ? `匹配 ${results.length} 条结果` : `共 ${results.length} 条结果`;
+    empty.hidden = results.length > 0;
+    list.hidden = results.length === 0;
+  }
+
+  function renderEntry(entry) {
+    const article = document.createElement("a");
+    article.className = "search-entry-card";
+    article.href = entry.route;
+    article.setAttribute("aria-label", `查看${entry.type === "note" ? "笔记" : "条目"} ${entry.title}`);
+
+    const top = document.createElement("div");
+    top.className = "search-entry-card__top";
+
+    const type = document.createElement("span");
+    type.className = "search-entry-card__type";
+    type.textContent = entry.type === "note" ? "笔记" : "条目";
+
+    const date = document.createElement("time");
+    date.className = "search-entry-card__date";
+    date.dateTime = entry.added_at;
+    date.textContent = formatAddedAt(entry.added_at);
+
+    top.append(type, date);
+
+    const body = document.createElement("div");
+    body.className = "search-entry-card__body";
+
+    const title = document.createElement("h3");
+    title.className = "search-entry-card__title";
+    title.textContent = entry.title;
+
+    const id = document.createElement("p");
+    id.className = "search-entry-card__id";
+    id.textContent = entry.id;
+
+    body.append(title, id);
+
+    if (entry.parentTitle) {
+      const parent = document.createElement("p");
+      parent.className = "search-entry-card__parent";
+      parent.textContent = `关联条目 · ${entry.parentTitle}`;
+      body.append(parent);
+    }
+
+    const summary = document.createElement("p");
+    summary.className = "search-entry-card__summary";
+    summary.textContent = entry.summary;
+    body.append(summary);
+
+    const labels = document.createElement("ul");
+    labels.className = "search-entry-card__labels";
+    labels.setAttribute("aria-label", "搜索标签");
+
+    for (const labelText of entry.labels.slice(0, 5)) {
+      const item = document.createElement("li");
+      const label = document.createElement("span");
+      label.className = "search-entry-card__label";
+      label.textContent = labelText;
+      item.append(label);
+      labels.append(item);
+    }
+
+    const footer = document.createElement("div");
+    footer.className = "search-entry-card__footer";
+
+    const meta = document.createElement("span");
+    meta.className = "search-entry-card__meta";
+    meta.textContent = `${entry.hall} / ${entry.kind.replaceAll("_", " ")}`;
+
+    const action = document.createElement("span");
+    action.className = "search-entry-card__action";
+    action.textContent = "打开 →";
+
+    footer.append(meta, action);
+    article.append(top, body);
+
+    if (entry.labels.length > 0) {
+      article.append(labels);
+    }
+
+    article.append(footer);
+    return article;
+  }
+
+  function formatAddedAt(value) {
+    const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[1]}年${Number(match[2])}月${Number(match[3])}日` : value;
+  }
+
+  function syncUrl(queryValue) {
+    const nextUrl = new URL(window.location.href);
+
+    if (queryValue.trim()) {
+      nextUrl.searchParams.set("q", queryValue.trim());
+    } else {
+      nextUrl.searchParams.delete("q");
+    }
+
+    history.replaceState({}, "", nextUrl);
+  }
+</script>

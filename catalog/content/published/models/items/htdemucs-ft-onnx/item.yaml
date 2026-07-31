@@ -4,6 +4,7 @@ hall: models
 kind: ai_model
 title: HT-Demucs FT ONNX
 summary: 面向音乐四轨分离的 HT-Demucs FT ONNX 模型包。
+added_at: '2026-07-09'
 source:
   type: huggingface
   url: https://huggingface.co/StemSplitio/htdemucs-ft-onnx
@@ -35,12 +36,14 @@ notes:
     type: markdown
     path: ./notes/quick-start.md
     summary: 记录模型定位、运行入口、输入输出和适用边界。
+    added_at: '2026-07-09'
     display: site
   - id: deployment-guide
     title: HTDemucs-FT ONNX 模型讲解与阿里云部署指南
     type: html
     path: ./notes/deployment-guide.html
     summary: 讲解 HTDemucs-FT ONNX 模型原理、运行方式和阿里云部署路径。
+    added_at: '2026-07-10'
     display: standalone
     html_mode: document
   - id: triton-server-image-deploy
@@ -48,6 +51,7 @@ notes:
     type: html
     path: ./notes/triton-server-image-deploy.html
     summary: 从请求链路、模型仓库、EAS 镜像部署、KServe v2 调用和 Triton 进阶特性理解 Triton Server 部署。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
   - id: triton-pai-eas-image-deploy
@@ -55,6 +59,7 @@ notes:
     type: html
     path: ./notes/triton-pai-eas-image-deploy.html
     summary: 围绕模型仓库结构、config.pbtxt、EAS 挂载配置、服务调用和动态批处理理解 Triton 镜像部署。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
   - id: demucs-htdemucs-explainer
@@ -62,6 +67,7 @@ notes:
     type: html
     path: ./notes/demucs-htdemucs-explainer.html
     summary: 从 Demucs 家族演化、HTDemucs 双域架构、Transformer 融合、四轨输出和使用边界理解音乐源分离模型。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

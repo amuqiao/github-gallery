@@ -4,6 +4,7 @@ hall: models
 kind: ai_model
 title: Draft Audio Model
 summary: 用于验证 drafts 状态不会进入公开内容的模型草稿。
+added_at: '2026-07-09'
 source:
   type: manual
   url: https://example.com/draft-audio-model

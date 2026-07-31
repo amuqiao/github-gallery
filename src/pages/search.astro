@@ -1,0 +1,38 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import ContentSearch from "@/components/ContentSearch.astro";
+import PageHeader from "@/components/PageHeader.astro";
+import Button from "@/components/ui/Button.astro";
+import { getPublishedSearchEntries } from "@/lib/catalog/search";
+import { getSiteConfig } from "@/lib/catalog/site";
+
+const [site, entries] = await Promise.all([getSiteConfig(), getPublishedSearchEntries()]);
+---
+
+<BaseLayout title="搜索 - Gallery Platform" site={site} description="搜索已发布条目与笔记。">
+  <article class="grid gap-6">
+    <Breadcrumbs
+      items={[
+        { label: "展馆入口", href: "/" },
+        { label: "搜索" }
+      ]}
+    />
+    <PageHeader
+      eyebrow="Catalog / Search"
+      title="搜索"
+      description="在已发布条目与笔记中按标题、摘要、标签和检索文本做即时筛选。"
+      stats={[
+        { label: "索引", value: entries.length },
+        { label: "范围", value: "条目 + 笔记" }
+      ]}
+    >
+      <Fragment slot="actions">
+        <Button href="/recent/" variant="outline">最近新增</Button>
+        <Button href="/">返回首页</Button>
+      </Fragment>
+    </PageHeader>
+
+    <ContentSearch entries={entries} />
+  </article>
+</BaseLayout>

@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: YouDub-webui
 summary: 面向 YouTube 视频本地化的 Web UI，覆盖翻译、配音和字幕处理流程。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/liuzhao1225/YouDub-webui

@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: Fish Speech
 summary: 面向语音生成和音色合成实验的开源文本转语音项目。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/fishaudio/fish-speech

@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: Dify
 summary: 开源 LLM 应用开发平台，用可视化工作流、RAG、Agent 和 API 发布连接模型应用落地链路。
+added_at: '2026-07-14'
 source:
   type: github
   url: https://github.com/langgenius/dify
@@ -28,6 +29,7 @@ notes:
     type: html
     path: ./notes/dify-explainer.html
     summary: 从画布编排、RAG、Agent、工作流、API 发布和 Docker Compose 部署理解 Dify 的平台边界。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

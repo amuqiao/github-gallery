@@ -4,6 +4,7 @@ hall: lab
 kind: knowledge_article
 title: Active Speaker Detection
 summary: 音视频理解任务，用语音、画面和人脸轨迹判断视频中哪一张脸正在说话。
+added_at: '2026-07-31'
 source:
   type: paper
   url: https://arxiv.org/abs/2108.07640
@@ -26,6 +27,7 @@ notes:
     type: html
     path: ./notes/active-speaker-detection-explainer.html
     summary: 从音频、画面、人脸轨迹和时序证据理解主动说话人检测任务的输入输出与判断边界。
+    added_at: '2026-07-31'
     display: standalone
     html_mode: document
 blocks:

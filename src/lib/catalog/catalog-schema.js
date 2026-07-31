@@ -2,12 +2,26 @@ import { z } from "zod";
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const relativePathPattern = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/;
+const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 const relativePathSchema = z
   .string()
   .regex(relativePathPattern, "Path must be a relative catalog item-local path such as ./details.md");
 
 const nonEmptyString = z.string().trim().min(1);
+const isoDateString = z
+  .string()
+  .regex(isoDatePattern, "Date must use YYYY-MM-DD")
+  .refine((value) => {
+    const [year, month, day] = value.split("-").map((segment) => Number.parseInt(segment, 10));
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
+  }, "Date must be a valid calendar date");
 export const localeCodeSchema = z.enum(["zh", "en"]);
 
 export const localizedTextSchema = z
@@ -37,6 +51,7 @@ export const projectNoteSchema = z
     type: z.enum(["markdown", "html"]),
     path: relativePathSchema,
     summary: nonEmptyString.max(180),
+    added_at: isoDateString,
     display: z.enum(["site", "standalone"]),
     html_mode: z.enum(["fragment", "document"]).optional()
   })
@@ -238,6 +253,7 @@ const contentItemBaseSchema = z
     hall: z.string().regex(slugPattern),
     title: nonEmptyString,
     summary: nonEmptyString.max(180),
+    added_at: isoDateString,
     source: contentSourceSchema,
     body: contentBodySchema,
     notes: z.array(projectNoteSchema).optional(),
@@ -337,8 +353,8 @@ export const siteNavigationHrefSchema = z
   .string()
   .trim()
   .regex(
-    /^\/$|^\/halls\/[a-z0-9]+(?:-[a-z0-9]+)*\/(?:collections\/)?$/,
-    "navigation.href must be /, /halls/<hall>/, or /halls/<hall>/collections/"
+    /^\/$|^\/(?:search|recent)\/$|^\/halls\/[a-z0-9]+(?:-[a-z0-9]+)*\/(?:collections\/)?$/,
+    "navigation.href must be /, /search/, /recent/, /halls/<hall>/, or /halls/<hall>/collections/"
   );
 
 export const siteConfigSchema = z

@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: ComfyUI
 summary: 节点式 AI 生成工作流引擎，用可复现的图形化流程编排扩散模型推理。
+added_at: '2026-07-14'
 source:
   type: github
   url: https://github.com/comfyanonymous/ComfyUI
@@ -30,6 +31,7 @@ notes:
     type: html
     path: ./notes/comfyui-explainer.html
     summary: 从节点图、DAG 执行、扩散模型运行时和典型使用路径理解 ComfyUI 的项目结构与能力边界。
+    added_at: '2026-07-14'
     display: standalone
     html_mode: document
 blocks:

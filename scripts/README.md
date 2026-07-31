@@ -21,7 +21,7 @@ deploy.sh    Docker 静态站点部署入口
 | --- | --- | --- |
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、content 生成。 |
 | `verify.sh` | content bundle、halls、taxonomy、site、内容资产和 static build 验证。 | README 或 `docs/` 漂移检查。 |
-| `content.sh` | content bundle item/collection 草稿创建、item note 添加、content import batch、publish/archive/restore 状态移动，以及 list/show/status 只读查询。 | 旧 project/root collection 维护、GitHub API 抓取、taxonomy 自动修改、物理删除。 |
+| `content.sh` | content bundle item/collection 草稿创建、item note 添加、content import batch、`added_at` 缺失元数据补齐、publish/archive/restore 状态移动，以及 list/show/status 只读查询。 | 旧 project/root collection 维护、GitHub API 抓取、taxonomy 自动修改、物理删除。 |
 | `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 5 覆盖现场隔离、GitHub item、模型 item、notes、collection 的创建、发布、归档、恢复、手工编辑、重新发布、list/show/status、列表可见性、渲染内容断言、import batch create/replace/delete、最小回滚，以及确定性失败/幂等边界。 | 日常内容创建、真实 catalog 写入、默认发布门禁、中断故障注入覆盖。 |
 | `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
@@ -55,7 +55,8 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
   --task source-separation \
   --access download \
   --format onnx \
-  --runtime onnxruntime
+  --runtime onnxruntime \
+  --added-at 2026-07-31
 ./scripts/content.sh item new lab knowledge_article activation-functions \
   --title "Activation Functions" \
   --summary "A focused knowledge article about nonlinearities and gradient flow." \
@@ -64,16 +65,19 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
   --domain "Machine Learning Foundations" \
   --topic "nonlinearity" \
   --topic "gradient-flow" \
-  --audience "self-study"
+  --audience "self-study" \
+  --added-at 2026-07-31
 ./scripts/content.sh item note add models example-model quick-start \
   --title "Quick Start" \
   --summary "Quick start note." \
-  --format markdown
+  --format markdown \
+  --added-at 2026-07-31
 ./scripts/content.sh item note import models example-model implementation-guide \
   --state drafts \
   --file .tmp/note-sources/implementation-guide.md \
   --title "Implementation Guide" \
-  --summary "Imported note file."
+  --summary "Imported note file." \
+  --added-at 2026-07-31
 ./scripts/content.sh item note replace models example-model implementation-guide \
   --state drafts \
   --file .tmp/note-sources/implementation-guide.md
@@ -85,6 +89,7 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
 ./scripts/content.sh import plan .tmp/import-batches/example-content-batch
 ./scripts/content.sh import diff .tmp/import-batches/example-content-batch
 ./scripts/content.sh import apply .tmp/import-batches/example-content-batch
+./scripts/content.sh metadata stamp-missing drafts --date 2026-07-31
 ./scripts/content.sh publish models item example-model
 ./scripts/content.sh archive models item example-model
 ./scripts/content.sh restore models item example-model
@@ -123,6 +128,10 @@ cp .env.example .env
 
 `content.sh` 是 content bundle 和 item note 文件写入的安全入口。它创建 `catalog/content/drafts/` 内容，在 `drafts`、`published`、`archived` 之间移动 content bundle，并可把外部 Markdown/HTML 文件导入或替换为 item note。
 
+- `added_at` 表示内容进入 catalog 的收录时间，不会在 `publish`、`archive` 或 `restore` 时自动改写。
+- `item new` 会在 `item.yaml` 写入 `added_at`；`--added-at YYYY-MM-DD` 可显式指定，不传时使用本地日期的当天值。
+- `item note add` 和 `item note import` 会在 note 元数据写入 `added_at`；`--added-at YYYY-MM-DD` 可显式指定，不传时使用当天日期。
+- `metadata stamp-missing [drafts|published|archived] [--date YYYY-MM-DD]` 只补齐 item 和 note 缺失的 `added_at`，不会覆盖已有值；不传 state 时扫描全部 publication state。
 - `import apply` 只写入 `drafts` 并运行 `./scripts/verify.sh catalog`。
 - `item note import` 新增外部 `.md` 或 `.html` 文件为 `drafts` 或 `published` item note，写后按目标 state 运行验证。
 - `item note replace` 只替换已有 note 正文，不修改 note 元数据，写后按目标 state 运行验证。

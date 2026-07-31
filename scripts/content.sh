@@ -16,11 +16,12 @@ usage() {
   管理 catalog/content/{drafts,published,archived}/ 下的 content bundle 骨架和发布状态。
 
 命令：
-  item new <hall> <github_project|ai_model|knowledge_article> <id> [options]
-  item note add <hall> <id> <note-id> [options]
-  item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>]
+  item new <hall> <github_project|ai_model|knowledge_article> <id> [options] [--added-at YYYY-MM-DD]
+  item note add <hall> <id> <note-id> [options] [--added-at YYYY-MM-DD]
+  item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>] [--added-at YYYY-MM-DD]
   item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
   collection new <hall> <id> [options]
+  metadata stamp-missing [drafts|published|archived] [--date YYYY-MM-DD]
   import <validate|plan|diff|apply> <batch> [options]
   publish <hall> <item|collection> <id>
   archive <hall> <item|collection> <id>
@@ -42,7 +43,8 @@ usage() {
     --task source-separation \\
     --access download \\
     --format onnx \\
-    --runtime onnxruntime
+    --runtime onnxruntime \\
+    --added-at 2026-07-31
 
   ./scripts/content.sh item new github github_project gpt-sovits \\
     --title "GPT-SoVITS" \\
@@ -50,7 +52,8 @@ usage() {
     --repo "https://github.com/RVC-Boss/GPT-SoVITS" \\
     --category ai \\
     --tag audio \\
-    --maintenance-status unknown
+    --maintenance-status unknown \\
+    --added-at 2026-07-31
 
   ./scripts/content.sh item new lab knowledge_article activation-functions \\
     --title "激活函数" \\
@@ -60,19 +63,22 @@ usage() {
     --domain "机器学习基础" \\
     --topic "非线性" \\
     --topic "梯度流" \\
-    --audience "自学者"
+    --audience "自学者" \\
+    --added-at 2026-07-31
 
   ./scripts/content.sh item note add models htdemucs-ft-onnx quick-start \\
     --title "快速试用" \\
     --summary "记录模型定位、运行入口、输入输出和适用边界。" \\
-    --format markdown
+    --format markdown \\
+    --added-at 2026-07-31
 
   ./scripts/content.sh item note import models htdemucs-ft-onnx deployment-guide \\
     --state published \\
     --file .data/htdemucs-ft-onnx-指南.html \\
     --title "HTDemucs-FT ONNX 模型讲解与阿里云部署指南" \\
     --summary "讲解 HTDemucs-FT ONNX 模型原理、运行方式和阿里云部署路径。" \\
-    --display standalone
+    --display standalone \\
+    --added-at 2026-07-31
 
   ./scripts/content.sh item note replace models htdemucs-ft-onnx deployment-guide \\
     --state published \\
@@ -87,6 +93,7 @@ usage() {
   ./scripts/content.sh import plan .tmp/import-batches/example-content-batch
   ./scripts/content.sh import diff .tmp/import-batches/example-content-batch
   ./scripts/content.sh import apply .tmp/import-batches/example-content-batch
+  ./scripts/content.sh metadata stamp-missing drafts --date 2026-07-31
 
   ./scripts/content.sh publish models item htdemucs-ft-onnx
   ./scripts/content.sh archive models item htdemucs-ft-onnx

@@ -4,6 +4,7 @@ hall: github
 kind: github_project
 title: CosyVoice
 summary: 支持多语言语音生成、推理、训练和部署流程的开源项目。
+added_at: '2026-07-09'
 source:
   type: github
   url: https://github.com/FunAudioLLM/CosyVoice
