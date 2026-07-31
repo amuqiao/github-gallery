@@ -1,0 +1,47 @@
+schema_version: 2
+id: bytetrack
+hall: lab
+kind: knowledge_article
+title: ByteTrack
+summary: 多目标跟踪算法，通过关联高低置信度检测框减少遮挡场景下的断轨和 ID switch。
+source:
+  type: paper
+  url: https://arxiv.org/abs/2110.06864
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  domain: 计算机视觉
+  topics:
+    - 多目标跟踪
+    - 检测框关联
+    - 轨迹匹配
+    - 视频理解
+  audience:
+    - AI 学习者
+    - 自学者
+notes:
+  - id: bytetrack-explainer
+    title: 一文读懂 ByteTrack · 每一个检测框都算数
+    type: html
+    path: ./notes/bytetrack-explainer.html
+    summary: 从高低分检测框、轨迹预测、匹配和遮挡恢复理解 ByteTrack 的多目标跟踪主线。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Paper
+        url: https://arxiv.org/abs/2110.06864
+      - label: Repository
+        url: https://github.com/FoundationVision/ByteTrack
+  - type: highlights
+    items:
+      - 通过关联每一个检测框改善多目标跟踪中的遮挡和低分框问题。
+      - 高分框提供可靠匹配，低分框用于帮助已有轨迹恢复被遮挡目标。
+      - 跟踪质量依赖检测器输出、阈值设置、运动预测和匹配策略。
+  - type: use-cases
+    items:
+      - 学习 tracking-by-detection 的状态推进和轨迹关联主线。
+      - 理解 ID switch、漏检、误检和遮挡对视频跟踪的影响。
+      - 在视频分析系统中评估检测器与跟踪器的接口边界。

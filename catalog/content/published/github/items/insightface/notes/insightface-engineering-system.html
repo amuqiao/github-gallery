@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 InsightFace — 从一张照片到一次身份判定</title>
+<style>
+:root{
+  --paper:#F5F6F3;
+  --card:#FFFFFF;
+  --ink:#171E27;
+  --sub:#5B6572;
+  --faint:#8C95A1;
+  --line:#DADEE2;
+  --model:#5C50E0;
+  --model-soft:#EDEBFC;
+  --model-deep:#3F35B0;
+  --algo:#0B8A66;
+  --algo-soft:#E2F2EC;
+  --algo-deep:#066B4E;
+  --warn:#C4641D;
+  --warn-soft:#FBEFE2;
+  --canvas:#0E141C;
+  --canvas-2:#141C27;
+  --canvas-line:#26313F;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Consolas,Menlo,monospace;
+  --sans:"PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif;
+  --maxw:1080px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.75;-webkit-font-smoothing:antialiased}
+::selection{background:var(--model-soft);color:var(--model-deep)}
+code,pre,.mono{font-family:var(--mono)}
+a{color:var(--model-deep)}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--model);outline-offset:2px}
+
+/* ---------- 通用排版 ---------- */
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+section{padding:72px 0 8px}
+.eyebrow{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase;margin-bottom:14px}
+.eyebrow::before{content:"";width:26px;height:2px;background:var(--ink)}
+h2{font-size:clamp(24px,3.4vw,32px);font-weight:800;letter-spacing:-.01em;line-height:1.3;margin-bottom:10px}
+.lede{color:var(--sub);max-width:760px;margin-bottom:30px}
+.lede strong{color:var(--ink)}
+p+p{margin-top:12px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px}
+.pad{padding:22px 24px}
+
+/* 模型 / 算法 双色系统 —— 全文签名 */
+.tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.06em;padding:3px 9px;border-radius:99px;vertical-align:2px;white-space:nowrap}
+.tag::before{content:"";width:7px;height:7px;border-radius:2px}
+.tag.m{background:var(--model-soft);color:var(--model-deep)}
+.tag.m::before{background:var(--model)}
+.tag.a{background:var(--algo-soft);color:var(--algo-deep)}
+.tag.a::before{background:var(--algo);border-radius:99px}
+.tag.io{background:#EDEFF1;color:var(--sub)}
+.tag.io::before{background:var(--faint);border-radius:99px}
+.tag.w{background:var(--warn-soft);color:var(--warn)}
+.tag.w::before{background:var(--warn);border-radius:99px}
+
+pre.code{background:var(--canvas);color:#D7DEE8;border-radius:12px;padding:18px 20px;font-size:13.2px;line-height:1.72;overflow-x:auto;border:1px solid var(--canvas-line)}
+pre.code .c{color:#5F7288}
+pre.code .k{color:#8FA6FF}
+pre.code .s{color:#8FD3B6}
+pre.code .n{color:#F0B36A}
+.inline-code{background:#ECEEF0;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;font-family:var(--mono);white-space:nowrap}
+
+/* ---------- HERO ---------- */
+header.hero{background:var(--canvas);color:#E8EDF4;padding:44px 0 0;overflow:hidden}
+.hero-top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-family:var(--mono);font-size:12px;color:#65778C;letter-spacing:.1em;border-bottom:1px solid var(--canvas-line);padding-bottom:14px;flex-wrap:wrap}
+.hero-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:36px;padding:40px 0 34px;align-items:center}
+h1{font-size:clamp(30px,4.6vw,46px);font-weight:800;line-height:1.22;letter-spacing:-.015em}
+h1 .hl{color:#A79DFF}
+.hero-sub{color:#93A1B3;margin-top:16px;font-size:15.5px;max-width:460px}
+.hero-sub b{color:#DDE4EE;font-weight:600}
+.legend{display:flex;gap:18px;margin-top:24px;font-family:var(--mono);font-size:12px;flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:7px;color:#93A1B3}
+.legend i{width:10px;height:10px;border-radius:3px;background:var(--model)}
+.legend i.a{background:#17B98A;border-radius:99px}
+.legend i.io{background:#5B6B80;border-radius:99px}
+
+.scene{position:relative}
+.scene svg{display:block;width:100%;height:auto;border:1px solid var(--canvas-line);border-radius:12px;background:var(--canvas-2)}
+.scene-caption{font-family:var(--mono);font-size:11.5px;color:#65778C;margin-top:8px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* hero 动画 */
+@keyframes drawBox{from{stroke-dashoffset:600}to{stroke-dashoffset:0}}
+@keyframes popIn{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:scale(1)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.anim .bbox{stroke-dasharray:600;animation:drawBox 1s ease-out forwards}
+.anim .kp{opacity:0;animation:popIn .35s ease-out forwards}
+.anim .late{opacity:0;animation:fadeUp .5s ease-out forwards}
+
+/* hero 底部流水线迷你轨道 */
+.hero-track{border-top:1px solid var(--canvas-line);padding:18px 0 26px;overflow-x:auto}
+.track-flow{display:flex;align-items:center;gap:0;min-width:840px;font-family:var(--mono);font-size:11.5px}
+.tf-node{padding:7px 13px;border-radius:8px;border:1px solid;white-space:nowrap;line-height:1.4}
+.tf-node small{display:block;font-size:10px;opacity:.75;letter-spacing:.05em}
+.tf-node.io{border-color:#3A4757;color:#9AA8BA;background:rgba(90,107,128,.12)}
+.tf-node.m{border-color:#4A41B8;color:#B4ACFF;background:rgba(92,80,224,.16)}
+.tf-node.a{border-color:#0E7A5C;color:#5FD9B2;background:rgba(23,185,138,.12)}
+.tf-arrow{color:#465468;padding:0 8px;flex-shrink:0}
+
+/* ---------- 契约四卡 ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.contract-card h3{font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.contract-card ul{list-style:none;color:var(--sub);font-size:14px}
+.contract-card li{padding:5px 0 5px 16px;position:relative;border-top:1px dashed var(--line)}
+.contract-card li:first-child{border-top:none}
+.contract-card li::before{content:"·";position:absolute;left:2px;color:var(--faint);font-weight:700}
+.contract-card li b{color:var(--ink);font-weight:600}
+.contract-card li .inline-code{white-space:normal}
+.dot{width:9px;height:9px;border-radius:99px;flex-shrink:0}
+
+.why-multi{margin-top:16px;border-left:3px solid var(--model);background:var(--card);border-radius:0 12px 12px 0;padding:18px 22px;color:var(--sub);font-size:14.5px}
+.why-multi b{color:var(--ink)}
+
+/* ---------- 案例 ---------- */
+.case-files{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+.file-card{display:flex;gap:14px;align-items:center}
+.file-card svg{flex-shrink:0;border-radius:9px;border:1px solid var(--line);background:var(--canvas-2)}
+.file-card .meta{font-size:13.5px;color:var(--sub);line-height:1.6}
+.file-card .meta b{color:var(--ink);font-family:var(--mono);font-size:13px}
+.goal{background:var(--canvas);color:#DDE4EE;border-radius:12px;padding:16px 22px;font-size:15px;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.goal .q{font-family:var(--mono);color:#8FA6FF;font-size:12px;letter-spacing:.1em;flex-shrink:0}
+
+/* ---------- 流水线探索器 ---------- */
+.explorer{margin-top:10px}
+.shape-chain{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px 12px 0 0;font-family:var(--mono);font-size:11.8px;color:var(--sub)}
+.shape-chain b{color:var(--ink);white-space:nowrap}
+.shape-chain .sep{color:var(--faint)}
+.stage-track{display:flex;gap:8px;overflow-x:auto;padding:14px;background:var(--card);border:1px solid var(--line);border-top:none}
+.stage-btn{flex-shrink:0;text-align:left;background:var(--paper);border:1.5px solid var(--line);border-radius:10px;padding:10px 14px;min-width:118px;transition:border-color .15s,background .15s}
+.stage-btn .num{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--faint);display:flex;align-items:center;gap:6px}
+.stage-btn .num i{width:8px;height:8px;border-radius:2px;background:var(--faint)}
+.stage-btn[data-kind="m"] .num i{background:var(--model)}
+.stage-btn[data-kind="a"] .num i{background:var(--algo);border-radius:99px}
+.stage-btn .name{font-size:13.5px;font-weight:700;margin-top:3px;line-height:1.35}
+.stage-btn:hover{border-color:var(--faint)}
+.stage-btn.active[data-kind="m"]{border-color:var(--model);background:var(--model-soft)}
+.stage-btn.active[data-kind="a"]{border-color:var(--algo);background:var(--algo-soft)}
+.stage-btn.active[data-kind="io"]{border-color:var(--ink);background:#EDEFF1}
+.stage-btn.err-flash{border-color:var(--warn)!important;background:var(--warn-soft)!important}
+
+.stage-panel{border:1px solid var(--line);border-top:none;border-radius:0 0 12px 12px;background:var(--card);padding:26px 28px}
+.sp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.sp-head h3{font-size:19px;font-weight:800}
+.sp-desc{color:var(--sub);font-size:14.5px;max-width:820px}
+.sp-io{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch;margin:18px 0}
+.sp-io .box{background:var(--paper);border:1px dashed var(--line);border-radius:10px;padding:12px 15px;font-family:var(--mono);font-size:12.3px;line-height:1.7;color:var(--sub)}
+.sp-io .box b{color:var(--ink);display:block;font-size:11px;letter-spacing:.1em;margin-bottom:4px}
+.sp-io .mid{align-self:center;color:var(--faint);font-size:20px}
+.sp-cols{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;margin-top:16px}
+.sp-note{background:var(--paper);border-radius:10px;padding:14px 17px;font-size:13.5px;color:var(--sub)}
+.sp-note b{color:var(--ink)}
+.sp-note.warn{background:var(--warn-soft);border-left:3px solid var(--warn)}
+.sp-note+.sp-note{margin-top:10px}
+.sp-panel-foot{margin-top:16px;font-size:13px;color:var(--faint);font-family:var(--mono)}
+
+/* ---------- 模型×算法 分栏 ---------- */
+.ma-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ma-col{border-radius:12px;border:1px solid var(--line);background:var(--card);overflow:hidden}
+.ma-col header{padding:15px 20px;font-weight:800;font-size:15px;display:flex;align-items:center;gap:9px}
+.ma-col.m header{background:var(--model-soft);color:var(--model-deep)}
+.ma-col.a header{background:var(--algo-soft);color:var(--algo-deep)}
+.ma-col ul{list-style:none}
+.ma-col li{padding:13px 20px;border-top:1px solid var(--line);font-size:13.8px;color:var(--sub)}
+.ma-col li b{display:block;color:var(--ink);font-family:var(--mono);font-size:13px;margin-bottom:2px}
+.ma-verdict{margin-top:16px;font-size:14.5px;color:var(--sub);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 22px}
+.ma-verdict b{color:var(--ink)}
+
+/* ---------- 阈值实验室 ---------- */
+.lab{background:var(--canvas);border-radius:14px;padding:28px;color:#C9D3E0}
+.lab-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:20px}
+.lab-head .t{font-weight:800;font-size:17px;color:#EDF1F7}
+.lab-read{font-family:var(--mono);font-size:13px;color:#8FA6FF}
+.axis{position:relative;height:110px;margin:8px 6px 2px}
+.axis .rail{position:absolute;left:0;right:0;top:70px;height:2px;background:#2A3644}
+.axis .tickrow{position:absolute;left:0;right:0;top:80px;display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:#5C6D82}
+.pair-dot{position:absolute;top:70px;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:99px;border:2.5px solid;cursor:default;transition:box-shadow .15s}
+.pair-dot.same{background:#17B98A33;border-color:#17B98A}
+.pair-dot.diff{background:#E0635033;border-color:#E06350}
+.pair-dot .lbl{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);font-size:10.8px;color:#93A1B3;line-height:1.45;text-align:center}
+.pair-dot .lbl b{display:block;color:#DDE4EE;font-weight:600}
+.thresh-line{position:absolute;top:34px;bottom:14px;width:2px;background:#8FA6FF;transform:translateX(-50%);pointer-events:none}
+.thresh-line::after{content:"阈值";position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:10.5px;color:#8FA6FF;letter-spacing:.1em}
+input[type=range]{width:100%;accent-color:var(--model);margin-top:26px}
+.lab-verdicts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:20px}
+.lv{border:1px solid #26313F;border-radius:10px;padding:11px 13px;font-size:12px;font-family:var(--mono);line-height:1.6;background:#121A24}
+.lv .nm{color:#93A1B3;font-size:11px}
+.lv .res{font-weight:700;font-size:12.5px}
+.lv .res.ok{color:#17B98A}
+.lv .res.bad{color:#E06350}
+.lab-moral{margin-top:20px;font-size:13.8px;color:#93A1B3;border-top:1px solid #26313F;padding-top:16px}
+.lab-moral b{color:#EDF1F7}
+
+/* ---------- 离线/在线 ---------- */
+.lane{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden;margin-bottom:16px}
+.lane header{padding:13px 20px;font-weight:800;font-size:14.5px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--line)}
+.lane header .who{margin-left:auto;font-family:var(--mono);font-weight:500;font-size:11.5px;color:var(--faint);letter-spacing:.08em}
+.lane .flow{display:flex;align-items:stretch;gap:0;padding:16px 20px;overflow-x:auto}
+.lane .fnode{flex-shrink:0;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:9px 13px;font-size:12.8px;min-width:130px;line-height:1.5}
+.lane .fnode b{display:block;font-size:13px}
+.lane .fnode small{color:var(--faint);font-family:var(--mono);font-size:10.8px}
+.lane .farrow{align-self:center;padding:0 9px;color:var(--faint)}
+.lane.online header{background:var(--model-soft);border-color:var(--model-soft)}
+.lane.offline header{background:#F0F1EE}
+.trust{margin-top:6px;font-size:14px;color:var(--sub)}
+.trust b{color:var(--ink)}
+
+/* ---------- 工程事实 ---------- */
+.eng-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+table.conf{width:100%;border-collapse:collapse;font-size:13.3px}
+table.conf th{text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--faint);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+table.conf td{padding:9px 10px;border-bottom:1px solid var(--line);color:var(--sub);vertical-align:top}
+table.conf td:first-child{font-family:var(--mono);color:var(--ink);font-size:12.5px;white-space:nowrap}
+table.conf tr:last-child td{border-bottom:none}
+
+/* ---------- 失败诊断 ---------- */
+.fail-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.fail-tab{border:1.5px solid var(--line);background:var(--card);border-radius:99px;padding:7px 15px;font-size:13.2px;color:var(--sub);transition:all .15s}
+.fail-tab:hover{border-color:var(--faint)}
+.fail-tab.active{border-color:var(--warn);background:var(--warn-soft);color:var(--warn);font-weight:700}
+.fail-panel{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:24px 26px}
+.fail-panel .sym{font-size:16.5px;font-weight:800;margin-bottom:14px}
+.fail-rows{display:grid;grid-template-columns:92px 1fr;gap:9px 16px;font-size:14px;color:var(--sub)}
+.fail-rows dt{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--faint);padding-top:2px}
+.fail-rows dd b{color:var(--ink)}
+.fail-rows dd .inline-code{white-space:normal}
+
+/* ---------- 取舍 ---------- */
+table.packs{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--card)}
+table.packs th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--faint);text-align:left;padding:11px 14px;border-bottom:1.5px solid var(--line)}
+table.packs td{padding:12px 14px;border-bottom:1px solid var(--line);color:var(--sub);vertical-align:top}
+table.packs td:first-child{font-family:var(--mono);color:var(--ink);white-space:nowrap}
+.license-warn{margin-top:16px;border:1.5px solid var(--warn);background:var(--warn-soft);border-radius:12px;padding:18px 22px;font-size:14.5px;color:#7A4310}
+.license-warn b{color:var(--warn)}
+
+/* ---------- 结论 ---------- */
+.verdicts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.verdict-card h3{font-size:15px;font-weight:800;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+.verdict-card h3 .inline-code{font-size:11px}
+.verdict-card p{font-size:13.8px;color:var(--sub)}
+
+footer{margin-top:80px;background:var(--canvas);color:#65778C;padding:30px 0;font-family:var(--mono);font-size:12px}
+footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+/* ---------- 响应式 ---------- */
+@media (max-width:900px){
+  .hero-grid{grid-template-columns:1fr}
+  .grid4{grid-template-columns:1fr 1fr}
+  .sp-cols,.eng-grid,.ma-grid,.verdicts,.case-files{grid-template-columns:1fr}
+  .lab-verdicts{grid-template-columns:1fr 1fr}
+}
+@media (max-width:560px){
+  .grid2,.grid4,.lab-verdicts{grid-template-columns:1fr}
+  .sp-io{grid-template-columns:1fr}
+  .sp-io .mid{transform:rotate(90deg);justify-self:center}
+  .axis .lbl{display:none}
+  section{padding:52px 0 6px}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-top">
+      <span>一文读懂 · AI 工程系统</span>
+      <span>deepinsight/insightface · Python + ONNX Runtime</span>
+    </div>
+    <div class="hero-grid">
+      <div>
+        <h1>InsightFace：<br>一张照片进去，<span class="hl">一次身份判定</span>出来，中间发生了什么</h1>
+        <p class="hero-sub">它不是"一个人脸识别模型"，而是把 <b>2 个模型 + 4 段算法</b>串成一条流水线的工程库。这篇文章沿着一张真实照片走完全程——每一步数据长什么样、哪一步是"学出来的"、哪一步是"写出来的"、错了通常错在哪。</p>
+        <div class="legend">
+          <span><i></i>模型 · 神经网络权重（训练得到）</span>
+          <span><i class="a"></i>算法 · 确定性规则（代码写死）</span>
+          <span><i class="io"></i>数据 · 输入 / 中间产物 / 输出</span>
+        </div>
+      </div>
+      <figure class="scene">
+        <svg id="heroSvg" viewBox="0 0 480 330" role="img" aria-label="示意：一张双人照片上叠加人脸检测框、五个关键点和特征向量读数">
+          <defs>
+            <pattern id="gridp" width="24" height="24" patternUnits="userSpaceOnUse">
+              <path d="M24 0H0V24" fill="none" stroke="#1B2532" stroke-width="1"/>
+            </pattern>
+          </defs>
+          <rect width="480" height="330" fill="url(#gridp)"/>
+          <!-- 人物剪影(抽象几何脸) -->
+          <g stroke="#3B4A5E" fill="#1A2432" stroke-width="1.5">
+            <!-- 大脸 -->
+            <ellipse cx="168" cy="150" rx="58" ry="72"/>
+            <path d="M110 260 Q168 225 226 260 L226 330 L110 330 Z" fill="#18202D"/>
+            <!-- 小脸 -->
+            <ellipse cx="356" cy="172" rx="38" ry="48"/>
+            <path d="M318 248 Q356 224 394 248 L394 330 L318 330 Z" fill="#18202D"/>
+          </g>
+          <g stroke="#49596F" stroke-width="1.6" fill="none" stroke-linecap="round">
+            <path d="M146 138 q8 -6 16 0"/><path d="M176 138 q8 -6 16 0"/>
+            <path d="M164 158 q4 8 8 0" opacity=".8"/>
+            <path d="M150 186 q18 12 36 0"/>
+            <path d="M342 164 q6 -4 11 0"/><path d="M360 164 q6 -4 11 0"/>
+            <path d="M344 196 q12 8 24 0"/>
+          </g>
+          <!-- 检测框 face 0 (模型输出:紫) -->
+          <rect class="bbox" x="102" y="66" width="132" height="168" fill="none" stroke="#8F84FF" stroke-width="2" rx="4"/>
+          <text class="late" style="animation-delay:1.1s" x="102" y="58" font-family="ui-monospace,monospace" font-size="11" fill="#8F84FF">face 0 · det 0.91</text>
+          <!-- 检测框 face 1 -->
+          <rect class="bbox" x="312" y="118" width="88" height="112" fill="none" stroke="#8F84FF" stroke-width="2" rx="4" style="animation-delay:.25s"/>
+          <text class="late" style="animation-delay:1.25s" x="312" y="110" font-family="ui-monospace,monospace" font-size="11" fill="#8F84FF">face 1 · det 0.78</text>
+          <!-- 五点关键点 -->
+          <g fill="#2EDDA9">
+            <circle class="kp" style="animation-delay:.9s" cx="154" cy="136" r="3.4"/>
+            <circle class="kp" style="animation-delay:1s" cx="184" cy="136" r="3.4"/>
+            <circle class="kp" style="animation-delay:1.1s" cx="168" cy="160" r="3.4"/>
+            <circle class="kp" style="animation-delay:1.2s" cx="156" cy="186" r="3.4"/>
+            <circle class="kp" style="animation-delay:1.3s" cx="182" cy="186" r="3.4"/>
+            <circle class="kp" style="animation-delay:1.35s" cx="347" cy="162" r="2.8"/>
+            <circle class="kp" style="animation-delay:1.4s" cx="366" cy="162" r="2.8"/>
+            <circle class="kp" style="animation-delay:1.45s" cx="356" cy="180" r="2.8"/>
+            <circle class="kp" style="animation-delay:1.5s" cx="348" cy="197" r="2.8"/>
+            <circle class="kp" style="animation-delay:1.55s" cx="365" cy="197" r="2.8"/>
+          </g>
+          <!-- embedding 条码 + 相似度读数 -->
+          <g class="late" style="animation-delay:1.7s">
+            <rect x="16" y="284" width="290" height="34" rx="6" fill="#121A24" stroke="#26313F"/>
+            <text x="26" y="298" font-family="ui-monospace,monospace" font-size="9.5" fill="#5C6D82">face 0 → embedding float32 (512,)</text>
+            <g id="barcode" transform="translate(26,303)"></g>
+          </g>
+          <g class="late" style="animation-delay:2s">
+            <rect x="318" y="284" width="146" height="34" rx="6" fill="#121A24" stroke="#26313F"/>
+            <text x="328" y="298" font-family="ui-monospace,monospace" font-size="9.5" fill="#5C6D82">cos( face0 , ref )</text>
+            <text x="328" y="313" font-family="ui-monospace,monospace" font-size="13" fill="#2EDDA9" font-weight="700">0.62 → 同一人 ✓</text>
+          </g>
+        </svg>
+        <figcaption class="scene-caption">
+          <span>photo.jpg · (720, 1280, 3) uint8 BGR</span>
+          <span>输出：2 × Face 对象</span>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+  <div class="hero-track">
+    <div class="wrap">
+      <div class="track-flow" aria-label="端到端流水线概览">
+        <div class="tf-node io">photo.jpg<small>输入图像</small></div>
+        <span class="tf-arrow">→</span>
+        <div class="tf-node a">预处理<small>缩放 · 归一化</small></div>
+        <span class="tf-arrow">→</span>
+        <div class="tf-node m">SCRFD<small>检测模型</small></div>
+        <span class="tf-arrow">→</span>
+        <div class="tf-node a">NMS + 阈值<small>候选过滤</small></div>
+        <span class="tf-arrow">→</span>
+        <div class="tf-node a">五点对齐<small>仿射变换</small></div>
+        <span class="tf-arrow">→</span>
+        <div class="tf-node m">ArcFace<small>识别模型</small></div>
+        <span class="tf-arrow">→</span>
+        <div class="tf-node a">余弦比对<small>阈值判定</small></div>
+        <span class="tf-arrow">→</span>
+        <div class="tf-node io">同一人？<small>bool + 分数</small></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ================= 1 能力契约 ================= -->
+<section id="contract">
+  <div class="wrap">
+    <div class="eyebrow">01 · 能力契约</div>
+    <h2>它承诺什么，不承诺什么</h2>
+    <p class="lede">InsightFace 是 deepinsight 团队维护的开源人脸分析库。对使用者来说，它的契约可以压缩成一句话：<strong>给我任意一张含人脸的图像，我返回每张脸的位置、关键点和一个 512 维特征向量</strong>——向量之间的距离近似"是不是同一个人"。</p>
+
+    <div class="grid4">
+      <div class="card pad contract-card">
+        <h3><span class="dot" style="background:var(--ink)"></span>输入</h3>
+        <ul>
+          <li><b>一张图</b>：BGR 的 numpy 数组（<span class="inline-code">cv2.imread</span> 的产物），任意分辨率</li>
+          <li>不接视频流、不管抽帧——那是你的循环该做的事</li>
+        </ul>
+      </div>
+      <div class="card pad contract-card">
+        <h3><span class="dot" style="background:var(--model)"></span>输出</h3>
+        <ul>
+          <li><b>list[Face]</b>，每个 Face 含：</li>
+          <li><span class="inline-code">bbox</span> 人脸框 (x1,y1,x2,y2)</li>
+          <li><span class="inline-code">kps</span> 五个关键点 (5,2)</li>
+          <li><span class="inline-code">embedding</span> 512 维特征向量</li>
+          <li><span class="inline-code">det_score</span>、年龄、性别等附加项</li>
+        </ul>
+      </div>
+      <div class="card pad contract-card">
+        <h3><span class="dot" style="background:var(--algo)"></span>隐含承诺</h3>
+        <ul>
+          <li><b>向量可比</b>：同一人的两张脸，embedding 余弦相似度显著高于不同人</li>
+          <li>这是整个库最有价值、也最容易被误解的承诺——它给分数，<b>不给判定</b></li>
+        </ul>
+      </div>
+      <div class="card pad contract-card">
+        <h3><span class="dot" style="background:var(--warn)"></span>明确不负责</h3>
+        <ul>
+          <li><b>活体检测</b>：照片翻拍它照样认</li>
+          <li><b>跟踪</b>：帧与帧之间谁是谁，交给 ByteTrack 这类算法</li>
+          <li><b>底库检索</b>：百万级向量搜索交给 faiss</li>
+          <li><b>阈值</b>：多像算同一人，由你校准</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="why-multi">
+      <b>为什么必须是多阶段协同，而不是"一个模型"？</b>因为"认人"在数学上被拆成了两个不同的问题：<b>"哪里有脸"</b>是检测问题（对整图做密集预测），<b>"这是谁的脸"</b>是度量学习问题（对标准化的脸产出可比向量）。两个问题用两个专门的模型，而两个模型之间——过滤候选框、把歪脸摆正、比较向量、下判定——全部由不学习的确定性算法衔接。<span class="tag m">模型</span>决定精度上限，<span class="tag a">算法</span>决定这些精度能不能被串成可用的能力。
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2 贯穿案例 ================= -->
+<section id="case">
+  <div class="wrap">
+    <div class="eyebrow">02 · 贯穿案例</div>
+    <h2>两个文件，一个问题</h2>
+    <p class="lede">全文只用这一个最小案例，每个阶段都回到它：手里有一张双人合影 <strong>photo.jpg</strong> 和一张 Alice 的证件照 <strong>ref.jpg</strong>，要回答——照片里有没有 Alice？</p>
+
+    <div class="case-files">
+      <div class="card pad file-card">
+        <svg width="86" height="64" viewBox="0 0 86 64"><rect width="86" height="64" fill="#141C27"/><ellipse cx="32" cy="28" rx="11" ry="14" fill="#1A2432" stroke="#3B4A5E"/><ellipse cx="62" cy="32" rx="8" ry="10" fill="#1A2432" stroke="#3B4A5E"/><path d="M20 52 Q32 44 44 52 L44 64 L20 64Z" fill="#18202D"/><path d="M54 54 Q62 48 70 54 L70 64 L54 64Z" fill="#18202D"/></svg>
+        <div class="meta"><b>photo.jpg</b><br>1280×720 合影，一张大正脸 + 一张较小的侧脸。读入后是 <span class="inline-code">(720, 1280, 3) uint8</span>。</div>
+      </div>
+      <div class="card pad file-card">
+        <svg width="86" height="64" viewBox="0 0 86 64"><rect width="86" height="64" fill="#141C27"/><ellipse cx="43" cy="28" rx="14" ry="17" fill="#1A2432" stroke="#3B4A5E"/><path d="M26 58 Q43 47 60 58 L60 64 L26 64Z" fill="#18202D"/><rect x="8" y="8" width="70" height="48" fill="none" stroke="#26313F" stroke-dasharray="3 3"/></svg>
+        <div class="meta"><b>ref.jpg</b><br>Alice 的单人正脸照。它会走完全相同的流水线，产出一条 512 维<b>参考向量</b>。</div>
+      </div>
+    </div>
+
+    <div class="goal"><span class="q">GOAL</span><span>photo.jpg 里的哪张脸（如果有）与 ref.jpg 是同一个人？期望输出：<span class="inline-code">face 0 → sim 0.62 → 同一人</span></span></div>
+
+    <p style="margin-top:22px;color:var(--sub);font-size:14.5px">从代码看，整个案例只有几行——这正是工程封装的意义，也是初学者误以为"它就是一个函数"的原因。下一节把 <span class="inline-code">app.get()</span> 这一行拆开。</p>
+
+    <pre class="code" style="margin-top:14px"><span class="k">import</span> cv2, numpy <span class="k">as</span> np
+<span class="k">from</span> insightface.app <span class="k">import</span> FaceAnalysis
+
+app = FaceAnalysis(name=<span class="s">'buffalo_l'</span>, providers=[<span class="s">'CPUExecutionProvider'</span>])
+app.prepare(ctx_id=<span class="n">-1</span>, det_size=(<span class="n">640</span>, <span class="n">640</span>), det_thresh=<span class="n">0.5</span>)   <span class="c"># 关键配置都在这</span>
+
+faces = app.get(cv2.imread(<span class="s">'photo.jpg'</span>))     <span class="c"># ← 本文全部内容，都发生在这一行里</span>
+ref   = app.get(cv2.imread(<span class="s">'ref.jpg'</span>))[<span class="n">0</span>]
+
+<span class="k">for</span> f <span class="k">in</span> faces:
+    sim = float(np.dot(f.normed_embedding, ref.normed_embedding))
+    print(f.bbox.astype(int), <span class="s">f'sim={sim:.2f}'</span>, <span class="s">'同一人'</span> <span class="k">if</span> sim &gt; <span class="n">0.40</span> <span class="k">else</span> <span class="s">'不同人'</span>)</pre>
+  </div>
+</section>
+
+<!-- ================= 3 流水线探索器 ================= -->
+<section id="pipeline">
+  <div class="wrap">
+    <div class="eyebrow">03 · 端到端主线</div>
+    <h2>拆开 app.get()：七个阶段的流水线</h2>
+    <p class="lede">点击下面的阶段查看细节。注意配色：<span class="tag m">模型</span>只有两处，其余全是<span class="tag a">算法</span>和数据搬运——<strong>大部分工程问题都出在绿色和灰色的环节，而不是紫色的</strong>。上方一行是数据形态在各阶段之间的完整流转。</p>
+
+    <div class="explorer">
+      <div class="shape-chain" id="shapeChain" aria-label="中间表示流转"></div>
+      <div class="stage-track" id="stageTrack" role="tablist" aria-label="流水线阶段"></div>
+      <div class="stage-panel" id="stagePanel" role="tabpanel"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4 模型 × 算法 ================= -->
+<section id="ma">
+  <div class="wrap">
+    <div class="eyebrow">04 · 分工</div>
+    <h2>模型负责感知，算法负责决策</h2>
+    <p class="lede">把整条链路里的部件按"是否需要训练"分成两列，能力形成的结构就一目了然：<strong>模型产出的是原始感知（框、点、向量），从感知到答案的每一步都是算法</strong>。</p>
+    <div class="ma-grid">
+      <div class="ma-col m">
+        <header><span style="width:10px;height:10px;border-radius:3px;background:var(--model)"></span>模型 · 训练得到的权重（.onnx 文件）</header>
+        <ul>
+          <li><b>det_10g.onnx — SCRFD</b>检测模型：整图进，密集候选出。在 WIDER FACE 数据集上训练，负责"哪里有脸 + 五个关键点在哪"。精度上限在这里锁死：它看不见的脸，后面所有环节都无从谈起。</li>
+          <li><b>w600k_r50.onnx — ArcFace (ResNet50)</b>识别模型：112×112 对齐脸进，512 维向量出。在 WebFace600K（约 60 万人）上用 ArcFace margin loss 训练。"两个向量近 = 同一人"这个性质，完全是这份权重赋予的。</li>
+          <li><b>genderage.onnx 等</b>附加模型：年龄性别、106 点、3D 68 点。默认全加载，可用 <span style="font-family:var(--mono);font-size:12px">allowed_modules</span> 砍掉。</li>
+        </ul>
+      </div>
+      <div class="ma-col a">
+        <header><span style="width:10px;height:10px;border-radius:99px;background:var(--algo)"></span>算法 · 写在代码里的确定性规则</header>
+        <ul>
+          <li><b>预处理</b>：等比缩放 + letterbox 填充 + 像素归一化。纯数组运算，错了是坐标系 bug，不是精度问题。</li>
+          <li><b>置信度过滤 + NMS</b>：把上万候选删成几个框。<span style="font-family:var(--mono);font-size:12px">det_thresh</span> 和 IoU 阈值是这里的旋钮。</li>
+          <li><b>五点对齐（Umeyama 相似变换）</b>：解一个最小二乘，把任意姿态的脸旋转缩放到标准模板。识别精度对它极其敏感。</li>
+          <li><b>余弦相似度 + 阈值判定</b>：两次点积、一次比较。整个系统唯一的"业务决策"发生在这里——而这一步 InsightFace 根本不管，是你写的。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="ma-verdict"><b>一个直接推论：</b>精度不够时先别怪模型。检出的框歪了是检测模型的事，但"同一人被判成两个人"更常见的原因是对齐质量差或阈值不合适——那是算法层的问题，调参数就能救；只有确认输入质量和算法参数都没问题，才轮到"换更大的模型"。</div>
+  </div>
+</section>
+
+<!-- ================= 5 阈值实验室 ================= -->
+<section id="lab-sec">
+  <div class="wrap">
+    <div class="eyebrow">05 · 交互实验</div>
+    <h2>阈值实验室：系统里唯一由你决定的数字</h2>
+    <p class="lede">ArcFace 只给相似度，"多像才算同一人"是你的业务决策。拖动阈值，看四对真实典型样本的判定如何翻转——注意<strong>无论怎么拖，都无法让四个判定同时正确</strong>。</p>
+    <div class="lab">
+      <div class="lab-head">
+        <span class="t">cosine similarity 判定线</span>
+        <span class="lab-read">threshold = <span id="threshVal">0.40</span></span>
+      </div>
+      <div class="axis" id="axis">
+        <div class="rail"></div>
+        <div class="tickrow"><span>0.0<br>完全无关</span><span style="text-align:center">0.5</span><span style="text-align:right">1.0<br>同一张图</span></div>
+      </div>
+      <input type="range" id="threshSlider" min="0" max="100" value="40" aria-label="相似度阈值">
+      <div class="lab-verdicts" id="labVerdicts"></div>
+      <div class="lab-moral" id="labMoral"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6 离线/在线 ================= -->
+<section id="offline">
+  <div class="wrap">
+    <div class="eyebrow">06 · 离线与在线边界</div>
+    <h2>哪些事发生在请求之前，哪些发生在请求之中</h2>
+    <p class="lede">理解这个边界，就理解了"什么你能改、什么你只能换"。模型能力全部在离线阶段被冻结进 .onnx 文件；在线阶段没有任何学习发生，<strong>每一次 app.get() 都只是同一套权重的确定性回放</strong>。</p>
+
+    <div class="lane offline">
+      <header>离线 · 一次性发生<span class="who">deepinsight 团队完成，与你无关</span></header>
+      <div class="flow">
+        <div class="fnode"><b>采集训练集</b><small>WIDER FACE / WebFace600K</small></div>
+        <span class="farrow">→</span>
+        <div class="fnode"><b>训练</b><small>SCRFD · ArcFace loss</small></div>
+        <span class="farrow">→</span>
+        <div class="fnode"><b>导出 ONNX</b><small>权重冻结</small></div>
+        <span class="farrow">→</span>
+        <div class="fnode"><b>发布 model zoo</b><small>buffalo_l / s / sc</small></div>
+      </div>
+    </div>
+    <div class="lane offline">
+      <header>离线 · 一次性发生<span class="who">你完成，在上线之前</span></header>
+      <div class="flow">
+        <div class="fnode"><b>首次运行自动下载</b><small>~/.insightface/models/</small></div>
+        <span class="farrow">→</span>
+        <div class="fnode"><b>注册底库</b><small>已知人 → embedding 存起来</small></div>
+        <span class="farrow">→</span>
+        <div class="fnode"><b>校准阈值</b><small>用自己场景的同人/异人对画分布</small></div>
+      </div>
+    </div>
+    <div class="lane online">
+      <header>在线 · 每次请求发生<span class="who">app.get() + 你的比对代码</span></header>
+      <div class="flow">
+        <div class="fnode"><b>读图</b><small>ms 级</small></div>
+        <span class="farrow">→</span>
+        <div class="fnode"><b>检测 + 后处理</b><small>耗时大头之一</small></div>
+        <span class="farrow">→</span>
+        <div class="fnode"><b>逐脸对齐 + 识别</b><small>脸越多越慢</small></div>
+        <span class="farrow">→</span>
+        <div class="fnode"><b>比对 / 检索</b><small>点积，几乎免费</small></div>
+      </div>
+    </div>
+
+    <p class="trust"><b>结果可信度靠什么判断？</b>在线看两个数：<span class="inline-code">det_score</span>（检测置信度，&lt;0.6 的框慎用其 embedding）和余弦相似度对你校准阈值的距离（0.41 vs 阈值 0.40 是"擦线"，应当降级处理或送人工）。离线的评估口径：检测看 WIDER FACE 三档 AP，识别看 LFW 准确率和 IJB-C 的 TAR@FAR——后者与你的阈值权衡是同一件事的学术表述。</p>
+  </div>
+</section>
+
+<!-- ================= 7 工程事实 ================= -->
+<section id="eng">
+  <div class="wrap">
+    <div class="eyebrow">07 · 工程事实</div>
+    <h2>能力藏在哪些文件和参数里</h2>
+    <p class="lede">只列<strong>直接决定能力形成和错误来源</strong>的工程事实：一个入口类、一个模型目录、五个真正常用的配置。</p>
+    <div class="eng-grid">
+      <div>
+        <pre class="code"><span class="c"># pip install insightface onnxruntime</span>
+<span class="c"># 首次 FaceAnalysis(name='buffalo_l') 自动下载到:</span>
+
+~/.insightface/models/buffalo_l/
+├── det_10g.onnx      <span class="c"># SCRFD 检测      [模型]</span>
+├── w600k_r50.onnx    <span class="c"># ArcFace 识别    [模型]</span>
+├── genderage.onnx    <span class="c"># 年龄性别        [模型]</span>
+├── 2d106det.onnx     <span class="c"># 106 点关键点    [模型]</span>
+└── 1k3d68.onnx       <span class="c"># 3D 68 点        [模型]</span>
+
+<span class="c"># app.get() 的真实执行顺序:
+#   1. det_model.detect()        → 框 + 5 点
+#   2. 对每张脸， 遍历其余已加载模型
+#      各自 crop/对齐后推理， 结果挂到 Face 对象上</span></pre>
+      </div>
+      <div class="card">
+        <table class="conf">
+          <tr><th>配置</th><th>作用与踩坑点</th></tr>
+          <tr><td>name='buffalo_l'</td><td>选模型包。决定检测和识别用哪份权重，是精度/速度的最大旋钮。</td></tr>
+          <tr><td>det_size=(640,640)</td><td>检测输入分辨率。小脸漏检第一个调它（如 1280），代价是检测耗时线性上涨。</td></tr>
+          <tr><td>det_thresh=0.5</td><td>置信度门槛。降低能捞回模糊脸，但会放进假阳性，污染下游 embedding。</td></tr>
+          <tr><td>ctx_id / providers</td><td>设备选择。装了 onnxruntime 而非 onnxruntime-gpu 时静默回落 CPU，速度慢 10 倍且不报错——最经典的"没坏但很慢"。</td></tr>
+          <tr><td>allowed_modules</td><td>只留 ['detection','recognition'] 可跳过年龄性别等模型，单脸延迟明显下降。</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 8 失败诊断 ================= -->
+<section id="fail">
+  <div class="wrap">
+    <div class="eyebrow">08 · 错误传播</div>
+    <h2>失败时，先定位是哪个阶段的锅</h2>
+    <p class="lede">这条流水线出错的症状高度雷同（"认不出"或"认错了"），但根因分布在完全不同的阶段。选一个症状，看它的传播路径——<strong>上方流水线里对应的阶段会同时标橙</strong>。</p>
+    <div class="fail-tabs" id="failTabs" role="tablist"></div>
+    <div class="fail-panel" id="failPanel"></div>
+  </div>
+</section>
+
+<!-- ================= 9 取舍与边界 ================= -->
+<section id="tradeoff">
+  <div class="wrap">
+    <div class="eyebrow">09 · 取舍与边界</div>
+    <h2>选型三档，和一条必须知道的许可红线</h2>
+    <p class="lede">同一套代码，换个 <span class="inline-code">name=</span> 就是完全不同的精度/资源档位——这是"工程与模型解耦"最直接的好处。</p>
+    <div class="card" style="overflow-x:auto">
+      <table class="packs">
+        <tr><th>模型包</th><th>检测 / 识别</th><th>体积 &amp; 速度</th><th>适用</th></tr>
+        <tr><td>buffalo_l</td><td>SCRFD-10GF / ResNet50 @WebFace600K</td><td>数百 MB，CPU 单图数百 ms 量级</td><td>默认选它。精度基准，服务器端离线分析</td></tr>
+        <tr><td>buffalo_s</td><td>SCRFD-500MF / MobileFaceNet</td><td>约为 l 的三分之一</td><td>算力紧张、实时性优先，接受识别精度下降</td></tr>
+        <tr><td>buffalo_sc</td><td>仅检测 + 识别两个模型</td><td>约十几 MB</td><td>嵌入式 / 边缘设备，只要"检出 + 认人"</td></tr>
+      </table>
+    </div>
+
+    <div class="license-warn"><b>⚠ 许可红线：</b>insightface 的 Python 代码是 MIT 协议，但<b>预训练模型权重仅限非商业研究用途</b>。做商业产品要么用自己的数据重训（仓库提供完整训练代码），要么联系团队获得授权。技术选型时这条经常比精度更早淘汰它。</div>
+
+    <div style="margin-top:16px" class="card pad">
+      <p style="font-size:14.5px;color:var(--sub)"><b style="color:var(--ink)">其他边界，按重要性：</b>① 无活体检测，任何涉及权限/支付的场景不能单独用它做门禁；② embedding 属个人生物特征信息，采集与存储受 GDPR / 个保法约束，向量本身即敏感数据；③ 极端姿态（&gt;60° 侧脸）、强遮挡、低分辨率（脸小于约 30px）下精度断崖，这是训练分布决定的，调参救不回来；④ 跨年龄、跨妆容的相似度衰减真实存在，底库照片需要更新机制。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 10 结论 ================= -->
+<section id="verdict">
+  <div class="wrap">
+    <div class="eyebrow">10 · 你该拿它怎么办</div>
+    <h2>四种关系，四个判断</h2>
+    <div class="verdicts">
+      <div class="card pad verdict-card">
+        <h3>学习 <span class="inline-code">适合 · 作为第一条 CV 流水线</span></h3>
+        <p>五行代码就能跑通"检测→对齐→识别"完整链路，且每个环节都能拆开单独观察（本文的七个阶段都可以在源码里找到对应文件）。比从论文入手快一个数量级。</p>
+      </div>
+      <div class="card pad verdict-card">
+        <h3>使用 <span class="inline-code">适合 · 研究与内部工具</span></h3>
+        <p>非商业场景下它是事实标准：精度业界第一梯队、API 稳定、社区活跃。记住两件事：阈值必须用自己的数据校准；det_score 低的脸不要信它的 embedding。</p>
+      </div>
+      <div class="card pad verdict-card">
+        <h3>集成 <span class="inline-code">谨慎 · 先过许可，再谈架构</span></h3>
+        <p>商用先解决权重许可。架构上把它当"感知件"：输入标准化（EXIF、BGR）在它上游做，跟踪（ByteTrack）、向量检索（faiss）、活体检测在下游拼——它只负责单帧的框和向量。</p>
+      </div>
+      <div class="card pad verdict-card">
+        <h3>深挖 <span class="inline-code">看方向</span></h3>
+        <p>想懂度量学习，读 ArcFace 的 margin loss，是近十年最优雅的损失函数设计之一；想懂检测，读 SCRFD 的采样与算力分配。仓库里训练代码齐全，可复现，是少见的"论文+工程"双完整的项目。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>一文读懂 · InsightFace</span>
+    <span>github.com/deepinsight/insightface</span>
+  </div>
+</footer>
+
+<script>
+/* ============ hero: embedding 条码 + 入场动画 ============ */
+(function(){
+  var g = document.getElementById('barcode');
+  var seed = 7;
+  function rnd(){ seed = (seed*16807)%2147483647; return seed/2147483647; }
+  var frag='';
+  for(var i=0;i<64;i++){
+    var v = rnd();
+    var col = v>0.66 ? '#8F84FF' : (v>0.33 ? '#4A5A72' : '#2EDDA9');
+    frag += '<rect x="'+(i*4.2)+'" y="0" width="3" height="9" rx="1" fill="'+col+'" opacity="'+(0.45+v*0.55)+'"/>';
+  }
+  g.innerHTML = frag;
+  if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    document.getElementById('heroSvg').classList.add('anim');
+  }
+})();
+
+/* ============ 阶段数据 ============ */
+var STAGES = [
+{
+  kind:'io', num:'STAGE 0', name:'输入图像', title:'Stage 0 · 输入 — 一切从一个 ndarray 开始',
+  desc:'photo.jpg 经 cv2.imread 读入。InsightFace 对输入只有一个假设：BGR 通道序的 uint8 数组。这个阶段没有任何智能，但输入质量在这里就已封顶——后面所有模型都只是在消费这些像素。',
+  in_:{t:'磁盘文件', v:'photo.jpg · 1280×720 JPEG'},
+  out:{t:'ndarray', v:'(720, 1280, 3) uint8 · BGR'},
+  code:'img = cv2.imread(\'photo.jpg\')\nprint(img.shape, img.dtype)\n# (720, 1280, 3) uint8   ← 注意是 BGR, 高在前',
+  notes:[
+    ['本案例中','photo.jpg 完好读入。ref.jpg 走的是同一条路。'],
+    ['经典坑 ①','cv2.imread <b>不解析 EXIF 方向</b>。手机竖拍的照片会"躺着"进入流水线，脸转了 90°，SCRFD 直接检不到——症状是"一张脸都没有"，根因却在输入阶段。'],
+    ['经典坑 ②','用 PIL 读图得到 RGB，直接喂进去不报错，但通道错序会让检测分数和识别精度同时莫名下降。']
+  ]
+},
+{
+  kind:'a', num:'STAGE 1', name:'检测预处理', title:'Stage 1 · 检测预处理 — 把任意图变成模型要的固定形状',
+  desc:'SCRFD 只吃固定尺寸（det_size，默认 640×640）。原图按长边等比缩放，空白处补零（letterbox），再把像素归一化、HWC 转 CHW。缩放比例 scale 必须记下来——第 3 阶段要用它把坐标换算回原图。',
+  in_:{t:'原图', v:'(720, 1280, 3) uint8'},
+  out:{t:'模型输入张量', v:'(1, 3, 640, 640) float32\nscale = 0.5（换算凭据）'},
+  code:'# insightface 内部等价逻辑\nscale = 640 / max(h, w)              # 1280→640, 得 0.5\nresized = cv2.resize(img, None, fx=scale, fy=scale)\ncanvas = np.zeros((640, 640, 3), np.uint8)\ncanvas[:360, :640] = resized          # letterbox: 下方补黑\nblob = (canvas.astype(np.float32) - 127.5) / 128.0\nblob = blob.transpose(2, 0, 1)[None]  # HWC → NCHW',
+  notes:[
+    ['本案例中','1280×720 缩到 640×360，画布下半是黑边。两张脸分别只剩约 66px 和 44px 宽——<b>det_size 决定了脸在模型眼里有多大</b>。'],
+    ['为什么是算法','这一步没有任何学习成分，全是确定性数组运算。它出错的方式是坐标系 bug（框整体偏移/错位），而不是"精度差"。']
+  ]
+},
+{
+  kind:'m', num:'STAGE 2', name:'SCRFD 推理', title:'Stage 2 · SCRFD 检测模型 — 第一份权重上场',
+  desc:'det_10g.onnx，anchor-free 单阶段检测器。在 stride 8/16/32 三个尺度上对每个位置同时预测：这里有脸的分数、框的偏移、五个关键点的偏移。一次前向产出上万个候选——绝大多数是垃圾，清理它们是下一阶段的事。',
+  in_:{t:'张量', v:'(1, 3, 640, 640) float32'},
+  out:{t:'密集原始预测', v:'scores (~16800,)\nbboxes (~16800, 4)\nkps (~16800, 5, 2)'},
+  code:'# ONNX Runtime 一次前向, 三个尺度各出三组头\nouts = session.run(None, {\'input.1\': blob})\n# 权重来自 WIDER FACE 训练, 已在导出时冻结\n# 此刻还没有"两张脸"的概念, 只有一片候选的海',
+  notes:[
+    ['本案例中','大正脸在多个位置得到 0.85+ 的高分候选；44px 的小侧脸最高分只有 0.78 附近——它离 det_thresh=0.5 的悬崖更近。'],
+    ['能力上限在此锁死','SCRFD 看不见的脸（过小、过侧、强遮挡），后续任何算法都无法凭空造出。检测召回是整条流水线的地基。'],
+    ['权重从哪来','离线训练冻结，运行时只读。你无法"调"它，只能换（buffalo_s/l）或重训。']
+  ]
+},
+{
+  kind:'a', num:'STAGE 3', name:'过滤 + NMS', title:'Stage 3 · 置信度过滤与 NMS — 从一万个候选到两个框',
+  desc:'两步纯算法：先用 det_thresh 砍掉低分候选（约剩几十个），再用 NMS（非极大值抑制）合并指向同一张脸的重叠框——按分数排序，IoU 超过 0.4 的低分框被吞掉。最后所有坐标除以 scale，映射回 1280×720 原图。',
+  in_:{t:'密集候选', v:'~16800 组 score/bbox/kps'},
+  out:{t:'干净检测结果', v:'2 × { bbox(4,), det_score,\n      kps(5,2) } · 原图坐标系'},
+  code:'keep = scores > 0.5                # det_thresh: 生死线\nidx  = nms(bboxes[keep], scores[keep], iou_thr=0.4)\nbboxes /= scale                     # 忘了这步 → 框缩在左上角\n# face0: [204,132,468,468] det 0.91\n# face1: [624,236,800,460] det 0.78',
+  notes:[
+    ['本案例中','face 0 由十几个重叠候选合并而来；face 1 只有三四个候选支撑，det 0.78——够用，但已经能看出"小脸的证据更薄"。'],
+    ['两个旋钮的代价','det_thresh 降到 0.3 能捞回更模糊的脸，但假阳性（衣服褶皱、海报）会混进来，在下游被一本正经地算出 embedding，<b>污染比对结果</b>。这是错误向下传播的第一个闸口。']
+  ]
+},
+{
+  kind:'a', num:'STAGE 4', name:'五点对齐', title:'Stage 4 · 五点对齐 — 整条链路里最被低估的一步',
+  desc:'ArcFace 训练时看到的全是"摆正"的脸：两眼水平、五官在固定位置的 112×112 图。所以每张检出的脸必须先对齐——用检测给的 5 个关键点，对标准模板解 Umeyama 相似变换（旋转+缩放+平移的最小二乘），再 warpAffine 裁出。',
+  in_:{t:'原图 + 关键点', v:'img (720,1280,3)\nkps (5, 2)'},
+  out:{t:'对齐的脸', v:'2 × (112, 112, 3) uint8\n眼睛水平 · 五官位置标准化'},
+  code:'from insightface.utils import face_align\naligned = face_align.norm_crop(img, landmark=face.kps)\n# 内部: skimage SimilarityTransform (Umeyama 算法)\n# 对标模板 = ArcFace 训练时的标准五点坐标\naligned.shape   # (112, 112, 3)',
+  notes:[
+    ['本案例中','face 0 正脸，对齐后近乎完美。face 1 是侧脸——鼻尖关键点本身就偏，解出的变换把脸拉得略歪。<b>这个歪会原样传给识别模型</b>。'],
+    ['为什么关键','喂没对齐的脸，ArcFace 精度断崖式下跌——模型没见过那种分布。很多"识别不准"的 bug 追到最后是关键点差 → 对齐差，而不是识别模型差。这是错误传播的第二个闸口。']
+  ]
+},
+{
+  kind:'m', num:'STAGE 5', name:'ArcFace 推理', title:'Stage 5 · ArcFace 识别模型 — 把一张脸变成 512 个数',
+  desc:'w600k_r50.onnx，ResNet50 骨干，在 WebFace600K（约 60 万个身份）上用 ArcFace margin loss 训练。它把 112×112 的脸映射成 512 维向量，损失函数在训练时强行拉开了不同人、压紧了同一人——"距离即身份"这个性质完全由这份权重赋予。',
+  in_:{t:'对齐的脸', v:'(112, 112, 3) → 归一化\n(1, 3, 112, 112) float32'},
+  out:{t:'特征向量', v:'embedding float32 (512,)\n每张脸一条'},
+  code:'blob = (aligned[..., ::-1].astype(np.float32) - 127.5) / 127.5\nemb = rec_session.run(None, {\'data\': blob.transpose(2,0,1)[None]})[0][0]\nemb.shape        # (512,)\n# 这 512 个数没有单个的含义, 只有整体的几何:\n# 同一人的向量夹角小, 不同人的夹角大',
+  notes:[
+    ['本案例中','face 0、face 1、ref 各得一条 512 维向量。三条向量就是接下来判定的全部依据——原始像素到此彻底退场。'],
+    ['ArcFace 是算法还是模型？','都是：ArcFace 首先是一种损失函数设计（角度间隔），这是算法创新；用它训出的权重才是模型。日常说"用 ArcFace"指的是后者。']
+  ]
+},
+{
+  kind:'a', num:'STAGE 6', name:'比对判定', title:'Stage 6 · 余弦比对与阈值 — 系统唯一的业务决策，而且是你写的',
+  desc:'L2 归一化后做点积（即余弦相似度），再和阈值比较。注意：这几行不在 InsightFace 里，是用户代码。库的契约到"给你向量"为止，"多像算同一人"是你的业务决策——下一节的实验室专门讲这个数怎么定。',
+  in_:{t:'向量', v:'faces[i].normed_embedding\nref.normed_embedding'},
+  out:{t:'最终答案', v:'face 0: sim 0.62 → 同一人 ✓\nface 1: sim 0.11 → 不同人'},
+  code:'sim = float(np.dot(f.normed_embedding, ref.normed_embedding))\nsame = sim > 0.40      # ← 这个 0.40 是你的决策, 不是库的\n# face 0: 0.62 ✓ Alice 在照片里\n# face 1: 0.11 ✗ 另一个人',
+  notes:[
+    ['本案例中','问题解决：photo.jpg 里的 face 0 是 Alice。整条链路耗时里，这一步几乎为零——两次点积而已。'],
+    ['1:N 检索呢','底库有 100 万人时，逐个点积太慢，交给 faiss 建向量索引。InsightFace 明确不管这段，这是它"能力契约"的边界。']
+  ]
+}
+];
+
+var CHAIN = [
+  ['io','(720,1280,3) u8'],
+  ['a','(1,3,640,640) f32'],
+  ['m','~16800 候选'],
+  ['a','2×{bbox,kps,score}'],
+  ['a','2×(112,112,3)'],
+  ['m','2×(512,) f32'],
+  ['a','sim 0.62'],
+  ['io','同一人 ✓']
+];
+
+/* ============ 渲染 shape chain ============ */
+(function(){
+  var el = document.getElementById('shapeChain');
+  var html = '<b style="flex-shrink:0;color:var(--faint)">形态流转</b><span class="sep" style="padding:0 4px">│</span>';
+  CHAIN.forEach(function(c, i){
+    if(i) html += '<span class="sep">→</span>';
+    var color = c[0]==='m' ? 'var(--model-deep)' : c[0]==='a' ? 'var(--algo-deep)' : 'var(--ink)';
+    html += '<b style="color:'+color+'">'+c[1]+'</b>';
+  });
+  el.innerHTML = html;
+})();
+
+/* ============ 渲染流水线探索器 ============ */
+var track = document.getElementById('stageTrack');
+var panel = document.getElementById('stagePanel');
+
+STAGES.forEach(function(s, i){
+  var b = document.createElement('button');
+  b.className = 'stage-btn';
+  b.dataset.kind = s.kind;
+  b.dataset.idx = i;
+  b.setAttribute('role','tab');
+  b.innerHTML = '<span class="num"><i></i>'+s.num+'</span><span class="name">'+s.name+'</span>';
+  b.addEventListener('click', function(){ selectStage(i); });
+  track.appendChild(b);
+});
+
+function esc(str){ return str.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function selectStage(i){
+  var s = STAGES[i];
+  Array.prototype.forEach.call(track.children, function(el, j){
+    el.classList.toggle('active', j===i);
+    el.setAttribute('aria-selected', j===i);
+  });
+  var kindTag = s.kind==='m' ? '<span class="tag m">模型 · 权重推理</span>'
+              : s.kind==='a' ? '<span class="tag a">算法 · 确定性规则</span>'
+              : '<span class="tag io">数据</span>';
+  var notes = s.notes.map(function(n){
+    var warn = n[0].indexOf('坑')>-1 || n[0].indexOf('闸口')>-1 || n[1].indexOf('闸口')>-1;
+    return '<div class="sp-note'+(warn?' warn':'')+'"><b>'+n[0]+' — </b>'+n[1]+'</div>';
+  }).join('');
+  panel.innerHTML =
+    '<div class="sp-head"><h3>'+s.title+'</h3>'+kindTag+'</div>'+
+    '<p class="sp-desc">'+s.desc+'</p>'+
+    '<div class="sp-io">'+
+      '<div class="box"><b>输入 ← 上一阶段</b>'+esc(s.in_.v).replace(/\n/g,'<br>')+'<br><span style="color:var(--faint)">'+s.in_.t+'</span></div>'+
+      '<div class="mid">→</div>'+
+      '<div class="box"><b>输出 → 下一阶段</b>'+esc(s.out.v).replace(/\n/g,'<br>')+'<br><span style="color:var(--faint)">'+s.out.t+'</span></div>'+
+    '</div>'+
+    '<div class="sp-cols"><div><pre class="code">'+esc(s.code)+'</pre></div><div>'+notes+'</div></div>'+
+    '<div class="sp-panel-foot">'+(i>0?'← Stage '+(i-1):'')+(i>0&&i<STAGES.length-1?' · ':'')+(i<STAGES.length-1?'Stage '+(i+1)+' →':'')+'　（点击上方任意阶段切换）</div>';
+}
+selectStage(0);
+
+/* ============ 阈值实验室 ============ */
+var PAIRS = [
+  {name:'同一人·正脸不同天', sim:0.62, same:true},
+  {name:'本人·大侧脸', sim:0.31, same:true},
+  {name:'兄弟·长相近', sim:0.42, same:false},
+  {name:'无关路人', sim:0.09, same:false}
+];
+var axis = document.getElementById('axis');
+var tl = document.createElement('div');
+tl.className = 'thresh-line';
+axis.appendChild(tl);
+PAIRS.forEach(function(p){
+  var d = document.createElement('div');
+  d.className = 'pair-dot ' + (p.same?'same':'diff');
+  d.style.left = (p.sim*100)+'%';
+  d.innerHTML = '<span class="lbl"><b>'+p.sim.toFixed(2)+'</b>'+p.name+'</span>';
+  axis.appendChild(d);
+});
+
+var slider = document.getElementById('threshSlider');
+var tv = document.getElementById('threshVal');
+var lv = document.getElementById('labVerdicts');
+var moral = document.getElementById('labMoral');
+
+function renderLab(){
+  var t = slider.value/100;
+  tv.textContent = t.toFixed(2);
+  tl.style.left = (t*100)+'%';
+  var fa=0, fr=0, html='';
+  PAIRS.forEach(function(p){
+    var accept = p.sim > t;
+    var correct = accept === p.same;
+    if(!correct){ if(accept) fa++; else fr++; }
+    html += '<div class="lv"><div class="nm">'+p.name+' · '+p.sim.toFixed(2)+'</div>'+
+      '<div class="res '+(correct?'ok':'bad')+'">'+
+      (accept?'判为同一人':'判为不同人')+' '+(correct?'✓':(accept?'✗ 认假 FA':'✗ 拒真 FR'))+
+      '</div></div>';
+  });
+  lv.innerHTML = html;
+  var msg;
+  if(fa===0 && fr===0) msg = '<b>此刻四对全对</b>——但别高兴：真实分布里 0.31 与 0.42 之间还有无数样本，重叠区不会因为你选对了一个点而消失。';
+  else if(fa>0 && fr>0) msg = '<b>同时出现认假（FA）和拒真（FR）</b>：兄弟俩的 0.42 高于侧脸同人的 0.31，任何单一阈值都无法把两者同时判对。';
+  else if(fa>0) msg = '<b>阈值偏松 → 认假（False Accept）</b>：长得像的不同人被放行。门禁类场景这是安全事故，阈值宁高勿低。';
+  else msg = '<b>阈值偏严 → 拒真（False Reject）</b>：侧脸的本人被拒。相册聚类类场景这只是体验问题，阈值可以松一些。';
+  moral.innerHTML = msg + '　根治重叠只有两条路：提升输入质量（正脸、光照、分辨率——救 Stage 0~4），或换更强的识别模型（救 Stage 5）。阈值本身只能<b>选择错误的种类</b>，不能消灭错误。';
+}
+slider.addEventListener('input', renderLab);
+renderLab();
+
+/* ============ 失败诊断 ============ */
+var FAILS = [
+  {
+    tab:'一张脸都检不到',
+    sym:'症状：手机拍的照片，明明有清晰正脸，faces 返回空列表',
+    stages:[0],
+    rows:[
+      ['根因','<b>Stage 0 输入</b>。手机竖拍靠 EXIF 标记方向，cv2.imread 不读 EXIF，图"躺着"进了流水线，SCRFD 没在训练中见过转 90° 的脸。'],
+      ['怎么查','cv2.imwrite 把喂给模型的 img 存下来肉眼看一眼。<b>把中间产物可视化，是这条流水线排错的万能第一步。</b>'],
+      ['怎么修','读图后按 EXIF 转正（PIL 的 ImageOps.exif_transpose），或部署侧统一转正后再入流水线。'],
+      ['教训','最智能的系统也会栽在最不智能的环节。输入契约（BGR、方向、uint8）值得写进代码注释。']
+    ]
+  },
+  {
+    tab:'远处小脸漏检',
+    sym:'症状：合影近处的人都检到了，后排小脸时有时无',
+    stages:[1,2,3],
+    rows:[
+      ['根因','<b>Stage 1→3 联合作用</b>。1280 宽的图缩到 det_size=640 后，后排的脸只剩十几个像素——低于 SCRFD 的有效感受范围；勉强出的候选分数又低于 det_thresh，在 Stage 3 被砍。'],
+      ['怎么查','把 det_thresh 临时降到 0.1 再跑：小脸若以低分出现，说明是阈值问题；仍不出现，是分辨率问题。'],
+      ['怎么修','优先调大 det_size 到 (1280,1280)（耗时约涨 4 倍）；或对大图切块分别检测再合并。降 det_thresh 是最后手段，记得盯住假阳性。'],
+      ['教训','"漏检"几乎从来不是换检测模型能解决的——先算一下：脸在模型输入里到底占几个像素。']
+    ]
+  },
+  {
+    tab:'同一人被判成不同人',
+    sym:'症状：本人侧脸照 vs 底库正脸照，相似度只有 0.3 出头，被拒',
+    stages:[4,5,6],
+    rows:[
+      ['根因','<b>Stage 4 对齐质量 + Stage 6 阈值</b>的复合。侧脸关键点定位偏 → Umeyama 变换歪 → 对齐脸失真 → embedding 偏移。识别模型（Stage 5）通常是无辜的。'],
+      ['怎么查','把 norm_crop 输出的 112×112 对齐脸存出来看：如果五官明显歪斜，问题在对齐链；如果对齐脸没问题，才考虑阈值和模型。'],
+      ['怎么修','产品侧引导正脸（最有效）；底库对每人存多角度多张照片取最高分；阈值按场景放宽并接受相应 FA 风险。'],
+      ['教训','错误会沿流水线放大：关键点偏 3 个像素，到相似度上可能就是 0.15 的落差。定位错误要从下游往上游逐段回溯。']
+    ]
+  },
+  {
+    tab:'两个人被判成同一人',
+    sym:'症状：兄弟/长相相近的同事，相似度 0.45，误放行',
+    stages:[5,6],
+    rows:[
+      ['根因','<b>Stage 5 模型分辨力 + Stage 6 阈值</b>。相近长相在 embedding 空间里本来就近，这是模型能力边界，不是 bug。'],
+      ['怎么查','拿你场景的真实同人对/异人对各几百对，画两条相似度分布曲线，看重叠区多大——这就是"离线校准阈值"的具体操作。'],
+      ['怎么修','高安全场景提高阈值 + 接受更多拒真 + 增加第二因子（工卡/密码）；或换更强识别权重（如更大训练集的模型）压缩重叠区。'],
+      ['教训','阈值实验室那条结论的现实版：<b>阈值选择错误的种类，模型决定错误的总量。</b>']
+    ]
+  },
+  {
+    tab:'能跑但慢得离谱',
+    sym:'症状：一张 1080p 图要 2 秒，视频处理完全不可行',
+    stages:[2,5],
+    rows:[
+      ['根因','<b>工程配置，而非任何模型或算法</b>。最常见：装的是 onnxruntime（CPU 版）而写了 CUDAExecutionProvider——ORT 会静默回落 CPU，不报错。其次：默认加载了年龄性别等 5 个模型，每张脸都全跑一遍。'],
+      ['怎么查','打印 session.get_providers() 确认真实设备；分段计时，看耗时落在检测还是识别。'],
+      ['怎么修','装 onnxruntime-gpu；allowed_modules=[\'detection\',\'recognition\'] 砍掉无关模型；视频场景隔帧检测 + 中间帧靠跟踪补位；再不够就换 buffalo_s。'],
+      ['教训','"没坏但很慢"几乎总是工程层的事。性能问题先查设备与配置，再谈模型压缩。']
+    ]
+  }
+];
+
+var ftabs = document.getElementById('failTabs');
+var fpanel = document.getElementById('failPanel');
+FAILS.forEach(function(f, i){
+  var b = document.createElement('button');
+  b.className = 'fail-tab';
+  b.textContent = f.tab;
+  b.setAttribute('role','tab');
+  b.addEventListener('click', function(){ selectFail(i); });
+  ftabs.appendChild(b);
+});
+
+function selectFail(i){
+  var f = FAILS[i];
+  Array.prototype.forEach.call(ftabs.children, function(el, j){
+    el.classList.toggle('active', j===i);
+  });
+  /* 高亮流水线相关阶段 */
+  Array.prototype.forEach.call(track.children, function(el, j){
+    el.classList.toggle('err-flash', f.stages.indexOf(j)>-1);
+  });
+  var rows = f.rows.map(function(r){
+    return '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>';
+  }).join('');
+  fpanel.innerHTML = '<div class="sym">'+f.sym+'</div><dl class="fail-rows">'+rows+'</dl>'+
+    '<p style="margin-top:16px;font-size:12.5px;font-family:var(--mono);color:var(--faint)">↑ 第 03 节流水线中，被标橙的阶段即本症状的根因区间</p>';
+}
+selectFail(0);
+</script>
+</body>
+</html>

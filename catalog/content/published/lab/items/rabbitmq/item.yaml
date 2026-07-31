@@ -27,6 +27,20 @@ notes:
     summary: 从 exchange、queue、routing key、ack 和死信队列理解 RabbitMQ 的消息分发模型。
     display: standalone
     html_mode: document
+  - id: rabbitmq-exchange-routing
+    title: RabbitMQ 一文读懂 · 消息不是发给队列的
+    type: html
+    path: ./notes/rabbitmq-exchange-routing.html
+    summary: 从 exchange、binding、routing key、ack、prefetch 和 DLX 理解 RabbitMQ 的消息路由与可靠消费主线。
+    display: standalone
+    html_mode: document
+  - id: rabbitmq-overview
+    title: 一文读懂 RabbitMQ · 消息路由与可靠消费
+    type: html
+    path: ./notes/rabbitmq-overview.html
+    summary: 从生产者、exchange、queue、binding、consumer、ack 和重试理解 RabbitMQ 的消息代理模型。
+    display: standalone
+    html_mode: document
 blocks:
   - type: links
     items:

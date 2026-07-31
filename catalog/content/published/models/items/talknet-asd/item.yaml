@@ -1,0 +1,53 @@
+schema_version: 2
+id: talknet-asd
+hall: models
+kind: ai_model
+title: TalkNet-ASD
+summary: 用于主动说话人检测的音视频模型，结合音频、视觉时序编码和跨模态注意力判断画面中谁在说话。
+source:
+  type: github
+  url: https://github.com/TaoRuijie/TalkNet_ASD
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  provider: TalkNet authors
+  modalities:
+    input:
+      - audio
+      - video
+    output:
+      - active-speaker-scores
+  tasks:
+    - active-speaker-detection
+  access:
+    - code
+  formats:
+    - pytorch
+  runtimes:
+    - pytorch
+notes:
+  - id: talknet-asd-explainer
+    title: 一文读懂 TalkNet-ASD · 画面里是谁在说话
+    type: html
+    path: ./notes/talknet-asd-explainer.html
+    summary: 从音频编码、视觉编码、跨模态交互和长时序证据理解 TalkNet-ASD 的主动说话人检测链路。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/TaoRuijie/TalkNet_ASD
+      - label: Paper Overview
+        url: https://paperswithcode.com/paper/is-someone-speaking-exploring-long-term
+  - type: highlights
+    items:
+      - 用音频和视觉时序证据判断画面中的候选人脸是否正在说话。
+      - 结合音频/视觉 temporal encoder、跨模态交互和长时序 self-attention。
+      - 适合理解 active speaker detection 中短时线索和长时上下文的分工。
+  - type: use-cases
+    items:
+      - 学习主动说话人检测模型如何融合音频与视觉信息。
+      - 评估访谈、会议、影视视频中的说话人定位能力。
+      - 对比 VAD、speaker diarization、face tracking 和 ASD 模型的边界。

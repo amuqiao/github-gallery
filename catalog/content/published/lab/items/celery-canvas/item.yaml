@@ -1,0 +1,46 @@
+schema_version: 2
+id: celery-canvas
+hall: lab
+kind: knowledge_article
+title: Celery Canvas
+summary: Celery 的任务编排机制，用 signature、chain、group、chord 等原语组合分布式任务工作流。
+source:
+  type: documentation
+  url: https://docs.celeryq.dev/en/main/userguide/canvas.html
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  domain: Python 异步任务
+  topics:
+    - 任务编排
+    - Celery
+    - chain
+    - group
+    - chord
+  audience:
+    - 后端开发者
+    - 自学者
+notes:
+  - id: celery-canvas-explainer
+    title: 一文读懂 Celery Canvas · 分布式任务编排
+    type: html
+    path: ./notes/celery-canvas-explainer.html
+    summary: 从 signature、chain、group、chord 和结果图理解 Celery Canvas 如何组合异步任务工作流。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Documentation
+        url: https://docs.celeryq.dev/en/main/userguide/canvas.html
+  - type: highlights
+    items:
+      - 用 signature、chain、group、chord 等原语组合 Celery task。
+      - 将顺序依赖、并行执行和汇总回调表达成任务工作流。
+      - 使用时仍需要处理幂等、重试、结果保存和失败补偿。
+  - type: use-cases
+    items:
+      - 学习 Celery 中复杂异步任务如何从单 task 扩展为依赖图。
+      - 设计批处理、并行计算、汇总回调和后台工作流。
+      - 对比 Canvas、普通队列任务、状态机和 durable workflow 的边界。

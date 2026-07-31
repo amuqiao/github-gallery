@@ -1,0 +1,45 @@
+schema_version: 2
+id: active-speaker-detection
+hall: lab
+kind: knowledge_article
+title: Active Speaker Detection
+summary: 音视频理解任务，用语音、画面和人脸轨迹判断视频中哪一张脸正在说话。
+source:
+  type: paper
+  url: https://arxiv.org/abs/2108.07640
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  domain: 音视频理解
+  topics:
+    - 主动说话人检测
+    - 音视频同步
+    - 人脸轨迹
+    - 说话人判定
+  audience:
+    - AI 学习者
+    - 自学者
+notes:
+  - id: active-speaker-detection-explainer
+    title: 一文读懂 Active Speaker Detection · 谁在说话
+    type: html
+    path: ./notes/active-speaker-detection-explainer.html
+    summary: 从音频、画面、人脸轨迹和时序证据理解主动说话人检测任务的输入输出与判断边界。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Reference Paper
+        url: https://arxiv.org/abs/2108.07640
+  - type: highlights
+    items:
+      - 判断视频中哪一张可见人脸与当前音频语音活动对应。
+      - 需要结合人脸轨迹、嘴部运动、语音活动和跨模态时序证据。
+      - 常见错误来自遮挡、旁白、多人同屏、画外音、配音和音画不同步。
+  - type: use-cases
+    items:
+      - 学习音视频多模态任务如何定义输入、输出和标注边界。
+      - 为会议、访谈、影视剪辑或说话人分离系统建立前处理能力。
+      - 对比 VAD、speaker diarization、face tracking 和 active speaker detection 的职责。

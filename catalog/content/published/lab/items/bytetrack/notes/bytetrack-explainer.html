@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 ByteTrack —— 每一个检测框都算数</title>
+<style>
+:root{
+  --paper:#ECEFF3; --card:#FFFFFF; --ink:#141C26; --muted:#5A6675; --line:#D3DAE3;
+  --screen:#0C1219; --screen-line:#22304200; --grid:#18232F;
+  --amber:#FFB424; --amber-ink:#8A5B00; --low:#8A93A1;
+  --idA:#3E8DF3; --idB:#FF6A3C; --idC:#B45CF0; --ok:#1FA968; --warn:#DC4437;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.75;font-size:16px;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1020px;margin:0 auto;padding:0 20px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.18em;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.eyebrow::before{content:"";width:14px;height:14px;border-left:2px solid var(--amber);border-top:2px solid var(--amber);display:inline-block;transform:translateY(1px)}
+h1{font-size:clamp(42px,7vw,74px);font-weight:850;letter-spacing:-0.03em;line-height:1.05}
+h1 .sub{display:block;font-size:clamp(19px,2.6vw,26px);font-weight:650;letter-spacing:.01em;color:var(--muted);margin-top:14px}
+h2{font-size:clamp(24px,3.4vw,32px);font-weight:800;letter-spacing:-0.015em;line-height:1.25;margin-bottom:18px}
+h3{font-size:18px;font-weight:750;margin:26px 0 10px}
+p{margin-bottom:14px}
+section{padding:64px 0 8px}
+.lede{font-size:18px;color:#333E4C;max-width:760px}
+strong{font-weight:700}
+em{font-style:normal;background:linear-gradient(transparent 62%,rgba(255,180,36,.42) 62%);padding:0 2px}
+code{font-family:var(--mono);font-size:.9em;background:#E2E7EE;border-radius:4px;padding:1px 6px;white-space:nowrap}
+a{color:inherit}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px 28px;margin:22px 0}
+.small{font-size:13.5px;color:var(--muted)}
+.note{border-left:3px solid var(--amber);background:#FFF8E8;border-radius:0 10px 10px 0;padding:14px 18px;margin:18px 0;font-size:15px}
+.note.red{border-color:var(--warn);background:#FDEFED}
+.note.green{border-color:var(--ok);background:#EBF7F0}
+
+/* ---------- 深色"视频帧"面板,角括号母题 ---------- */
+.screen-wrap{position:relative;background:var(--screen);border-radius:12px;padding:14px;margin:8px 0}
+.screen-wrap::before,.screen-wrap::after{content:"";position:absolute;width:22px;height:22px;pointer-events:none}
+.screen-wrap::before{left:-6px;top:-6px;border-left:3px solid var(--amber);border-top:3px solid var(--amber)}
+.screen-wrap::after{right:-6px;bottom:-6px;border-right:3px solid var(--amber);border-bottom:3px solid var(--amber)}
+canvas.scene{display:block;width:100%;height:auto;border-radius:6px}
+.tc{position:absolute;right:24px;top:22px;font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:#9FB4CC;background:rgba(10,16,24,.7);padding:3px 9px;border-radius:5px;border:1px solid #2A3A4E}
+.legend{display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:12px;font-size:13px;color:var(--muted);font-family:var(--mono)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw{width:24px;height:12px;display:inline-block;border-radius:2px;flex:none}
+.sw.hi{border:2.5px solid var(--amber)}
+.sw.lo{border:2px dashed #7E8DA1}
+.sw.tr{border:0;position:relative}
+.sw.tr::before{content:"";position:absolute;inset:0;border:2.5px solid var(--idA);border-right-color:transparent;border-bottom-color:transparent}
+.sw.tr::after{content:"";position:absolute;inset:0;border:2.5px solid var(--idA);border-left-color:transparent;border-top-color:transparent}
+.sw.pr{border:2px dotted var(--idC)}
+
+/* ---------- Hero ---------- */
+.hero{padding:64px 0 30px}
+.hero .lede{margin:20px 0 30px}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:28px}
+.chips a{font-family:var(--mono);font-size:12.5px;text-decoration:none;color:var(--muted);border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 13px;transition:.15s}
+.chips a:hover{border-color:var(--amber);color:var(--ink)}
+
+/* ---------- 阈值困境滑杆 ---------- */
+.dilemma{padding:6px 2px}
+.strip{display:flex;gap:8px;align-items:flex-end;height:150px;margin:24px 0 6px}
+.dbar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.dbox{width:100%;border-radius:6px 6px 3px 3px;position:relative;transition:opacity .2s, outline .2s;outline:2px solid transparent}
+.dbox .s{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.dlabel{font-size:11px;color:var(--muted);text-align:center;line-height:1.3;height:30px}
+.dbox.tp{background:#BFD6F5;border:1.5px solid var(--idA)}
+.dbox.occ{background:#FFD9CB;border:1.5px solid var(--idB)}
+.dbox.fp{background:#E0E5EC;border:1.5px solid #98A3B3}
+.dbox.cut{opacity:.22}
+input[type=range]{width:100%;accent-color:var(--amber)}
+.tau-read{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:13px;color:var(--muted);margin:6px 0 4px}
+.verdict{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px}
+.verdict div{flex:1;min-width:210px;border-radius:10px;padding:10px 14px;font-size:14px;border:1px solid var(--line);background:#F6F8FA}
+.verdict b{font-family:var(--mono);font-size:15px}
+
+/* ---------- 状态机 & 流程图 ---------- */
+.flow{display:flex;flex-wrap:wrap;gap:0;align-items:stretch;margin:18px 0}
+.fstep{flex:1;min-width:150px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:12px 14px;position:relative;margin-right:26px}
+.fstep:last-child{margin-right:0}
+.fstep::after{content:"→";position:absolute;right:-23px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:700}
+.fstep:last-child::after{content:""}
+.fstep .t{font-weight:750;font-size:14.5px;display:block;margin-bottom:3px}
+.fstep .d{font-size:12.5px;color:var(--muted);line-height:1.5;display:block}
+.fstep.hot{border-color:var(--amber);background:#FFF8E8}
+.fstep.hot .t{color:var(--amber-ink)}
+.statebar{display:flex;gap:8px;flex-wrap:wrap;font-family:var(--mono);font-size:12.5px;margin:8px 0 4px}
+.st{padding:3px 10px;border-radius:99px;border:1px solid var(--line)}
+.st.tracked{background:#E7F5EE;border-color:#9BD8B9;color:#116B41}
+.st.lost{background:#FDF3E3;border-color:#EFD49A;color:#7A5A0E}
+.st.removed{background:#F1F3F6;color:#7A8595}
+.st.new{background:#EAF1FD;border-color:#B9D2F7;color:#1D5FBF}
+
+/* ---------- 伪代码 ---------- */
+pre.code{background:var(--screen);color:#D7E2EF;border-radius:12px;padding:22px 24px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.8;margin:18px 0}
+pre.code .cm{color:#5F7590}
+pre.code .kw{color:#78B7FF}
+pre.code .hl1{color:#FFC44D}
+pre.code .hl2{color:#FF9A78}
+pre.code .fn{color:#8EE6B8}
+
+/* ---------- 实验台 ---------- */
+.lab{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;margin:26px 0}
+.lab-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden;background:#F2F4F7}
+.seg button{border:0;background:transparent;font:inherit;font-size:13.5px;font-weight:650;padding:8px 16px;cursor:pointer;color:var(--muted)}
+.seg button.on{background:var(--ink);color:#fff}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.controls button{border:1.5px solid var(--line);background:#fff;border-radius:9px;font:inherit;font-size:14px;padding:7px 13px;cursor:pointer;font-weight:650;transition:.12s}
+.controls button:hover{border-color:var(--ink)}
+.controls button.play{background:var(--ink);color:#fff;border-color:var(--ink);min-width:86px}
+.lab-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+@media(max-width:900px){.lab-grid{grid-template-columns:1fr}}
+.counters{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.counter{flex:1;min-width:130px;border:1px solid var(--line);border-radius:10px;padding:8px 14px;background:#F7F9FB}
+.counter .k{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.08em}
+.counter .v{font-size:22px;font-weight:800;font-family:var(--mono)}
+.counter .v.bad{color:var(--warn)}
+.logpane{border:1px solid var(--line);border-radius:12px;background:#F9FAFC;padding:16px 16px 10px;max-height:560px;overflow-y:auto}
+.logpane h4{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--muted);margin-bottom:10px}
+.stage{margin-bottom:14px}
+.stage .sname{font-family:var(--mono);font-size:12px;color:var(--ink);font-weight:700;letter-spacing:.06em;border-left:3px solid var(--amber);padding-left:8px;margin-bottom:6px}
+.stage .sname.dim{border-color:#C4CCD6;color:var(--muted)}
+.evt{font-size:13.5px;padding:5px 8px 5px 10px;border-radius:7px;margin:3px 0;background:#fff;border:1px solid #E6EAF0;line-height:1.55}
+.evt.ok{border-color:#BFE6D1;background:#F0FAF4}
+.evt.warn{border-color:#F2C4BE;background:#FCF0EE}
+.evt.mut{color:var(--muted);background:transparent;border-style:dashed}
+.pill{display:inline-block;font-family:var(--mono);font-size:11.5px;padding:1px 8px;border-radius:99px;vertical-align:1px;margin:0 2px}
+.pill.hi{background:#FFF1D2;border:1px solid #EFC65F;color:#7A5600}
+.pill.lo{background:#EDF0F4;border:1px dashed #A6B1C0;color:#5B6879}
+.pill.id{color:#fff;border:0}
+.ioutab{border-collapse:collapse;font-family:var(--mono);font-size:12px;margin:6px 0 2px}
+.ioutab td,.ioutab th{border:1px solid #DFE5EC;padding:3px 9px;text-align:center;background:#fff}
+.ioutab th{background:#F1F4F8;color:var(--muted);font-weight:600}
+.ioutab td.hit{background:#FFF1D2;font-weight:800;color:#7A5600}
+.ioutab td.dead{color:#B9C2CE}
+
+/* ---------- 剧本清单 ---------- */
+.script{list-style:none;counter-reset:sc}
+.script li{position:relative;padding:10px 0 10px 58px;border-bottom:1px dashed var(--line)}
+.script li:last-child{border-bottom:0}
+.script li::before{counter-increment:sc;content:"F" attr(data-f);position:absolute;left:0;top:12px;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--amber-ink);background:#FFF1D2;border:1px solid #EFC65F;border-radius:6px;padding:2px 7px}
+
+/* ---------- 双列理由卡 ---------- */
+.why{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:20px 0}
+.why .card{margin:0}
+.why h3{margin-top:2px}
+.why .idx{font-family:var(--mono);color:var(--amber-ink);font-size:12px;letter-spacing:.14em}
+
+/* ---------- 参数与边界表 ---------- */
+table.plain{width:100%;border-collapse:collapse;font-size:14.5px;margin:16px 0}
+table.plain th{text-align:left;font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--muted);border-bottom:2px solid var(--ink);padding:8px 10px}
+table.plain td{border-bottom:1px solid var(--line);padding:10px;vertical-align:top}
+table.plain td:first-child{font-family:var(--mono);font-size:13px;white-space:nowrap}
+.good-bad{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.good-bad ul{padding-left:20px}
+.good-bad li{margin:7px 0}
+
+/* ---------- 自检题 ---------- */
+.quiz{margin:18px 0}
+.q{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:14px 0}
+.q .qt{font-weight:750;margin-bottom:12px}
+.q .opts{display:flex;flex-direction:column;gap:8px}
+.q .opts button{text-align:left;border:1.5px solid var(--line);background:#F8FAFC;border-radius:9px;font:inherit;font-size:14.5px;padding:9px 14px;cursor:pointer;transition:.12s;line-height:1.5}
+.q .opts button:hover{border-color:var(--ink)}
+.q .opts button.right{border-color:var(--ok);background:#EBF7F0}
+.q .opts button.wrong{border-color:var(--warn);background:#FDEFED;opacity:.75}
+.q .expl{display:none;margin-top:12px;font-size:14px;border-top:1px dashed var(--line);padding-top:10px;color:#333E4C}
+.q .expl.show{display:block}
+
+footer{padding:50px 0 70px;color:var(--muted);font-size:13.5px}
+footer .rule{border-top:1px solid var(--line);padding-top:22px}
+.kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 6px;background:#fff}
+:focus-visible{outline:3px solid var(--amber);outline-offset:2px;border-radius:6px}
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<header class="hero wrap">
+  <div class="eyebrow">一文读懂 · 多目标跟踪 (MOT) · ECCV 2022</div>
+  <h1>ByteTrack
+    <span class="sub">每一个检测框都算数 —— 用两级关联,把"低分框"从垃圾堆里救回来</span>
+  </h1>
+  <p class="lede">多目标跟踪器几乎都要先把低置信度的检测框扔掉,可目标被遮挡时,分数恰恰会掉下去——<strong>被扔掉的往往正是最需要跟住的那个人</strong>。ByteTrack 的回答简单到近乎朴素:低分框不扔,让已有轨迹的运动预测来给它们"作保"。下面这段画面就是全文的主线:行人 B 走进棚架、检测分数跌破阈值,注意它的 ID 有没有丢。</p>
+  <div class="chips">
+    <a href="#s1">① 问题与阈值困境</a><a href="#s2">② 核心状态</a><a href="#s3">③ 两级关联流程</a><a href="#s4">④ 实验台</a><a href="#s5">⑤ 为什么是对的</a><a href="#s6">⑥ 成本与边界</a><a href="#s7">⑦ 迁移</a><a href="#s8">⑧ 自检</a>
+  </div>
+  <div class="screen-wrap">
+    <canvas id="heroCanvas" class="scene" width="640" height="360" aria-label="ByteTrack 跟踪过程动画:两名行人,其中一人穿过遮挡棚架,轨迹 ID 保持不变"></canvas>
+    <div class="tc" id="heroTc">FRAME 00/13 · BYTE</div>
+  </div>
+  <div class="legend">
+    <span><i class="sw hi"></i>高分检测框 (score ≥ 0.6)</span>
+    <span><i class="sw lo"></i>低分检测框 (0.1 ≤ score &lt; 0.6)</span>
+    <span><i class="sw tr"></i>轨迹 (角括号 + ID)</span>
+    <span><i class="sw pr"></i>Lost 轨迹的 Kalman 预测</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 1 问题建模 ================= -->
+<section id="s1">
+  <div class="eyebrow">SECTION 01 · 问题建模</div>
+  <h2>多目标跟踪,和一个躲不开的"阈值困境"</h2>
+  <p><strong>输入:</strong>一段视频,以及一个检测器(如 YOLOX)在每一帧给出的检测框集合 <code>D_t = {(box, score)}</code>。<strong>输出:</strong>一组轨迹 <code>{T_k}</code>,每条轨迹是"同一个物体在连续帧中的 box 序列",带有<em>全程一致的身份 ID</em>。这就是 <strong>tracking-by-detection</strong> 范式:检测器负责"每帧有什么",跟踪器负责"跨帧是谁"。</p>
+  <p>核心难点只有一个词:<strong>关联 (association)</strong>——把第 <code>t</code> 帧的检测框正确接到第 <code>t−1</code> 帧的轨迹上。关联依赖两个前置件:一个不太差的检测器,和一个跨帧相似度(经典做法是 Kalman filter 预测轨迹下一帧位置,再算预测框与检测框的 <strong>IoU</strong>,用 Hungarian 算法做二分图最优匹配——这套组合就是 SORT)。</p>
+  <p>那问题出在哪?检测器的每个框都带一个置信度分数,而传统流程的第一步是<strong>设一个阈值 τ,把低分框全部丢掉</strong>。现在请你亲手挑一个 τ:</p>
+
+  <div class="card dilemma">
+    <div class="eyebrow" style="margin-bottom:4px">交互 · 一帧检测结果,8 个框,τ 放哪?</div>
+    <div class="strip" id="dilemmaStrip" aria-hidden="true"></div>
+    <div class="tau-read"><span>τ = <b id="tauVal">0.60</b>(虚线以下丢弃)</span><span>拖动滑杆试试</span></div>
+    <input type="range" id="tauSlider" min="5" max="95" value="60" aria-label="检测分数阈值 τ">
+    <div class="verdict">
+      <div>✅ 保留真目标 <b id="vTp">3</b>/5</div>
+      <div>🕳️ 漏掉被遮挡目标 <b id="vOcc" style="color:var(--warn)">2</b>/2</div>
+      <div>👻 混入背景误检 <b id="vFp" style="color:var(--warn)">0</b>/3</div>
+    </div>
+    <p class="small" style="margin-top:12px" id="dilemmaMsg"></p>
+  </div>
+
+  <p>你会发现<strong>不存在两全的 τ</strong>:真目标(尤其被遮挡的)和背景误检的分数分布是<em>重叠</em>的。τ 调高,遮挡目标的框被丢掉,轨迹在遮挡期断裂、目标重现时换 ID(碎片化 + ID switch);τ 调低,大量误检涌入匹配,产生虚假轨迹。SORT、DeepSORT、FairMOT 等一整代方法都默认接受了这个困境,只在"丢掉低分框之后"做文章。</p>
+  <div class="note"><strong>ByteTrack 的破题:</strong>不在一维的分数轴上选点,而是把检测框按分数分成<span class="pill hi">高分池 D_high</span>和<span class="pill lo">低分池 D_low</span>两档,<strong>分两轮、按不同的规则使用</strong>。低分框不再靠分数自证清白,而是靠"有没有一条已存在的轨迹预测到了它的位置"来甄别——用运动先验代替分数阈值做判决。这套关联策略叫 <strong>BYTE</strong>(意为每个 box 如同 byte,再小也保留),ByteTrack = BYTE + YOLOX 检测器。</div>
+</section>
+
+<!-- ================= 2 核心状态 ================= -->
+<section id="s2">
+  <div class="eyebrow">SECTION 02 · 核心对象与状态</div>
+  <h2>跟踪器脑子里装着什么</h2>
+  <p>BYTE 是一个逐帧推进的<strong>在线算法</strong>:任何时刻只依赖"当前帧检测 + 已维护的轨迹状态",不回看未来。它维护的核心状态出乎意料地少:</p>
+  <div class="card">
+    <h3 style="margin-top:0">① 轨迹对象 <code>STrack</code></h3>
+    <p>每条轨迹是一个 Kalman filter 实例,状态向量为 <code>(x, y, a, h, vx, vy, va, vh)</code>——中心坐标、宽高比、高度,以及各自的速度。<strong>predict</strong> 按匀速假设外推一帧;<strong>update</strong> 用匹配上的检测框修正位置与速度。速度是这套系统唯一的"记忆",它让轨迹在没有检测的帧里也能推测目标去了哪。</p>
+    <h3>② 轨迹生命周期(状态机)</h3>
+    <div class="statebar">
+      <span class="st new">New 新建</span>→<span class="st tracked">Tracked 跟踪中</span>⇄<span class="st lost">Lost 暂失(保留 track_buffer 帧)</span>→<span class="st removed">Removed 移除</span>
+    </div>
+    <p class="small">Tracked 轨迹某帧没匹配上任何框 → 转 Lost,但<strong>不删除</strong>,继续参与后续帧的(第一次)关联,给短暂消失的目标留复活窗口;连续 Lost 超过 <code>track_buffer</code>(默认 30 帧 ≈ 1 秒)才 Removed。</p>
+    <h3>③ 每帧的两个检测池</h3>
+    <p><span class="pill hi">D_high</span> <code>score ≥ τ_high</code>(≈0.6):可信度高,享有全部权限——可匹配任何轨迹,匹配剩下的还能<strong>新建轨迹</strong>。<br>
+    <span class="pill lo">D_low</span> <code>τ_low ≤ score &lt; τ_high</code>:嫌疑对象,权限受限——只能在第二轮匹配"刚刚还在被跟踪、这一轮却没配上"的轨迹,<strong>匹配不上就丢弃,永远不能新建轨迹</strong>。</p>
+  </div>
+  <p>注意这个<strong>不对称的权限设计</strong>:高分框能"开户",低分框只能"续命"。这一条不起眼的规则,是低分框敢被留下的全部前提——后面§5 会解释为什么。</p>
+</section>
+
+<!-- ================= 3 流程 ================= -->
+<section id="s3">
+  <div class="eyebrow">SECTION 03 · 主流程</div>
+  <h2>每一帧,五步走:预测 → 一关 → 二关 → 收尾</h2>
+  <div class="flow">
+    <div class="fstep"><span class="t">0 · 检测分池</span><span class="d">检测器出框,按分数切成 D_high / D_low</span></div>
+    <div class="fstep"><span class="t">1 · Kalman 预测</span><span class="d">所有轨迹(含 Lost)外推到当前帧</span></div>
+    <div class="fstep hot"><span class="t">2 · 第一次关联</span><span class="d">D_high × 全部轨迹,IoU + Hungarian</span></div>
+    <div class="fstep hot"><span class="t">3 · 第二次关联</span><span class="d">D_low × 一关剩下的 Tracked 轨迹</span></div>
+    <div class="fstep"><span class="t">4 · 收尾</span><span class="d">剩余高分框开新轨迹;没配上的轨迹转 Lost;超时 Removed;剩余低分框丢弃</span></div>
+  </div>
+  <pre class="code"><span class="cm"># BYTE 关联(论文 Algorithm 1 简化版)</span>
+<span class="kw">输入</span>: 视频 V, 检测器 Det, 阈值 τ_high, τ_low        T ← ∅   <span class="cm"># 轨迹集合</span>
+<span class="kw">for</span> frame f <span class="kw">in</span> V:
+    D      ← Det(f)
+    <span class="hl1">D_high</span> ← {d ∈ D : score(d) ≥ τ_high}
+    <span class="hl2">D_low</span>  ← {d ∈ D : τ_low ≤ score(d) &lt; τ_high}
+    <span class="kw">for</span> t <span class="kw">in</span> T:  t.<span class="fn">kalman_predict</span>()               <span class="cm"># 匀速外推一帧</span>
+
+    <span class="cm"># ---- 第一次关联:高分框 × 全部轨迹(含 Lost) ----</span>
+    M₁ ← <span class="fn">Hungarian</span>( IoU(T, <span class="hl1">D_high</span>) )              <span class="cm"># IoU 过低的门控掉</span>
+    匹配对 → t.<span class="fn">update</span>(d)
+    T_remain ← 一关未匹配 且 上一帧仍为 Tracked 的轨迹
+    D_remain ← 一关未匹配的高分框
+
+    <span class="cm"># ---- 第二次关联:低分框只配"刚刚还在被跟踪"的轨迹 ----</span>
+    M₂ ← <span class="fn">Hungarian</span>( IoU(T_remain, <span class="hl2">D_low</span>) )
+    匹配对 → t.<span class="fn">update</span>(d)
+    未匹配的 <span class="hl2">D_low</span> → <span class="kw">丢弃</span>                          <span class="cm"># 永不新建轨迹!</span>
+    未匹配的轨迹  → 标记 Lost(保留 track_buffer 帧)
+
+    <span class="cm"># ---- 收尾 ----</span>
+    <span class="kw">for</span> d <span class="kw">in</span> D_remain: T ← T ∪ <span class="fn">new_track</span>(d)       <span class="cm"># 只有高分框能开新轨迹</span>
+    移除 Lost 超过 track_buffer 的轨迹
+<span class="kw">输出</span>: 每条轨迹的 (id, 逐帧 box)</pre>
+  <p>就这么多——<strong>没有神经网络做关联、没有外观特征、没有训练</strong>。BYTE 是纯粹的匹配策略,新增的只有"第二次关联"这十来行。它能即插即用地装进任何 tracking-by-detection 跟踪器(论文把它装进 SORT、DeepSORT、JDE、FairMOT,MOTA/IDF1 全部上涨)。</p>
+</section>
+
+<!-- ================= 4 实验台 ================= -->
+<section id="s4">
+  <div class="eyebrow">SECTION 04 · 一次完整执行</div>
+  <h2>实验台:亲手放一遍 14 帧,看低分框如何救回一条轨迹</h2>
+  <p>场景:行人 A 在上方直行;行人 B 在下方向右走,第 5–8 帧穿过棚架——检测框还在,但分数跌到 0.3~0.5,而且 B 在棚架后<strong>拐了个弯</strong>(斜向右上)。另外第 3、6 帧各有一个背景误检(低分)。右侧日志逐阶段展示真实运行的关联过程,含 IoU 矩阵。<strong>建议先在 BYTE 模式下单步走完,再切到"只留高分框"模式重放对比。</strong></p>
+
+  <div class="lab">
+    <div class="lab-head">
+      <div class="seg" role="group" aria-label="关联模式">
+        <button id="modeByte" class="on">BYTE(两级关联)</button>
+        <button id="modeSort">只留高分框(SORT-style)</button>
+      </div>
+      <div class="controls">
+        <button id="btnReset" title="回到第 0 帧">⏮ 重置</button>
+        <button id="btnPrev" title="上一帧">◀</button>
+        <button id="btnNext" title="下一帧">下一帧 ▶</button>
+        <button id="btnPlay" class="play">▶ 播放</button>
+      </div>
+    </div>
+    <div class="lab-grid">
+      <div>
+        <div class="screen-wrap" style="margin-top:0">
+          <canvas id="labCanvas" class="scene" width="640" height="360" aria-label="跟踪实验台画面"></canvas>
+          <div class="tc" id="labTc">FRAME 00/13</div>
+        </div>
+        <div class="legend">
+          <span><i class="sw hi"></i>高分框</span>
+          <span><i class="sw lo"></i>低分框</span>
+          <span><i class="sw tr"></i>轨迹(更新后)</span>
+          <span><i class="sw pr"></i>Lost 预测</span>
+        </div>
+        <div class="counters">
+          <div class="counter"><div class="k">FRAME</div><div class="v" id="cFrame">0</div></div>
+          <div class="counter"><div class="k">存活轨迹</div><div class="v" id="cTracks">0</div></div>
+          <div class="counter"><div class="k">累计新建 ID</div><div class="v" id="cIds">0</div></div>
+          <div class="counter"><div class="k">ID SWITCH</div><div class="v" id="cSwitch">0</div></div>
+        </div>
+      </div>
+      <div class="logpane" id="logPane">
+        <h4>关联日志 · 当前帧</h4>
+        <div id="logBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>观察剧本(对照上面逐帧看)</h3>
+  <ul class="script">
+    <li data-f="0">两个高分框、零条轨迹 → 一关空转,收尾阶段<strong>新建 ID 1(行人A)、ID 2(行人B)</strong>。新轨迹只能由高分框创建。</li>
+    <li data-f="3">出现 0.28 分的背景误检。BYTE 会看它吗?会——但二关时<strong>没有任何"落单"的轨迹</strong>可供匹配(A、B 都在一关配上了),于是直接丢弃。误检连参赛资格都拿不到。</li>
+    <li data-f="5-8">B 进入棚架,分数跌到低分池。<strong>BYTE 模式:</strong>一关只配上 A;B 的轨迹落单,进入二关,与低分框 IoU 0.63~0.95,匹配成功——注意 Kalman 速度被低分框持续校正,预测框贴着 B 的拐弯路线走。<strong>高分框-only 模式:</strong>低分框被直接扔掉,ID 2 转 Lost,预测框按旧速度直直向右漂移,离真实位置越来越远。</li>
+    <li data-f="6">再来一个误检(0.33 分)。此时 B 的轨迹确实落单在二关等待——但误检和 B 的预测框 IoU=0,Hungarian 只会把 B 的真实低分框配给它。<strong>运动先验完成了分数阈值做不到的甄别。</strong></li>
+    <li data-f="9">B 走出棚架,分数恢复 0.86。<strong>BYTE:</strong>轨迹预测早已跟到出口,一关高分匹配,<em>仍是 ID 2</em>。<strong>高分框-only:</strong>Lost 轨迹的预测漂在老路线上,与新检测 IoU=0,匹配失败 → 收尾新建 <strong>ID 3——ID switch 发生</strong>,计数器 +1。</li>
+    <li data-f="11">(仅高分框-only 模式)旧 ID 2 连续 Lost 超过 buffer(演示中设 6 帧),被 Removed。一条轨迹就此碎成两段。</li>
+  </ul>
+  <div class="note green"><strong>输出语义:</strong>算法结束时,每条轨迹给出"ID + 逐帧 box 序列"。BYTE 模式下本场景输出 2 条完整轨迹;高分框-only 模式输出 3 条(其中 B 断成两截)。评测指标里,前者 IDF1/MOTA 更高——ByteTrack 论文在 MOT17 上拿到 80.3 MOTA / 77.3 IDF1,30 FPS,当年同时刷新精度与速度。</div>
+</section>
+
+<!-- ================= 5 为什么正确 ================= -->
+<section id="s5">
+  <div class="eyebrow">SECTION 05 · 为什么这样是对的</div>
+  <h2>低分框凭什么可信?三条支撑直觉</h2>
+  <div class="why">
+    <div class="card">
+      <div class="idx">直觉 A · 分数低 ≠ 框是错的</div>
+      <h3>遮挡时分数必然下降</h3>
+      <p>检测分数衡量的是"这块像素看起来多像完整目标"。目标被遮挡、模糊、截断时,<strong>框的位置往往仍然大致正确,只是分数掉了</strong>。也就是说低分池里混着两类东西:降级的真目标 + 背景误检。按分数一刀切,等于把两类同罪论处。BYTE 的第二次关联正是给前者一条申诉通道。</p>
+    </div>
+    <div class="card">
+      <div class="idx">直觉 B · 运动先验当担保人</div>
+      <h3>二关是"有罪推定 + 保释"</h3>
+      <p>低分框想被采纳,必须满足苛刻条件:恰好有一条<strong>上一帧还在被正常跟踪</strong>的轨迹,这一帧没配上高分框,且其 Kalman 预测与该低分框 IoU 足够高。背景误检出现的位置是随机的,几乎不可能连续多帧撞进某条轨迹的预测框里;而被遮挡的真目标<strong>恰好就在预测位置上</strong>。先验越强,甄别越准——这也解释了为什么二关只用刚落单的 Tracked 轨迹、不用 Lost 轨迹:Lost 已多帧未校正,预测不确定性大,拿不可靠的先验去担保不可靠的观测,错配风险陡增。</p>
+    </div>
+    <div class="card">
+      <div class="idx">直觉 C · 不对称权限封死风险敞口</div>
+      <h3>低分框只能续命,不能开户</h3>
+      <p>最坏情况下误检真的骗过了二关会怎样?它只能让一条已有轨迹多续一帧(下一帧大概率被真检测拉回),<strong>永远不会凭空制造一条虚假轨迹</strong>——因为新建轨迹是高分框的专属权限。虚警的代价被结构性地封顶了。这就是为什么"保留低分框"在 BYTE 里安全,而在"直接调低 τ"的方案里是灾难。</p>
+    </div>
+    <div class="card">
+      <div class="idx">直觉 D · 一个隐含不变量</div>
+      <h3>轨迹连续性靠"持续校正"维持</h3>
+      <p>实验台里最关键的一幕:高分框-only 模式下保留 Lost 轨迹也没能救回 B——因为 B 拐了弯,匀速预测在 4 帧无校正后已漂出目标一整个身位。BYTE 维持的不变量是:<strong>只要目标还产生任何检测证据(哪怕低分),轨迹的状态估计就与真实位置保持同步</strong>。匀速假设只需在"相邻两帧"这个尺度上近似成立即可,而这几乎总是成立的。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6 成本与边界 ================= -->
+<section id="s6">
+  <div class="eyebrow">SECTION 06 · 成本、参数与边界</div>
+  <h2>代价几乎为零,但要知道它在哪些地方会碎</h2>
+  <p><strong>复杂度:</strong>设当前轨迹数 N、检测数 M(拥挤场景也就几十上百)。每帧开销 = IoU 矩阵 <code>O(N·M)</code> + Hungarian 匹配 <code>O(n³)</code> + Kalman 常数级更新——微秒到毫秒级。第二次关联只是把这套流程再跑一小遍,<strong>整条流水线的瓶颈完全在检测器上</strong>(ByteTrack 的 30 FPS 里 YOLOX 占了绝大头)。内存上仅多保留 Lost 轨迹缓冲,可忽略。这是 BYTE 最漂亮的性价比:近乎零成本换来显著的 IDF1 提升。</p>
+
+  <h3>关键参数与调法</h3>
+  <table class="plain">
+    <tr><th>参数</th><th>典型值</th><th>调大 / 调小会怎样</th></tr>
+    <tr><td>τ_high</td><td>0.5 ~ 0.6</td><td>调大:高分池更纯,但更多真目标坠入低分池,轨迹起点变晚、更依赖二关;调小:误检开始混入一关甚至开出假轨迹。对不同检测器需要重标定(分数分布不同)。</td></tr>
+    <tr><td>τ_low</td><td>≈ 0.1</td><td>低分池的地板。调太低,二关候选里噪声框暴增,拥挤场景可能错配;调太高,退化回传统做法。</td></tr>
+    <tr><td>track_buffer</td><td>30 帧(≈1s)</td><td>决定 Lost 轨迹的存活期。调大能挺过更长遮挡,但久未校正的预测漂移后,复活时错接他人的风险上升;调小则短暂消失即断链。</td></tr>
+    <tr><td>match_thresh</td><td>IoU 门控 ≈ 0.2(一关)</td><td>低于门控的配对直接禁止。调松:漂移的预测也能强行匹配,易错接;调紧:轻微抖动即断匹配。二关通常用更紧的门控。</td></tr>
+  </table>
+
+  <div class="good-bad">
+    <div class="card">
+      <h3 style="margin-top:0;color:var(--ok)">适合用 BYTE 的场景</h3>
+      <ul>
+        <li>有一个<strong>较强的检测器</strong>(前置依赖!低分池里得真有"降级真目标",全是噪声就没得救)</li>
+        <li>帧率较高、相邻帧位移小 —— IoU 与匀速假设都成立</li>
+        <li>相机静止或缓慢运动(监控、体育转播、无人机悬停)</li>
+        <li>遮挡频繁但短暂的行人 / 车辆场景 —— 正是它的主场</li>
+        <li>需要实时、需要简单可维护、不想训练关联模型</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;color:var(--warn)">会碎的地方(及社区补丁)</h3>
+      <ul>
+        <li><strong>相机剧烈运动:</strong>匀速模型在图像坐标系里失效,预测框整体漂移 → BoT-SORT 加全局运动补偿 (CMC)</li>
+        <li><strong>长时遮挡</strong>(> buffer)或目标出画再回:纯运动关联无能为力 → 需要 ReID 外观特征找回</li>
+        <li><strong>外观相似目标近距交叉:</strong>两条轨迹预测框重叠,纯 IoU 可能互换 ID → 加外观项,或 OC-SORT 式观测中心化修正</li>
+        <li><strong>低帧率视频:</strong>帧间位移大到 IoU 归零,匹配整体失效</li>
+        <li><strong>非线性急变机动</strong>(体育、无人机竞速):Kalman 匀速先验本身不准,二关的"担保人"失信</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 7 迁移 ================= -->
+<section id="s7">
+  <div class="eyebrow">SECTION 07 · 迁移与举一反三</div>
+  <h2>把 BYTE 的思想带走</h2>
+  <p>BYTE 首先是一个<strong>可插拔组件</strong>:任何"逐帧观测 + 轨迹关联"的系统,只要观测带置信度、轨迹带预测,就能加装第二次关联。论文自己做了示范——装到 SORT / DeepSORT / JDE / FairMOT 上全部涨点;后续的 BoT-SORT、以及大量工业部署(行人分析、自动驾驶感知、零售客流)都以它为底座。</p>
+  <p>更值得带走的是那条抽象原则:</p>
+  <div class="note"><strong>低置信度观测 ≠ 无用观测。先用高置信度观测建立可靠的状态先验,再让先验去甄别低置信度证据——并给低置信度证据以受限的权限(只能延续假设,不能创造假设)。</strong></div>
+  <p>照这个模子可以套很多相近问题:雷达/声呐点迹关联里对弱回波的二次利用;细胞显微追踪中分裂、失焦导致的弱检测;SLAM 特征匹配里先用强特征解位姿、再用位姿约束回收弱特征;甚至日志异常关联——先由高置信告警建立事件链,再吸纳低置信日志补全链条而不允许它们单独立案。判断能不能迁移,就问三个问题:<em>① 低分证据里是否真的混有降级的真信号?② 是否存在足够强的先验(运动模型 / 几何约束 / 因果链)能替分数做判决?③ 能否把"创造新假设"的权限只留给高置信证据?</em>三个都答"是",BYTE 的结构就能照搬。</p>
+</section>
+
+<!-- ================= 8 自检 ================= -->
+<section id="s8">
+  <div class="eyebrow">SECTION 08 · 自检</div>
+  <h2>四道题,确认你真的读懂了</h2>
+  <div class="quiz" id="quiz"></div>
+</section>
+
+<footer class="wrap">
+  <div class="rule">
+    <p>本页所有可视化由内置的简化版 BYTE 实现实时计算(简化 Kalman:中心点匀速 + α-β 校正;Hungarian 以小规模精确搜索替代),阈值取 τ_high=0.6、τ_low=0.1,IoU 门控一关 0.1 / 二关 0.35(演示步幅较大故略放宽),演示 buffer=6 帧,与论文默认参数量级一致。原始论文:<em>ByteTrack: Multi-Object Tracking by Associating Every Detection Box</em>, Zhang et al., ECCV 2022。单文件 · 离线可用 · 键盘 <span class="kbd">←</span> <span class="kbd">→</span> 可在实验台单步。</p>
+  </div>
+</footer>
+
+</main>
+
+<script>
+/* ================================================================
+   共享:场景数据(14 帧,两名行人 + 遮挡棚架 + 两个背景误检)
+================================================================ */
+const W=640,H=360,FRAMES=14;
+const TH_HIGH=0.6, TH_LOW=0.1, IOU1=0.1, IOU2=0.35, BUFFER=6;
+const SLAB={x:158,y:140,w:104,h:190};
+const jit=[3,-2,1,-3,2,0,-1,2,-2,1,3,-1,0,2];
+const scoreB=[0.91,0.88,0.90,0.87,0.89,0.42,0.34,0.38,0.47,0.86,0.90,0.88,0.91,0.89];
+function truthA(f){return {cx:70+f*24, cy:90, w:36, h:86};}
+function truthB(f){
+  if(f<=4) return {cx:56+f*24, cy:250, w:36, h:86};
+  if(f<=8){const xs=[176,200,224,248], ys=[236,218,198,178]; return {cx:xs[f-5], cy:ys[f-5], w:36, h:86};}
+  return {cx:272+(f-9)*24, cy:160, w:36, h:86};
+}
+function detsOf(f){
+  const list=[];
+  const a=truthA(f); list.push({cx:a.cx+jit[f],cy:a.cy,w:a.w,h:a.h,score:+(0.88-(f%3)*0.02).toFixed(2),gt:'A',name:'行人A'});
+  const b=truthB(f); list.push({cx:b.cx,cy:b.cy+jit[(f+5)%14],w:b.w,h:b.h,score:scoreB[f],gt:'B',name:'行人B'});
+  if(f===3) list.push({cx:230,cy:300,w:30,h:60,score:0.28,gt:'FP',name:'误检'});
+  if(f===6) list.push({cx:60,cy:300,w:32,h:64,score:0.33,gt:'FP',name:'误检'});
+  return list;
+}
+function iou(a,b){
+  const ax1=a.cx-a.w/2, ay1=a.cy-a.h/2, ax2=a.cx+a.w/2, ay2=a.cy+a.h/2;
+  const bx1=b.cx-b.w/2, by1=b.cy-b.h/2, bx2=b.cx+b.w/2, by2=b.cy+b.h/2;
+  const iw=Math.min(ax2,bx2)-Math.max(ax1,bx1), ih=Math.min(ay2,by2)-Math.max(ay1,by1);
+  if(iw<=0||ih<=0) return 0;
+  const inter=iw*ih;
+  return inter/(a.w*a.h+b.w*b.h-inter);
+}
+/* 小规模精确匹配(等价于 Hungarian):最大化 IoU 总和,低于门控禁配 */
+function assign(tracks,dets,th){
+  const n=tracks.length,m=dets.length;
+  const mat=tracks.map(t=>dets.map(d=>iou(t,d)));
+  let best={score:-1,pairs:[]};
+  const usedD=new Array(m).fill(false);
+  (function rec(ti,pairs,sum){
+    if(ti===n){ if(sum>best.score) best={score:sum,pairs:pairs.slice()}; return; }
+    rec(ti+1,pairs,sum);
+    for(let di=0;di<m;di++) if(!usedD[di]&&mat[ti][di]>=th){
+      usedD[di]=true; pairs.push([ti,di]);
+      rec(ti+1,pairs,sum+mat[ti][di]);
+      pairs.pop(); usedD[di]=false;
+    }
+  })(0,[],0);
+  return {pairs:best.pairs,mat};
+}
+const ID_COLORS={1:'#3E8DF3',2:'#FF6A3C',3:'#B45CF0',4:'#2FBF71',5:'#E8B72E',6:'#E45CA8'};
+const idColor=id=>ID_COLORS[((id-1)%6)+1];
+
+/* ================================================================
+   简化版 BYTE 跟踪器(逐帧推进,可完整重放)
+================================================================ */
+class Sim{
+  constructor(byteMode){
+    this.byte=byteMode; this.tracks=[]; this.nextId=1; this.frame=-1;
+    this.idSwitches=0; this.totalIds=0; this.gtOwner={}; this.trails={};
+    this.lastLog=null; this.lastDets=[];
+  }
+  step(){
+    this.frame++; const f=this.frame;
+    const D=detsOf(f); this.lastDets=D;
+    const Dh=D.filter(d=>d.score>=TH_HIGH), Dl=D.filter(d=>d.score>=TH_LOW&&d.score<TH_HIGH);
+    const log={f,Dh,Dl,pred:[],m1:[],un1:[],m2:[],drop:[],news:[],lost:[],removed:[],iou1:null,iou2:null,switch:null,sortDrop:[]};
+
+    // 1. Kalman 预测
+    for(const t of this.tracks){ t.cx+=t.vx; t.cy+=t.vy; t.px=t.cx; t.py=t.cy; }
+    if(this.tracks.length) log.pred.push(`${this.tracks.length} 条轨迹按当前速度外推一帧`);
+
+    // 2. 第一次关联:D_high × 全部轨迹(含 Lost)
+    const pool1=this.tracks.slice();
+    const A1=assign(pool1,Dh,IOU1);
+    log.iou1={tracks:pool1.map(t=>({id:t.id,state:t.state})),dets:Dh,mat:A1.mat,pairs:A1.pairs,th:IOU1};
+    const matchedT=new Set(), matchedD=new Set();
+    for(const [ti,di] of A1.pairs){
+      const t=pool1[ti], d=Dh[di];
+      const wasLost=t.state==='lost';
+      this.update(t,d);
+      matchedT.add(t); matchedD.add(di);
+      log.m1.push({id:t.id,det:d,iou:A1.mat[ti][di],wasLost});
+    }
+    // 一关落单、且此前处于 Tracked 的轨迹 → 二关候选
+    const remainTracked=pool1.filter(t=>!matchedT.has(t)&&t.state==='tracked');
+    const remainAll=pool1.filter(t=>!matchedT.has(t));
+    for(const t of remainAll) log.un1.push({id:t.id,state:t.state,eligible:t.state==='tracked'});
+    const DhRemain=Dh.filter((d,i)=>!matchedD.has(i));
+
+    // 3. 第二次关联(仅 BYTE 模式)
+    if(this.byte){
+      const A2=assign(remainTracked,Dl,IOU2);
+      log.iou2={tracks:remainTracked.map(t=>({id:t.id,state:t.state})),dets:Dl,mat:A2.mat,pairs:A2.pairs,th:IOU2};
+      const m2T=new Set(), m2D=new Set();
+      for(const [ti,di] of A2.pairs){
+        const t=remainTracked[ti], d=Dl[di];
+        this.update(t,d); matchedT.add(t); m2T.add(t); m2D.add(di);
+        log.m2.push({id:t.id,det:d,iou:A2.mat[ti][di]});
+      }
+      Dl.forEach((d,i)=>{ if(!m2D.has(i)) log.drop.push(d); });
+    }else{
+      log.sortDrop=Dl.slice();
+    }
+
+    // 4. 收尾:未匹配轨迹 → Lost / Removed
+    const removedList=[];
+    for(const t of this.tracks){
+      if(matchedT.has(t)) continue;
+      if(t.state==='tracked'){ t.state='lost'; t.lostFrames=1; log.lost.push({id:t.id,n:1}); }
+      else { t.lostFrames++; if(t.lostFrames>BUFFER){ t.state='removed'; removedList.push(t); log.removed.push({id:t.id}); } else log.lost.push({id:t.id,n:t.lostFrames}); }
+    }
+    this.tracks=this.tracks.filter(t=>t.state!=='removed');
+
+    // 剩余高分框 → 新建轨迹(仅高分框有此权限)
+    for(const d of DhRemain){
+      const nt={id:this.nextId++,cx:d.cx,cy:d.cy,w:d.w,h:d.h,vx:0,vy:0,state:'tracked',lostFrames:0,px:d.cx,py:d.cy};
+      this.tracks.push(nt); this.totalIds++;
+      let sw=false;
+      if(d.gt!=='FP'){
+        const prev=this.gtOwner[d.gt];
+        if(prev!==undefined && prev!==nt.id){ this.idSwitches++; sw=true; log.switch={gtName:d.name,oldId:prev,newId:nt.id}; }
+        this.gtOwner[d.gt]=nt.id;
+      }
+      log.news.push({id:nt.id,det:d,sw});
+      this.pushTrail(nt);
+    }
+    this.lastLog=log;
+  }
+  update(t,d){
+    const rx=d.cx-t.cx, ry=d.cy-t.cy;
+    t.cx+=0.9*rx; t.cy+=0.9*ry;
+    t.vx+=0.45*rx; t.vy+=0.45*ry;
+    t.w=0.7*t.w+0.3*d.w; t.h=0.7*t.h+0.3*d.h;
+    t.state='tracked'; t.lostFrames=0;
+    if(d.gt!=='FP') this.gtOwner[d.gt]=t.id;
+    this.pushTrail(t);
+  }
+  pushTrail(t){ (this.trails[t.id]=this.trails[t.id]||[]).push({x:t.cx,y:t.cy}); }
+}
+function runTo(byteMode,frame){
+  const s=new Sim(byteMode);
+  for(let i=0;i<=frame;i++) s.step();
+  return s;
+}
+
+/* ================================================================
+   渲染
+================================================================ */
+function setupCanvas(cv){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=W*dpr; cv.height=H*dpr;
+  const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr); return ctx;
+}
+function drawPerson(ctx,p){
+  ctx.fillStyle='#4A586E';
+  ctx.beginPath(); ctx.arc(p.cx,p.cy-p.h/2+11,8.5,0,7); ctx.fill();
+  ctx.fillStyle='#3C4A5F';
+  rr(ctx,p.cx-10,p.cy-p.h/2+21,20,p.h-25,8); ctx.fill();
+}
+function rr(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function bracket(ctx,b,color,lw){
+  const x=b.cx-b.w/2-4, y=b.cy-b.h/2-4, w=b.w+8, h=b.h+8, L=Math.min(13,w/3);
+  ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(x,y+L);ctx.lineTo(x,y);ctx.lineTo(x+L,y);
+  ctx.moveTo(x+w-L,y);ctx.lineTo(x+w,y);ctx.lineTo(x+w,y+L);
+  ctx.moveTo(x+w,y+h-L);ctx.lineTo(x+w,y+h);ctx.lineTo(x+w-L,y+h);
+  ctx.moveTo(x+L,y+h);ctx.lineTo(x,y+h);ctx.lineTo(x,y+h-L);
+  ctx.stroke();
+}
+function tag(ctx,x,y,text,bg,fg){
+  ctx.font='700 11px ui-monospace,Consolas,monospace';
+  const w=ctx.measureText(text).width+10;
+  ctx.fillStyle=bg; rr(ctx,x,y-14,w,15,4); ctx.fill();
+  ctx.fillStyle=fg; ctx.fillText(text,x+5,y-3);
+}
+function render(ctx,sim,opts){
+  opts=opts||{};
+  const f=sim.frame;
+  // 背景
+  ctx.fillStyle='#0C1219'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#141E2A'; ctx.lineWidth=1;
+  for(let x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  ctx.fillStyle='#111B27'; ctx.fillRect(0,H-16,W,16);
+  // 真实行人
+  drawPerson(ctx,truthA(f)); drawPerson(ctx,truthB(f));
+  // 遮挡棚架(半透明暗罩 + 斜纹)
+  ctx.fillStyle='rgba(9,14,21,0.68)'; ctx.fillRect(SLAB.x,SLAB.y,SLAB.w,SLAB.h);
+  ctx.save(); ctx.beginPath(); ctx.rect(SLAB.x,SLAB.y,SLAB.w,SLAB.h); ctx.clip();
+  ctx.strokeStyle='rgba(110,135,168,0.16)'; ctx.lineWidth=1;
+  for(let i=-SLAB.h;i<SLAB.w;i+=14){ctx.beginPath();ctx.moveTo(SLAB.x+i,SLAB.y+SLAB.h);ctx.lineTo(SLAB.x+i+SLAB.h,SLAB.y);ctx.stroke();}
+  ctx.restore();
+  ctx.strokeStyle='rgba(120,150,185,0.45)'; ctx.lineWidth=1.5; ctx.strokeRect(SLAB.x,SLAB.y,SLAB.w,SLAB.h);
+  ctx.font='600 11px ui-monospace,Consolas,monospace'; ctx.fillStyle='rgba(150,175,205,0.7)';
+  ctx.fillText('遮挡棚架',SLAB.x+8,SLAB.y+16);
+  // 轨迹拖尾
+  if(opts.trails!==false){
+    for(const id in sim.trails){
+      const pts=sim.trails[id]; if(pts.length<2) continue;
+      ctx.strokeStyle=idColor(+id); ctx.lineWidth=2; ctx.setLineDash([]);
+      ctx.globalAlpha=0.4; ctx.beginPath();
+      pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+      ctx.stroke(); ctx.globalAlpha=1;
+    }
+  }
+  // 检测框
+  for(const d of sim.lastDets){
+    const x=d.cx-d.w/2, y=d.cy-d.h/2;
+    if(d.score>=TH_HIGH){
+      ctx.strokeStyle='#FFB424'; ctx.lineWidth=2.2; ctx.setLineDash([]);
+      ctx.strokeRect(x,y,d.w,d.h);
+      tag(ctx,x,y-4,d.score.toFixed(2),'#FFB424','#241A00');
+    }else{
+      ctx.strokeStyle='#8B99AC'; ctx.lineWidth=1.8; ctx.setLineDash([6,4]);
+      ctx.strokeRect(x,y,d.w,d.h); ctx.setLineDash([]);
+      tag(ctx,x,y-4,d.score.toFixed(2)+' 低','#334052','#C4D0DF');
+    }
+  }
+  // 轨迹框(更新后估计) & Lost 预测
+  for(const t of sim.tracks){
+    const c=idColor(t.id);
+    if(t.state==='tracked'){
+      bracket(ctx,t,c,3);
+      tag(ctx,t.cx-t.w/2-4,t.cy+t.h/2+20,'ID '+t.id,c,'#fff');
+    }else{
+      ctx.strokeStyle=c; ctx.lineWidth=1.8; ctx.setLineDash([3,4]);
+      ctx.strokeRect(t.cx-t.w/2,t.cy-t.h/2,t.w,t.h); ctx.setLineDash([]);
+      tag(ctx,t.cx-t.w/2,t.cy-t.h/2-6,'ID '+t.id+' LOST 预测','#2A3546',c);
+    }
+  }
+}
+
+/* ================================================================
+   Hero:自动循环(BYTE 模式)
+================================================================ */
+(function(){
+  const cv=document.getElementById('heroCanvas'), ctx=setupCanvas(cv);
+  const tc=document.getElementById('heroTc');
+  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let f=reduced?9:0;
+  function show(frame){
+    const sim=runTo(true,frame);
+    render(ctx,sim,{});
+    tc.textContent='FRAME '+String(frame).padStart(2,'0')+'/13 · BYTE';
+  }
+  show(f);
+  if(reduced) return;
+  let dir=1, hold=0;
+  setInterval(()=>{
+    if(hold>0){hold--;return;}
+    f++;
+    if(f>FRAMES-1){f=0;hold=2;}
+    show(f);
+  },750);
+})();
+
+/* ================================================================
+   阈值困境滑杆
+================================================================ */
+(function(){
+  const data=[
+    {s:0.92,t:'tp', l:'清晰行人'},{s:0.85,t:'tp',l:'清晰行人'},{s:0.71,t:'tp',l:'清晰行人'},
+    {s:0.52,t:'occ',l:'半遮挡行人'},{s:0.38,t:'occ',l:'重遮挡行人'},
+    {s:0.44,t:'fp',l:'背景误检'},{s:0.19,t:'fp',l:'背景误检'},{s:0.11,t:'fp',l:'噪声误检'}
+  ].sort((a,b)=>b.s-a.s);
+  const strip=document.getElementById('dilemmaStrip');
+  data.forEach(d=>{
+    const bar=document.createElement('div'); bar.className='dbar';
+    const box=document.createElement('div'); box.className='dbox '+d.t;
+    box.style.height=(d.s*115)+'px';
+    box.innerHTML='<span class="s">'+d.s.toFixed(2)+'</span>';
+    const lb=document.createElement('div'); lb.className='dlabel'; lb.textContent=d.l;
+    bar.appendChild(box); bar.appendChild(lb); strip.appendChild(bar);
+    d.el=box;
+  });
+  const slider=document.getElementById('tauSlider');
+  const msg=document.getElementById('dilemmaMsg');
+  function upd(){
+    const tau=slider.value/100;
+    document.getElementById('tauVal').textContent=tau.toFixed(2);
+    let tp=0,occ=0,fp=0;
+    data.forEach(d=>{
+      const kept=d.s>=tau;
+      d.el.classList.toggle('cut',!kept);
+      if(kept){ if(d.t==='fp')fp++; }
+      else { if(d.t==='occ')occ++; }
+      if(kept&&d.t!=='fp')tp++;
+    });
+    document.getElementById('vTp').textContent=tp;
+    document.getElementById('vOcc').textContent=occ;
+    document.getElementById('vFp').textContent=fp;
+    document.getElementById('vOcc').style.color=occ?'var(--warn)':'var(--ok)';
+    document.getElementById('vFp').style.color=fp?'var(--warn)':'var(--ok)';
+    if(occ===0&&fp===0) msg.textContent='……如果你看到这句话,说明数据被改过了:在真实分布里,遮挡目标与误检的分数区间是重叠的,总有一头要出问题。';
+    else if(occ>0&&fp>0) msg.textContent='两头都在流血:既漏掉被遮挡的真目标,又放进了误检。';
+    else if(occ>0) msg.textContent='误检挡住了,但被遮挡的行人也被扔掉了——遮挡期间轨迹会断裂,重现时大概率换 ID。';
+    else msg.textContent='遮挡目标保住了,代价是误检混入匹配,可能长出虚假轨迹。注意 0.44 分的误检比 0.38 分的真行人分数还高——一维阈值无法区分它们。';
+  }
+  slider.addEventListener('input',upd); upd();
+})();
+
+/* ================================================================
+   实验台
+================================================================ */
+(function(){
+  const cv=document.getElementById('labCanvas'), ctx=setupCanvas(cv);
+  const tc=document.getElementById('labTc'), logBody=document.getElementById('logBody');
+  let byteMode=true, frame=0, playing=false, timer=null;
+  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const pillDet=d=>{
+    const cls=d.score>=TH_HIGH?'hi':'lo';
+    return '<span class="pill '+cls+'">'+d.name+' '+d.score.toFixed(2)+'</span>';
+  };
+  const pillId=id=>'<span class="pill id" style="background:'+idColor(id)+'">ID '+id+'</span>';
+
+  function iouTable(info){
+    if(!info||!info.tracks.length||!info.dets.length) return '';
+    const hit=new Set(info.pairs.map(p=>p[0]+'_'+p[1]));
+    let h='<table class="ioutab"><tr><th>IoU</th>'+info.dets.map(d=>'<th>'+d.name+'<br>'+d.score.toFixed(2)+'</th>').join('')+'</tr>';
+    info.tracks.forEach((t,ti)=>{
+      h+='<tr><th>ID'+t.id+(t.state==='lost'?'ᴸ':'')+'</th>';
+      info.dets.forEach((d,di)=>{
+        const v=info.mat[ti][di];
+        const cls=hit.has(ti+'_'+di)?'hit':(v<info.th?'dead':'');
+        h+='<td class="'+cls+'">'+v.toFixed(2)+'</td>';
+      });
+      h+='</tr>';
+    });
+    return h+'</table><div class="small">灰色 = 低于 IoU 门控 '+info.th+',禁止匹配;高亮 = Hungarian 选中的配对</div>';
+  }
+
+  function renderLog(sim){
+    const L=sim.lastLog; let h='';
+    // 检测
+    h+='<div class="stage"><div class="sname">0 · 检测分池</div>';
+    h+='<div class="evt">D_high:'+(L.Dh.map(pillDet).join(' ')||'<span class="small">空</span>')+'</div>';
+    h+='<div class="evt">D_low:&nbsp;'+(L.Dl.map(pillDet).join(' ')||'<span class="small">空</span>')+'</div></div>';
+    // 预测
+    h+='<div class="stage"><div class="sname">1 · Kalman 预测</div>';
+    h+=L.pred.length?('<div class="evt">'+L.pred[0]+'</div>'):'<div class="evt mut">还没有任何轨迹</div>';
+    h+='</div>';
+    // 一关
+    h+='<div class="stage"><div class="sname">2 · 第一次关联(高分框 × 全部轨迹)</div>';
+    h+=iouTable(L.iou1);
+    for(const m of L.m1) h+='<div class="evt ok">'+pillId(m.id)+' ↔ '+pillDet(m.det)+' IoU '+m.iou.toFixed(2)+' ✓'+(m.wasLost?' <b>(Lost 轨迹复活)</b>':'')+'</div>';
+    if(!L.m1.length) h+='<div class="evt mut">无匹配</div>';
+    for(const u of L.un1) h+='<div class="evt">'+pillId(u.id)+' 未匹配 → '+(u.eligible?'进入第二次关联候选':'(Lost 状态,不参与二关)')+'</div>';
+    h+='</div>';
+    // 二关
+    if(byteMode){
+      h+='<div class="stage"><div class="sname">3 · 第二次关联(低分框 × 落单的 Tracked 轨迹)</div>';
+      if(L.iou2&&L.iou2.tracks.length&&L.iou2.dets.length) h+=iouTable(L.iou2);
+      for(const m of L.m2) h+='<div class="evt ok">'+pillId(m.id)+' ↔ '+pillDet(m.det)+' IoU '+m.iou.toFixed(2)+' ✓ —— <b>低分框救回轨迹</b></div>';
+      if(!L.m2.length&&L.Dl.length&&!(L.iou2&&L.iou2.tracks.length)) h+='<div class="evt mut">没有落单的 Tracked 轨迹可供匹配</div>';
+      for(const d of L.drop) h+='<div class="evt">'+pillDet(d)+' 未匹配 → <b>丢弃</b>(低分框不能新建轨迹)</div>';
+      if(!L.Dl.length) h+='<div class="evt mut">本帧没有低分框</div>';
+      h+='</div>';
+    }else{
+      h+='<div class="stage"><div class="sname dim">3 · 第二次关联(已关闭)</div>';
+      for(const d of L.sortDrop) h+='<div class="evt warn">'+pillDet(d)+' 被阈值直接丢弃(SORT-style)</div>';
+      if(!L.sortDrop.length) h+='<div class="evt mut">本帧没有低分框</div>';
+      h+='</div>';
+    }
+    // 收尾
+    h+='<div class="stage"><div class="sname">4 · 收尾</div>';
+    for(const n of L.news){
+      h+='<div class="evt '+(n.sw?'warn':'ok')+'">新建 '+pillId(n.id)+' ← '+pillDet(n.det)+(n.sw?' ⚠ <b>ID switch!</b> '+n.det.name+' 原本是 '+pillId(L.switch.oldId):'')+'</div>';
+    }
+    for(const l of L.lost) h+='<div class="evt">'+pillId(l.id)+' → <span class="st lost" style="font-size:11px">Lost</span> 已丢失 '+l.n+'/'+BUFFER+' 帧(仍参与后续一关)</div>';
+    for(const r of L.removed) h+='<div class="evt warn">'+pillId(r.id)+' Lost 超过 buffer → <b>Removed</b>,轨迹终结</div>';
+    if(!L.news.length&&!L.lost.length&&!L.removed.length) h+='<div class="evt mut">所有轨迹均已匹配,无需处理</div>';
+    h+='</div>';
+    logBody.innerHTML=h;
+  }
+
+  function show(){
+    const sim=runTo(byteMode,frame);
+    render(ctx,sim,{});
+    tc.textContent='FRAME '+String(frame).padStart(2,'0')+'/13'+(byteMode?' · BYTE':' · 高分ONLY');
+    document.getElementById('cFrame').textContent=frame;
+    document.getElementById('cTracks').textContent=sim.tracks.length;
+    document.getElementById('cIds').textContent=sim.totalIds;
+    const sw=document.getElementById('cSwitch');
+    sw.textContent=sim.idSwitches;
+    sw.classList.toggle('bad',sim.idSwitches>0);
+    renderLog(sim);
+  }
+  function stop(){ playing=false; clearInterval(timer); document.getElementById('btnPlay').textContent='▶ 播放'; }
+  function play(){
+    if(playing){stop();return;}
+    playing=true; document.getElementById('btnPlay').textContent='⏸ 暂停';
+    if(frame>=FRAMES-1){frame=0;show();}
+    timer=setInterval(()=>{
+      if(frame>=FRAMES-1){stop();return;}
+      frame++; show();
+    }, reduced?1400:850);
+  }
+  document.getElementById('btnNext').onclick=()=>{stop(); if(frame<FRAMES-1){frame++;show();}};
+  document.getElementById('btnPrev').onclick=()=>{stop(); if(frame>0){frame--;show();}};
+  document.getElementById('btnReset').onclick=()=>{stop(); frame=0; show();};
+  document.getElementById('btnPlay').onclick=play;
+  document.getElementById('modeByte').onclick=()=>{byteMode=true;stop();
+    document.getElementById('modeByte').classList.add('on');document.getElementById('modeSort').classList.remove('on');show();};
+  document.getElementById('modeSort').onclick=()=>{byteMode=false;stop();
+    document.getElementById('modeSort').classList.add('on');document.getElementById('modeByte').classList.remove('on');show();};
+  document.addEventListener('keydown',e=>{
+    if(e.target.tagName==='INPUT')return;
+    if(e.key==='ArrowRight'){stop();if(frame<FRAMES-1){frame++;show();e.preventDefault();}}
+    if(e.key==='ArrowLeft'){stop();if(frame>0){frame--;show();e.preventDefault();}}
+  });
+  show();
+})();
+
+/* ================================================================
+   自检题
+================================================================ */
+(function(){
+  const qs=[
+    {q:'Q1 · 为什么低分框被禁止新建轨迹,只能延续已有轨迹?',
+     opts:['因为低分框的坐标精度太差,不足以初始化 Kalman filter',
+           '因为低分池里混有大量误检,只有已有轨迹的运动先验能替它们"作保";没有先验背书的低分框无法自证不是误检',
+           '因为新建轨迹的计算开销太大,需要限制数量'],
+     a:1,
+     ex:'低分框的可信度不来自分数本身,而来自"恰好落在某条活跃轨迹的预测位置上"这一事实。凭空出现的低分框没有任何先验背书,统计上大概率是误检——允许它开新轨迹,虚警会泛滥。这个不对称权限把误检的最坏代价封顶在"给某条轨迹多续一帧"。'},
+    {q:'Q2 · 第二次关联的候选轨迹,为什么只包括"上一帧还是 Tracked、本帧一关落单"的轨迹,而不包括 Lost 轨迹?',
+     opts:['Lost 轨迹已经被删除,物理上不存在了',
+           'Lost 轨迹多帧未被检测校正,预测位置不确定性大;用不可靠的先验去担保不可靠的低分观测,错配风险太高',
+           '因为 Lost 轨迹的 ID 已经被回收再分配'],
+     a:1,
+     ex:'Lost 轨迹并没有被删除(它们还参与第一次关联,等高分框来复活)。但二关的判决完全依赖"预测位置准"这个前提——刚落单一帧的 Tracked 轨迹预测最可靠;Lost 越久预测漂移越大,配低分框极易张冠李戴。实验台的高分框-only 模式里,漂移 4 帧的预测连真目标都接不回来,正说明了这一点。'},
+    {q:'Q3 · 目标被完全遮挡 5 秒(约 150 帧,期间没有任何检测框)后重新出现,原版 ByteTrack 最可能发生什么?',
+     opts:['第二次关联把它救回来,ID 不变',
+           '轨迹早已超过 track_buffer 被 Removed(或预测严重漂移),目标重现时被当作新目标,分配新 ID',
+           'Kalman filter 会自动扩大搜索范围,直到重新找到该目标'],
+     a:1,
+     ex:'BYTE 救的是"还有低分检测框"的弱观测遮挡;完全遮挡意味着连低分框都没有,轨迹只能靠匀速外推硬撑,默认 buffer 只有 30 帧(≈1 秒)。长时遮挡/出画重入需要 ReID 外观特征这类跨时空的身份线索,这正是 BoT-SORT 等后续工作补的课。'},
+    {q:'Q4 · 拥挤场景中,两个穿着相同的行人近距离交叉走过,纯 ByteTrack 容易换 ID。哪个改动最对症?',
+     opts:['把 τ_high 调低,让更多框进入第一次关联',
+           '把 track_buffer 调大十倍',
+           '在关联相似度里加入 ReID 外观特征,让"长得是谁"参与判决'],
+     a:2,
+     ex:'交叉瞬间两条轨迹的预测框互相重叠,纯 IoU(几何)相似度无法分辨谁是谁——这是运动线索的固有盲区,调分数阈值或 buffer 都不触及要害。只有引入外观(或更精细的运动方向建模,如 OC-SORT)才能补上这个维度。'}
+  ];
+  const root=document.getElementById('quiz');
+  qs.forEach(item=>{
+    const q=document.createElement('div'); q.className='q';
+    q.innerHTML='<div class="qt">'+item.q+'</div>';
+    const opts=document.createElement('div'); opts.className='opts';
+    const expl=document.createElement('div'); expl.className='expl';
+    expl.innerHTML='<strong>解析:</strong>'+item.ex;
+    item.opts.forEach((o,i)=>{
+      const b=document.createElement('button'); b.textContent=String.fromCharCode(65+i)+'. '+o;
+      b.onclick=()=>{
+        if(i===item.a){ b.classList.add('right'); expl.classList.add('show');
+          opts.querySelectorAll('button').forEach(x=>{if(x!==b)x.disabled=true;});
+        } else b.classList.add('wrong');
+      };
+      opts.appendChild(b);
+    });
+    q.appendChild(opts); q.appendChild(expl); root.appendChild(q);
+  });
+})();
+</script>
+</body>
+</html>

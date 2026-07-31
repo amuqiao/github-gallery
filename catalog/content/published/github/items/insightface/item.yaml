@@ -1,0 +1,48 @@
+schema_version: 2
+id: insightface
+hall: github
+kind: github_project
+title: InsightFace
+summary: 开源 2D/3D 人脸分析工具箱，串联人脸检测、对齐、特征提取和身份判定等端到端人脸识别链路。
+source:
+  type: github
+  url: https://github.com/deepinsight/insightface
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  repo: https://github.com/deepinsight/insightface
+  category: ai
+  tags:
+    - machine-learning
+    - toolkit
+    - inference
+  maintenance_status: unknown
+  languages:
+    - Python
+    - C++
+notes:
+  - id: insightface-engineering-system
+    title: 一文读懂 InsightFace · 从照片到身份判定
+    type: html
+    path: ./notes/insightface-engineering-system.html
+    summary: 从检测、关键点、对齐、embedding、阈值和工程入口理解 InsightFace 的端到端人脸分析链路。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/deepinsight/insightface
+      - label: Website
+        url: https://insightface.ai
+  - type: highlights
+    items:
+      - 串联人脸检测、对齐、特征提取和身份比对形成端到端人脸分析能力。
+      - 同时包含 Python 包、模型仓库、训练/评估代码和多种人脸任务模块。
+      - 工程采用时需要关注模型许可、阈值校准、数据质量和误识别风险。
+  - type: use-cases
+    items:
+      - 学习人脸识别系统如何从照片生成 embedding 并完成身份判定。
+      - 评估人脸检测、对齐、识别和索引库在业务系统中的分工。
+      - 对比人脸分析工具箱与单一检测模型或识别模型的边界。
