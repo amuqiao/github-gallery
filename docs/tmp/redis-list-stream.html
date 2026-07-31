@@ -1,0 +1,1624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一文读懂 Redis List 与 Stream</title>
+<style>
+:root{
+  --bg:#0E1416;
+  --bg2:#121A1D;
+  --surface:#161F22;
+  --surface2:#1C2629;
+  --line:#26343A;
+  --line2:#38484F;
+  --ink:#E7EEEB;
+  --muted:#8FA1A6;
+  --dim:#6B7C82;
+  --amber:#F5A524;
+  --teal:#35C5A5;
+  --crimson:#E5484D;
+  --violet:#9B8CFA;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --display:"Arial Black","Helvetica Neue",Impact,var(--sans);
+  --r:4px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:var(--sans);font-size:16px;line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+  background-image:
+    radial-gradient(900px 500px at 80% -10%, rgba(245,165,36,.07), transparent 60%),
+    radial-gradient(700px 400px at 0% 20%, rgba(53,197,165,.05), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.014) 0 1px, transparent 1px 3px);
+}
+::selection{background:var(--amber);color:#0E1416}
+a{color:var(--amber)}
+code,kbd{font-family:var(--mono)}
+
+/* ---------- 版式骨架 ---------- */
+.wrap{max-width:1000px;margin:0 auto;padding:0 22px}
+.sec{padding:76px 0 12px;border-top:1px solid var(--line)}
+.sec:first-of-type{border-top:none}
+.sec__tag{
+  font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--dim);
+  text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:10px;
+}
+.sec__tag i{font-style:normal;color:var(--amber)}
+.sec__tag::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+h2{
+  font-size:clamp(26px,4.4vw,38px);line-height:1.28;margin:0 0 10px;font-weight:800;letter-spacing:-.01em;
+}
+h3{font-size:19px;margin:38px 0 10px;font-weight:700;letter-spacing:.01em}
+h4{font-size:15px;margin:20px 0 8px;font-weight:700;color:var(--ink)}
+p{margin:0 0 16px;color:#CBD6D5}
+.lead{font-size:17.5px;color:#D8E3E1}
+.small{font-size:14px;color:var(--muted);line-height:1.75}
+strong{color:#fff;font-weight:700}
+em{font-style:normal;color:var(--amber);font-weight:600}
+.kw{font-family:var(--mono);font-size:.92em;color:var(--teal);background:rgba(53,197,165,.09);
+  border:1px solid rgba(53,197,165,.2);padding:1px 5px;border-radius:3px;white-space:nowrap}
+.kw--a{color:var(--amber);background:rgba(245,165,36,.09);border-color:rgba(245,165,36,.22)}
+.kw--r{color:var(--crimson);background:rgba(229,72,77,.09);border-color:rgba(229,72,77,.22)}
+.kw--v{color:var(--violet);background:rgba(155,140,250,.09);border-color:rgba(155,140,250,.22)}
+
+/* ---------- 顶部导航 ---------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(14,20,22,.9);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line)}
+.topbar__bar{height:2px;background:var(--amber);width:0%;transition:width .12s linear}
+.topbar__inner{display:flex;gap:4px;align-items:center;overflow-x:auto;padding:7px 22px;
+  max-width:1000px;margin:0 auto;scrollbar-width:none}
+.topbar__inner::-webkit-scrollbar{display:none}
+.navlink{font-family:var(--mono);font-size:12px;color:var(--dim);text-decoration:none;
+  padding:5px 9px;border-radius:3px;white-space:nowrap;border:1px solid transparent}
+.navlink:hover,.navlink:focus-visible{color:var(--ink);background:var(--surface)}
+.navlink.is-on{color:var(--amber);border-color:rgba(245,165,36,.3);background:rgba(245,165,36,.07)}
+
+/* ---------- Hero ---------- */
+.hero{position:relative;overflow:hidden;padding:64px 0 56px}
+.hero__grid{position:absolute;inset:0;opacity:.5;pointer-events:none;
+  background-image:linear-gradient(90deg,rgba(56,72,79,.25) 1px,transparent 1px);
+  background-size:44px 100%;mask-image:linear-gradient(180deg,transparent,#000 30%,#000 60%,transparent)}
+.hero__eyebrow{font-family:var(--mono);font-size:12.5px;color:var(--dim);letter-spacing:.12em;margin-bottom:20px}
+.hero__eyebrow b{color:var(--teal);font-weight:400}
+.hero h1{
+  font-size:clamp(32px,6.6vw,60px);line-height:1.1;margin:0 0 6px;font-weight:800;letter-spacing:-.02em;
+  position:relative;
+}
+.hero h1 .en{font-family:var(--display);display:inline-block;transform:scaleX(.94);transform-origin:left;
+  letter-spacing:-.03em}
+.hero h1 .en--a{color:var(--teal)}
+.hero h1 .en--b{color:var(--amber)}
+.hero__sub{max-width:660px;font-size:17px;color:#C3CFCE;margin:18px 0 30px;position:relative}
+.hook{border-left:2px solid var(--line2);padding:2px 0 2px 16px;margin:0 0 30px;position:relative}
+.hook__row{font-family:var(--mono);font-size:13.5px;line-height:2.1;color:var(--muted);
+  display:flex;gap:12px;flex-wrap:wrap;align-items:baseline}
+.hook__cmd{color:var(--ink)}
+.hook__row--a .hook__cmd{color:var(--teal)}
+.hook__row--b .hook__cmd{color:var(--amber)}
+.hook__note{color:var(--dim)}
+.hook__note b{color:var(--crimson);font-weight:400}
+.hook__note i{font-style:normal;color:var(--teal)}
+
+/* 纸带 —— 全篇签名元素 */
+.tape{position:relative;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);
+  background:
+    repeating-linear-gradient(90deg,rgba(56,72,79,.55) 0 1px,transparent 1px 22px),
+    linear-gradient(180deg,rgba(245,165,36,.05),rgba(245,165,36,.01));
+  overflow:hidden}
+.tape--hero{margin-top:34px}
+.tape__label{position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 12px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--dim);
+  background:linear-gradient(90deg,var(--bg) 70%,transparent);z-index:2}
+.tape__track{display:flex;gap:8px;padding:12px 12px 12px 130px;min-height:64px;align-items:center}
+.tape__cell{
+  flex:0 0 auto;font-family:var(--mono);font-size:12px;padding:7px 11px;border-radius:3px;
+  border:1px solid var(--line2);background:var(--surface);color:var(--muted);white-space:nowrap;
+  animation:slidein .5s ease both;
+}
+.tape__cell b{color:var(--amber);font-weight:400}
+.tape__cell.is-new{border-color:var(--amber);box-shadow:0 0 0 1px rgba(245,165,36,.25) inset}
+@keyframes slidein{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
+.tape__arrow{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:var(--mono);
+  font-size:11px;color:var(--dim);background:var(--bg);padding:2px 6px;z-index:2}
+
+.scrollcue{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:22px;display:flex;gap:8px;align-items:center}
+.scrollcue span{animation:bob 2.2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+
+/* ---------- 通用组件 ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:760px){.grid2,.grid3{grid-template-columns:1fr}}
+
+.term{background:#0A1012;border:1px solid var(--line);border-radius:var(--r);
+  font-family:var(--mono);font-size:13px;line-height:1.95;padding:14px 16px;overflow-x:auto;color:#C9D4D2}
+.term .p{color:var(--dim)}
+.term .c{color:var(--teal)}
+.term .a{color:var(--amber)}
+.term .r{color:var(--crimson)}
+.term .g{color:var(--dim);font-style:normal}
+.term .o{color:#8FA1A6}
+
+.callout{border-left:3px solid var(--amber);background:rgba(245,165,36,.06);padding:14px 18px;
+  border-radius:0 var(--r) var(--r) 0;margin:22px 0}
+.callout--r{border-left-color:var(--crimson);background:rgba(229,72,77,.06)}
+.callout--t{border-left-color:var(--teal);background:rgba(53,197,165,.06)}
+.callout p:last-child{margin-bottom:0}
+.callout__t{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;color:var(--amber);margin-bottom:6px}
+.callout--r .callout__t{color:var(--crimson)}
+.callout--t .callout__t{color:var(--teal)}
+
+.btn{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--surface2);
+  border:1px solid var(--line2);border-radius:3px;padding:7px 12px;cursor:pointer;
+  transition:background .15s,border-color .15s,color .15s}
+.btn:hover{background:#243135;border-color:var(--amber);color:var(--amber)}
+.btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn--t:hover{border-color:var(--teal);color:var(--teal)}
+.btn--r:hover{border-color:var(--crimson);color:var(--crimson)}
+.btn--on{background:rgba(245,165,36,.14);border-color:var(--amber);color:var(--amber)}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
+th{background:var(--surface2);font-family:var(--mono);font-size:12px;letter-spacing:.06em;
+  color:var(--muted);font-weight:400}
+td:first-child{color:var(--muted);font-size:13.5px}
+.tbl-wrap{overflow-x:auto;border-radius:var(--r)}
+.y{color:var(--teal)}.n{color:var(--crimson)}.m{color:var(--amber)}
+
+/* ---------- 单线程命令流演示 ---------- */
+.thread{display:grid;grid-template-columns:1fr auto 1fr;gap:0;align-items:center}
+@media(max-width:760px){.thread{grid-template-columns:1fr}}
+.thread__clients{display:flex;flex-direction:column;gap:8px}
+.cli{font-family:var(--mono);font-size:12px;padding:8px 10px;border:1px solid var(--line);
+  border-radius:3px;background:var(--surface2);color:var(--muted);transition:all .25s}
+.cli.is-sent{opacity:.35}
+.thread__pipe{padding:0 18px;min-width:150px}
+.pipe{border:1px dashed var(--line2);border-radius:3px;min-height:120px;padding:8px;display:flex;
+  flex-direction:column;gap:6px;justify-content:flex-end}
+.pipe__item{font-family:var(--mono);font-size:11.5px;background:var(--surface2);border:1px solid var(--line2);
+  border-radius:3px;padding:5px 8px;animation:slidein .35s ease both}
+.pipe__item.is-run{border-color:var(--amber);color:var(--amber)}
+.thread__out{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:2}
+.thread__out b{color:var(--teal);font-weight:400}
+
+/* ---------- List 操作台 ---------- */
+.lab{border:1px solid var(--line);border-radius:var(--r);background:var(--bg2);overflow:hidden}
+.lab__head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface)}
+.lab__title{font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--muted)}
+.lab__title b{color:var(--teal);font-weight:400}
+.lab__body{padding:18px 14px}
+.lab__ctrl{display:flex;flex-wrap:wrap;gap:7px;padding:12px 14px;border-top:1px solid var(--line);
+  background:var(--surface)}
+
+.listviz{display:flex;align-items:stretch;gap:10px;min-height:96px}
+.listviz__end{font-family:var(--mono);font-size:11px;color:var(--dim);writing-mode:vertical-rl;
+  text-orientation:mixed;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:3px;padding:4px 2px;background:var(--surface);letter-spacing:.12em}
+.listviz__cells{flex:1;display:flex;align-items:center;gap:7px;overflow-x:auto;padding:4px 2px;
+  border-top:1px dashed var(--line);border-bottom:1px dashed var(--line)}
+.node{flex:0 0 auto;position:relative;font-family:var(--mono);font-size:12.5px;padding:12px 13px;
+  border:1px solid var(--line2);border-radius:3px;background:var(--surface2);color:var(--ink);
+  animation:pop .3s ease both;white-space:nowrap}
+@keyframes pop{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:none}}
+.node.is-hi{border-color:var(--teal);color:var(--teal);box-shadow:0 0 0 1px rgba(53,197,165,.3) inset}
+.node.is-out{animation:fadeout .32s ease both}
+@keyframes fadeout{to{opacity:0;transform:scale(.7) translateY(-14px)}}
+.node__i{position:absolute;top:-9px;left:0;font-size:9.5px;color:var(--dim)}
+.listviz__empty{font-family:var(--mono);font-size:12.5px;color:var(--dim);padding:12px 4px}
+.blocked{display:none;align-items:center;gap:10px;margin-top:12px;font-family:var(--mono);font-size:12.5px;
+  color:var(--amber);border:1px dashed rgba(245,165,36,.4);border-radius:3px;padding:8px 12px;
+  background:rgba(245,165,36,.05)}
+.blocked.is-on{display:flex}
+.blocked .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+.log{margin-top:14px;background:#0A1012;border:1px solid var(--line);border-radius:3px;
+  font-family:var(--mono);font-size:12px;line-height:1.95;padding:10px 12px;height:112px;overflow-y:auto}
+.log div{white-space:pre-wrap}
+.log .p{color:var(--dim)}
+.log .ret{color:var(--teal)}
+.log .err{color:var(--crimson)}
+
+/* ---------- 崩溃对比 ---------- */
+.crash{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.crash{grid-template-columns:1fr}}
+.crash__col{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:14px}
+.crash__t{font-family:var(--mono);font-size:12px;letter-spacing:.08em;margin-bottom:12px}
+.crash__col--l .crash__t{color:var(--teal)}
+.crash__col--s .crash__t{color:var(--amber)}
+.frame{font-family:var(--mono);font-size:12.5px;color:var(--muted);padding:8px 10px;border-left:2px solid var(--line);
+  margin-bottom:6px;opacity:.25;transition:opacity .3s,border-color .3s,color .3s}
+.frame.is-on{opacity:1;border-left-color:var(--line2);color:var(--ink)}
+.frame.is-bad.is-on{border-left-color:var(--crimson);color:var(--crimson)}
+.frame.is-good.is-on{border-left-color:var(--teal);color:var(--teal)}
+
+/* ---------- Entry ID 解剖 ---------- */
+.idbox{display:flex;justify-content:center;padding:18px 0 6px;flex-wrap:wrap;gap:2px}
+.idpart{font-family:var(--mono);font-size:clamp(20px,4.6vw,34px);letter-spacing:-.01em;
+  padding:6px 8px;border-radius:3px;cursor:default;position:relative;transition:background .2s,color .2s}
+.idpart[data-k]:hover,.idpart[data-k]:focus-visible{background:rgba(245,165,36,.12);color:var(--amber);outline:none}
+.idpart--dash{color:var(--dim)}
+.iddesc{min-height:66px;text-align:center;font-size:14.5px;color:var(--muted);padding:6px 10px 0;
+  border-top:1px dashed var(--line);margin-top:6px}
+.iddesc b{color:var(--amber);font-weight:600}
+
+/* ---------- Stream 消费者组分步演示 ---------- */
+.demo__steps{display:flex;gap:6px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line);
+  background:var(--surface)}
+.stepdot{width:26px;height:26px;border-radius:3px;border:1px solid var(--line2);background:var(--surface2);
+  color:var(--dim);font-family:var(--mono);font-size:11px;cursor:pointer;padding:0}
+.stepdot:hover{border-color:var(--amber);color:var(--amber)}
+.stepdot:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.stepdot.is-on{background:var(--amber);border-color:var(--amber);color:#0E1416;font-weight:700}
+.stepdot.is-done{color:var(--muted);border-color:var(--line2)}
+.demo__cmd{font-family:var(--mono);font-size:13px;padding:12px 14px;background:#0A1012;
+  border-bottom:1px solid var(--line);color:var(--teal);overflow-x:auto;white-space:pre}
+.demo__cmd .p{color:var(--dim)}
+.demo__cmd .a{color:var(--amber)}
+.demo__say{padding:14px;font-size:14.5px;color:#CBD6D5;border-bottom:1px solid var(--line);line-height:1.8}
+.demo__say b{color:var(--amber);font-weight:600}
+.demo__stage{padding:16px 14px}
+.streamtape{position:relative;border:1px solid var(--line2);border-radius:3px;
+  background:repeating-linear-gradient(90deg,rgba(56,72,79,.4) 0 1px,transparent 1px 20px);
+  padding:12px;display:flex;gap:8px;overflow-x:auto;min-height:74px;align-items:center}
+.entry{flex:0 0 auto;font-family:var(--mono);font-size:11.5px;border:1px solid var(--line2);border-radius:3px;
+  padding:7px 9px;background:var(--surface);color:var(--muted);text-align:center;transition:all .3s;position:relative}
+.entry b{display:block;color:var(--ink);font-weight:400;font-size:12px}
+.entry small{display:block;font-size:9.5px;color:var(--dim);margin-top:3px;letter-spacing:.04em}
+.entry.s-new{border-color:var(--amber);background:rgba(245,165,36,.1)}
+.entry.s-c1{border-color:var(--teal);background:rgba(53,197,165,.1)}
+.entry.s-c1 small{color:var(--teal)}
+.entry.s-c2{border-color:var(--violet);background:rgba(155,140,250,.1)}
+.entry.s-c2 small{color:var(--violet)}
+.entry.s-stuck{border-color:var(--crimson);background:rgba(229,72,77,.12)}
+.entry.s-stuck small{color:var(--crimson)}
+.entry.s-ack{opacity:.4;border-style:dashed}
+.entry.s-ack small{color:var(--dim)}
+.ldi{position:absolute;bottom:-1px;height:2px;background:var(--amber);transition:all .35s;left:12px;width:0}
+
+.consumers{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px;margin-top:14px}
+@media(max-width:860px){.consumers{grid-template-columns:1fr}}
+.cbox{border:1px solid var(--line);border-radius:3px;background:var(--surface);padding:11px 12px;
+  font-family:var(--mono);font-size:12px;transition:all .3s}
+.cbox__n{font-size:12px;margin-bottom:8px;letter-spacing:.06em}
+.cbox--1 .cbox__n{color:var(--teal)}
+.cbox--2 .cbox__n{color:var(--violet)}
+.cbox--dead{border-color:var(--crimson);background:rgba(229,72,77,.06)}
+.cbox--dead .cbox__n{color:var(--crimson)}
+.cbox__hold{color:var(--muted);min-height:38px;line-height:1.7}
+.pel{border:1px solid var(--line);border-radius:3px;background:var(--surface);padding:11px 12px}
+.pel__n{font-family:var(--mono);font-size:12px;color:var(--amber);margin-bottom:8px;letter-spacing:.06em}
+.pel table{font-size:11.5px;font-family:var(--mono)}
+.pel th,.pel td{padding:4px 6px;border-color:var(--line)}
+.pel td{color:var(--muted)}
+.pel .warn td{color:var(--crimson)}
+.pel__empty{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.demo__nav{display:flex;gap:8px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);
+  background:var(--surface)}
+.demo__pos{font-family:var(--mono);font-size:12px;color:var(--dim);margin-left:auto}
+
+/* ---------- 误区手风琴 ---------- */
+.acc{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.acc + .acc{margin-top:10px}
+.acc__q{width:100%;text-align:left;background:none;border:none;color:var(--ink);font-family:var(--sans);
+  font-size:15.5px;padding:15px 46px 15px 16px;cursor:pointer;position:relative;line-height:1.6}
+.acc__q:hover{background:var(--surface2)}
+.acc__q:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.acc__q::before{content:"\201C";font-family:var(--mono);color:var(--crimson);margin-right:8px;font-size:18px}
+.acc__q::after{content:"+";position:absolute;right:16px;top:50%;transform:translateY(-50%);
+  font-family:var(--mono);color:var(--dim);font-size:18px;transition:transform .2s}
+.acc.is-open .acc__q::after{content:"\2212";color:var(--amber)}
+.acc__a{display:none;padding:0 16px 18px;border-top:1px solid var(--line);font-size:14.5px;color:#C3CFCE;line-height:1.85}
+.acc.is-open .acc__a{display:block;animation:fadein .25s ease both}
+.acc__a p:first-child{margin-top:14px}
+.acc__a p:last-child{margin-bottom:0}
+@keyframes fadein{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.verdict{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;color:var(--teal);margin:14px 0 0}
+
+/* ---------- 决策器 ---------- */
+.picker{display:grid;grid-template-columns:1.15fr 1fr;gap:18px}
+@media(max-width:820px){.picker{grid-template-columns:1fr}}
+.q{border-bottom:1px solid var(--line);padding:14px 0}
+.q:last-of-type{border-bottom:none}
+.q__t{font-size:15px;margin-bottom:10px;color:#D8E3E1;line-height:1.6}
+.q__t i{font-family:var(--mono);font-style:normal;color:var(--dim);font-size:12px;margin-right:8px}
+.q__opts{display:flex;gap:8px;flex-wrap:wrap}
+.result{border:1px solid var(--line2);border-radius:var(--r);background:var(--surface);padding:20px;
+  position:sticky;top:70px;align-self:start}
+.result__k{font-family:var(--display);font-size:clamp(22px,4vw,30px);letter-spacing:-.02em;
+  transform:scaleX(.95);transform-origin:left;display:inline-block;margin-bottom:10px}
+.result__k.k-list{color:var(--teal)}
+.result__k.k-stream{color:var(--amber)}
+.result__k.k-pubsub{color:var(--violet)}
+.result__k.k-kafka{color:var(--crimson)}
+.result__k.k-none{color:var(--dim)}
+.result__d{font-size:14.5px;color:#C3CFCE;line-height:1.8}
+.result__cmd{margin-top:14px;font-family:var(--mono);font-size:12px;color:var(--muted);
+  background:#0A1012;border:1px solid var(--line);border-radius:3px;padding:10px;overflow-x:auto;white-space:pre}
+
+/* ---------- 速查表 tab ---------- */
+.tabs{display:flex;gap:6px;margin-bottom:0}
+.tab{font-family:var(--mono);font-size:12.5px;padding:8px 14px;border:1px solid var(--line);
+  border-bottom:none;border-radius:3px 3px 0 0;background:var(--bg2);color:var(--dim);cursor:pointer}
+.tab.is-on{background:var(--surface);color:var(--amber);border-color:var(--line2)}
+.tab:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.tabpane{display:none;border:1px solid var(--line2);border-radius:0 var(--r) var(--r) var(--r);
+  background:var(--surface);padding:0}
+.tabpane.is-on{display:block}
+.cmdrow{display:grid;grid-template-columns:minmax(220px,.9fr) 1.3fr;gap:0;border-bottom:1px solid var(--line)}
+.cmdrow:last-child{border-bottom:none}
+@media(max-width:700px){.cmdrow{grid-template-columns:1fr}}
+.cmdrow__c{font-family:var(--mono);font-size:12.5px;color:var(--teal);padding:11px 14px;
+  border-right:1px solid var(--line);word-break:break-all}
+.tabpane--s .cmdrow__c{color:var(--amber)}
+.cmdrow__d{padding:11px 14px;font-size:13.5px;color:var(--muted);line-height:1.7}
+.cmdrow__d b{color:var(--ink);font-weight:600}
+
+/* ---------- 页脚 ---------- */
+.foot{border-top:1px solid var(--line);margin-top:70px;padding:34px 0 60px;
+  font-family:var(--mono);font-size:12px;color:var(--dim);line-height:2}
+.foot b{color:var(--muted);font-weight:400}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar__bar" id="progress"></div>
+  <nav class="topbar__inner" id="nav">
+    <a class="navlink" href="#s1">01 场景</a>
+    <a class="navlink" href="#s2">02 Redis 是什么</a>
+    <a class="navlink" href="#s3">03 List</a>
+    <a class="navlink" href="#s4">04 List 的边界</a>
+    <a class="navlink" href="#s5">05 Stream</a>
+    <a class="navlink" href="#s6">06 消费者组</a>
+    <a class="navlink" href="#s7">07 对比</a>
+    <a class="navlink" href="#s8">08 误区</a>
+    <a class="navlink" href="#s9">09 选型</a>
+    <a class="navlink" href="#s10">10 速查</a>
+  </nav>
+</div>
+
+<header class="hero">
+  <div class="hero__grid"></div>
+  <div class="wrap">
+    <div class="hero__eyebrow">redis-cli &nbsp;<b>127.0.0.1:6379</b>&nbsp; · 一文读懂</div>
+    <h1>
+      <span class="en en--a">LIST</span> <span style="color:var(--dim)">与</span> <span class="en en--b">STREAM</span><br>
+      Redis 的两种「排队」
+    </h1>
+    <p class="hero__sub">
+      同样是把任务丢给后台处理，一条命令之差，决定了服务器崩溃的那一秒，消息是<strong>永远消失</strong>，还是<strong>躺在那里等人接手</strong>。
+      这篇文章从一个真实需求出发，把这件事讲透。
+    </p>
+    <div class="hook">
+      <div class="hook__row hook__row--a">
+        <span class="hook__cmd">BRPOP orders 0</span>
+        <span class="hook__note">消息被取走的瞬间就<b>离开了 Redis</b> —— 消费者崩了，它不会回来</span>
+      </div>
+      <div class="hook__row hook__row--b">
+        <span class="hook__cmd">XREADGROUP GROUP g1 c1 STREAMS orders &gt;</span>
+        <span class="hook__note">消息<i>还在 Redis 里</i>，只是被记了一笔「c1 欠着没 ACK」</span>
+      </div>
+    </div>
+    <div class="scrollcue"><span>↓</span> 往下滚，先看看这个需求长什么样</div>
+  </div>
+  <div class="tape tape--hero">
+    <div class="tape__label">APPEND ONLY →</div>
+    <div class="tape__track" id="heroTape"></div>
+    <div class="tape__arrow">HEAD</div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============ 01 场景 ============ -->
+<section class="sec" id="s1">
+  <div class="sec__tag"><i>&gt;</i> 01 &nbsp;从一个真实需求开始</div>
+  <h2>下单成功之后，还有一堆事要做</h2>
+  <p class="lead">
+    用户点了「提交订单」。主流程写完数据库就该返回了，但后面还挂着一串杂活：发短信、加积分、通知仓库、写数据报表。
+    这些事不该卡住用户的那 200 毫秒，于是你想到把它们<em>丢到队列里慢慢做</em>。
+  </p>
+  <p>
+    此刻你的系统里已经有一台 Redis 在做缓存。要不要为了这个需求单独搭一套 Kafka 或 RabbitMQ？
+    大多数团队的第一反应是：先用 Redis 顶一下。这个判断通常是对的 —— 但「用 Redis 顶一下」有好几种写法，
+    它们在正常情况下表现一模一样，只有在出事的时候才会露出差别。
+  </p>
+
+  <div class="grid3" style="margin:26px 0 6px">
+    <div class="card">
+      <div class="sec__tag" style="margin:0 0 8px"><i>A</i> LIST</div>
+      <p class="small" style="margin:0">
+        <span class="kw">LPUSH</span> 生产，<span class="kw">BRPOP</span> 消费。
+        五分钟能上线，是绝大多数人的起点。
+      </p>
+    </div>
+    <div class="card">
+      <div class="sec__tag" style="margin:0 0 8px"><i>B</i> PUB/SUB</div>
+      <p class="small" style="margin:0">
+        <span class="kw kw--v">PUBLISH</span> 广播，多个订阅者同时收到。
+        听起来更像「消息队列」，其实陷阱最深。
+      </p>
+    </div>
+    <div class="card">
+      <div class="sec__tag" style="margin:0 0 8px"><i>C</i> STREAM</div>
+      <p class="small" style="margin:0">
+        <span class="kw kw--a">XADD</span> 追加，消费者组分发 + <span class="kw kw--a">XACK</span> 确认。
+        Redis 5.0 才有，命令多，但把前两者的坑都补上了。
+      </p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout__t">本文要回答的问题</div>
+    <p style="margin:0">
+      这三条路各自的<strong>投递语义</strong>是什么？为什么 Redis 已经有了 List 和 Pub/Sub，还要在 5.0 再造一个 Stream？
+      以及最实际的：<strong>你的场景该选哪个</strong>，以及选完之后有哪些坑在等你。
+    </p>
+  </div>
+</section>
+
+<!-- ============ 02 Redis 是什么 ============ -->
+<section class="sec" id="s2">
+  <div class="sec__tag"><i>&gt;</i> 02 &nbsp;先把 Redis 本身的心智模型建对</div>
+  <h2>它不是「缓存」，是一台跑在内存里的数据结构服务器</h2>
+  <p>
+    很多人对 Redis 的印象停在「一个远程的 HashMap」。这个印象会让你在读到 Stream 时完全无法理解它为什么长这样。
+    换成下面这个模型，后面的一切都会顺：
+  </p>
+
+  <div class="grid2" style="margin:22px 0">
+    <div class="card">
+      <h4 style="margin-top:0">① key 指向的是「结构」，不是「字符串」</h4>
+      <p class="small" style="margin:0">
+        每个 key 背后可以是 string、list、hash、set、zset、stream……
+        服务端<strong>认识</strong>这些结构，于是你可以只推入一个元素、只读一段范围，而不必把整个值拉回本地改完再写回。
+        网络往返从 N 次变成 1 次 —— 这才是 Redis 快的真正原因之一。
+      </p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">② 命令在一条线程上排队执行</h4>
+      <p class="small" style="margin:0">
+        Redis 用 I/O 多路复用接收成千上万个连接，但<strong>命令的执行是串行的</strong>。
+        这意味着每条命令天然原子，不需要加锁；
+        也意味着任何一条 O(N) 的大命令都会<strong>卡住所有人</strong>。
+        （6.0 之后的多线程只负责网络收发和协议解析，执行仍是单线程。）
+      </p>
+    </div>
+  </div>
+
+  <div class="lab">
+    <div class="lab__head">
+      <div class="lab__title">DEMO &nbsp;<b>三个客户端同时发命令，会发生什么</b></div>
+    </div>
+    <div class="lab__body">
+      <div class="thread">
+        <div class="thread__clients" id="thClients"></div>
+        <div class="thread__pipe">
+          <div class="small" style="font-family:var(--mono);font-size:11px;color:var(--dim);text-align:center;margin-bottom:6px">单线程执行队列</div>
+          <div class="pipe" id="thPipe"></div>
+        </div>
+        <div class="thread__out" id="thOut"></div>
+      </div>
+    </div>
+    <div class="lab__ctrl">
+      <button class="btn btn--t" id="thRun">同时发出三条 INCR</button>
+      <button class="btn" id="thReset">重置</button>
+      <span class="small" style="margin-left:auto;font-family:var(--mono);font-size:11.5px">并发到达 → 排队 → 逐条执行</span>
+    </div>
+  </div>
+
+  <div class="callout callout--t" style="margin-top:22px">
+    <div class="callout__t">记住这一句</div>
+    <p style="margin:0">
+      <strong>「命令串行」是 Redis 一切设计的地基。</strong>
+      正因为串行，<span class="kw">BRPOP</span> 才敢保证一条消息只会给一个消费者；
+      也正因为串行，Stream 才能用一个简单的自增 ID 保证全局有序，不需要任何分布式共识。
+    </p>
+  </div>
+</section>
+
+<!-- ============ 03 LIST ============ -->
+<section class="sec" id="s3">
+  <div class="sec__tag"><i>&gt;</i> 03 &nbsp;List：一根两头都能进出的管子</div>
+  <h2>把它想成双端队列，而不是数组</h2>
+  <p class="lead">
+    Redis List 的心智模型只有一句话：<em>一个有序的元素序列，两端的插入和弹出都是 O(1)，中间的随机访问是 O(N)。</em>
+    所有命令的名字都在提示你这件事 —— 以 <span class="kw">L</span> 开头的操作左端（Left / head），
+    以 <span class="kw">R</span> 开头的操作右端（Right / tail）。
+  </p>
+
+  <div class="callout" style="margin:22px 0">
+    <div class="callout__t">底层是什么</div>
+    <p style="margin:0">
+      早期是 ziplist（小列表）和 linkedlist（大列表）两种编码，3.2 之后统一成 <strong>quicklist</strong>：
+      一个由若干「压缩小块」串起来的双向链表。所以它既有链表的两端 O(1)，又不至于为每个元素付出一个完整节点的内存开销。
+      你不需要记住细节，只需要记住结论：<strong>两端快，中间慢，元素本身按插入顺序排列</strong>。
+    </p>
+  </div>
+
+  <h3>动手推一推：List 操作台</h3>
+  <p class="small">
+    点下面的命令按钮，观察元素在两端进出。重点体会两组对比：<span class="kw">LPUSH</span> + <span class="kw">RPOP</span>
+    组成先进先出的队列，<span class="kw">LPUSH</span> + <span class="kw">LPOP</span> 则组成后进先出的栈；
+    以及 <span class="kw">BRPOP</span> 在列表为空时会「挂起」而不是返回 nil。
+  </p>
+
+  <div class="lab" style="margin-top:16px">
+    <div class="lab__head">
+      <div class="lab__title">KEY &nbsp;<b>orders</b> &nbsp;<span style="color:var(--dim)">type: list</span></div>
+      <div class="lab__title" id="listLen">LLEN = 0</div>
+    </div>
+    <div class="lab__body">
+      <div class="listviz">
+        <div class="listviz__end">LEFT / HEAD &nbsp;index 0</div>
+        <div class="listviz__cells" id="listCells"><div class="listviz__empty">(empty list — key 不存在)</div></div>
+        <div class="listviz__end">RIGHT / TAIL &nbsp;index -1</div>
+      </div>
+      <div class="blocked" id="listBlocked">
+        <span class="dot"></span> 客户端 c2 正阻塞在 <b>BRPOP orders 0</b> 上，等待新元素…（此时它<strong>不占用</strong> Redis 的 CPU）
+      </div>
+      <div class="log" id="listLog"></div>
+    </div>
+    <div class="lab__ctrl" id="listCtrl">
+      <button class="btn btn--t" data-cmd="lpush">LPUSH orders job</button>
+      <button class="btn btn--t" data-cmd="rpush">RPUSH orders job</button>
+      <button class="btn" data-cmd="lpop">LPOP</button>
+      <button class="btn" data-cmd="rpop">RPOP</button>
+      <button class="btn" data-cmd="lrange">LRANGE 0 -1</button>
+      <button class="btn" data-cmd="lindex">LINDEX 2</button>
+      <button class="btn" data-cmd="ltrim">LTRIM 0 4</button>
+      <button class="btn btn--r" data-cmd="brpop">BRPOP orders 0</button>
+      <button class="btn btn--r" data-cmd="del">DEL orders</button>
+    </div>
+  </div>
+
+  <h3>List 真正好用的几个场景</h3>
+  <div class="grid2" style="margin-top:14px">
+    <div class="card">
+      <h4 style="margin-top:0">简单任务队列</h4>
+      <p class="small">生产者 <span class="kw">LPUSH</span>，消费者 <span class="kw">BRPOP</span> 阻塞等待。
+      不用轮询，不用锁，一条消息只会被一个消费者拿到。</p>
+      <div class="term" style="font-size:12px">
+<span class="p">生产者&gt;</span> <span class="c">LPUSH</span> orders <span class="o">'{"id":1001}'</span>
+<span class="p">消费者&gt;</span> <span class="c">BRPOP</span> orders 0   <span class="g"># 0 = 一直等</span></div>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">固定长度的最新 N 条</h4>
+      <p class="small">写入后立刻裁剪，天然是一个「只保留最近 100 条」的环形缓冲，
+      适合做操作日志、最近浏览、简易时间线。</p>
+      <div class="term" style="font-size:12px">
+<span class="c">LPUSH</span> user:1:feed <span class="o">"item"</span>
+<span class="c">LTRIM</span> user:1:feed 0 99   <span class="g"># 只留 100 条</span></div>
+    </div>
+  </div>
+
+  <div class="callout callout--t" style="margin-top:20px">
+    <div class="callout__t">一个立刻能用上的改进</div>
+    <p>
+      如果你正在用 <span class="kw">BRPOP</span> 做队列，把它换成 <span class="kw kw--a">BLMOVE source dest RIGHT LEFT 0</span>。
+      它在弹出的同一个原子操作里，把消息放进一个「处理中」列表：
+    </p>
+    <div class="term" style="margin-top:10px">
+<span class="p">1&gt;</span> <span class="a">BLMOVE</span> orders orders:processing RIGHT LEFT 0   <span class="g"># 取出，同时留底</span>
+<span class="p">2&gt;</span> <span class="g"># ... 业务处理 ...</span>
+<span class="p">3&gt;</span> <span class="c">LREM</span> orders:processing 1 <span class="o">"$msg"</span>              <span class="g"># 处理成功才删掉</span></div>
+      <p class="small" style="margin:12px 0 0">
+      这就是所谓的 <strong>reliable queue</strong> 模式。它能救回崩溃时丢的消息，但你要自己写一个扫描
+      <span class="kw">orders:processing</span> 的超时重投程序 —— 而这，正是 Stream 的消费者组内置替你做好的事。
+      （旧代码里的 <span class="kw">RPOPLPUSH</span> / <span class="kw">BRPOPLPUSH</span> 是同样的东西，6.2 之后已标记为废弃。）
+    </p>
+  </div>
+</section>
+
+<!-- ============ 04 边界 ============ -->
+<section class="sec" id="s4">
+  <div class="sec__tag"><i>&gt;</i> 04 &nbsp;边界：List 做队列，会在哪一秒出事</div>
+  <h2>「弹出即删除」是它的全部优点，也是它的全部问题</h2>
+  <p>
+    <span class="kw">BRPOP</span> 返回的那一刻，这条消息在 Redis 里已经不存在了。它现在只活在你的进程内存里。
+    接下来发生的任何意外 —— 进程被 OOM Killer 杀掉、机器断电、一次没接住的异常 —— 都会让它<strong>永久消失</strong>，
+    而且没有任何地方留下它存在过的痕迹。
+  </p>
+
+  <div class="crash" style="margin:22px 0 10px">
+    <div class="crash__col crash__col--l">
+      <div class="crash__t">A · LIST &nbsp;BRPOP</div>
+      <div class="frame" data-f="1">1. 队列中有消息 job:42</div>
+      <div class="frame" data-f="2">2. c1 执行 BRPOP，拿到 job:42</div>
+      <div class="frame" data-f="3">3. Redis 中已无此消息，LLEN = 0</div>
+      <div class="frame is-bad" data-f="4">4. c1 处理到一半，进程崩溃 ✖</div>
+      <div class="frame is-bad" data-f="5">5. job:42 永久丢失，无人知情</div>
+    </div>
+    <div class="crash__col crash__col--s">
+      <div class="crash__t">B · STREAM &nbsp;XREADGROUP</div>
+      <div class="frame" data-f="1">1. Stream 中有消息 1720-0</div>
+      <div class="frame" data-f="2">2. c1 读到它，同时写入 PEL（待确认列表）</div>
+      <div class="frame" data-f="3">3. 消息<strong>仍在 Stream 里</strong>，PEL 记着 c1 欠一笔</div>
+      <div class="frame is-bad" data-f="4">4. c1 处理到一半，进程崩溃 ✖</div>
+      <div class="frame is-good" data-f="5">5. c2 用 XAUTOCLAIM 接管，继续处理 ✔</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px">
+    <button class="btn btn--r" id="crashRun">模拟一次消费者崩溃</button>
+    <button class="btn" id="crashReset">重置</button>
+  </div>
+
+  <h3>把三个缺口摆在一起看</h3>
+  <div class="tbl-wrap">
+  <table>
+    <tr><th style="width:24%">List 做不到的事</th><th style="width:38%">具体表现</th><th>什么时候会咬你</th></tr>
+    <tr>
+      <td>消息不可重投</td>
+      <td>弹出即删除，没有确认机制，没有「处理中」状态</td>
+      <td>任何一次进程重启、部署、崩溃</td>
+    </tr>
+    <tr>
+      <td>无法多方消费</td>
+      <td>一条消息只能被一个客户端拿走；想让风控和报表各收一份，只能生产者写两个 key</td>
+      <td>下游系统从 1 个变成 3 个的那天</td>
+    </tr>
+    <tr>
+      <td>没有历史与位点</td>
+      <td>消费过的数据不存在了，不能回放，不能查「昨天那条消息到底发出去没有」</td>
+      <td>线上排查问题、需要重跑数据时</td>
+    </tr>
+  </table>
+  </div>
+
+  <h3>那 Pub/Sub 呢？</h3>
+  <p>
+    Pub/Sub 解决了「多方消费」：一次 <span class="kw kw--v">PUBLISH</span>，所有订阅者都收到。但它走向了另一个极端 ——
+    它是<strong>彻底的 fire-and-forget</strong>：消息不存储，谁在线谁收到，离线的订阅者什么都拿不到，
+    连「我错过了几条」都无从得知。客户端网络抖动 3 秒，这 3 秒的消息就凭空蒸发了。
+  </p>
+  <div class="callout callout--r">
+    <div class="callout__t">判断口诀</div>
+    <p style="margin:0">
+      需要<strong>可靠投递</strong>就别用 Pub/Sub，它适合的是「实时通知、丢了也无所谓」的场景：
+      在线状态推送、配置变更广播、聊天室在线消息。
+      （Redis 7 的 Sharded Pub/Sub 解决的是集群下的扩展性问题，不改变「不存储」这个本质。）
+    </p>
+  </div>
+  <p style="margin-top:20px">
+    到这里，需求已经很清楚了：我们想要一个东西，<strong>既像 List 一样能可靠地把任务分给一组 worker</strong>，
+    <strong>又像 Pub/Sub 一样支持多方独立消费</strong>，<strong>还得把消息留下来能回看</strong>。
+    2018 年 Redis 5.0 给出的答案，就是 Stream。
+  </p>
+</section>
+
+<!-- ============ 05 STREAM ============ -->
+<section class="sec" id="s5">
+  <div class="sec__tag"><i>&gt;</i> 05 &nbsp;Stream：一条只能往后写的账本</div>
+  <h2>它借来了日志的抽象，而不是队列的抽象</h2>
+  <p class="lead">
+    List 的模型是「容器」：东西放进去、拿出来，拿走就没了。
+    Stream 的模型是<em>账本</em>：只能在末尾追加新的一行，已经写下的行不会因为「被读过」而消失，
+    每一行都有一个<strong>单调递增的编号</strong>。谁读到哪一行，是读者自己的事，记在读者名下。
+  </p>
+  <p>
+    这个差别听起来抽象，但它直接推导出 Stream 的所有能力：
+    因为数据留着，所以能回放、能查历史、能让多个消费者组各读各的；
+    因为有编号，所以「我读到哪了」可以被精确记录和恢复。这正是 Kafka 的核心思路，Redis 把它做成了一个 key 的类型。
+  </p>
+
+  <h3>先认识那个 ID</h3>
+  <p class="small">Stream 里每条消息的 ID 不是随便给的。把鼠标移到下面各部分（或用键盘 Tab 聚焦）看看它们分别是什么：</p>
+  <div class="card" style="padding:8px 16px 16px">
+    <div class="idbox">
+      <span class="idpart" tabindex="0" data-k="ms">1720506000000</span>
+      <span class="idpart idpart--dash">-</span>
+      <span class="idpart" tabindex="0" data-k="seq">0</span>
+    </div>
+    <div class="iddesc" id="idDesc">把指针移上去，看每一段的含义。</div>
+  </div>
+
+  <div class="grid2" style="margin-top:20px">
+    <div class="card">
+      <h4 style="margin-top:0">为什么必须单调递增</h4>
+      <p class="small" style="margin:0">
+        ID 决定了全局顺序，也决定了「读到哪了」这件事可以只用一个数表示。
+        Redis 会保证新 ID 一定大于当前最大 ID —— 即使服务器时钟回拨，它也会退化成只递增序列号，绝不倒退。
+        你几乎总是应该用 <span class="kw kw--a">*</span> 让 Redis 自动生成。
+      </p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">几个特殊 ID，读命令里天天见</h4>
+      <p class="small" style="margin:0">
+        <span class="kw">-</span> 和 <span class="kw">+</span>：最小 / 最大，用于 <span class="kw">XRANGE</span> 全量扫描。<br>
+        <span class="kw">$</span>：当前最后一条，意思是「只给我之后的新消息」。<br>
+        <span class="kw">0</span>：从头开始。<br>
+        <span class="kw kw--a">&gt;</span>：只在 <span class="kw">XREADGROUP</span> 里有效，意思是「组里还没分发给任何人的新消息」。
+      </p>
+    </div>
+  </div>
+
+  <h3>最小可验证例子：三条命令跑通一个 Stream</h3>
+  <p class="small">打开 redis-cli，逐行敲下去，注意每一步的返回值：</p>
+  <div class="term">
+<span class="p">&gt;</span> <span class="a">XADD</span> orders <span class="a">*</span> id 1001 amount 59.9
+<span class="o">"1720506000000-0"</span>                    <span class="g"># 返回自动生成的 ID</span>
+
+<span class="p">&gt;</span> <span class="a">XADD</span> orders <span class="a">*</span> id 1002 amount 12.0
+<span class="o">"1720506000318-0"</span>
+
+<span class="p">&gt;</span> <span class="a">XLEN</span> orders
+<span class="o">(integer) 2</span>
+
+<span class="p">&gt;</span> <span class="a">XRANGE</span> orders - +          <span class="g"># 全量读，消息读完仍然留在 Stream 里</span>
+<span class="o">1) 1) "1720506000000-0"
+   2) 1) "id"  2) "1001"  3) "amount"  4) "59.9"
+2) 1) "1720506000318-0"
+   2) 1) "id"  2) "1002"  3) "amount"  4) "12.0"</span>
+
+<span class="p">&gt;</span> <span class="a">XLEN</span> orders                <span class="g"># 关键：读过之后长度没变</span>
+<span class="o">(integer) 2</span>                        <span class="g"># ← List 在这里会变成 0</span></div>
+
+  <div class="callout" style="margin-top:20px">
+    <div class="callout__t">这一行就是分水岭</div>
+    <p style="margin:0">
+      <strong>读取不消费数据。</strong>
+      Stream 里删除数据只有两个途径：主动 <span class="kw">XDEL</span>，或者按容量/时间裁剪 <span class="kw">XTRIM</span>。
+      「读过了」和「可以删了」是两件完全独立的事 —— 这是理解 Stream 最重要的一句话。
+    </p>
+  </div>
+
+  <h3>每条消息是一组 field-value，不是一个字符串</h3>
+  <p class="small">
+    <span class="kw kw--a">XADD key * f1 v1 f2 v2</span> 的结构类似一个小 hash。这鼓励你把消息写成结构化的字段，
+    而不是塞一坨 JSON 字符串。不过实践中两种都常见：字段多用于需要被消费者按需读取的场景，
+    单个 <span class="kw">payload</span> 字段塞 JSON 则更方便做版本演进。
+  </p>
+</section>
+
+<!-- ============ 06 消费者组 ============ -->
+<section class="sec" id="s6">
+  <div class="sec__tag"><i>&gt;</i> 06 &nbsp;消费者组：Stream 真正的核心机制</div>
+  <h2>让一组 worker 分担一条流，还不丢消息</h2>
+  <p>
+    只用 <span class="kw">XREAD</span> 的话，Stream 只是个能回放的日志：每个客户端各读各的，
+    同一条消息所有人都会读到。要实现「一组 worker 分工处理、每条消息只处理一次」，就需要
+    <strong>consumer group</strong>。它引入了三个新东西：
+  </p>
+
+  <div class="grid3" style="margin:20px 0">
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--amber)">last-delivered-id</h4>
+      <p class="small" style="margin:0">组的游标。记录这个组已经把哪些消息<strong>发出去过</strong>了。
+      用 <span class="kw kw--a">&gt;</span> 读取时，只会拿到游标之后的消息，然后游标前移。</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--amber)">PEL（Pending Entries List）</h4>
+      <p class="small" style="margin:0">每个组维护的「已投递但未确认」清单。
+      记录了消息 ID、当前归属的消费者、投递时间、投递次数。<strong>它是可靠性的全部来源。</strong></p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--amber)">XACK</h4>
+      <p class="small" style="margin:0">消费者处理成功后主动确认，这条记录才会从 PEL 移除。
+      不 ACK，它就一直挂在那里，等着被别人认领。</p>
+    </div>
+  </div>
+
+  <h3>分步跑一遍：从投递到崩溃到接管</h3>
+  <p class="small">
+    下面这个演示走完消费者组的完整生命周期。用 ← → 按钮逐步推进，注意观察三处联动：
+    <strong>纸带上每条消息的颜色</strong>（归属谁）、<strong>右侧 PEL 表格</strong>（欠了哪些账）、以及<strong>底部那条橙线</strong>（组游标走到哪了）。
+  </p>
+
+  <div class="lab" style="margin-top:16px">
+    <div class="lab__head">
+      <div class="lab__title">STREAM &nbsp;<b>orders</b> &nbsp;<span style="color:var(--dim)">group: g1 &nbsp;consumers: c1, c2</span></div>
+    </div>
+    <div class="demo__steps" id="demoSteps"></div>
+    <div class="demo__cmd" id="demoCmd"></div>
+    <div class="demo__say" id="demoSay"></div>
+    <div class="demo__stage">
+      <div class="streamtape" id="demoTape">
+        <div class="ldi" id="demoLdi"></div>
+      </div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:6px" id="demoLdiLabel">
+        last-delivered-id: 0-0
+      </div>
+      <div class="consumers">
+        <div class="cbox cbox--1" id="demoC1">
+          <div class="cbox__n">consumer c1</div>
+          <div class="cbox__hold">空闲</div>
+        </div>
+        <div class="cbox cbox--2" id="demoC2">
+          <div class="cbox__n">consumer c2</div>
+          <div class="cbox__hold">空闲</div>
+        </div>
+        <div class="pel">
+          <div class="pel__n">PEL &nbsp;待确认列表</div>
+          <div id="demoPel"><div class="pel__empty">(empty)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="demo__nav">
+      <button class="btn" id="demoPrev">← 上一步</button>
+      <button class="btn btn--on" id="demoNext">下一步 →</button>
+      <span class="demo__pos" id="demoPos"></span>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:24px">
+    <div class="card">
+      <h4 style="margin-top:0">组内是分工，组间是广播</h4>
+      <p class="small" style="margin:0">
+        这是最容易搞混的一点。同一个组里的 c1、c2 <strong>竞争</strong>消息，每条只给一个人；
+        不同的组则各有各的游标和 PEL，同一条消息<strong>每个组都会收到一份</strong>。
+        所以「订单流同时给库存服务和风控服务」的正确做法是：建两个组。
+      </p>
+      <div class="term" style="font-size:12px;margin-top:10px">
+<span class="c">XGROUP</span> CREATE orders inventory 0
+<span class="c">XGROUP</span> CREATE orders riskctl  0   <span class="g"># 各读各的</span></div>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">崩溃恢复的两种姿势</h4>
+      <p class="small" style="margin:0">
+        消费者重启后，先用 <span class="kw kw--a">XREADGROUP ... STREAMS orders 0</span>
+        （注意是 <b>0</b> 不是 <b>&gt;</b>）把自己 PEL 里的旧账捞回来重做；
+        对于再也起不来的消费者，则由存活的实例定期 <span class="kw kw--a">XAUTOCLAIM</span> 把超时未确认的消息接管过去。
+      </p>
+      <div class="term" style="font-size:12px;margin-top:10px">
+<span class="g"># 接管 idle 超过 60s 的消息</span>
+<span class="a">XAUTOCLAIM</span> orders g1 c1 60000 0 COUNT 10</div>
+    </div>
+  </div>
+
+  <div class="callout callout--r" style="margin-top:22px">
+    <div class="callout__t">别忽略这个字段</div>
+    <p style="margin:0">
+      PEL 里的 <strong>delivery-count</strong> 会在每次被 claim 时加一。
+      如果某条消息反复被接管却始终没人 ACK，它大概率是一条能把消费者<strong>撑死的毒消息</strong>（poison message）。
+      生产代码里应该判断这个计数，超过阈值就 <span class="kw">XACK</span> 掉并转投死信队列，否则整个组会被它反复卡住。
+    </p>
+  </div>
+</section>
+
+<!-- ============ 07 对比 ============ -->
+<section class="sec" id="s7">
+  <div class="sec__tag"><i>&gt;</i> 07 &nbsp;放在一张表里比一比</div>
+  <h2>四种方案，同一组问题</h2>
+  <div class="tbl-wrap" style="margin-top:18px">
+  <table>
+    <tr>
+      <th style="width:20%">维度</th>
+      <th>List</th>
+      <th>Pub/Sub</th>
+      <th>Stream</th>
+      <th>Kafka</th>
+    </tr>
+    <tr>
+      <td>数据模型</td>
+      <td>双端队列，弹出即删</td>
+      <td>无存储，纯转发</td>
+      <td>append-only log</td>
+      <td>分区 append-only log</td>
+    </tr>
+    <tr>
+      <td>投递语义</td>
+      <td><span class="n">at-most-once</span><br><span class="small">（BLMOVE 可做到 at-least-once）</span></td>
+      <td><span class="n">at-most-once</span><br><span class="small">离线即丢</span></td>
+      <td><span class="y">at-least-once</span><br><span class="small">靠 PEL + XACK</span></td>
+      <td><span class="y">at-least-once</span><br><span class="small">可配 exactly-once</span></td>
+    </tr>
+    <tr>
+      <td>多方独立消费</td>
+      <td><span class="n">不支持</span></td>
+      <td><span class="y">支持</span>（仅在线）</td>
+      <td><span class="y">多消费者组</span></td>
+      <td><span class="y">多消费者组</span></td>
+    </tr>
+    <tr>
+      <td>历史回放</td>
+      <td><span class="n">无</span></td>
+      <td><span class="n">无</span></td>
+      <td><span class="y">XRANGE 任意区间</span></td>
+      <td><span class="y">按 offset / 时间</span></td>
+    </tr>
+    <tr>
+      <td>消费进度</td>
+      <td><span class="n">无概念</span></td>
+      <td><span class="n">无概念</span></td>
+      <td><span class="y">组游标 + PEL</span></td>
+      <td><span class="y">offset 提交</span></td>
+    </tr>
+    <tr>
+      <td>数据留存成本</td>
+      <td>内存</td>
+      <td>—</td>
+      <td><span class="m">内存</span>，需 XTRIM 控制</td>
+      <td>磁盘，天然适合长留存</td>
+    </tr>
+    <tr>
+      <td>运维复杂度</td>
+      <td><span class="y">已有 Redis 即可</span></td>
+      <td><span class="y">已有 Redis 即可</span></td>
+      <td><span class="y">已有 Redis 即可</span></td>
+      <td><span class="n">独立集群</span></td>
+    </tr>
+    <tr>
+      <td>典型量级</td>
+      <td colspan="3">单实例十万级 QPS，数据量受内存约束（GB 级）</td>
+      <td>百万级 QPS，TB～PB 留存</td>
+    </tr>
+  </table>
+  </div>
+  <div class="callout callout--t" style="margin-top:20px">
+    <div class="callout__t">怎么读这张表</div>
+    <p style="margin:0">
+      Stream 的定位非常清楚：<strong>在你已有的 Redis 上，用最小的运维代价换到接近 Kafka 的消费语义</strong>。
+      它换不来的是 Kafka 的存储规模 —— 因为数据在内存里。
+      所以判断标准往往不是「哪个更强」，而是<strong>你的留存需求会不会撑爆内存</strong>。
+    </p>
+  </div>
+</section>
+
+<!-- ============ 08 误区 ============ -->
+<section class="sec" id="s8">
+  <div class="sec__tag"><i>&gt;</i> 08 &nbsp;那些看起来对、其实不对的说法</div>
+  <h2>七个高频误区</h2>
+  <p class="small" style="margin-bottom:20px">点开每一条看看它错在哪。</p>
+
+  <div class="acc">
+    <button class="acc__q">Stream 是持久化的，所以消息一定不会丢。</button>
+    <div class="acc__a">
+      <p>Stream 的「持久」是相对 Pub/Sub 而言的：它把数据<strong>保存在内存里</strong>，落盘与否取决于你的 RDB / AOF 配置。
+      默认 <span class="kw">appendfsync everysec</span> 意味着断电最多丢一秒的写入；关掉 AOF 只用 RDB，能丢的更多。</p>
+      <p>还有一个更隐蔽的洞：<strong>主从复制是异步的</strong>。主节点 <span class="kw">XADD</span> 成功并返回给客户端后，
+      如果它在数据同步到从节点之前宕机、从节点被提升为主，这些消息就没了。这不是 Stream 的缺陷，而是 Redis 的整体架构决定的。</p>
+      <p class="verdict">→ 需要金融级不丢，用真正的持久化消息中间件；用 Redis 就要接受这个概率并做好幂等与对账。</p>
+    </div>
+  </div>
+
+  <div class="acc">
+    <button class="acc__q">加了 XACK，消息就是 exactly-once 了。</button>
+    <div class="acc__a">
+      <p>不是。设想：消费者处理完业务、还没来得及发 <span class="kw">XACK</span> 就崩了。这条消息仍在 PEL 里，
+      迟早会被别人接管并<strong>再处理一次</strong>。反过来，如果先 ACK 再处理，就变成了可能丢。</p>
+      <p>这不是 Redis 的问题 —— 任何跨进程的消息系统都无法在通用情况下白送你 exactly-once。</p>
+      <p class="verdict">→ 正确姿势：接受 at-least-once，把<strong>消费逻辑做成幂等</strong>（用业务唯一键去重，或把「处理结果 + 已处理消息 ID」写在同一个数据库事务里）。</p>
+    </div>
+  </div>
+
+  <div class="acc">
+    <button class="acc__q">XADD 时加了 MAXLEN 1000，Stream 就一定是 1000 条。</button>
+    <div class="acc__a">
+      <p>取决于你有没有写那个波浪号。<span class="kw kw--r">MAXLEN 1000</span> 是精确裁剪，
+      而 <span class="kw kw--a">MAXLEN ~ 1000</span> 是近似裁剪 —— 后者只在能整块删除底层节点时才动手，
+      实际长度可能是 1000 出头。</p>
+      <p>为什么要有近似模式？因为精确裁剪在极端情况下会退化成一次删很多条的 O(N) 操作，
+      而 Redis 是单线程的，这一下就会<strong>卡住所有客户端</strong>。</p>
+      <div class="term" style="font-size:12px;margin:14px 0 0">
+<span class="a">XADD</span> orders MAXLEN <span class="a">~</span> 10000 <span class="a">*</span> id 1001   <span class="g"># 推荐：近似裁剪</span>
+<span class="a">XTRIM</span> orders MINID <span class="a">~</span> 1720506000000   <span class="g"># 也可按时间裁剪</span></div>
+      <p class="verdict" style="margin-top:14px">→ 除非有硬性长度要求，一律用 <span class="kw kw--a">~</span>。</p>
+    </div>
+  </div>
+
+  <div class="acc">
+    <button class="acc__q">消息 ACK 之后就从 Stream 里删掉了，内存会自动回收。</button>
+    <div class="acc__a">
+      <p>完全不会。<span class="kw">XACK</span> 动的只是 PEL —— 它把「这条消息某人还欠着」这条记录抹掉，
+      消息本体<strong>原封不动留在 Stream 里</strong>。这也正是别的消费者组还能读到它的原因。</p>
+      <p>如果你从不 <span class="kw">XTRIM</span>，这个 key 会一直涨，直到吃光内存。
+      这是 Stream 在生产环境最常见的事故来源，没有之一。</p>
+      <p class="verdict">→ 每个 XADD 都带上 <span class="kw kw--a">MAXLEN ~ N</span>，或者用定时任务按 MINID 裁掉过期数据。</p>
+    </div>
+  </div>
+
+  <div class="acc">
+    <button class="acc__q">PEL 是内部结构，不用管它。</button>
+    <div class="acc__a">
+      <p>PEL 也占内存，而且它<strong>只增不减</strong>直到消息被 ACK 或被 <span class="kw">XACK</span> 强制清掉。
+      一个只读不确认的消费者，能在几个小时里堆出几百万条 pending 记录。</p>
+      <p>更麻烦的是：即使你 <span class="kw">XTRIM</span> 掉了消息本体，
+      对应的 PEL 记录仍然存在（它们会变成指向不存在消息的「幽灵条目」，claim 时会被自动清理）。</p>
+      <div class="term" style="font-size:12px;margin:14px 0 0">
+<span class="a">XPENDING</span> orders g1                     <span class="g"># 概览：总数、最小/最大 ID、各消费者欠账</span>
+<span class="a">XPENDING</span> orders g1 - + 10 c1            <span class="g"># 明细：ID、idle 时长、投递次数</span>
+<span class="a">XINFO</span> GROUPS orders                     <span class="g"># 看每个组的 pending 与 lag</span></div>
+      <p class="verdict" style="margin-top:14px">→ 把 <span class="kw">XINFO GROUPS</span> 的 pending 和 lag 接进监控，它比 QPS 更能提前发现问题。</p>
+    </div>
+  </div>
+
+  <div class="acc">
+    <button class="acc__q">用 Stream 就不需要 List 了。</button>
+    <div class="acc__a">
+      <p>不成立。List 在两类场景里仍然是更好的选择：</p>
+      <p><strong>一是它根本不是队列的时候。</strong>「最近浏览的 20 个商品」「一个用户的操作栈」这类需求，
+      List + <span class="kw">LTRIM</span> 就是最省事的数据结构，用 Stream 反而要自己处理裁剪和读取语义。</p>
+      <p><strong>二是极简的一次性任务分发。</strong>没有多消费方、丢一条也无所谓、追求最低延迟和最小内存开销时，
+      <span class="kw">BRPOP</span> 的开销和心智负担都比消费者组小得多。Stream 的每条消息要额外存 ID、field 结构和可能的 PEL 记录，内存占用明显更高。</p>
+      <p class="verdict">→ 选择的依据是「消息丢了会不会有人来找你」，而不是「哪个更新」。</p>
+    </div>
+  </div>
+
+  <div class="acc">
+    <button class="acc__q">阻塞命令可以放进事务或 Lua 脚本里用。</button>
+    <div class="acc__a">
+      <p>可以写，但不会阻塞。<span class="kw">BRPOP</span>、<span class="kw">BLMOVE</span>、
+      <span class="kw">XREAD BLOCK</span> 在 <span class="kw">MULTI/EXEC</span> 里执行时，行为会退化成非阻塞版本 ——
+      因为 Redis 是单线程的，让一条命令在事务中间挂起，等于让整个服务器停摆。</p>
+      <p>同理，任何 O(N) 的大命令都要警惕：<span class="kw">LRANGE mylist 0 -1</span> 在一个百万元素的 list 上执行，
+      会让所有其他客户端等它。</p>
+      <p class="verdict">→ 阻塞留给单条命令；批量读取用小 COUNT 分页；线上禁用 <span class="kw kw--r">KEYS</span> 这类全扫命令。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 决策 ============ -->
+<section class="sec" id="s9">
+  <div class="sec__tag"><i>&gt;</i> 09 &nbsp;回到你自己的场景</div>
+  <h2>四个问题，定下方案</h2>
+  <p class="small" style="margin-bottom:6px">按你的真实情况选，右边会实时给出建议。</p>
+  <div class="picker" style="margin-top:14px">
+    <div>
+      <div class="q" data-q="q1">
+        <div class="q__t"><i>Q1</i>同一条消息，需要被<strong>多个互不相干的下游</strong>各消费一份吗？</div>
+        <div class="q__opts">
+          <button class="btn" data-v="y">需要，比如库存和风控各要一份</button>
+          <button class="btn" data-v="n">不需要，一组 worker 分着干完就行</button>
+        </div>
+      </div>
+      <div class="q" data-q="q2">
+        <div class="q__t"><i>Q2</i>消费者中途崩溃，这条消息<strong>丢了会不会有人来找你</strong>？</div>
+        <div class="q__opts">
+          <button class="btn" data-v="y">会，必须能重新处理</button>
+          <button class="btn" data-v="n">不会，丢了就丢了</button>
+        </div>
+      </div>
+      <div class="q" data-q="q3">
+        <div class="q__t"><i>Q3</i>需要<strong>回看或重放</strong>历史消息吗（排查问题、重跑数据）？</div>
+        <div class="q__opts">
+          <button class="btn" data-v="y">需要</button>
+          <button class="btn" data-v="n">不需要</button>
+        </div>
+      </div>
+      <div class="q" data-q="q4">
+        <div class="q__t"><i>Q4</i>留存的数据量级：<strong>放得进内存吗</strong>？</div>
+        <div class="q__opts">
+          <button class="btn" data-v="n">放得下，最多几个 GB</button>
+          <button class="btn" data-v="y">放不下，要留几天到几个月的全量</button>
+        </div>
+      </div>
+    </div>
+    <div class="result">
+      <div class="result__k k-none" id="rKey">选一选</div>
+      <div class="result__d" id="rDesc">左边四个问题选完，这里会给出建议方案和第一行代码。</div>
+      <div class="result__cmd" id="rCmd" style="display:none"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 速查 ============ -->
+<section class="sec" id="s10">
+  <div class="sec__tag"><i>&gt;</i> 10 &nbsp;带走这张表</div>
+  <h2>命令速查</h2>
+  <div class="tabs" style="margin-top:18px">
+    <button class="tab is-on" data-tab="list">LIST</button>
+    <button class="tab" data-tab="stream">STREAM</button>
+  </div>
+  <div class="tabpane is-on" id="pane-list">
+    <div class="cmdrow"><div class="cmdrow__c">LPUSH / RPUSH key v [v ...]</div><div class="cmdrow__d">从左 / 右插入，返回<b>插入后的长度</b></div></div>
+    <div class="cmdrow"><div class="cmdrow__c">LPOP / RPOP key [count]</div><div class="cmdrow__d">从左 / 右弹出，<b>弹出即删除</b></div></div>
+    <div class="cmdrow"><div class="cmdrow__c">BRPOP key [key ...] timeout</div><div class="cmdrow__d">阻塞版弹出，timeout 为 <b>0 表示一直等</b>；可同时监听多个 key</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">BLMOVE src dst RIGHT LEFT 0</div><div class="cmdrow__d">阻塞弹出并<b>原子地转移</b>到另一个 list，实现可靠队列的关键</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">LMPOP / BLMPOP numkeys key ... LEFT</div><div class="cmdrow__d">7.0 新增，一次从<b>多个 key 中的第一个非空 list</b> 弹出</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">LRANGE key start stop</div><div class="cmdrow__d">读取区间，<b>不删除</b>；<span class="n">大 list 上是 O(N)，慎用 0 -1</span></div></div>
+    <div class="cmdrow"><div class="cmdrow__c">LTRIM key start stop</div><div class="cmdrow__d">只保留区间内的元素，<b>其余全部删除</b>，做定长列表用</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">LLEN / LINDEX / LSET / LREM</div><div class="cmdrow__d">长度 / 按下标读 / 按下标写 / 按值删除（后三个都是 O(N)）</div></div>
+  </div>
+  <div class="tabpane tabpane--s" id="pane-stream">
+    <div class="cmdrow"><div class="cmdrow__c">XADD key [MAXLEN ~ N] * f v [f v ...]</div><div class="cmdrow__d">追加一条，<b>*</b> 表示自动生成 ID；<b>顺手裁剪</b>是好习惯</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">XLEN / XRANGE key - + [COUNT n]</div><div class="cmdrow__d">长度 / 按 ID 区间读取，<b>读取不消费</b>；XREVRANGE 反向读</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">XREAD [BLOCK ms] STREAMS key $</div><div class="cmdrow__d">不带组的读取，<b>各读各的</b>，$ 表示只要新消息</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">XGROUP CREATE key group 0 | $ [MKSTREAM]</div><div class="cmdrow__d">建组。<b>0 = 从头消费</b>，<b>$ = 只消费建组之后的新消息</b></div></div>
+    <div class="cmdrow"><div class="cmdrow__c">XREADGROUP GROUP g c [BLOCK ms] STREAMS key &gt;</div><div class="cmdrow__d"><b>&gt;</b> 取组内未分发的新消息；换成 <b>0</b> 则取自己 PEL 里的旧账</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">XACK key group id [id ...]</div><div class="cmdrow__d">确认处理完成，<b>从 PEL 移除</b>（消息本体仍在 Stream 里）</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">XPENDING key group [- + n [consumer]]</div><div class="cmdrow__d">查看待确认清单：<b>idle 时长、投递次数</b>、归属者</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">XAUTOCLAIM key group c min-idle-time 0</div><div class="cmdrow__d">6.2 新增，<b>批量接管</b>超时未确认的消息（旧写法是 XCLAIM 逐条）</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">XTRIM key MAXLEN ~ N | MINID ~ id</div><div class="cmdrow__d">按<b>条数</b>或<b>时间</b>裁剪，控制内存的唯一手段</div></div>
+    <div class="cmdrow"><div class="cmdrow__c">XINFO STREAM / GROUPS / CONSUMERS key</div><div class="cmdrow__d">运维必备：看长度、组游标、<b>pending 与 lag</b></div></div>
+  </div>
+
+  <h3>一份能直接改的消费循环骨架</h3>
+  <div class="term">
+<span class="g"># 1. 建组（已存在会报 BUSYGROUP，忽略即可）</span>
+<span class="a">XGROUP</span> CREATE orders g1 <span class="a">$</span> MKSTREAM
+
+<span class="g"># 2. 启动时先处理自己的旧账（崩溃重启后的第一件事）</span>
+<span class="a">XREADGROUP</span> GROUP g1 c1 COUNT 100 STREAMS orders <span class="a">0</span>
+
+<span class="g"># 3. 主循环：阻塞读新消息 → 处理 → 确认</span>
+<span class="a">XREADGROUP</span> GROUP g1 c1 BLOCK 5000 COUNT 10 STREAMS orders <span class="a">&gt;</span>
+<span class="a">XACK</span> orders g1 &lt;id&gt;
+
+<span class="g"># 4. 后台定时：接管掉线消费者留下的消息</span>
+<span class="a">XAUTOCLAIM</span> orders g1 c1 60000 0 COUNT 20
+
+<span class="g"># 5. 后台定时（或写入时顺手）：控制内存</span>
+<span class="a">XTRIM</span> orders MAXLEN <span class="a">~</span> 1000000</div>
+
+  <div class="callout callout--t" style="margin-top:24px">
+    <div class="callout__t">最后收束成三句话</div>
+    <p style="margin:0">
+      <strong>List 是容器，拿走就没了；Stream 是账本，读过也还在。</strong><br>
+      <strong>Stream 的可靠性全部来自 PEL —— 没有 XACK，就没有可靠投递；不做 XTRIM，就会吃光内存。</strong><br>
+      <strong>Redis 给你的是「够用的消息语义 + 零新增运维」，一旦留存需求超过内存，就该换 Kafka 了。</strong>
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <b>一文读懂 · Redis List &amp; Stream</b><br>
+    命令与行为以 Redis 7.x 为准；XAUTOCLAIM 需 6.2+，LMPOP / BLMPOP 需 7.0+，Stream 需 5.0+。<br>
+    实际使用请以 <b>redis.io/commands</b> 的官方文档为准。
+  </div>
+</footer>
+<script>
+(function(){
+"use strict";
+var $=function(s,r){return (r||document).querySelector(s);};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
+var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------------- Hero 纸带 ---------------- */
+(function(){
+  var track=$("#heroTape"); if(!track) return;
+  var base=Date.now(), n=0;
+  function cell(){
+    var ts=base+n*137+Math.floor(Math.random()*90);
+    var d=document.createElement("div");
+    d.className="tape__cell is-new";
+    d.innerHTML='<b>'+ts+'-0</b> &nbsp;id='+(1001+n)+'  amount='+(10+((n*37)%90))+'.0';
+    n++;
+    track.appendChild(d);
+    setTimeout(function(){d.classList.remove("is-new");},700);
+    while(track.children.length>9){track.removeChild(track.firstChild);}
+  }
+  for(var i=0;i<7;i++) cell();
+  if(!reduce) setInterval(cell,1900);
+})();
+
+/* ---------------- 进度条 + 导航高亮 ---------------- */
+(function(){
+  var bar=$("#progress"), links=$$("#nav .navlink");
+  var secs=links.map(function(a){return document.getElementById(a.getAttribute("href").slice(1));});
+  function tick(){
+    var h=document.documentElement;
+    var p=h.scrollTop/((h.scrollHeight-h.clientHeight)||1);
+    if(bar) bar.style.width=Math.min(100,Math.max(0,p*100))+"%";
+    var cur=-1;
+    for(var i=0;i<secs.length;i++){
+      if(secs[i] && secs[i].getBoundingClientRect().top<140) cur=i;
+    }
+    links.forEach(function(a,i){a.classList.toggle("is-on",i===cur);});
+    if(cur>-1 && links[cur]){
+      var nav=$("#nav"), el=links[cur];
+      if(el.offsetLeft<nav.scrollLeft || el.offsetLeft+el.offsetWidth>nav.scrollLeft+nav.clientWidth){
+        nav.scrollTo({left:Math.max(0,el.offsetLeft-60),behavior:reduce?"auto":"smooth"});
+      }
+    }
+  }
+  window.addEventListener("scroll",tick,{passive:true});
+  window.addEventListener("resize",tick); tick();
+})();
+
+/* ---------------- 单线程命令流 ---------------- */
+(function(){
+  var clients=$("#thClients"), pipe=$("#thPipe"), out=$("#thOut"),
+      run=$("#thRun"), reset=$("#thReset");
+  if(!clients) return;
+  var names=["c1","c2","c3"], timers=[];
+  function draw(){
+    clients.innerHTML="";
+    names.forEach(function(n){
+      var d=document.createElement("div");
+      d.className="cli"; d.textContent=n+"> INCR order:seq";
+      clients.appendChild(d);
+    });
+    pipe.innerHTML=""; out.innerHTML='<span style="color:var(--dim)">点击下方按钮开始</span>';
+  }
+  function clear(){timers.forEach(clearTimeout);timers=[];}
+  function go(){
+    clear(); draw(); run.disabled=true;
+    var step=reduce?1:1;
+    $$(".cli",clients).forEach(function(el,i){
+      timers.push(setTimeout(function(){
+        el.classList.add("is-sent");
+        var p=document.createElement("div");
+        p.className="pipe__item"; p.textContent=names[i]+": INCR order:seq";
+        pipe.appendChild(p);
+      },120*i*step));
+    });
+    out.innerHTML="";
+    for(var i=0;i<3;i++){
+      (function(i){
+        timers.push(setTimeout(function(){
+          var items=$$(".pipe__item",pipe);
+          items.forEach(function(x){x.classList.remove("is-run");});
+          if(items[i]) items[i].classList.add("is-run");
+          var line=document.createElement("div");
+          line.innerHTML="执行 "+names[i]+" → <b>(integer) "+(i+1)+"</b>";
+          out.appendChild(line);
+          if(i===2){
+            var f=document.createElement("div");
+            f.style.marginTop="8px"; f.style.color="var(--amber)";
+            f.textContent="最终 order:seq = 3，不会丢更新";
+            out.appendChild(f);
+            run.disabled=false;
+          }
+        },700+520*i));
+      })(i);
+    }
+  }
+  run.addEventListener("click",go);
+  reset.addEventListener("click",function(){clear();draw();run.disabled=false;});
+  draw();
+})();
+
+/* ---------------- List 操作台 ---------------- */
+(function(){
+  var cells=$("#listCells"), logEl=$("#listLog"), lenEl=$("#listLen"),
+      blocked=$("#listBlocked"), ctrl=$("#listCtrl");
+  if(!cells) return;
+  var list=["job:3","job:2","job:1"], seq=4, waiting=false;
+
+  function log(cmd,ret,cls){
+    var d=document.createElement("div");
+    d.innerHTML='<span class="p">127.0.0.1:6379&gt;</span> '+cmd+'\n<span class="'+(cls||"ret")+'">'+ret+'</span>';
+    logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight;
+  }
+  function render(hi){
+    lenEl.textContent="LLEN = "+list.length;
+    if(!list.length){cells.innerHTML='<div class="listviz__empty">(empty list — key 不存在)</div>';return;}
+    cells.innerHTML="";
+    list.forEach(function(v,i){
+      var d=document.createElement("div");
+      d.className="node"+(hi?" is-hi":"");
+      d.innerHTML='<span class="node__i">'+i+'</span>'+v;
+      cells.appendChild(d);
+    });
+  }
+  function wake(){
+    if(!waiting) return false;
+    waiting=false; blocked.classList.remove("is-on");
+    var v=list.pop(); render();
+    log('<span style="color:var(--crimson)">BRPOP orders 0</span> <span class="p">(阻塞中被唤醒)</span>',
+        '1) "orders"\n2) "'+v+'"   ← 立刻拿到刚推入的元素');
+    return true;
+  }
+  var ops={
+    lpush:function(){
+      var v="job:"+(seq++);
+      if(waiting){ log('LPUSH orders "'+v+'"','(integer) 1'); wake(); return; }
+      list.unshift(v); render(); log('LPUSH orders "'+v+'"','(integer) '+list.length);
+    },
+    rpush:function(){
+      var v="job:"+(seq++);
+      if(waiting){ log('RPUSH orders "'+v+'"','(integer) 1'); wake(); return; }
+      list.push(v); render(); log('RPUSH orders "'+v+'"','(integer) '+list.length);
+    },
+    lpop:function(){
+      if(!list.length){log("LPOP orders","(nil)","err");return;}
+      var v=list.shift(); render(); log("LPOP orders",'"'+v+'"');
+    },
+    rpop:function(){
+      if(!list.length){log("RPOP orders","(nil)","err");return;}
+      var v=list.pop(); render(); log("RPOP orders",'"'+v+'"   ← 队列模式：与 LPUSH 配对，先进先出');
+    },
+    lrange:function(){
+      if(!list.length){log("LRANGE orders 0 -1","(empty array)","err");return;}
+      render(true);
+      setTimeout(function(){render();},1100);
+      log("LRANGE orders 0 -1",list.map(function(v,i){return (i+1)+') "'+v+'"';}).join("\n")+"\n(读取不删除，元素还在)");
+    },
+    lindex:function(){
+      if(list.length<3){log("LINDEX orders 2","(nil)","err");return;}
+      log("LINDEX orders 2",'"'+list[2]+'"   ← 按下标访问是 O(N)，大 list 上很慢');
+    },
+    ltrim:function(){
+      var before=list.length;
+      list=list.slice(0,5); render();
+      log("LTRIM orders 0 4","OK   ← 只保留前 5 个，删掉了 "+Math.max(0,before-list.length)+" 个");
+    },
+    brpop:function(){
+      if(list.length){
+        var v=list.pop(); render();
+        log("BRPOP orders 0",'1) "orders"\n2) "'+v+'"   ← 有数据时立即返回');
+      }else{
+        waiting=true; blocked.classList.add("is-on");
+        log("BRPOP orders 0",'<span class="p">…阻塞等待中，现在去点一下 LPUSH 试试</span>');
+      }
+    },
+    del:function(){
+      var n=list.length?1:0; list=[]; render();
+      log("DEL orders","(integer) "+n);
+    }
+  };
+  ctrl.addEventListener("click",function(e){
+    var b=e.target.closest("button[data-cmd]"); if(!b) return;
+    var fn=ops[b.getAttribute("data-cmd")]; if(fn) fn();
+  });
+  render();
+  log("LRANGE orders 0 -1",'1) "job:3"\n2) "job:2"\n3) "job:1"   ← 初始状态');
+})();
+
+/* ---------------- 崩溃对比时间线 ---------------- */
+(function(){
+  var run=$("#crashRun"), reset=$("#crashReset");
+  if(!run) return;
+  var frames=$$(".frame"), timers=[];
+  function clearAll(){timers.forEach(clearTimeout);timers=[];frames.forEach(function(f){f.classList.remove("is-on");});}
+  run.addEventListener("click",function(){
+    clearAll(); run.disabled=true;
+    for(var k=1;k<=5;k++){
+      (function(k){
+        timers.push(setTimeout(function(){
+          frames.filter(function(f){return f.getAttribute("data-f")===String(k);})
+                .forEach(function(f){f.classList.add("is-on");});
+          if(k===5) run.disabled=false;
+        },k*(reduce?60:620)));
+      })(k);
+    }
+  });
+  reset.addEventListener("click",function(){clearAll();run.disabled=false;});
+})();
+
+/* ---------------- Entry ID 解剖 ---------------- */
+(function(){
+  var desc=$("#idDesc"); if(!desc) return;
+  var txt={
+    ms:"<b>毫秒时间戳</b>：这条消息被写入 Redis 的时刻。因为它在前面，所以 ID 的字典序天然等于时间序 —— 也让你能直接用 <span class=\"kw\">XRANGE</span> 按时间段捞数据，甚至用 <span class=\"kw\">XTRIM MINID</span> 按时间裁剪。",
+    seq:"<b>同毫秒内的序号</b>：同一毫秒里写入多条时靠它区分，从 0 开始递增。有了它，一毫秒内写进一万条消息也不会撞 ID，并且顺序依然明确。"
+  };
+  var def="把指针移上去，看每一段的含义。";
+  $$(".idpart[data-k]").forEach(function(el){
+    var k=el.getAttribute("data-k");
+    function on(){desc.innerHTML=txt[k];}
+    function off(){desc.innerHTML=def;}
+    el.addEventListener("mouseenter",on);
+    el.addEventListener("mouseleave",off);
+    el.addEventListener("focus",on);
+    el.addEventListener("blur",off);
+  });
+})();
+
+/* ---------------- Stream 消费者组分步演示 ---------------- */
+(function(){
+  var tape=$("#demoTape"); if(!tape) return;
+  var ldiEl=$("#demoLdi"), ldiLabel=$("#demoLdiLabel"), pelEl=$("#demoPel"),
+      c1El=$("#demoC1"), c2El=$("#demoC2"), cmdEl=$("#demoCmd"), sayEl=$("#demoSay"),
+      stepsEl=$("#demoSteps"), posEl=$("#demoPos"), prev=$("#demoPrev"), next=$("#demoNext");
+
+  var E=[{s:"…0000-0",p:"id=1001"},{s:"…0318-0",p:"id=1002"},{s:"…0705-0",p:"id=1003"}];
+  function ents(specs){
+    return specs.map(function(x,i){return {s:E[i].s,p:E[i].p,cls:x[0],note:x[1]};});
+  }
+  var steps=[
+    {
+      cmd:'<span class="p">&gt;</span> XGROUP CREATE orders g1 <span class="a">$</span> MKSTREAM\n<span class="p">OK</span>',
+      say:'先建组。<b>$</b> 表示这个组只关心建组之后写入的新消息（写 <b>0</b> 则从流的开头全部重新消费一遍）。此刻流是空的，组游标 last-delivered-id = 0-0，PEL 也是空的。',
+      ents:[], ldi:-1, pel:[], c1:"空闲", c2:"空闲", dead:false
+    },
+    {
+      cmd:'<span class="p">&gt;</span> XADD orders <span class="a">*</span> id 1001\n<span class="p">&gt;</span> XADD orders <span class="a">*</span> id 1002\n<span class="p">&gt;</span> XADD orders <span class="a">*</span> id 1003',
+      say:'生产者追加了三条消息。它们只是<b>躺在流里</b>，还没有分发给任何消费者 —— 组游标仍停在起点。',
+      ents:ents([["s-new","未分发"],["s-new","未分发"],["s-new","未分发"]]), ldi:-1,
+      pel:[], c1:"空闲", c2:"空闲", dead:false
+    },
+    {
+      cmd:'<span class="p">c1&gt;</span> XREADGROUP GROUP g1 c1 COUNT 2 STREAMS orders <span class="a">&gt;</span>',
+      say:'c1 用 <b>&gt;</b> 读取，拿到最早的两条未分发消息。同一瞬间发生了两件事：组游标前移到 …0318-0；PEL 里多出两条「c1 欠着没确认」的记录。<b>消息本体一条都没离开流。</b>',
+      ents:ents([["s-c1","→ c1"],["s-c1","→ c1"],["s-new","未分发"]]), ldi:1,
+      pel:[{id:"…0000-0",c:"c1",idle:"0s",cnt:1},{id:"…0318-0",c:"c1",idle:"0s",cnt:1}],
+      c1:"处理中：…0000-0, …0318-0", c2:"空闲", dead:false
+    },
+    {
+      cmd:'<span class="p">c2&gt;</span> XREADGROUP GROUP g1 c2 COUNT 2 STREAMS orders <span class="a">&gt;</span>',
+      say:'c2 发出<b>完全相同</b>的读取命令，拿到的却是第三条，而不是 c1 手里那两条 —— 同一个组内的消费者是<b>分工</b>，不是广播。这就是 Stream 实现「一组 worker 分担一条流」的方式。',
+      ents:ents([["s-c1","→ c1"],["s-c1","→ c1"],["s-c2","→ c2"]]), ldi:2,
+      pel:[{id:"…0000-0",c:"c1",idle:"1s",cnt:1},{id:"…0318-0",c:"c1",idle:"1s",cnt:1},{id:"…0705-0",c:"c2",idle:"0s",cnt:1}],
+      c1:"处理中：…0000-0, …0318-0", c2:"处理中：…0705-0", dead:false
+    },
+    {
+      cmd:'<span class="p">c1&gt;</span> XACK orders g1 1720506000000-0\n<span class="p">(integer) 1</span>',
+      say:'c1 处理完第一条，发出确认。PEL 里对应记录消失了 —— 但注意纸带：这条消息<b>只是变淡，并没有被删除</b>。ACK 清的是账，不是货。',
+      ents:ents([["s-ack","已 ACK"],["s-c1","→ c1"],["s-c2","→ c2"]]), ldi:2,
+      pel:[{id:"…0318-0",c:"c1",idle:"3s",cnt:1},{id:"…0705-0",c:"c2",idle:"2s",cnt:1}],
+      c1:"处理中：…0318-0", c2:"处理中：…0705-0", dead:false
+    },
+    {
+      cmd:'<span class="p">#</span> consumer c2 进程崩溃 ✖',
+      say:'c2 挂了，手里那条既没处理完也没确认。如果这是 List，消息此刻已经<b>随进程一起消失</b>。而在 Stream 里，它仍然躺在流里，PEL 也记着「c2 欠一笔」，只是 <b>idle 时间开始不断增长</b>。',
+      ents:ents([["s-ack","已 ACK"],["s-c1","→ c1"],["s-stuck","c2 失联"]]), ldi:2,
+      pel:[{id:"…0318-0",c:"c1",idle:"12s",cnt:1},{id:"…0705-0",c:"c2",idle:"76s",cnt:1,warn:true}],
+      c1:"处理中：…0318-0", c2:"进程已退出 ✖", dead:true
+    },
+    {
+      cmd:'<span class="p">&gt;</span> XPENDING orders g1\n<span class="p">1) (integer) 2\n2) "1720506000318-0"\n3) "1720506000705-0"\n4) 1) 1) "c1"  2) "1"\n   2) 1) "c2"  2) "1"</span>',
+      say:'运维视角：组里还欠两笔。c1 那条 idle 12 秒，属于正常处理中；c2 那条已经 idle 76 秒，明显不对劲。<b>PEL 就是你排查消费卡顿的第一现场。</b>',
+      ents:ents([["s-ack","已 ACK"],["s-c1","→ c1"],["s-stuck","idle 76s"]]), ldi:2,
+      pel:[{id:"…0318-0",c:"c1",idle:"12s",cnt:1},{id:"…0705-0",c:"c2",idle:"76s",cnt:1,warn:true}],
+      c1:"处理中：…0318-0", c2:"进程已退出 ✖", dead:true
+    },
+    {
+      cmd:'<span class="p">c1&gt;</span> XAUTOCLAIM orders g1 c1 <span class="a">60000</span> 0 COUNT 10',
+      say:'存活的 c1 把 idle 超过 60 秒的消息<b>接管</b>过来：归属者从 c2 改成 c1，delivery-count 加一。这就是 Stream 的崩溃恢复 —— 不需要外部协调者，一条命令搞定。',
+      ents:ents([["s-ack","已 ACK"],["s-c1","→ c1"],["s-c1","→ c1 接管"]]), ldi:2,
+      pel:[{id:"…0318-0",c:"c1",idle:"14s",cnt:1},{id:"…0705-0",c:"c1",idle:"0s",cnt:2}],
+      c1:"处理中：…0318-0, …0705-0（重投）", c2:"进程已退出 ✖", dead:true
+    },
+    {
+      cmd:'<span class="p">c1&gt;</span> XACK orders g1 1720506000318-0 1720506000705-0\n<span class="p">(integer) 2</span>',
+      say:'两条都处理完并确认。<b>PEL 清空</b>，这一批消息的投递生命周期结束。整个过程中，没有任何一条消息因为 c2 的崩溃而丢失。',
+      ents:ents([["s-ack","已 ACK"],["s-ack","已 ACK"],["s-ack","已 ACK"]]), ldi:2,
+      pel:[], c1:"空闲", c2:"进程已退出 ✖", dead:true
+    },
+    {
+      cmd:'<span class="p">&gt;</span> XLEN orders\n<span class="p">(integer) 3</span>',
+      say:'全部确认之后，<b>XLEN 依然是 3</b>。三条消息一条没少地留在内存里。这是 Stream 与 List 最根本的差别，也是它<b>必须配 XTRIM</b> 的原因 —— 没人替你清理。',
+      ents:ents([["s-ack","仍在流中"],["s-ack","仍在流中"],["s-ack","仍在流中"]]), ldi:2,
+      pel:[], c1:"空闲", c2:"进程已退出 ✖", dead:true
+    },
+    {
+      cmd:'<span class="p">&gt;</span> XGROUP CREATE orders g2 <span class="a">0</span>\n<span class="p">c3&gt;</span> XREADGROUP GROUP g2 c3 COUNT 3 STREAMS orders <span class="a">&gt;</span>',
+      say:'因为数据还在，新建一个从 <b>0</b> 开始的组 g2，就能把这三条<b>完整重新消费一遍</b>。组与组之间是广播，各有各的游标和 PEL。「同一条订单流同时喂给库存服务和风控服务」就是这么做的。',
+      ents:ents([["s-new","→ g2/c3"],["s-new","→ g2/c3"],["s-new","→ g2/c3"]]), ldi:2,
+      pel:[{id:"…0000-0",c:"c3 (g2)",idle:"0s",cnt:1},{id:"…0318-0",c:"c3 (g2)",idle:"0s",cnt:1},{id:"…0705-0",c:"c3 (g2)",idle:"0s",cnt:1}],
+      c1:"空闲（g1 已全部确认）", c2:"进程已退出 ✖", dead:true
+    }
+  ];
+
+  var cur=0;
+  steps.forEach(function(_,i){
+    var b=document.createElement("button");
+    b.className="stepdot"; b.textContent=i; b.setAttribute("aria-label","第 "+i+" 步");
+    b.addEventListener("click",function(){cur=i;render();});
+    stepsEl.appendChild(b);
+  });
+
+  function render(){
+    var s=steps[cur];
+    cmdEl.innerHTML=s.cmd;
+    sayEl.innerHTML=s.say;
+    Array.prototype.slice.call(tape.querySelectorAll(".entry")).forEach(function(n){tape.removeChild(n);});
+    if(!s.ents.length){
+      var e=document.createElement("div");
+      e.className="entry"; e.style.border="1px dashed var(--line)";
+      e.innerHTML='<b>(empty stream)</b><small>XLEN = 0</small>';
+      tape.appendChild(e);
+    }
+    s.ents.forEach(function(x){
+      var e=document.createElement("div");
+      e.className="entry "+x.cls;
+      e.innerHTML='<b>'+x.s+'</b>'+x.p+'<small>'+x.note+'</small>';
+      tape.appendChild(e);
+    });
+    if(s.pel.length){
+      var h='<table><tr><th>entry-id</th><th>consumer</th><th>idle</th><th>次数</th></tr>';
+      s.pel.forEach(function(r){
+        h+='<tr class="'+(r.warn?"warn":"")+'"><td>'+r.id+'</td><td>'+r.c+'</td><td>'+r.idle+'</td><td>'+r.cnt+'</td></tr>';
+      });
+      pelEl.innerHTML=h+'</table>';
+    }else{
+      pelEl.innerHTML='<div class="pel__empty">(empty) — 没有欠账</div>';
+    }
+    c1El.querySelector(".cbox__hold").textContent=s.c1;
+    c2El.querySelector(".cbox__hold").textContent=s.c2;
+    c2El.classList.toggle("cbox--dead",!!s.dead);
+    $$(".stepdot",stepsEl).forEach(function(b,i){
+      b.classList.toggle("is-on",i===cur);
+      b.classList.toggle("is-done",i<cur);
+    });
+    posEl.textContent="step "+cur+" / "+(steps.length-1);
+    prev.disabled=(cur===0); next.disabled=(cur===steps.length-1);
+    requestAnimationFrame(function(){
+      var nodes=tape.querySelectorAll(".entry");
+      if(s.ldi>=0 && nodes[s.ldi]){
+        var n=nodes[s.ldi];
+        ldiEl.style.width=Math.max(0,n.offsetLeft+n.offsetWidth-12)+"px";
+        ldiLabel.innerHTML='last-delivered-id: <span style="color:var(--amber)">'+s.ents[s.ldi].s+'</span> &nbsp;← 橙线覆盖的部分是「组已经分发过」的范围';
+      }else{
+        ldiEl.style.width="0px";
+        ldiLabel.innerHTML='last-delivered-id: 0-0 &nbsp;<span style="color:var(--dim)">（还没分发过任何消息）</span>';
+      }
+    });
+  }
+  prev.addEventListener("click",function(){if(cur>0){cur--;render();}});
+  next.addEventListener("click",function(){if(cur<steps.length-1){cur++;render();}});
+  document.addEventListener("keydown",function(e){
+    if(!tape.getBoundingClientRect) return;
+    var r=tape.getBoundingClientRect();
+    if(r.top>window.innerHeight||r.bottom<0) return;
+    if(e.key==="ArrowRight"&&cur<steps.length-1){cur++;render();}
+    if(e.key==="ArrowLeft"&&cur>0){cur--;render();}
+  });
+  render();
+})();
+
+/* ---------------- 误区手风琴 ---------------- */
+(function(){
+  $$(".acc").forEach(function(acc){
+    var q=acc.querySelector(".acc__q");
+    q.setAttribute("aria-expanded","false");
+    q.addEventListener("click",function(){
+      var open=acc.classList.toggle("is-open");
+      q.setAttribute("aria-expanded",open?"true":"false");
+    });
+  });
+})();
+
+/* ---------------- 选型决策器 ---------------- */
+(function(){
+  var kEl=$("#rKey"), dEl=$("#rDesc"), cEl=$("#rCmd");
+  if(!kEl) return;
+  var ans={};
+  var R={
+    list:{k:"LIST",cls:"k-list",d:"用 <span class=\"kw\">LPUSH</span> + <span class=\"kw\">BRPOP</span> 就够了。单一消费方、允许偶发丢失、不需要历史 —— 这正是 List 最擅长的位置，代价最小、心智负担最轻。如果你想再稳一点，把 BRPOP 换成 BLMOVE 留一份处理中的底。",
+      c:"# 生产\nLPUSH orders '{\"id\":1001}'\n\n# 消费（更稳的写法）\nBLMOVE orders orders:processing RIGHT LEFT 0\n# ...处理成功后...\nLREM orders:processing 1 \"$msg\""},
+    pubsub:{k:"PUB/SUB",cls:"k-pubsub",d:"需要广播、又不在乎丢失，Pub/Sub 是最轻的选择：无存储、无游标、订阅即收。但请确认你真的能接受「订阅者掉线 3 秒，这 3 秒的消息就没了」。只要答案有一点犹豫，就应该改用 Stream 的多消费者组。",
+      c:"# 广播\nPUBLISH config:changed '{\"v\":12}'\n\n# 订阅\nSUBSCRIBE config:changed"},
+    stream:{k:"STREAM",cls:"k-stream",d:"你的需求已经超出 List 和 Pub/Sub 的能力边界：要么需要多方各消费一份，要么消息不能丢，要么需要回放历史。Stream 的消费者组正是为此而生，而且不需要引入任何新组件。记住配套的两件事：<strong>处理逻辑做幂等</strong>，<strong>XADD 时带上 MAXLEN ~ N</strong>。",
+      c:"XGROUP CREATE orders g1 $ MKSTREAM\nXADD orders MAXLEN ~ 100000 * id 1001\nXREADGROUP GROUP g1 c1 BLOCK 5000 COUNT 10 STREAMS orders >\nXACK orders g1 <id>\nXAUTOCLAIM orders g1 c1 60000 0"},
+    kafka:{k:"KAFKA",cls:"k-kafka",d:"留存量级放不进内存，就到了 Redis 的天花板 —— Stream 的数据全部驻留内存，用它存几天的全量日志成本极高且有 OOM 风险。这种规模应该用磁盘型日志系统（Kafka / Pulsar / RocketMQ）。<br><br>折中做法也很常见：<strong>Redis Stream 扛实时链路，异步归档到对象存储或数仓</strong>做长期留存与回放。",
+      c:"# Redis 侧只保留最近一小段\nXADD orders MAXLEN ~ 200000 * id 1001\nXTRIM orders MINID ~ <一小时前的时间戳>"}
+  };
+  function calc(){
+    var n=Object.keys(ans).length;
+    if(n<4){
+      kEl.className="result__k k-none"; kEl.textContent="还差 "+(4-n)+" 个问题";
+      dEl.innerHTML="左边四个问题选完，这里会给出建议方案和第一行代码。";
+      cEl.style.display="none"; return;
+    }
+    var r;
+    if(ans.q4==="y") r=R.kafka;
+    else if(ans.q2==="n"&&ans.q3==="n") r=(ans.q1==="y")?R.pubsub:R.list;
+    else r=R.stream;
+    kEl.className="result__k "+r.cls; kEl.textContent=r.k;
+    dEl.innerHTML=r.d;
+    cEl.textContent=r.c; cEl.style.display="block";
+  }
+  $$(".q").forEach(function(q){
+    var key=q.getAttribute("data-q");
+    q.addEventListener("click",function(e){
+      var b=e.target.closest("button[data-v]"); if(!b) return;
+      ans[key]=b.getAttribute("data-v");
+      $$("button",q).forEach(function(x){x.classList.toggle("btn--on",x===b);});
+      calc();
+    });
+  });
+  calc();
+})();
+
+/* ---------------- 速查表 tab ---------------- */
+(function(){
+  var tabs=$$(".tab"); if(!tabs.length) return;
+  tabs.forEach(function(t){
+    t.addEventListener("click",function(){
+      var id=t.getAttribute("data-tab");
+      tabs.forEach(function(x){x.classList.toggle("is-on",x===t);});
+      $$(".tabpane").forEach(function(p){p.classList.toggle("is-on",p.id==="pane-"+id);});
+    });
+  });
+})();
+
+})();
+</script>
+</body>
+</html>

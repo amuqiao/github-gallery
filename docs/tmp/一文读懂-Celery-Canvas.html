@@ -1,0 +1,2297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Celery & Canvas</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #0F1117;
+  --bg2: #161B27;
+  --bg3: #1E2535;
+  --bg4: #252D3F;
+  --border: #2E3850;
+  --border2: #3D4D6A;
+  --text: #E8EAF0;
+  --text2: #8A94A8;
+  --text3: #5A6478;
+  --yellow: #E8C547;
+  --yellow-dim: #9E8730;
+  --teal: #4ECDC4;
+  --teal-dim: #2A7A76;
+  --red: #FF6B6B;
+  --red-dim: #8B3B3B;
+  --blue: #5B8DEF;
+  --purple: #9B6DFF;
+  --green: #52C97D;
+  --mono: 'IBM Plex Mono', 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.7;
+  font-size: 15px;
+  overflow-x: hidden;
+}
+
+/* ─── NAV ─── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(15,17,23,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  display: flex; align-items: center; gap: 0; height: 52px;
+}
+.nav-brand {
+  font-family: var(--mono); font-weight: 700; font-size: 14px;
+  color: var(--yellow); margin-right: 32px; white-space: nowrap;
+  letter-spacing: 0.05em;
+}
+.nav-links { display: flex; gap: 0; flex: 1; overflow-x: auto; }
+.nav-links a {
+  font-family: var(--mono); font-size: 11px; color: var(--text3);
+  text-decoration: none; padding: 0 12px; height: 52px;
+  display: flex; align-items: center; white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color .2s, border-color .2s; letter-spacing: 0.06em;
+}
+.nav-links a:hover { color: var(--text); border-color: var(--border2); }
+.nav-links a.active { color: var(--yellow); border-color: var(--yellow); }
+
+main { padding-top: 52px; }
+
+/* ─── SECTION LAYOUT ─── */
+section { padding: 80px 32px; max-width: 1100px; margin: 0 auto; }
+section + section { border-top: 1px solid var(--border); }
+
+.eyebrow {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--text3); margin-bottom: 12px;
+}
+h2 {
+  font-family: var(--mono); font-weight: 700;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  color: var(--text); line-height: 1.25; margin-bottom: 10px;
+  letter-spacing: -0.02em;
+}
+h2 em { color: var(--yellow); font-style: normal; }
+h3 {
+  font-family: var(--mono); font-size: 1rem; font-weight: 600;
+  color: var(--text); margin-bottom: 8px; letter-spacing: -0.01em;
+}
+p.lead { color: var(--text2); max-width: 680px; margin-bottom: 32px; font-size: 15px; }
+p { color: var(--text2); line-height: 1.75; }
+
+code {
+  font-family: var(--mono); font-size: 0.85em;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 6px; color: var(--yellow);
+}
+pre {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 20px 22px; overflow-x: auto;
+  font-family: var(--mono); font-size: 13px; line-height: 1.7;
+  color: var(--text);
+}
+pre .c { color: var(--text3); }
+pre .k { color: var(--blue); }
+pre .s { color: var(--green); }
+pre .f { color: var(--yellow); }
+pre .n { color: var(--teal); }
+pre .d { color: var(--purple); }
+pre .r { color: var(--red); }
+
+/* ─── HERO ─── */
+#hero {
+  min-height: calc(100vh - 52px); max-width: 100%;
+  padding: 0; display: flex; flex-direction: column;
+  justify-content: center; position: relative; overflow: hidden;
+}
+.hero-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0; max-width: 1100px; margin: 0 auto;
+  padding: 80px 32px; width: 100%; align-items: center;
+}
+@media (max-width: 768px) { .hero-grid { grid-template-columns: 1fr; } }
+.hero-left { padding-right: 48px; }
+.hero-tag {
+  display: inline-block; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  border: 1px solid var(--yellow-dim); color: var(--yellow);
+  padding: 4px 12px; border-radius: 2px; margin-bottom: 24px;
+}
+.hero-title {
+  font-family: var(--mono); font-weight: 700;
+  font-size: clamp(2rem, 4.5vw, 3.4rem);
+  line-height: 1.1; letter-spacing: -0.04em;
+  margin-bottom: 20px;
+}
+.hero-title .accent { color: var(--yellow); }
+.hero-title .accent2 { color: var(--teal); }
+.hero-sub {
+  color: var(--text2); font-size: 15px; line-height: 1.75;
+  max-width: 480px; margin-bottom: 36px;
+}
+.hero-stats {
+  display: flex; gap: 32px; flex-wrap: wrap;
+}
+.stat-item { display: flex; flex-direction: column; gap: 2px; }
+.stat-num {
+  font-family: var(--mono); font-size: 1.6rem;
+  font-weight: 700; color: var(--yellow);
+}
+.stat-lbl { font-size: 11px; color: var(--text3); letter-spacing: 0.08em; }
+
+/* Pipeline animation */
+.hero-right { position: relative; }
+.pipeline-demo {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 24px; position: relative;
+  overflow: hidden;
+}
+.pipeline-label {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text3); letter-spacing: 0.15em;
+  text-transform: uppercase; margin-bottom: 16px;
+}
+.pipe-track {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px; position: relative;
+}
+.pipe-node {
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 10px 14px;
+  font-family: var(--mono); font-size: 11px; color: var(--text2);
+  white-space: nowrap; position: relative; z-index: 1;
+  transition: all .3s;
+}
+.pipe-node.active {
+  border-color: var(--yellow); color: var(--yellow);
+  box-shadow: 0 0 16px rgba(232,197,71,0.25);
+}
+.pipe-node.done {
+  border-color: var(--teal); color: var(--teal);
+  box-shadow: 0 0 12px rgba(78,205,196,0.15);
+}
+.pipe-node.running {
+  border-color: var(--blue); color: var(--blue);
+  box-shadow: 0 0 12px rgba(91,141,239,0.2);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+.pipe-arrow {
+  color: var(--text3); font-size: 16px; flex-shrink: 0;
+}
+.pipe-arrow.lit { color: var(--yellow); }
+.task-ball-container {
+  height: 28px; position: relative; margin: 4px 0 12px;
+  overflow: hidden;
+}
+.task-ball {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--yellow);
+  position: absolute; top: 5px; left: -20px;
+  box-shadow: 0 0 12px var(--yellow);
+  transition: none;
+}
+.pipe-status {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text3); margin-top: 8px;
+}
+.pipe-status span { color: var(--teal); }
+
+/* ─── GRID UTILS ─── */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+@media(max-width:820px) { .grid2,.grid3 { grid-template-columns: 1fr; } }
+
+/* ─── CARDS ─── */
+.card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 22px 24px;
+}
+.card-tag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+  text-transform: uppercase; margin-bottom: 10px;
+}
+.card.yellow { border-top: 2px solid var(--yellow); }
+.card.yellow .card-tag { color: var(--yellow); }
+.card.teal { border-top: 2px solid var(--teal); }
+.card.teal .card-tag { color: var(--teal); }
+.card.red { border-top: 2px solid var(--red); }
+.card.red .card-tag { color: var(--red); }
+.card.blue { border-top: 2px solid var(--blue); }
+.card.blue .card-tag { color: var(--blue); }
+.card.purple { border-top: 2px solid var(--purple); }
+.card.purple .card-tag { color: var(--purple); }
+
+/* ─── WHY SECTION: Before/After ─── */
+.before-after {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  margin-top: 32px;
+}
+@media(max-width:768px) { .before-after { grid-template-columns: 1fr; } }
+.ba-panel {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+}
+.ba-header {
+  padding: 12px 18px; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+}
+.ba-header.bad { background: rgba(255,107,107,0.12); color: var(--red); border-bottom: 1px solid rgba(255,107,107,0.2); }
+.ba-header.good { background: rgba(78,205,196,0.1); color: var(--teal); border-bottom: 1px solid rgba(78,205,196,0.2); }
+.ba-body { padding: 18px; }
+.ba-timeline {
+  display: flex; flex-direction: column; gap: 6px; margin-top: 12px;
+}
+.ba-step {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 12px;
+}
+.ba-step .dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.ba-step .bar {
+  height: 22px; border-radius: 3px;
+  display: flex; align-items: center; padding: 0 10px;
+  font-size: 11px; white-space: nowrap;
+}
+
+/* ─── THREE COMPONENTS ─── */
+.trio {
+  display: grid; grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 0; align-items: center; margin: 40px 0;
+}
+@media(max-width:768px) {
+  .trio { grid-template-columns: 1fr; }
+  .trio-arrow { transform: rotate(90deg); margin: 8px auto; }
+}
+.trio-node {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 28px 20px; text-align: center;
+  cursor: pointer; transition: all .25s; position: relative;
+}
+.trio-node:hover, .trio-node.sel {
+  border-color: var(--yellow);
+  box-shadow: 0 0 24px rgba(232,197,71,0.15);
+}
+.trio-icon { font-size: 2rem; margin-bottom: 10px; display: block; }
+.trio-name {
+  font-family: var(--mono); font-weight: 700; font-size: 14px;
+  color: var(--yellow); margin-bottom: 6px;
+}
+.trio-sub { font-size: 12px; color: var(--text3); }
+.trio-arrow {
+  font-size: 24px; color: var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 12px;
+}
+.trio-detail {
+  margin-top: 24px; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; padding: 24px; min-height: 120px;
+  transition: opacity .2s;
+}
+.trio-detail h3 { color: var(--yellow); margin-bottom: 12px; }
+.trio-detail ul { list-style: none; padding: 0; }
+.trio-detail li {
+  padding: 5px 0; padding-left: 20px; position: relative;
+  font-size: 14px; color: var(--text2);
+}
+.trio-detail li::before { content: '→'; position: absolute; left: 0; color: var(--yellow-dim); font-size: 12px; top: 6px; }
+
+/* ─── CODE TABS ─── */
+.code-block {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; margin-top: 24px;
+}
+.code-tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  background: var(--bg3); overflow-x: auto;
+}
+.code-tab {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+  padding: 10px 18px; color: var(--text3); cursor: pointer;
+  border: none; background: none; white-space: nowrap;
+  border-bottom: 2px solid transparent; transition: all .2s;
+}
+.code-tab.active { color: var(--yellow); border-bottom-color: var(--yellow); }
+.code-tab:hover:not(.active) { color: var(--text); }
+.code-pane { display: none; padding: 0; }
+.code-pane.active { display: block; }
+.code-pane pre { border: none; border-radius: 0; margin: 0; }
+.code-note {
+  padding: 12px 20px; background: var(--bg3);
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text3);
+  font-family: var(--mono);
+}
+
+/* ─── CANVAS SECTION ─── */
+.canvas-intro {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
+  margin: 40px 0;
+}
+@media(max-width:768px) { .canvas-intro { grid-template-columns: 1fr; } }
+
+.canvas-primitives {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin: 32px 0;
+}
+@media(max-width:768px) { .canvas-primitives { grid-template-columns: 1fr; } }
+.primitive {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; cursor: pointer;
+  transition: all .2s;
+}
+.primitive:hover { border-color: var(--border2); transform: translateY(-2px); }
+.primitive.sel { border-color: var(--yellow); box-shadow: 0 0 20px rgba(232,197,71,0.15); }
+.prim-header {
+  padding: 14px 18px; display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.prim-icon {
+  font-family: var(--mono); font-weight: 700; font-size: 18px;
+  width: 40px; height: 40px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.prim-name { font-family: var(--mono); font-weight: 700; font-size: 15px; color: var(--text); }
+.prim-tagline { font-size: 12px; color: var(--text3); }
+.prim-body { padding: 16px 18px; }
+
+/* Canvas playground */
+.canvas-playground {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; margin: 32px 0;
+}
+.playground-header {
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+}
+.playground-title {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--text2); letter-spacing: 0.1em;
+}
+.playground-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.pg-btn {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+  padding: 6px 14px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg3);
+  color: var(--text3); transition: all .2s;
+}
+.pg-btn:hover { border-color: var(--border2); color: var(--text); }
+.pg-btn.active { border-color: var(--yellow); color: var(--yellow); background: rgba(232,197,71,0.08); }
+.pg-btn.run {
+  border-color: var(--teal); color: var(--teal);
+  background: rgba(78,205,196,0.1);
+}
+.pg-btn.run:hover { background: rgba(78,205,196,0.18); }
+.playground-body {
+  display: grid; grid-template-columns: 1fr 1fr;
+}
+@media(max-width:768px) { .playground-body { grid-template-columns: 1fr; } }
+.playground-viz {
+  padding: 24px; border-right: 1px solid var(--border);
+  min-height: 280px; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.playground-code { padding: 0; background: var(--bg); overflow: hidden; }
+.playground-code pre { margin: 0; border: none; border-radius: 0; height: 100%; min-height: 280px; }
+.playground-trace {
+  padding: 16px 20px; border-top: 1px solid var(--border);
+  font-family: var(--mono); font-size: 11px; color: var(--text3);
+  min-height: 52px; display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.trace-step {
+  padding: 3px 10px; border-radius: 3px;
+  border: 1px solid var(--border); background: var(--bg3);
+  transition: all .4s;
+}
+.trace-step.running {
+  border-color: var(--blue); color: var(--blue);
+  background: rgba(91,141,239,0.1);
+  animation: pulse 1s infinite;
+}
+.trace-step.done {
+  border-color: var(--teal); color: var(--teal);
+  background: rgba(78,205,196,0.08);
+}
+
+/* SVG Flow diagrams */
+.flow-svg-wrap {
+  overflow-x: auto; padding: 8px 0;
+}
+svg.flow { display: block; }
+.f-node rect { fill: var(--bg3); stroke: var(--border2); stroke-width: 1.5; rx: 8; }
+.f-node text { fill: var(--text2); font-family: 'IBM Plex Mono',monospace; font-size: 12px; }
+.f-node.yellow rect { stroke: var(--yellow); }
+.f-node.yellow text { fill: var(--yellow); }
+.f-node.teal rect { stroke: var(--teal); fill: rgba(78,205,196,0.06); }
+.f-node.teal text { fill: var(--teal); }
+.f-node.blue rect { stroke: var(--blue); fill: rgba(91,141,239,0.06); }
+.f-node.blue text { fill: var(--blue); }
+.f-node.purple rect { stroke: var(--purple); fill: rgba(155,109,255,0.06); }
+.f-node.purple text { fill: var(--purple); }
+.f-node.red rect { stroke: var(--red); fill: rgba(255,107,107,0.06); }
+.f-node.red text { fill: var(--red); }
+.f-arrow { stroke: var(--border2); stroke-width: 1.5; fill: none; marker-end: url(#ah); }
+.f-arrow.yellow { stroke: var(--yellow); }
+.f-arrow.teal { stroke: var(--teal); }
+.f-label { font-family: 'IBM Plex Mono',monospace; font-size: 10px; fill: var(--text3); }
+
+/* ─── TASK LIFECYCLE ─── */
+.lifecycle-wrap {
+  margin: 32px 0; overflow-x: auto;
+}
+.lifecycle-states {
+  display: flex; gap: 0; align-items: stretch;
+  min-width: 700px;
+}
+.lc-state {
+  flex: 1; padding: 18px 14px; text-align: center;
+  border: 1px solid var(--border); border-right: none;
+  cursor: pointer; transition: all .25s; background: var(--bg2);
+}
+.lc-state:last-child { border-right: 1px solid var(--border); border-radius: 0 8px 8px 0; }
+.lc-state:first-child { border-radius: 8px 0 0 8px; }
+.lc-state.sel { z-index: 1; }
+.lc-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  margin: 0 auto 8px; background: var(--text3);
+}
+.lc-name {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.lc-desc { font-size: 11px; color: var(--text3); }
+.lc-detail {
+  margin-top: 16px; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 18px 20px; min-height: 80px;
+  transition: opacity .2s;
+}
+
+/* State colors */
+.lc-state[data-state="PENDING"] .lc-dot { background: var(--text3); }
+.lc-state[data-state="PENDING"].sel { background: rgba(90,100,120,0.15); border-color: var(--text3); }
+.lc-state[data-state="RECEIVED"] .lc-dot, .lc-state[data-state="RECEIVED"].sel .lc-dot { background: var(--blue); }
+.lc-state[data-state="RECEIVED"].sel { background: rgba(91,141,239,0.08); border-color: var(--blue); }
+.lc-state[data-state="STARTED"] .lc-dot { background: var(--yellow); }
+.lc-state[data-state="STARTED"].sel { background: rgba(232,197,71,0.08); border-color: var(--yellow); }
+.lc-state[data-state="SUCCESS"] .lc-dot { background: var(--teal); }
+.lc-state[data-state="SUCCESS"].sel { background: rgba(78,205,196,0.08); border-color: var(--teal); }
+.lc-state[data-state="FAILURE"] .lc-dot { background: var(--red); }
+.lc-state[data-state="FAILURE"].sel { background: rgba(255,107,107,0.08); border-color: var(--red); }
+.lc-state[data-state="RETRY"] .lc-dot { background: var(--purple); }
+.lc-state[data-state="RETRY"].sel { background: rgba(155,109,255,0.08); border-color: var(--purple); }
+.lc-state[data-state="REVOKED"] .lc-dot { background: var(--red-dim); }
+
+/* ─── PITFALLS ─── */
+.pitfall {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; margin-bottom: 12px; overflow: hidden;
+}
+.pitfall-q {
+  padding: 16px 20px; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--mono); font-size: 13px; color: var(--text);
+  user-select: none; transition: background .2s;
+}
+.pitfall-q:hover { background: var(--bg3); }
+.pitfall-q .icon {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(255,107,107,0.15); color: var(--red);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; flex-shrink: 0; margin-right: 12px;
+}
+.pitfall-q .chev {
+  color: var(--text3); transition: transform .25s; font-size: 12px;
+}
+.pitfall.open .pitfall-q .chev { transform: rotate(90deg); }
+.pitfall-a {
+  display: none; padding: 16px 20px; border-top: 1px solid var(--border);
+  background: var(--bg3);
+}
+.pitfall.open .pitfall-a { display: block; }
+.pitfall-a p { font-size: 14px; margin-bottom: 12px; }
+.pitfall-a pre { font-size: 12px; margin-top: 10px; }
+
+/* ─── COMPARISON TABLE ─── */
+.cmp-table-wrap { overflow-x: auto; margin: 24px 0; }
+table.cmp {
+  width: 100%; border-collapse: collapse;
+  font-size: 13px; font-family: var(--mono);
+}
+table.cmp th, table.cmp td {
+  padding: 12px 16px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+table.cmp th {
+  color: var(--text3); font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; background: var(--bg3);
+  position: sticky; top: 52px;
+}
+table.cmp td { color: var(--text2); }
+table.cmp tr:last-child td { border-bottom: none; }
+table.cmp td:first-child { color: var(--text); font-weight: 600; }
+table.cmp .y { color: var(--teal); }
+table.cmp .n { color: var(--red); }
+table.cmp .m { color: var(--yellow); }
+table.cmp tr:hover td { background: var(--bg3); }
+
+/* ─── FOOTER ─── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 32px; text-align: center;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text3); letter-spacing: 0.08em;
+}
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ─── SEPARATORS AND MISC ─── */
+.sep { width: 40px; height: 2px; background: var(--yellow); margin: 16px 0; border: none; }
+.tag-pill {
+  display: inline-block; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.1em; padding: 2px 10px;
+  border-radius: 999px; border: 1px solid; margin: 2px;
+}
+.tag-pill.y { color: var(--yellow); border-color: var(--yellow-dim); background: rgba(232,197,71,0.08); }
+.tag-pill.t { color: var(--teal); border-color: var(--teal-dim); background: rgba(78,205,196,0.08); }
+.tag-pill.b { color: var(--blue); border-color: #3056a0; background: rgba(91,141,239,0.08); }
+.tag-pill.p { color: var(--purple); border-color: #5a3faa; background: rgba(155,109,255,0.08); }
+
+.insight {
+  border-left: 3px solid var(--yellow);
+  padding: 12px 18px; background: rgba(232,197,71,0.06);
+  border-radius: 0 8px 8px 0; margin: 16px 0;
+  font-size: 14px; color: var(--text2);
+}
+.insight strong { color: var(--yellow); }
+
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">▶ Celery & Canvas</div>
+  <div class="nav-links">
+    <a href="#hero">概览</a>
+    <a href="#why">为什么</a>
+    <a href="#how">三件套</a>
+    <a href="#quickstart">快速上手</a>
+    <a href="#beat">Beat 定时</a>
+    <a href="#canvas">Canvas 编排</a>
+    <a href="#lifecycle">任务状态</a>
+    <a href="#pitfalls">常见陷阱</a>
+    <a href="#compare">对比选型</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════════ HERO -->
+<section id="hero" style="padding:0; max-width:100%; border:none;">
+<div class="hero-grid">
+  <div class="hero-left">
+    <div class="hero-tag">Python 分布式任务队列</div>
+    <div class="hero-title">
+      把<span class="accent">耗时操作</span><br>
+      从请求里<br>
+      <span class="accent2">剥离出去</span>
+    </div>
+    <p class="hero-sub">
+      Celery 是 Python 生态最主流的分布式任务队列。<br>
+      用户点了按钮就能立刻得到响应——发邮件、压图片、跑模型,
+      这些事情悄悄在后台<strong style="color:var(--text)">异步完成</strong>。<br>
+      Canvas 是它的工作流编排层,让多个任务像积木一样组合。
+    </p>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <div class="stat-num">~24k</div>
+        <div class="stat-lbl">GitHub Stars</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">2009</div>
+        <div class="stat-lbl">年首次发布</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">Redis/RMQ</div>
+        <div class="stat-lbl">主流 Broker</div>
+      </div>
+    </div>
+  </div>
+  <div class="hero-right">
+    <div class="pipeline-demo">
+      <div class="pipeline-label">// TASK EXECUTION PIPELINE</div>
+      <div class="pipe-track">
+        <div class="pipe-node" id="pn-app">APP</div>
+        <div class="pipe-arrow" id="pa-1">→</div>
+        <div class="pipe-node" id="pn-broker">BROKER</div>
+        <div class="pipe-arrow" id="pa-2">→</div>
+        <div class="pipe-node" id="pn-queue">QUEUE</div>
+        <div class="pipe-arrow" id="pa-3">→</div>
+        <div class="pipe-node" id="pn-worker">WORKER</div>
+      </div>
+      <div class="task-ball-container">
+        <div class="task-ball" id="task-ball"></div>
+      </div>
+      <pre style="background:var(--bg);border:none;padding:0;font-size:12px;margin-top:4px;"><span class="c"># 你的代码只需这一行:</span>
+<span class="f">send_email</span>.<span class="n">delay</span>(user_id=<span class="d">42</span>)
+<span class="c"># → 立即返回, 邮件在后台发送</span></pre>
+      <div class="pipe-status">STATUS: <span id="pipe-status-text">waiting for task...</span></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ WHY -->
+<section id="why">
+  <div class="eyebrow">核心动机</div>
+  <h2>一个 HTTP 请求<em>不应该</em>做所有事</h2>
+  <p class="lead">用户点击"注册"按钮，你的服务器同步发了欢迎邮件——邮件服务器慢的时候，用户要等 3 秒才能看到"注册成功"。这不是邮件慢的问题，是架构错了。</p>
+  <div class="before-after">
+    <div class="ba-panel">
+      <div class="ba-header bad">❌ 同步阻塞（问题所在）</div>
+      <div class="ba-body">
+        <p style="font-size:13px;color:var(--text3);margin-bottom:12px;">HTTP 请求被迫等待所有操作完成才能返回</p>
+        <div class="ba-timeline">
+          <div class="ba-step"><div class="dot" style="background:var(--blue)"></div><div class="bar" style="background:rgba(91,141,239,0.15);border:1px solid rgba(91,141,239,0.3);color:var(--blue);width:60px">接受请求</div></div>
+          <div class="ba-step"><div class="dot" style="background:var(--yellow)"></div><div class="bar" style="background:rgba(232,197,71,0.15);border:1px solid rgba(232,197,71,0.3);color:var(--yellow);width:220px">写数据库 (200ms)</div></div>
+          <div class="ba-step"><div class="dot" style="background:var(--red)"></div><div class="bar" style="background:rgba(255,107,107,0.15);border:1px solid rgba(255,107,107,0.3);color:var(--red);width:340px">发欢迎邮件（等 SMTP 服务器…2500ms）</div></div>
+          <div class="ba-step"><div class="dot" style="background:var(--red)"></div><div class="bar" style="background:rgba(255,107,107,0.15);border:1px solid rgba(255,107,107,0.3);color:var(--red);width:180px">压缩头像 (800ms)</div></div>
+          <div class="ba-step"><div class="dot" style="background:var(--text3)"></div><div class="bar" style="background:var(--bg3);border:1px solid var(--border);color:var(--text3);width:100px">返回响应 ← 3.5s后</div></div>
+        </div>
+        <div style="margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--red)">⚠ 用户等待 3.5 秒。SMTP 超时时直接报 500。</div>
+      </div>
+    </div>
+    <div class="ba-panel">
+      <div class="ba-header good">✓ Celery 异步（正确姿势）</div>
+      <div class="ba-body">
+        <p style="font-size:13px;color:var(--text3);margin-bottom:12px;">任务入队即返回，worker 在后台并发处理</p>
+        <div class="ba-timeline">
+          <div class="ba-step"><div class="dot" style="background:var(--blue)"></div><div class="bar" style="background:rgba(91,141,239,0.15);border:1px solid rgba(91,141,239,0.3);color:var(--blue);width:60px">接受请求</div></div>
+          <div class="ba-step"><div class="dot" style="background:var(--yellow)"></div><div class="bar" style="background:rgba(232,197,71,0.15);border:1px solid rgba(232,197,71,0.3);color:var(--yellow);width:220px">写数据库 (200ms)</div></div>
+          <div class="ba-step"><div class="dot" style="background:var(--teal)"></div><div class="bar" style="background:rgba(78,205,196,0.15);border:1px solid rgba(78,205,196,0.3);color:var(--teal);width:130px">.delay() 入队 (&lt;5ms)</div></div>
+          <div class="ba-step"><div class="dot" style="background:var(--text3)"></div><div class="bar" style="background:var(--bg3);border:1px solid var(--border);color:var(--teal);width:100px">返回响应 ← 205ms</div></div>
+          <div style="height:8px"></div>
+          <div class="ba-step" style="opacity:0.6"><div class="dot" style="background:var(--teal)"></div><span style="font-size:11px;color:var(--text3)">（后台 worker）发邮件 + 压图像（并发）</span></div>
+        </div>
+        <div style="margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--teal)">✓ 用户 205ms 后看到成功页面</div>
+      </div>
+    </div>
+  </div>
+  <div class="insight" style="margin-top:28px">
+    <strong>核心思路：</strong>把"需要时间"和"必须等待"这两件事分开。数据库写入必须等，但发邮件不需要用户等——Celery 让你明确表达这个区别。
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ HOW -->
+<section id="how">
+  <div class="eyebrow">架构</div>
+  <h2>三个角色，一条<em>消息总线</em></h2>
+  <p class="lead">Celery 不是一个程序，是三个角色的协作。点击各节点查看详情。</p>
+
+  <div class="trio">
+    <div class="trio-node sel" id="trio-producer" onclick="selectTrio('producer')">
+      <span class="trio-icon">🖥</span>
+      <div class="trio-name">Producer</div>
+      <div class="trio-sub">你的应用代码</div>
+    </div>
+    <div class="trio-arrow">→</div>
+    <div class="trio-node" id="trio-broker" onclick="selectTrio('broker')">
+      <span class="trio-icon">📬</span>
+      <div class="trio-name">Broker</div>
+      <div class="trio-sub">消息中间件</div>
+    </div>
+    <div class="trio-arrow">→</div>
+    <div class="trio-node" id="trio-worker" onclick="selectTrio('worker')">
+      <span class="trio-icon">⚙️</span>
+      <div class="trio-name">Worker</div>
+      <div class="trio-sub">任务执行进程</div>
+    </div>
+  </div>
+
+  <div class="trio-detail" id="trio-detail">
+    <h3>Producer — 你的应用</h3>
+    <ul>
+      <li>调用 <code>task.delay(args)</code> 或 <code>task.apply_async(args, kwargs, countdown=5)</code></li>
+      <li>不执行任务，只把「任务名 + 参数 + 元数据」序列化成消息推入 Broker</li>
+      <li>立即拿到一个 <code>AsyncResult</code> 对象，可以用它来轮询结果</li>
+      <li>可以是 Django/Flask/FastAPI 里的 View，也可以是定时脚本</li>
+    </ul>
+  </div>
+
+  <hr class="sep" style="margin:32px 0 24px">
+  <h3 style="margin-bottom:16px">消息在 Broker 里长什么样</h3>
+  <pre><span class="c"># Celery 推入 Redis/RabbitMQ 的消息（简化版）</span>
+{
+  <span class="s">"id"</span>: <span class="s">"a3f2c1b0-..."</span>,         <span class="c"># task_id，唯一标识</span>
+  <span class="s">"task"</span>: <span class="s">"myapp.tasks.send_email"</span>, <span class="c"># 任务路径（worker 靠它找到函数）</span>
+  <span class="s">"args"</span>: [<span class="d">42</span>],                    <span class="c"># 位置参数</span>
+  <span class="s">"kwargs"</span>: {<span class="s">"subject"</span>: <span class="s">"Welcome"</span>},
+  <span class="s">"retries"</span>: <span class="d">0</span>,
+  <span class="s">"eta"</span>: <span class="k">null</span>,                    <span class="c"># 延迟执行时间</span>
+  <span class="s">"expires"</span>: <span class="k">null</span>
+}</pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ QUICKSTART -->
+<section id="quickstart">
+  <div class="eyebrow">最小可运行示例</div>
+  <h2>五行代码<em>跑起来</em></h2>
+  <p class="lead">先看能跑的最小例子，再理解每一行为什么这样写。</p>
+
+  <div class="code-block">
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="switchTab(this,'qs-tasks')">tasks.py</button>
+      <button class="code-tab" onclick="switchTab(this,'qs-run')">发送任务</button>
+      <button class="code-tab" onclick="switchTab(this,'qs-worker')">启动 worker</button>
+      <button class="code-tab" onclick="switchTab(this,'qs-result')">获取结果</button>
+      <button class="code-tab" onclick="switchTab(this,'qs-config')">配置文件</button>
+    </div>
+    <div class="code-pane active" id="qs-tasks">
+      <pre><span class="k">from</span> celery <span class="k">import</span> Celery
+
+<span class="c"># 1. 创建 Celery 实例，指定 broker</span>
+app = Celery(<span class="s">'myapp'</span>, broker=<span class="s">'redis://localhost:6379/0'</span>,
+             backend=<span class="s">'redis://localhost:6379/1'</span>)
+
+<span class="c"># 2. 用 @app.task 装饰器注册任务</span>
+<span class="d">@app.task</span>
+<span class="k">def</span> <span class="f">add</span>(x, y):
+    <span class="k">return</span> x + y
+
+<span class="d">@app.task</span>
+<span class="k">def</span> <span class="f">send_email</span>(user_id, subject=<span class="s">"Hello"</span>):
+    <span class="c"># 实际发邮件逻辑...</span>
+    <span class="k">return</span> <span class="s">f"email sent to user {user_id}"</span></pre>
+      <div class="code-note">📌 backend 是可选的，只有需要拿回 task 返回值时才要配置</div>
+    </div>
+    <div class="code-pane" id="qs-run">
+      <pre><span class="k">from</span> tasks <span class="k">import</span> add, send_email, on_success, on_failure
+<span class="k">from</span> datetime <span class="k">import</span> datetime, timedelta, timezone
+
+<span class="c"># .delay() 是最简单的发送方式</span>
+result = add.<span class="n">delay</span>(<span class="d">4</span>, <span class="d">6</span>)
+print(result.id)  <span class="c"># 'a3f2c1b0-...' 立即返回</span>
+
+<span class="c"># apply_async() 提供完整控制</span>
+send_email.<span class="n">apply_async</span>(
+    args=[<span class="d">42</span>],
+    kwargs={<span class="s">'subject'</span>: <span class="s">'Welcome!'</span>},
+    countdown=<span class="d">10</span>,            <span class="c"># N 秒后执行（相对时间）</span>
+    eta=datetime.now(timezone.utc) + timedelta(hours=<span class="d">1</span>),
+                             <span class="c"># 指定绝对时间执行（与 countdown 互斥）</span>
+    expires=<span class="d">3600</span>,            <span class="c"># N 秒内未执行则丢弃</span>
+    queue=<span class="s">'email'</span>,           <span class="c"># 发到指定队列</span>
+    priority=<span class="d">5</span>,              <span class="c"># 优先级 0-9（RabbitMQ: 9最高；Redis: 0最高!）</span>
+    time_limit=<span class="d">60</span>,           <span class="c"># 硬超时：60s 强制 SIGKILL</span>
+    soft_time_limit=<span class="d">50</span>,      <span class="c"># 软超时：50s 抛 SoftTimeLimitExceeded</span>
+    link=on_success.<span class="n">s</span>(),      <span class="c"># 成功后自动调用的回调</span>
+    link_error=on_failure.<span class="n">s</span>(), <span class="c"># 失败后自动调用的回调</span>
+    ignore_result=<span class="k">True</span>,       <span class="c"># fire-and-forget：不存结果，省 backend 开销</span>
+)</pre>
+      <div class="code-note">📌 <code>countdown</code> 和 <code>eta</code> 互斥，不能同时用。<code>priority</code> 方向因 broker 不同而<strong>相反</strong>：RabbitMQ 9=最高，Redis 0=最高。</div>
+    </div>
+    <div class="code-pane" id="qs-worker">
+      <pre><span class="c"># 启动 worker（监听所有队列，默认 prefork 并发）</span>
+$ celery -A tasks worker --loglevel=info
+
+<span class="c"># 常用参数</span>
+$ celery -A tasks worker \
+    -c 4 \                  <span class="c"># 并发数（prefork=进程数，默认按 CPU 核数）</span>
+    -Q email,default \      <span class="c"># 只处理指定队列</span>
+    --loglevel=info
+
+<span class="c"># 并发模型选择（-P 参数）</span>
+$ celery -A tasks worker -P prefork   <span class="c"># 默认：多进程，CPU 密集型任务</span>
+$ celery -A tasks worker -P gevent    <span class="c"># 协程，IO 密集型（pip install gevent）</span>
+$ celery -A tasks worker -P eventlet  <span class="c"># 协程，同上（pip install eventlet）</span>
+$ celery -A tasks worker -P solo      <span class="c"># 单线程，调试用，不生产使用</span>
+$ celery -A tasks worker -P threads   <span class="c"># 多线程，适合带 GIL 的 IO 任务</span>
+
+<span class="c"># 运维命令</span>
+$ celery -A tasks inspect registered  <span class="c"># 查看已注册任务</span>
+$ celery -A tasks inspect active      <span class="c"># 查看正在执行的任务</span>
+$ celery -A tasks inspect stats       <span class="c"># worker 统计信息</span>
+$ celery -A tasks control rate_limit tasks.add 100/m  <span class="c"># 动态限速</span>
+
+<span class="c"># Beat 定时任务调度器（独立进程，⚠️ 只能有一个实例）</span>
+$ celery -A tasks beat --loglevel=info
+$ celery -A tasks beat -s /var/celerybeat-schedule  <span class="c"># 指定调度状态文件</span>
+
+<span class="c"># Flower 可视化监控（pip install flower）</span>
+$ celery -A tasks flower --port=5555
+<span class="c"># 然后访问 http://localhost:5555</span></pre>
+      <div class="code-note">📌 gevent/eventlet 模式下 -c 可以设置很大（如 1000），因为协程比进程轻；prefork 模式建议 = CPU 核数。Beat 和 worker 不要在同一进程跑（<code>worker --beat</code> 仅限开发）。</div>
+    </div>
+    <div class="code-pane" id="qs-result">
+      <pre><span class="k">from</span> tasks <span class="k">import</span> add
+
+result = add.<span class="n">delay</span>(<span class="d">4</span>, <span class="d">6</span>)
+
+<span class="c"># 检查状态</span>
+print(result.status)   <span class="c"># 'PENDING' → 'SUCCESS'</span>
+print(result.ready())  <span class="c"># False / True</span>
+
+<span class="c"># 等待结果（会阻塞，谨慎使用）</span>
+value = result.<span class="n">get</span>(timeout=<span class="d">5</span>)
+print(value)  <span class="c"># 10</span>
+
+<span class="c"># 用 task_id 在任何地方查询</span>
+<span class="k">from</span> celery.result <span class="k">import</span> AsyncResult
+r = AsyncResult(<span class="s">'a3f2c1b0-...'</span>)
+print(r.result)  <span class="c"># 拿到返回值</span></pre>
+      <div class="code-note">📌 在 HTTP 请求里调用 <code>.get()</code> 会阻塞住 worker 线程，通常不这样做</div>
+    </div>
+    <div class="code-pane" id="qs-config">
+      <pre><span class="c"># celeryconfig.py（推荐用配置文件）</span>
+broker_url = <span class="s">'redis://localhost:6379/0'</span>
+result_backend = <span class="s">'redis://localhost:6379/1'</span>
+
+<span class="c"># 序列化格式</span>
+task_serializer = <span class="s">'json'</span>
+result_serializer = <span class="s">'json'</span>
+accept_content = [<span class="s">'json'</span>]
+
+<span class="c"># 时区</span>
+timezone = <span class="s">'Asia/Shanghai'</span>
+enable_utc = <span class="k">True</span>
+
+<span class="c"># 任务路由：不同任务发到不同队列</span>
+task_routes = {
+    <span class="s">'tasks.send_email'</span>: {<span class="s">'queue'</span>: <span class="s">'email'</span>},
+    <span class="s">'tasks.process_image'</span>: {<span class="s">'queue'</span>: <span class="s">'media'</span>},
+}
+
+<span class="c"># 重试配置</span>
+task_acks_late = <span class="k">True</span>      <span class="c"># 任务完成后再 ack（防丢失）</span>
+task_reject_on_worker_lost = <span class="k">True</span></pre>
+      <div class="code-note">📌 用 <code>app.config_from_object('celeryconfig')</code> 加载</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ BEAT -->
+<section id="beat">
+  <div class="eyebrow">定时任务</div>
+  <h2>Celery <em>Beat</em>：周期性任务调度</h2>
+  <p class="lead">Beat 是一个独立的调度进程，按设定的时间表把任务发进队列，由 worker 执行。它和 cron 的区别是：配置是代码，任务执行是分布式的。</p>
+
+  <div class="grid2">
+    <div>
+      <div class="code-block">
+        <div class="code-tabs">
+          <button class="code-tab active" onclick="switchTab(this,'bt-basic')">基础配置</button>
+          <button class="code-tab" onclick="switchTab(this,'bt-crontab')">crontab 语法</button>
+          <button class="code-tab" onclick="switchTab(this,'bt-dynamic')">动态添加</button>
+        </div>
+        <div class="code-pane active" id="bt-basic">
+          <pre><span class="k">from</span> celery <span class="k">import</span> Celery
+<span class="k">from</span> celery.schedules <span class="k">import</span> crontab
+
+app = Celery(<span class="s">'tasks'</span>, broker=<span class="s">'redis://localhost:6379/0'</span>)
+
+app.conf.beat_schedule = {
+    <span class="c"># 每 30 秒执行一次</span>
+    <span class="s">'add-every-30-seconds'</span>: {
+        <span class="s">'task'</span>: <span class="s">'tasks.add'</span>,
+        <span class="s">'schedule'</span>: <span class="d">30.0</span>,
+        <span class="s">'args'</span>: (<span class="d">16</span>, <span class="d">16</span>),
+    },
+    <span class="c"># 每天 8 点生成报告</span>
+    <span class="s">'daily-report'</span>: {
+        <span class="s">'task'</span>: <span class="s">'tasks.generate_report'</span>,
+        <span class="s">'schedule'</span>: crontab(hour=<span class="d">8</span>, minute=<span class="d">0</span>),
+    },
+    <span class="c"># 每周一 9:30 发周报</span>
+    <span class="s">'weekly-digest'</span>: {
+        <span class="s">'task'</span>: <span class="s">'tasks.send_digest'</span>,
+        <span class="s">'schedule'</span>: crontab(hour=<span class="d">9</span>, minute=<span class="d">30</span>, day_of_week=<span class="d">1</span>),
+    },
+}
+app.conf.timezone = <span class="s">'Asia/Shanghai'</span></pre>
+          <div class="code-note">📌 配置 timezone 很重要，否则 crontab 按 UTC 算</div>
+        </div>
+        <div class="code-pane" id="bt-crontab">
+          <pre><span class="k">from</span> celery.schedules <span class="k">import</span> crontab
+
+<span class="c"># crontab() 参数全部可选，默认 * (每个)</span>
+crontab(minute=<span class="d">0</span>, hour=<span class="d">0</span>)        <span class="c"># 每天 00:00</span>
+crontab(minute=<span class="s">'*/15'</span>)            <span class="c"># 每 15 分钟</span>
+crontab(hour=<span class="d">7</span>, day_of_week=<span class="d">1</span>)   <span class="c"># 每周一 07:00</span>
+crontab(day_of_month=<span class="d">1</span>, hour=<span class="d">0</span>)  <span class="c"># 每月 1 号 00:00</span>
+crontab(month_of_year=<span class="s">'*/3'</span>, day_of_month=<span class="d">1</span>, hour=<span class="d">0</span>)
+                                   <span class="c"># 每季度第一天 00:00</span>
+
+<span class="c"># 对比纯秒数（timedelta 风格）</span>
+<span class="k">from</span> datetime <span class="k">import</span> timedelta
+timedelta(seconds=<span class="d">30</span>)   <span class="c"># 每 30 秒</span>
+timedelta(hours=<span class="d">1</span>)      <span class="c"># 每小时</span>
+
+<span class="c"># solar 日出日落调度（不常见）</span>
+<span class="k">from</span> celery.schedules <span class="k">import</span> solar
+solar(<span class="s">'sunset'</span>, <span class="d">-37.81753</span>, <span class="d">144.96736</span>)  <span class="c"># 每天日落时</span></pre>
+          <div class="code-note">📌 day_of_week: 0=周日, 1=周一, ..., 6=周六</div>
+        </div>
+        <div class="code-pane" id="bt-dynamic">
+          <pre><span class="c"># 动态添加定时任务（存入 backend，不重启 Beat 即生效）</span>
+<span class="c"># 需要 django-celery-beat 或 redbeat</span>
+<span class="c"># pip install django-celery-beat</span>
+
+<span class="k">from</span> django_celery_beat.models <span class="k">import</span> PeriodicTask, IntervalSchedule
+<span class="k">import</span> json
+
+schedule, _ = IntervalSchedule.objects.<span class="n">get_or_create</span>(
+    every=<span class="d">10</span>, period=IntervalSchedule.SECONDS,
+)
+PeriodicTask.objects.<span class="n">create</span>(
+    interval=schedule,
+    name=<span class="s">'import-feed-every-10-seconds'</span>,
+    task=<span class="s">'tasks.import_feed'</span>,
+    args=json.<span class="n">dumps</span>([<span class="s">'https://feed.example.com'</span>]),
+)
+<span class="c"># 不需要重启 Beat，下个轮询周期自动生效</span></pre>
+          <div class="code-note">📌 静态 beat_schedule 需要重启才能更新；动态方案（django-celery-beat / redbeat）可以运行时增删</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:16px;border-top:2px solid var(--red)">
+        <div class="card-tag" style="color:var(--red)">⚠️ Beat 只能有一个实例</div>
+        <h3>为什么不能多开？</h3>
+        <p style="font-size:14px;margin-bottom:10px">Beat 是中心化调度器，它维护一个调度状态文件（<code>celerybeat-schedule</code>）来记录上次执行时间。多个 Beat 实例各自独立，会重复触发任务。</p>
+        <p style="font-size:14px;color:var(--text3)">高可用方案：用 Kubernetes 的单副本 Deployment + 快速重启，或者用 <code>redbeat</code>（把调度状态存进 Redis，支持 leader election）。</p>
+      </div>
+      <div class="card" style="border-top:2px solid var(--yellow)">
+        <div class="card-tag" style="color:var(--yellow)">Beat vs Worker</div>
+        <h3>职责分工</h3>
+        <p style="font-size:14px;margin-bottom:10px">Beat <strong style="color:var(--text)">只发消息，不执行任务</strong>。到点了它就 <code>.delay()</code> 一下，然后忘记这件事。实际执行在 worker 里。</p>
+        <pre style="font-size:12px;"><span class="c"># 开发时：可以用 --beat 嵌入 worker（不推荐生产）</span>
+$ celery -A tasks worker --beat
+
+<span class="c"># 生产时：独立进程</span>
+$ celery -A tasks beat &amp;
+$ celery -A tasks worker -c 4</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ CANVAS -->
+<section id="canvas">
+  <div class="eyebrow">Canvas 工作流编排</div>
+  <h2>当一个任务不够用：<em>Canvas</em></h2>
+  <p class="lead">现实场景往往需要多个任务协作——先做 A，再拿 A 的结果做 B；或者 A、B、C 并行，全部完成后做 D。Canvas 就是 Celery 给这类需求提供的"积木系统"。</p>
+
+  <div class="canvas-intro">
+    <div>
+      <h3 style="margin-bottom:12px">Canvas 解决什么</h3>
+      <p style="margin-bottom:12px">如果你写出了这样的代码，你需要 Canvas：</p>
+      <pre style="font-size:12px;"><span class="c"># ❌ 这样写是同步阻塞的，失去了异步的意义</span>
+r1 = fetch_data.<span class="n">delay</span>(url)
+data = r1.<span class="n">get</span>()       <span class="c"># 阻塞等待</span>
+r2 = process.<span class="n">delay</span>(data)
+result = r2.<span class="n">get</span>()   <span class="c"># 再次阻塞</span></pre>
+    </div>
+    <div>
+      <h3 style="margin-bottom:12px">Canvas 的解法</h3>
+      <pre style="font-size:12px;"><span class="c"># ✓ 声明式地描述依赖关系，Celery 自动编排</span>
+<span class="k">from</span> celery <span class="k">import</span> chain
+
+workflow = chain(fetch_data.<span class="n">s</span>(url), process.<span class="n">s</span>())
+result = workflow.<span class="n">delay</span>()
+<span class="c"># 全程异步，不阻塞任何东西</span></pre>
+    </div>
+  </div>
+
+  <!-- Primitives -->
+  <h3 style="margin-bottom:6px;margin-top:8px">六个核心原语</h3>
+  <p style="color:var(--text3);font-size:13px;margin-bottom:20px">点击任意原语查看详解与执行示意</p>
+  <div class="canvas-primitives" style="grid-template-columns:1fr 1fr 1fr">
+
+    <div class="primitive sel" id="prim-chain" onclick="selectPrim('chain')">
+      <div class="prim-header">
+        <div class="prim-icon" style="background:rgba(232,197,71,0.15);color:var(--yellow)">⛓</div>
+        <div>
+          <div class="prim-name">chain</div>
+          <div class="prim-tagline">串行管道：A → B → C</div>
+        </div>
+        <span class="tag-pill y">顺序</span>
+      </div>
+      <div class="prim-body">
+        <p style="font-size:13px;color:var(--text2)">前一个任务的<strong style="color:var(--text)">返回值自动成为下一个任务的第一个参数</strong>。适合有数据依赖的流水线。</p>
+      </div>
+    </div>
+
+    <div class="primitive" id="prim-group" onclick="selectPrim('group')">
+      <div class="prim-header">
+        <div class="prim-icon" style="background:rgba(78,205,196,0.12);color:var(--teal)">⊞</div>
+        <div>
+          <div class="prim-name">group</div>
+          <div class="prim-tagline">并行扇出：同时执行多个任务</div>
+        </div>
+        <span class="tag-pill t">并行</span>
+      </div>
+      <div class="prim-body">
+        <p style="font-size:13px;color:var(--text2)">多个任务<strong style="color:var(--text)">同时发送</strong>到 broker，各自独立执行。返回 <code>GroupResult</code>，可整体等待或逐一查询。</p>
+      </div>
+    </div>
+
+    <div class="primitive" id="prim-chord" onclick="selectPrim('chord')">
+      <div class="prim-header">
+        <div class="prim-icon" style="background:rgba(155,109,255,0.12);color:var(--purple)">⊕</div>
+        <div>
+          <div class="prim-name">chord</div>
+          <div class="prim-tagline">并行 + 汇聚：group 完成后执行 callback</div>
+        </div>
+        <span class="tag-pill p">聚合</span>
+      </div>
+      <div class="prim-body">
+        <p style="font-size:13px;color:var(--text2)">= <code>group</code> + 汇聚任务。并行任务<strong style="color:var(--text)">全部完成后</strong>，将所有结果作为列表传给 callback。需要 result backend。</p>
+      </div>
+    </div>
+
+    <div class="primitive" id="prim-chunks" onclick="selectPrim('chunks')">
+      <div class="prim-header">
+        <div class="prim-icon" style="background:rgba(91,141,239,0.12);color:var(--blue)">⊟</div>
+        <div>
+          <div class="prim-name">chunks</div>
+          <div class="prim-tagline">批量分片：大任务自动切片</div>
+        </div>
+        <span class="tag-pill b">批量</span>
+      </div>
+      <div class="prim-body">
+        <p style="font-size:13px;color:var(--text2)">把一个大列表<strong style="color:var(--text)">自动均分</strong>成 N 批，每批作为一个 group task 执行。适合批量处理场景。</p>
+      </div>
+    </div>
+
+    <div class="primitive" id="prim-map" onclick="selectPrim('map')">
+      <div class="prim-header">
+        <div class="prim-icon" style="background:rgba(82,201,125,0.12);color:var(--green)">⟶</div>
+        <div>
+          <div class="prim-name">map</div>
+          <div class="prim-tagline">顺序 map：单参数，一条消息</div>
+        </div>
+        <span class="tag-pill" style="color:var(--green);border-color:#2a7040;background:rgba(82,201,125,0.08)">顺序</span>
+      </div>
+      <div class="prim-body">
+        <p style="font-size:13px;color:var(--text2)"><strong style="color:var(--text)">只发一条消息</strong>，在同一个 worker 进程内 for 循环顺序执行。<em style="color:var(--red)">不是并行</em>。适合轻量批量操作，避免大量消息 overhead。</p>
+      </div>
+    </div>
+
+    <div class="primitive" id="prim-starmap" onclick="selectPrim('starmap')">
+      <div class="prim-header">
+        <div class="prim-icon" style="background:rgba(255,171,64,0.12);color:#FFA040">✳</div>
+        <div>
+          <div class="prim-name">starmap</div>
+          <div class="prim-tagline">顺序 map：多参数解包，一条消息</div>
+        </div>
+        <span class="tag-pill" style="color:#FFA040;border-color:#7a5020;background:rgba(255,160,64,0.08)">解包</span>
+      </div>
+      <div class="prim-body">
+        <p style="font-size:13px;color:var(--text2)">和 <code>map</code> 相同，但迭代的是<strong style="color:var(--text)">元组列表</strong>，每个元组用 <code>*args</code> 解包传入任务。等价于 Python 的 <code>itertools.starmap</code>。</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Playground -->
+  <div class="canvas-playground">
+    <div class="playground-header">
+      <div class="playground-title">// CANVAS PLAYGROUND — 选择原语查看代码与执行流</div>
+      <div class="playground-btns">
+        <button class="pg-btn active" id="pgbtn-chain" onclick="selectPrim('chain')">chain</button>
+        <button class="pg-btn" id="pgbtn-group" onclick="selectPrim('group')">group</button>
+        <button class="pg-btn" id="pgbtn-chord" onclick="selectPrim('chord')">chord</button>
+        <button class="pg-btn" id="pgbtn-chunks" onclick="selectPrim('chunks')">chunks</button>
+        <button class="pg-btn" id="pgbtn-map" onclick="selectPrim('map')">map</button>
+        <button class="pg-btn" id="pgbtn-starmap" onclick="selectPrim('starmap')">starmap</button>
+        <button class="pg-btn" id="pgbtn-complex" onclick="selectPrim('complex')">组合</button>
+        <button class="pg-btn run" onclick="runSimulation()">▶ 模拟执行</button>
+      </div>
+    </div>
+    <div class="playground-body">
+      <div class="playground-viz" id="pg-viz">
+        <!-- SVG diagrams injected here -->
+      </div>
+      <div class="playground-code">
+        <pre id="pg-code" style="height:100%;min-height:280px;overflow:auto;"></pre>
+      </div>
+    </div>
+    <div class="playground-trace" id="pg-trace">
+      <span style="color:var(--text3)">点击 ▶ 模拟执行，查看任务调度流程</span>
+    </div>
+  </div>
+
+  <!-- s() signature -->
+  <h3 style="margin-top:40px;margin-bottom:12px">理解 <code>.s()</code> — Signature（签名）</h3>
+  <div class="grid2">
+    <div class="card yellow">
+      <div class="card-tag">核心概念</div>
+      <h3>Signature 是"任务的配方"</h3>
+      <p style="margin-bottom:12px;font-size:14px">在 Canvas 里，你不能直接传函数，要传它的"签名"——记录了函数名和参数的可序列化对象，可以跨网络传递、延迟执行。</p>
+      <pre style="font-size:12px;"><span class="c"># task.s() 创建 Signature（不执行）</span>
+add.<span class="n">s</span>(<span class="d">2</span>, <span class="d">3</span>)         <span class="c"># add(2, 3)</span>
+add.<span class="n">s</span>(<span class="d">2</span>)            <span class="c"># add(2, ?)  偏函数</span>
+add.<span class="n">si</span>(<span class="d">2</span>, <span class="d">3</span>)        <span class="c"># immutable：忽略上一步结果</span></pre>
+    </div>
+    <div class="card teal">
+      <div class="card-tag">s() vs si() vs delay()</div>
+      <h3>三种调用方式的区别</h3>
+      <pre style="font-size:12px;"><span class="c"># .delay() — 立刻发送，立刻执行</span>
+add.<span class="n">delay</span>(<span class="d">2</span>, <span class="d">3</span>)
+
+<span class="c"># .s() — 创建 Signature，链式时接收前一步结果</span>
+chain(double.<span class="n">s</span>(<span class="d">10</span>), add.<span class="n">s</span>(<span class="d">5</span>))
+<span class="c"># double(10)=20 → add(20, 5)=25</span>
+
+<span class="c"># .si() — immutable Signature，不接收结果</span>
+chain(fetch.<span class="n">s</span>(), notify.<span class="n">si</span>(<span class="s">"done"</span>))
+<span class="c"># notify 总是收到 "done"，不管 fetch 返回什么</span></pre>
+    </div>
+  </div>
+
+  <!-- map vs group vs starmap -->
+  <h3 style="margin-top:40px;margin-bottom:12px">最容易混淆：<code>map</code> / <code>starmap</code> / <code>group</code> 的选择</h3>
+  <div class="insight">
+    <strong>一句话区别：</strong><code>map</code> 和 <code>starmap</code> 是<strong>顺序的</strong>，只发 1 条消息，整个列表在单个 worker 里 for 循环跑完。<code>group</code> 是<strong>真正并行的</strong>，发 N 条消息，可以在 N 个 worker 上同时跑。
+  </div>
+  <div class="card" style="margin-top:12px;border:1px solid var(--border);">
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;font-family:var(--mono)">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="padding:10px 14px;text-align:left;color:var(--text3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">原语</th>
+          <th style="padding:10px 14px;text-align:left;color:var(--text3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">参数形式</th>
+          <th style="padding:10px 14px;text-align:left;color:var(--text3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">消息数</th>
+          <th style="padding:10px 14px;text-align:left;color:var(--text3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">执行方式</th>
+          <th style="padding:10px 14px;text-align:left;color:var(--text3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">适合场景</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:10px 14px;color:var(--green);font-weight:700">map</td>
+          <td style="padding:10px 14px;color:var(--text2)"><code>task.map([x, x, x])</code><br><small style="color:var(--text3)">每项是单个参数</small></td>
+          <td style="padding:10px 14px;color:var(--teal);font-weight:700">1 条</td>
+          <td style="padding:10px 14px;color:var(--text2)">单 worker 顺序</td>
+          <td style="padding:10px 14px;color:var(--text3)">轻量批量、无需并行</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:10px 14px;color:#FFA040;font-weight:700">starmap</td>
+          <td style="padding:10px 14px;color:var(--text2)"><code>task.starmap([(a,b), ...])</code><br><small style="color:var(--text3)">每项是元组，<code>*</code> 解包</small></td>
+          <td style="padding:10px 14px;color:var(--teal);font-weight:700">1 条</td>
+          <td style="padding:10px 14px;color:var(--text2)">单 worker 顺序</td>
+          <td style="padding:10px 14px;color:var(--text3)">多参数批量、无需并行</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:10px 14px;color:var(--blue);font-weight:700">chunks</td>
+          <td style="padding:10px 14px;color:var(--text2)"><code>task.chunks(it, n)</code><br><small style="color:var(--text3)">自动均分成 n 组</small></td>
+          <td style="padding:10px 14px;color:var(--yellow);font-weight:700">n 条</td>
+          <td style="padding:10px 14px;color:var(--text2)">n 个 worker 并行（每组内顺序）</td>
+          <td style="padding:10px 14px;color:var(--text3)">大批量，折中并行度</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;color:var(--teal);font-weight:700">group</td>
+          <td style="padding:10px 14px;color:var(--text2)"><code>group(task.s(x) for x in it)</code><br><small style="color:var(--text3)">每项一个独立 Signature</small></td>
+          <td style="padding:10px 14px;color:var(--red);font-weight:700">N 条</td>
+          <td style="padding:10px 14px;color:var(--text2)">最多 N 个 worker 真并行</td>
+          <td style="padding:10px 14px;color:var(--text3)">重任务、需要最大并行度</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- Real use cases -->
+  <h3 style="margin-top:40px;margin-bottom:16px">真实场景：用 Canvas 思考问题</h3>
+  <div class="grid3">
+    <div class="card blue">
+      <div class="card-tag">图片处理流水线</div>
+      <h3>chain + group</h3>
+      <pre style="font-size:11px;"><span class="c"># 上传 → 压缩 → 生成多尺寸缩略图</span>
+workflow = chain(
+  upload.<span class="n">s</span>(file),
+  compress.<span class="n">s</span>(),
+  group(
+    thumbnail.<span class="n">s</span>(<span class="s">'small'</span>),
+    thumbnail.<span class="n">s</span>(<span class="s">'medium'</span>),
+    thumbnail.<span class="n">s</span>(<span class="s">'large'</span>),
+  )
+)</pre>
+    </div>
+    <div class="card purple">
+      <div class="card-tag">数据报告生成</div>
+      <h3>chord</h3>
+      <pre style="font-size:11px;"><span class="c"># 并行抓取多个数据源，汇总生成报告</span>
+workflow = chord(
+  group(
+    fetch_sales.<span class="n">s</span>(),
+    fetch_users.<span class="n">s</span>(),
+    fetch_traffic.<span class="n">s</span>(),
+  ),
+  generate_report.<span class="n">s</span>()
+  <span class="c"># 收到 [sales, users, traffic]</span>
+)</pre>
+    </div>
+    <div class="card teal">
+      <div class="card-tag">批量邮件发送</div>
+      <h3>chunks</h3>
+      <pre style="font-size:11px;"><span class="c"># 10万用户 ID，分100批并发发邮件</span>
+user_ids = list(range(<span class="d">100000</span>))
+result = send_email.<span class="n">chunks</span>(
+    [(uid,) <span class="k">for</span> uid <span class="k">in</span> user_ids],
+    n=<span class="d">100</span>  <span class="c"># 分成100批</span>
+).<span class="n">group</span>().<span class="n">delay</span>()</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ LIFECYCLE -->
+<section id="lifecycle">
+  <div class="eyebrow">任务状态机</div>
+  <h2>一个任务经历的<em>七种状态</em></h2>
+  <p class="lead">理解任务状态对于错误处理和调试至关重要。点击各状态查看说明。</p>
+
+  <div class="lifecycle-wrap">
+    <div class="lifecycle-states">
+      <div class="lc-state" data-state="PENDING" onclick="selectLC(this)">
+        <div class="lc-dot"></div>
+        <div class="lc-name">PENDING</div>
+        <div class="lc-desc">等待中</div>
+      </div>
+      <div class="lc-state" data-state="RECEIVED" onclick="selectLC(this)">
+        <div class="lc-dot"></div>
+        <div class="lc-name">RECEIVED</div>
+        <div class="lc-desc">已接收</div>
+      </div>
+      <div class="lc-state" data-state="STARTED" onclick="selectLC(this)">
+        <div class="lc-dot"></div>
+        <div class="lc-name">STARTED</div>
+        <div class="lc-desc">执行中</div>
+      </div>
+      <div class="lc-state" data-state="SUCCESS" onclick="selectLC(this)">
+        <div class="lc-dot"></div>
+        <div class="lc-name">SUCCESS</div>
+        <div class="lc-desc">成功</div>
+      </div>
+      <div class="lc-state" data-state="FAILURE" onclick="selectLC(this)">
+        <div class="lc-dot"></div>
+        <div class="lc-name">FAILURE</div>
+        <div class="lc-desc">失败</div>
+      </div>
+      <div class="lc-state" data-state="RETRY" onclick="selectLC(this)">
+        <div class="lc-dot"></div>
+        <div class="lc-name">RETRY</div>
+        <div class="lc-desc">重试中</div>
+      </div>
+      <div class="lc-state" data-state="REVOKED" onclick="selectLC(this)">
+        <div class="lc-dot"></div>
+        <div class="lc-name">REVOKED</div>
+        <div class="lc-desc">已撤销</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lc-detail" id="lc-detail">
+    <p style="color:var(--text3);font-size:14px">← 点击任意状态查看详情</p>
+  </div>
+
+  <h3 style="margin-top:36px;margin-bottom:16px">重试机制</h3>
+  <pre><span class="c"># default_retry_delay 默认是 180 秒（3 分钟），max_retries 默认是 3</span>
+<span class="d">@app.task</span>(bind=<span class="k">True</span>, max_retries=<span class="d">3</span>, default_retry_delay=<span class="d">30</span>)
+<span class="k">def</span> <span class="f">send_email</span>(self, user_id):
+    <span class="k">try</span>:
+        email_service.send(user_id)
+    <span class="k">except</span> TemporaryError <span class="k">as</span> exc:
+        <span class="c"># 30s 后重试，最多 3 次</span>
+        <span class="k">raise</span> self.<span class="n">retry</span>(exc=exc, countdown=<span class="d">30</span>)
+    <span class="k">except</span> PermanentError:
+        <span class="c"># 永久错误不重试，直接变成 FAILURE</span>
+        <span class="k">raise</span>
+
+<span class="c"># 指数退避：30s, 60s, 120s, 240s, 480s</span>
+<span class="d">@app.task</span>(bind=<span class="k">True</span>)
+<span class="k">def</span> <span class="f">flaky_task</span>(self):
+    <span class="k">try</span>:
+        do_work()
+    <span class="k">except</span> Exception <span class="k">as</span> exc:
+        countdown = <span class="d">2</span> ** self.request.retries * <span class="d">30</span>
+        <span class="k">raise</span> self.<span class="n">retry</span>(exc=exc, countdown=countdown, max_retries=<span class="d">5</span>)
+
+<span class="c"># 软/硬超时：区分"超时可清理"和"超时必须杀死"</span>
+<span class="k">from</span> celery.exceptions <span class="k">import</span> SoftTimeLimitExceeded
+
+<span class="d">@app.task</span>(time_limit=<span class="d">120</span>, soft_time_limit=<span class="d">100</span>)
+<span class="k">def</span> <span class="f">long_task</span>():
+    <span class="k">try</span>:
+        do_long_work()
+    <span class="k">except</span> SoftTimeLimitExceeded:
+        <span class="c"># 100s 到了：还有 20s 可以做清理/保存进度</span>
+        save_progress()
+        <span class="k">raise</span>
+    <span class="c"># 120s 到了：强制 SIGKILL，无法捕获</span>
+
+<span class="c"># link / link_error：任务完成/失败后自动触发回调</span>
+<span class="d">@app.task</span>
+<span class="k">def</span> <span class="f">on_done</span>(result): notify_slack(<span class="s">f"done: {result}"</span>)
+
+<span class="d">@app.task</span>
+<span class="k">def</span> <span class="f">on_fail</span>(task_id, exc, tb): alert_pagerduty(exc)
+
+process_order.<span class="n">apply_async</span>(
+    args=[order_id],
+    link=on_done.<span class="n">s</span>(),
+    link_error=on_fail.<span class="n">s</span>(),
+)</pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ PITFALLS -->
+<section id="pitfalls">
+  <div class="eyebrow">避坑指南</div>
+  <h2>这些<em>坑</em>踩过才知道</h2>
+  <p class="lead">Celery 的问题往往在上线后才暴露。这里是最常见的几个，展开看原因和解法。</p>
+
+  <div class="pitfall open" id="pt1">
+    <div class="pitfall-q" onclick="togglePitfall('pt1')">
+      <span style="display:flex;align-items:center;gap:10px">
+        <span class="icon">!</span>
+        任务里调用 <code>.get()</code> 导致死锁
+      </span>
+      <span class="chev">▶</span>
+    </div>
+    <div class="pitfall-a">
+      <p><strong style="color:var(--text)">原因：</strong>如果 worker 在执行一个任务时，调用另一个任务的 <code>.get()</code>，而那个任务要在同一个 worker 上执行，就会产生死锁——worker 在等结果，但结果要由正在等待的 worker 来计算。</p>
+      <p><strong style="color:var(--text)">解法：</strong>用 Canvas 替代。在任务内组合 Signature，不要阻塞等待。</p>
+      <pre style="font-size:12px;"><span class="c"># ❌ 在任务里调 .get()</span>
+<span class="d">@app.task</span>
+<span class="k">def</span> <span class="f">pipeline</span>():
+    r = step1.<span class="n">delay</span>()
+    data = r.<span class="n">get</span>()   <span class="r"># ⚠️ 可能死锁！</span>
+    step2.<span class="n">delay</span>(data)
+
+<span class="c"># ✓ 用 chain 替代</span>
+<span class="d">@app.task</span>
+<span class="k">def</span> <span class="f">pipeline</span>():
+    chain(step1.<span class="n">s</span>(), step2.<span class="n">s</span>()).<span class="n">delay</span>()</pre>
+    </div>
+  </div>
+
+  <div class="pitfall" id="pt2">
+    <div class="pitfall-q" onclick="togglePitfall('pt2')">
+      <span style="display:flex;align-items:center;gap:10px">
+        <span class="icon">!</span>
+        任务参数传了不可序列化的对象
+      </span>
+      <span class="chev">▶</span>
+    </div>
+    <div class="pitfall-a">
+      <p><strong style="color:var(--text)">原因：</strong>任务参数要经过 Broker 传输，必须可以 JSON 序列化。传入 Django Model 实例、文件对象、数据库连接等会直接报错，或者序列化成空对象。</p>
+      <p><strong style="color:var(--text)">解法：</strong>只传 ID，在任务内部重新查询。</p>
+      <pre style="font-size:12px;"><span class="c"># ❌ 传 Model 实例</span>
+user = User.objects.<span class="n">get</span>(id=<span class="d">42</span>)
+send_email.<span class="n">delay</span>(user)  <span class="r"># ⚠️ 序列化失败或数据过期</span>
+
+<span class="c"># ✓ 只传 ID</span>
+send_email.<span class="n">delay</span>(user_id=<span class="d">42</span>)  <span class="c"># 任务内部再查</span></pre>
+    </div>
+  </div>
+
+  <div class="pitfall" id="pt3">
+    <div class="pitfall-q" onclick="togglePitfall('pt3')">
+      <span style="display:flex;align-items:center;gap:10px">
+        <span class="icon">!</span>
+        chord 里一个任务失败，callback 仍然执行
+      </span>
+      <span class="chev">▶</span>
+    </div>
+    <div class="pitfall-a">
+      <p><strong style="color:var(--text)">原因：</strong>chord 的 header（并行任务）中如果有任务失败，callback 仍然会被调用，失败的那个位置结果是异常对象而非预期返回值。<code>chord_propagates</code> 这个配置<strong style="color:var(--red)">并不存在</strong>，网上很多文章写错了。</p>
+      <p><strong style="color:var(--text)">正确解法：</strong>用 <code>link_error</code> 捕获 header 里的单个失败，或在 callback 里检查每个结果的类型。</p>
+      <pre style="font-size:12px;"><span class="c"># ✓ 在 callback 里检查每个结果</span>
+<span class="d">@app.task</span>
+<span class="k">def</span> <span class="f">aggregate</span>(results):
+    <span class="k">for</span> r <span class="k">in</span> results:
+        <span class="k">if</span> isinstance(r, Exception):
+            logger.error(<span class="s">f"subtask failed: {r}"</span>)
+            <span class="k">continue</span>
+        process(r)
+
+<span class="c"># ✓ 用 link_error 捕获整个 chord 的失败</span>
+<span class="d">@app.task</span>
+<span class="k">def</span> <span class="f">handle_chord_error</span>(task_id, exc, tb):
+    logger.error(<span class="s">f"chord {task_id} failed: {exc}"</span>)
+
+chord(header, callback).<span class="n">apply_async</span>(link_error=handle_chord_error.<span class="n">s</span>())</pre>
+    </div>
+  </div>
+
+  <div class="pitfall" id="pt4">
+    <div class="pitfall-q" onclick="togglePitfall('pt4')">
+      <span style="display:flex;align-items:center;gap:10px">
+        <span class="icon">!</span>
+        任务在模块导入时生成（热路径里创建 Signature）
+      </span>
+      <span class="chev">▶</span>
+    </div>
+    <div class="pitfall-a">
+      <p><strong style="color:var(--text)">原因：</strong>Signature 对象在创建时就固定了参数。如果把一个带参数的 Signature 存为模块级变量，参数不会更新，永远用创建时的值。</p>
+      <pre style="font-size:12px;"><span class="c"># ❌ 模块级 Signature（参数被固化）</span>
+WORKFLOW = chain(fetch.<span class="n">s</span>(config.URL), process.<span class="n">s</span>())
+<span class="c"># config.URL 改变后，WORKFLOW 里的 URL 不变</span>
+
+<span class="c"># ✓ 在函数里创建 Signature</span>
+<span class="k">def</span> <span class="f">get_workflow</span>():
+    <span class="k">return</span> chain(fetch.<span class="n">s</span>(config.URL), process.<span class="n">s</span>())</pre>
+    </div>
+  </div>
+
+  <div class="pitfall" id="pt5">
+    <div class="pitfall-q" onclick="togglePitfall('pt5')">
+      <span style="display:flex;align-items:center;gap:10px">
+        <span class="icon">!</span>
+        忘记配置 result backend，调用 <code>.get()</code> 一直超时
+      </span>
+      <span class="chev">▶</span>
+    </div>
+    <div class="pitfall-a">
+      <p><strong style="color:var(--text)">原因：</strong>不配置 <code>result_backend</code> 时，任务执行结果无处存储，<code>AsyncResult.get()</code> 会永远等待（或超时），状态也永远是 PENDING。这不是 bug，是正常行为——fire-and-forget 场景就不需要 backend。</p>
+      <p><strong style="color:var(--text)">解法：</strong>需要结果时配置 Redis 或 Django DB 作为 backend；chord 必须配置 backend。不关心结果时，显式设置 <code>ignore_result=True</code> 跳过 backend 写入。</p>
+      <pre style="font-size:12px;"><span class="c"># fire-and-forget 正确姿势：显式声明</span>
+<span class="d">@app.task</span>(ignore_result=<span class="k">True</span>)
+<span class="k">def</span> <span class="f">send_notification</span>(user_id): ...
+
+<span class="c"># 或者发送时临时忽略</span>
+send_notification.<span class="n">apply_async</span>([user_id], ignore_result=<span class="k">True</span>)</pre>
+    </div>
+  </div>
+
+  <div class="pitfall" id="pt6">
+    <div class="pitfall-q" onclick="togglePitfall('pt6')">
+      <span style="display:flex;align-items:center;gap:10px">
+        <span class="icon">!</span>
+        priority 优先级：RabbitMQ 和 Redis 方向<strong style="color:var(--red)">相反</strong>
+      </span>
+      <span class="chev">▶</span>
+    </div>
+    <div class="pitfall-a">
+      <p><strong style="color:var(--text)">原因：</strong>Celery 的 priority 参数范围是 0-9，但两个主流 broker 的优先级语义是相反的，完全是历史遗留问题。</p>
+      <pre style="font-size:12px;"><span class="c"># RabbitMQ：9 = 最高优先级，0 = 最低</span>
+task.<span class="n">apply_async</span>(priority=<span class="d">9</span>)  <span class="c"># RabbitMQ: 优先执行</span>
+task.<span class="n">apply_async</span>(priority=<span class="d">9</span>)  <span class="c"># Redis:     最后执行！</span>
+
+<span class="c"># Redis：0 = 最高优先级，9 = 最低</span>
+task.<span class="n">apply_async</span>(priority=<span class="d">0</span>)  <span class="c"># Redis:     优先执行</span>
+task.<span class="n">apply_async</span>(priority=<span class="d">0</span>)  <span class="c"># RabbitMQ:  最后执行！</span>
+
+<span class="c"># 最安全的跨 broker 做法：</span>
+<span class="c"># 用不同队列模拟优先级，而不依赖 priority 参数</span>
+task.<span class="n">apply_async</span>(queue=<span class="s">'high'</span>)
+task.<span class="n">apply_async</span>(queue=<span class="s">'low'</span>)
+<span class="c"># worker 优先消费 high 队列</span>
+<span class="c"># $ celery -A app worker -Q high,low</span></pre>
+    </div>
+  </div>
+
+  <div class="pitfall" id="pt7">
+    <div class="pitfall-q" onclick="togglePitfall('pt7')">
+      <span style="display:flex;align-items:center;gap:10px">
+        <span class="icon">!</span>
+        测试时任务实际不执行，或者需要真实 broker
+      </span>
+      <span class="chev">▶</span>
+    </div>
+    <div class="pitfall-a">
+      <p><strong style="color:var(--text)">问题：</strong>单元测试里 <code>.delay()</code> 真的会往 broker 发消息，如果测试环境没有 Redis/RabbitMQ 就会报连接错误。</p>
+      <p><strong style="color:var(--text)">解法一：</strong>用 <code>task_always_eager=True</code>，让所有任务在调用进程里同步执行，不走 broker。</p>
+      <p><strong style="color:var(--text)">解法二：</strong>用 <code>.apply()</code> 直接同步调用，不发消息，适合测试单个任务逻辑。</p>
+      <pre style="font-size:12px;"><span class="c"># 方法一：全局 eager 模式（conftest.py）</span>
+<span class="d">@pytest.fixture</span>(autouse=<span class="k">True</span>)
+<span class="k">def</span> <span class="f">celery_eager</span>(settings):
+    settings.CELERY_TASK_ALWAYS_EAGER = <span class="k">True</span>
+    <span class="c"># Celery 5+ 新配置名</span>
+    app.conf.task_always_eager = <span class="k">True</span>
+
+<span class="c"># 方法二：直接 .apply() 同步执行（推荐）</span>
+result = add.<span class="n">apply</span>(args=[<span class="d">4</span>, <span class="d">6</span>])  <span class="c"># 同步，不走 broker</span>
+assert result.result == <span class="d">10</span>
+
+<span class="c"># 方法三：mock 掉 delay</span>
+<span class="k">with</span> patch(<span class="s">'tasks.send_email.delay'</span>) <span class="k">as</span> mock_task:
+    view_register(request)
+    mock_task.<span class="n">assert_called_once_with</span>(user_id=<span class="d">42</span>)
+
+<span class="c"># 方法四：pytest-celery（官方测试工具）</span>
+<span class="c"># pip install pytest-celery</span>
+<span class="c"># 提供真实 broker/backend 的 pytest fixtures</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ COMPARE -->
+<section id="compare">
+  <div class="eyebrow">对比与选型</div>
+  <h2>该用 Celery，还是<em>别的</em>？</h2>
+  <p class="lead">Celery 功能全面，但不总是最优选择。理解它的边界，才能用对地方。</p>
+
+  <div class="cmp-table-wrap">
+    <table class="cmp">
+      <thead>
+        <tr>
+          <th>方案</th>
+          <th>适合场景</th>
+          <th>async 支持</th>
+          <th>Canvas 编排</th>
+          <th>运维复杂度</th>
+          <th>学习曲线</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Celery</td>
+          <td>复杂工作流、多 broker 选项、大型项目</td>
+          <td class="m">有限（Prefork）</td>
+          <td class="y">完整 ✓</td>
+          <td class="m">中高</td>
+          <td class="m">陡</td>
+        </tr>
+        <tr>
+          <td>RQ (Redis Queue)</td>
+          <td>简单任务、纯 Redis、快速上手</td>
+          <td class="n">不原生</td>
+          <td class="n">无</td>
+          <td class="y">低</td>
+          <td class="y">平缓</td>
+        </tr>
+        <tr>
+          <td>Dramatiq</td>
+          <td>API 更简洁、需要可靠性</td>
+          <td class="n">有限</td>
+          <td class="m">管道</td>
+          <td class="y">低</td>
+          <td class="y">平缓</td>
+        </tr>
+        <tr>
+          <td>taskiq</td>
+          <td>纯 asyncio 项目、FastAPI 生态</td>
+          <td class="y">原生 ✓</td>
+          <td class="n">无</td>
+          <td class="m">中</td>
+          <td class="m">中</td>
+        </tr>
+        <tr>
+          <td>FastAPI BackgroundTasks</td>
+          <td>简单后台操作、不需要持久化</td>
+          <td class="y">原生 ✓</td>
+          <td class="n">无</td>
+          <td class="y">极低</td>
+          <td class="y">极低</td>
+        </tr>
+        <tr>
+          <td>Prefect / Airflow</td>
+          <td>数据管道、DAG、监控优先</td>
+          <td class="y">✓</td>
+          <td class="y">DAG ✓</td>
+          <td class="n">高</td>
+          <td class="n">陡</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid2" style="margin-top:24px">
+    <div class="card" style="border-top:2px solid var(--teal)">
+      <div class="card-tag" style="color:var(--teal)">该用 Celery 的场景</div>
+      <ul style="list-style:none;padding:0;">
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--teal)">✓</span> 任务有复杂依赖关系（chain/chord）</li>
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--teal)">✓</span> 需要定时任务（Celery Beat）</li>
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--teal)">✓</span> 需要多种 broker（RabbitMQ 保证顺序）</li>
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--teal)">✓</span> 团队已有 Celery 运维经验</li>
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--teal)">✓</span> Django 生态，有 django-celery-results</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:2px solid var(--red)">
+      <div class="card-tag" style="color:var(--red)">可以不用 Celery 的场景</div>
+      <ul style="list-style:none;padding:0;">
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--red)">✗</span> 任务很简单，RQ 更轻量</li>
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--red)">✗</span> 纯 async/await 项目（考虑 taskiq/arq）</li>
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--red)">✗</span> 只需要"请求完成后做点小事"（BackgroundTasks）</li>
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--red)">✗</span> 需要可视化 DAG 监控（用 Prefect）</li>
+        <li style="padding:6px 0;font-size:14px;color:var(--text2);padding-left:20px;position:relative"><span style="position:absolute;left:0;color:var(--red)">✗</span> 资源极度受限的小项目</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Worker 并发模型 -->
+  <h3 style="margin-top:40px;margin-bottom:16px">Worker 并发模型选哪个</h3>
+  <div class="cmp-table-wrap">
+    <table class="cmp">
+      <thead>
+        <tr>
+          <th>模型 (-P)</th>
+          <th>原理</th>
+          <th>适合</th>
+          <th>-c 建议值</th>
+          <th>注意</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>prefork</td>
+          <td>多进程（默认）</td>
+          <td>CPU 密集型、数学计算、图像处理</td>
+          <td class="m">= CPU 核数</td>
+          <td>内存开销大，进程间无共享内存</td>
+        </tr>
+        <tr>
+          <td>gevent</td>
+          <td>绿色线程（协程）</td>
+          <td>IO 密集型：HTTP 请求、数据库、邮件</td>
+          <td class="y">100~1000</td>
+          <td>需 <code>pip install gevent</code>，monkey-patch 可能有副作用</td>
+        </tr>
+        <tr>
+          <td>eventlet</td>
+          <td>绿色线程（协程）</td>
+          <td>同 gevent，生态略不同</td>
+          <td class="y">100~1000</td>
+          <td>需 <code>pip install eventlet</code></td>
+        </tr>
+        <tr>
+          <td>threads</td>
+          <td>Python 线程</td>
+          <td>IO 密集型，不想 monkey-patch</td>
+          <td class="m">10~50</td>
+          <td>受 GIL 限制，CPU 密集型无效</td>
+        </tr>
+        <tr>
+          <td>solo</td>
+          <td>单线程同步</td>
+          <td>本地调试、嵌入式场景</td>
+          <td class="n">N/A</td>
+          <td>不用于生产，任务串行执行</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Flower 监控 -->
+  <h3 style="margin-top:40px;margin-bottom:16px">Flower：可视化监控面板</h3>
+  <div class="grid2">
+    <div>
+      <pre><span class="c"># 安装并启动</span>
+$ pip install flower
+$ celery -A tasks flower --port=<span class="d">5555</span>
+<span class="c"># 访问 http://localhost:5555</span>
+
+<span class="c"># 带认证启动</span>
+$ celery -A tasks flower \
+    --basic_auth=admin:password \
+    --url_prefix=flower
+
+<span class="c"># 查看 API（Flower 提供 REST API）</span>
+GET /api/tasks          <span class="c"># 任务列表</span>
+GET /api/workers        <span class="c"># worker 状态</span>
+POST /api/task/revoke/{task_id}  <span class="c"># 撤销任务</span></pre>
+    </div>
+    <div>
+      <div class="card" style="border-top:2px solid var(--purple)">
+        <div class="card-tag" style="color:var(--purple)">Flower 能看到什么</div>
+        <ul style="list-style:none;padding:0;font-size:14px;color:var(--text2)">
+          <li style="padding:5px 0;padding-left:18px;position:relative"><span style="position:absolute;left:0;color:var(--purple)">→</span>所有 worker 的实时状态、并发数、处理速率</li>
+          <li style="padding:5px 0;padding-left:18px;position:relative"><span style="position:absolute;left:0;color:var(--purple)">→</span>每个任务的执行历史、耗时、状态、参数</li>
+          <li style="padding:5px 0;padding-left:18px;position:relative"><span style="position:absolute;left:0;color:var(--purple)">→</span>失败任务的完整 traceback</li>
+          <li style="padding:5px 0;padding-left:18px;position:relative"><span style="position:absolute;left:0;color:var(--purple)">→</span>任务队列积压情况</li>
+          <li style="padding:5px 0;padding-left:18px;position:relative"><span style="position:absolute;left:0;color:var(--purple)">→</span>手动重试或撤销任务</li>
+        </ul>
+        <p style="margin-top:10px;font-size:13px;color:var(--text3)">生产环境建议加认证，Flower 本身没有内置权限控制。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  整理自 Celery 官方文档 (docs.celeryq.dev) · 适用于 Celery 5.x · 离线可用
+</footer>
+
+<script>
+// ─── PIPELINE ANIMATION ───
+const ball = document.getElementById('task-ball');
+const statusText = document.getElementById('pipe-status-text');
+const nodes = ['pn-app','pn-broker','pn-queue','pn-worker'];
+const arrows = ['pa-1','pa-2','pa-3'];
+const statusMessages = ['sending task...', 'queued in broker', 'waiting for worker', 'executing task'];
+const finalMessages = ['task completed ✓', 'result saved'];
+let animRunning = false;
+
+function getNodeX(id) {
+  const el = document.getElementById(id);
+  const demo = document.querySelector('.pipeline-demo');
+  const demoRect = demo.getBoundingClientRect();
+  const nodeRect = el.getBoundingClientRect();
+  return nodeRect.left - demoRect.left + nodeRect.width / 2;
+}
+
+function animatePipeline() {
+  if (animRunning) return;
+  animRunning = true;
+  const positions = [0, 1, 2, 3];
+  let step = 0;
+
+  nodes.forEach(n => document.getElementById(n).className = 'pipe-node');
+  arrows.forEach(a => { document.getElementById(a).className = 'pipe-arrow'; });
+  statusText.textContent = 'sending task...';
+
+  function nextStep() {
+    if (step >= nodes.length) {
+      statusText.textContent = 'task completed ✓';
+      nodes.forEach(n => {
+        const el = document.getElementById(n);
+        el.className = n === 'pn-worker' ? 'pipe-node running' : 'pipe-node done';
+      });
+      setTimeout(() => {
+        nodes.forEach(n => document.getElementById(n).className = 'pipe-node');
+        arrows.forEach(a => { document.getElementById(a).className = 'pipe-arrow'; });
+        statusText.textContent = 'waiting for task...';
+        ball.style.transition = 'none';
+        ball.style.left = '-20px';
+        animRunning = false;
+        setTimeout(animatePipeline, 1500);
+      }, 2000);
+      return;
+    }
+
+    const nodeEl = document.getElementById(nodes[step]);
+    nodeEl.className = step === nodes.length - 1 ? 'pipe-node running' : 'pipe-node active';
+    if (step > 0) document.getElementById(nodes[step-1]).className = 'pipe-node done';
+    if (step > 0) document.getElementById(arrows[step-1]).className = 'pipe-arrow lit';
+
+    statusText.textContent = statusMessages[step];
+
+    const demo = document.querySelector('.pipeline-demo');
+    const demoRect = demo.getBoundingClientRect();
+    const nodeRect = nodeEl.getBoundingClientRect();
+    const targetX = nodeRect.left - demoRect.left + nodeRect.width / 2 - 9;
+    ball.style.transition = 'left 0.6s ease';
+    ball.style.left = targetX + 'px';
+
+    step++;
+    setTimeout(nextStep, 900);
+  }
+
+  ball.style.transition = 'none';
+  ball.style.left = '-20px';
+  setTimeout(nextStep, 300);
+}
+
+setTimeout(animatePipeline, 800);
+
+// ─── TRIO SELECTOR ───
+const trioData = {
+  producer: {
+    title: 'Producer — 你的应用',
+    items: [
+      '调用 <code>task.delay(args)</code> 或 <code>task.apply_async(args, kwargs)</code>',
+      '不执行任务，只把「任务名 + 参数 + 元数据」序列化成消息推入 Broker',
+      '立即拿到一个 <code>AsyncResult</code> 对象，可以查询任务状态或等待结果',
+      '可以是 Django/Flask/FastAPI 里的 View，也可以是定时脚本或另一个任务',
+    ]
+  },
+  broker: {
+    title: 'Broker — 消息中间件',
+    items: [
+      '接收来自 Producer 的消息，暂存在队列里',
+      '常用选项：<code>Redis</code>（简单，推荐开发）、<code>RabbitMQ</code>（生产级，支持路由/持久化）',
+      'Worker 从 Broker 轮询或订阅，取走任务执行',
+      '一个应用可以有多个队列（如 default、email、heavy），不同 Worker 监听不同队列',
+    ]
+  },
+  worker: {
+    title: 'Worker — 任务执行进程',
+    items: [
+      '独立进程，通过 <code>celery -A app worker</code> 启动，可横向扩展',
+      '从 Broker 取出消息，找到对应的任务函数并执行',
+      '并发模型：默认 <code>prefork</code>（多进程），也可选 <code>eventlet</code>/<code>gevent</code>（协程）、<code>solo</code>（调试用）',
+      '执行完成后将结果存入 Result Backend（如果配置了的话）',
+    ]
+  }
+};
+
+function selectTrio(key) {
+  ['producer','broker','worker'].forEach(k => {
+    document.getElementById('trio-' + k).classList.toggle('sel', k === key);
+  });
+  const d = trioData[key];
+  const detail = document.getElementById('trio-detail');
+  detail.innerHTML = `<h3>${d.title}</h3><ul>${d.items.map(i => `<li>${i}</li>`).join('')}</ul>`;
+}
+
+// ─── CODE TABS ───
+function switchTab(btn, paneId) {
+  const block = btn.closest('.code-block');
+  block.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+  block.querySelectorAll('.code-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(paneId).classList.add('active');
+}
+
+// ─── CANVAS PLAYGROUND ───
+const primData = {
+  chain: {
+    svg: `<svg width="380" height="180" viewBox="0 0 380 180" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#3D4D6A"/></marker>
+      <marker id="ahY" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#E8C547"/></marker></defs>
+      <g class="f-node yellow"><rect x="20" y="75" width="80" height="36" rx="8"/><text x="60" y="98" text-anchor="middle">fetch(url)</text></g>
+      <line x1="100" y1="93" x2="128" y2="93" stroke="#E8C547" stroke-width="1.5" marker-end="url(#ahY)"/>
+      <text x="114" y="88" text-anchor="middle" style="font-family:monospace;font-size:9px;fill:#8A94A8">result</text>
+      <g class="f-node yellow"><rect x="130" y="75" width="80" height="36" rx="8"/><text x="170" y="98" text-anchor="middle">parse()</text></g>
+      <line x1="210" y1="93" x2="238" y2="93" stroke="#E8C547" stroke-width="1.5" marker-end="url(#ahY)"/>
+      <text x="224" y="88" text-anchor="middle" style="font-family:monospace;font-size:9px;fill:#8A94A8">result</text>
+      <g class="f-node yellow"><rect x="240" y="75" width="80" height="36" rx="8"/><text x="280" y="98" text-anchor="middle">save()</text></g>
+      <text x="190" y="160" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#5A6478">串行：前一步结果 → 后一步参数</text>
+    </svg>`,
+    code: `<span class="k">from</span> celery <span class="k">import</span> chain
+
+<span class="c"># fetch 的返回值自动传给 parse</span>
+<span class="c"># parse 的返回值自动传给 save</span>
+workflow = chain(
+    fetch.<span class="n">s</span>(<span class="s">"http://example.com/data"</span>),
+    parse.<span class="n">s</span>(),      <span class="c"># 接收 fetch 的返回值</span>
+    save.<span class="n">s</span>()        <span class="c"># 接收 parse 的返回值</span>
+)
+
+result = workflow.<span class="n">delay</span>()
+<span class="c"># 等价于管道符：fetch | parse | save</span>
+
+<span class="c"># 也可以用管道符语法（Celery 5+）</span>
+workflow = fetch.<span class="n">s</span>(url) | parse.<span class="n">s</span>() | save.<span class="n">s</span>()`,
+    steps: ['fetch(url)', 'parse(data)', 'save(result)']
+  },
+  group: {
+    svg: `<svg width="380" height="200" viewBox="0 0 380 200" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#3D4D6A"/></marker></defs>
+      <g class="f-node teal"><rect x="20" y="90" width="80" height="30" rx="8"/><text x="60" y="110" text-anchor="middle">group</text></g>
+      <line x1="100" y1="100" x2="128" y2="60" stroke="#4ECDC4" stroke-width="1.5" marker-end="url(#ah)"/>
+      <line x1="100" y1="105" x2="128" y2="105" stroke="#4ECDC4" stroke-width="1.5" marker-end="url(#ah)"/>
+      <line x1="100" y1="110" x2="128" y2="148" stroke="#4ECDC4" stroke-width="1.5" marker-end="url(#ah)"/>
+      <g class="f-node teal"><rect x="130" y="40" width="90" height="30" rx="8"/><text x="175" y="60" text-anchor="middle">resize_sm()</text></g>
+      <g class="f-node teal"><rect x="130" y="90" width="90" height="30" rx="8"/><text x="175" y="110" text-anchor="middle">resize_md()</text></g>
+      <g class="f-node teal"><rect x="130" y="140" width="90" height="30" rx="8"/><text x="175" y="160" text-anchor="middle">resize_lg()</text></g>
+      <text x="30" y="40" style="font-family:monospace;font-size:10px;fill:#4ECDC4">同时发送，并发执行</text>
+      <text x="240" y="70" style="font-family:monospace;font-size:9px;fill:#5A6478">GroupResult</text>
+      <text x="240" y="83" style="font-family:monospace;font-size:9px;fill:#5A6478">[result1,</text>
+      <text x="240" y="96" style="font-family:monospace;font-size:9px;fill:#5A6478"> result2,</text>
+      <text x="240" y="109" style="font-family:monospace;font-size:9px;fill:#5A6478"> result3]</text>
+    </svg>`,
+    code: `<span class="k">from</span> celery <span class="k">import</span> group
+
+<span class="c"># 三个任务同时发到 broker</span>
+g = group(
+    resize_image.<span class="n">s</span>(img_id, <span class="s">'small'</span>),
+    resize_image.<span class="n">s</span>(img_id, <span class="s">'medium'</span>),
+    resize_image.<span class="n">s</span>(img_id, <span class="s">'large'</span>),
+)
+
+result = g.<span class="n">delay</span>()
+
+<span class="c"># 等待所有子任务完成，返回结果列表</span>
+results = result.<span class="n">get</span>()  <span class="c"># [url_sm, url_md, url_lg]</span>
+
+<span class="c"># 逐一处理（iter_native 利用 broker 原生批量拉取）</span>
+<span class="k">for</span> r <span class="k">in</span> result.<span class="n">iter_native</span>():
+    print(r)
+
+<span class="c"># 检查整体完成情况</span>
+print(result.<span class="n">completed_count</span>())  <span class="c"># 已完成数</span>
+print(result.<span class="n">ready</span>())            <span class="c"># 是否全部完成</span>
+print(result.<span class="n">successful</span>())      <span class="c"># 是否全部成功</span>`,
+    steps: ['group 分发', 'resize_sm()', 'resize_md()', 'resize_lg()', '收集 GroupResult']
+  },
+  chord: {
+    svg: `<svg width="380" height="220" viewBox="0 0 380 220" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#3D4D6A"/></marker>
+      <marker id="ahP" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#9B6DFF"/></marker></defs>
+      <text x="10" y="25" style="font-family:monospace;font-size:10px;fill:#9B6DFF">header (并行)</text>
+      <g class="f-node purple"><rect x="10" y="35" width="80" height="28" rx="8"/><text x="50" y="54" text-anchor="middle">fetch_a()</text></g>
+      <g class="f-node purple"><rect x="10" y="75" width="80" height="28" rx="8"/><text x="50" y="94" text-anchor="middle">fetch_b()</text></g>
+      <g class="f-node purple"><rect x="10" y="115" width="80" height="28" rx="8"/><text x="50" y="134" text-anchor="middle">fetch_c()</text></g>
+      <line x1="90" y1="49" x2="155" y2="89" stroke="#9B6DFF" stroke-width="1.5" marker-end="url(#ahP)"/>
+      <line x1="90" y1="89" x2="155" y2="100" stroke="#9B6DFF" stroke-width="1.5" marker-end="url(#ahP)"/>
+      <line x1="90" y1="129" x2="155" y2="108" stroke="#9B6DFF" stroke-width="1.5" marker-end="url(#ahP)"/>
+      <g class="f-node purple"><rect x="158" y="80" width="90" height="36" rx="8"/><text x="203" y="100" text-anchor="middle">callback(</text><text x="203" y="113" text-anchor="middle">[a,b,c])</text></g>
+      <line x1="248" y1="98" x2="276" y2="98" stroke="#9B6DFF" stroke-width="1.5" marker-end="url(#ahP)"/>
+      <g class="f-node purple"><rect x="278" y="80" width="82" height="36" rx="8"/><text x="319" y="98" text-anchor="middle">report</text><text x="319" y="111" text-anchor="middle">generated</text></g>
+      <text x="140" y="165" style="font-family:monospace;font-size:10px;fill:#5A6478">全部完成才触发 callback</text>
+      <text x="140" y="179" style="font-family:monospace;font-size:10px;fill:#5A6478">⚠ 需要 result backend</text>
+    </svg>`,
+    code: `<span class="k">from</span> celery <span class="k">import</span> chord, group
+
+<span class="c"># chord = group + 一个汇聚回调</span>
+<span class="c"># 全部并行任务完成后，结果列表传给 callback</span>
+workflow = chord(
+    group(
+        fetch_sales.<span class="n">s</span>(<span class="s">'2024'</span>),
+        fetch_users.<span class="n">s</span>(<span class="s">'2024'</span>),
+        fetch_traffic.<span class="n">s</span>(<span class="s">'2024'</span>),
+    ),
+    generate_report.<span class="n">s</span>()
+    <span class="c"># 收到: [sales_data, users_data, traffic_data]</span>
+)
+
+result = workflow.<span class="n">delay</span>()
+<span class="c"># ⚠️ chord 必须配置 result_backend！</span>`,
+    steps: ['分发 header 任务', 'fetch_sales()', 'fetch_users()', 'fetch_traffic()', '等待全部完成', 'callback([...])']
+  },
+  chunks: {
+    svg: `<svg width="380" height="180" viewBox="0 0 380 180" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#3D4D6A"/></marker></defs>
+      <text x="10" y="22" style="font-family:monospace;font-size:10px;fill:#5B8DEF">原始列表: 10000 个 ID</text>
+      <g class="f-node blue"><rect x="10" y="30" width="100" height="28" rx="8"/><text x="60" y="49" text-anchor="middle">items[0:100]</text></g>
+      <g class="f-node blue"><rect x="10" y="72" width="100" height="28" rx="8"/><text x="60" y="91" text-anchor="middle">items[100:200]</text></g>
+      <g class="f-node blue"><rect x="10" y="114" width="100" height="28" rx="8"/><text x="60" y="133" text-anchor="middle">items[200:300]</text></g>
+      <line x1="110" y1="44" x2="158" y2="44" stroke="#5B8DEF" stroke-width="1.5" marker-end="url(#ah)"/>
+      <line x1="110" y1="86" x2="158" y2="86" stroke="#5B8DEF" stroke-width="1.5" marker-end="url(#ah)"/>
+      <line x1="110" y1="128" x2="158" y2="128" stroke="#5B8DEF" stroke-width="1.5" marker-end="url(#ah)"/>
+      <g class="f-node blue"><rect x="160" y="30" width="90" height="28" rx="8"/><text x="205" y="49" text-anchor="middle">task(batch)</text></g>
+      <g class="f-node blue"><rect x="160" y="72" width="90" height="28" rx="8"/><text x="205" y="91" text-anchor="middle">task(batch)</text></g>
+      <g class="f-node blue"><rect x="160" y="114" width="90" height="28" rx="8"/><text x="205" y="133" text-anchor="middle">task(batch)</text></g>
+      <text x="130" y="170" style="font-family:monospace;font-size:10px;fill:#5A6478">自动分片，变为 group 并发执行</text>
+    </svg>`,
+    code: `<span class="k">from</span> tasks <span class="k">import</span> send_notification
+
+<span class="c"># 10万个用户 ID</span>
+user_ids = User.objects.<span class="n">values_list</span>(<span class="s">'id'</span>, flat=<span class="k">True</span>)
+
+<span class="c"># 分成 100 批，每批 1000 个并发执行</span>
+result = send_notification.<span class="n">chunks</span>(
+    [(uid,) <span class="k">for</span> uid <span class="k">in</span> user_ids],
+    n=<span class="d">100</span>
+).<span class="n">group</span>().<span class="n">delay</span>()
+
+<span class="c"># 等价于手动创建 group</span>
+batches = [user_ids[i:i+<span class="d">1000</span>] <span class="k">for</span> i <span class="k">in</span> range(<span class="d">0</span>, <span class="d">100000</span>, <span class="d">1000</span>)]
+g = group(send_notification.<span class="n">s</span>(batch) <span class="k">for</span> batch <span class="k">in</span> batches)`,
+    steps: ['切片分发', 'batch_0 (0-999)', 'batch_1 (1000-1999)', '...', 'batch_99 (99000-99999)']
+  },
+  map: {
+    svg: `<svg width="400" height="220" viewBox="0 0 400 220" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#3D4D6A"/></marker>
+      <marker id="ahG" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#52C97D"/></marker></defs>
+      <rect x="10" y="50" width="90" height="110" rx="8" fill="rgba(82,201,125,0.07)" stroke="#2a7040" stroke-width="1.5" stroke-dasharray="5,3"/>
+      <text x="55" y="38" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#52C97D">1条消息</text>
+      <text x="55" y="72" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#52C97D">celery.map</text>
+      <text x="55" y="90" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#5A6478">for x in it:</text>
+      <text x="55" y="108" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#8A94A8">double(1)</text>
+      <text x="55" y="124" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#8A94A8">double(2)</text>
+      <text x="55" y="140" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#8A94A8">double(3)</text>
+      <text x="55" y="156" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#5A6478">顺序执行 ↓</text>
+      <line x1="100" y1="105" x2="130" y2="105" stroke="#52C97D" stroke-width="1.5" marker-end="url(#ahG)"/>
+      <g style="opacity:0.4"><rect x="133" y="20" width="80" height="28" rx="8" fill="none" stroke="#3D4D6A" stroke-width="1.5"/><text x="173" y="39" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#5A6478">worker-2</text></g>
+      <g style="opacity:0.4"><rect x="133" y="60" width="80" height="28" rx="8" fill="none" stroke="#3D4D6A" stroke-width="1.5"/><text x="173" y="79" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#5A6478">worker-3</text></g>
+      <g><rect x="133" y="91" width="80" height="28" rx="8" fill="rgba(82,201,125,0.1)" stroke="#52C97D" stroke-width="1.5"/><text x="173" y="110" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#52C97D">worker-1</text></g>
+      <g style="opacity:0.4"><rect x="133" y="130" width="80" height="28" rx="8" fill="none" stroke="#3D4D6A" stroke-width="1.5"/><text x="173" y="149" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#5A6478">worker-4</text></g>
+      <text x="173" y="185" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#FF6B6B">只占用 1 个 worker，其他空闲</text>
+      <text x="280" y="60" style="font-family:monospace;font-size:10px;fill:#52C97D">对比 group:</text>
+      <text x="280" y="78" style="font-family:monospace;font-size:10px;fill:#5A6478">发 N 条消息</text>
+      <text x="280" y="96" style="font-family:monospace;font-size:10px;fill:#5A6478">N 个 worker</text>
+      <text x="280" y="114" style="font-family:monospace;font-size:10px;fill:#5A6478">真正并行</text>
+    </svg>`,
+    code: `<span class="k">from</span> tasks <span class="k">import</span> double, add
+
+<span class="c"># map: 单参数迭代，在 1 个 worker 内顺序执行</span>
+result = double.<span class="n">map</span>([<span class="d">1</span>, <span class="d">2</span>, <span class="d">3</span>, <span class="d">4</span>, <span class="d">5</span>]).<span class="n">delay</span>()
+<span class="c"># → 发送 1 条消息到 celery.map 内建任务</span>
+<span class="c"># → 在 worker 内: [double(1), double(2), ...]</span>
+<span class="c"># → 返回: [2, 4, 6, 8, 10]</span>
+
+result.<span class="n">get</span>()  <span class="c"># [2, 4, 6, 8, 10]</span>
+
+<span class="c"># ⚠️  和 group 的关键区别：</span>
+<span class="c"># map   → 1 条消息，顺序，1 个 worker</span>
+group(double.<span class="n">s</span>(x) <span class="k">for</span> x <span class="k">in</span> range(<span class="d">5</span>))
+<span class="c"># group → 5 条消息，并行，最多 5 个 worker</span>
+
+<span class="c"># 何时用 map？</span>
+<span class="c"># - 任务很轻，不值得为每个元素开销一条消息</span>
+<span class="c"># - 需要保证执行顺序</span>
+<span class="c"># - 不关心并行度</span>`,
+    steps: ['发送 1 条消息', 'worker 接收 celery.map', 'double(1)', 'double(2)', 'double(3)', '返回 [2,4,6]']
+  },
+  starmap: {
+    svg: `<svg width="400" height="200" viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#3D4D6A"/></marker>
+      <marker id="ahO" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#FFA040"/></marker></defs>
+      <text x="10" y="24" style="font-family:monospace;font-size:10px;fill:#FFA040">输入：元组列表</text>
+      <rect x="10" y="30" width="110" height="110" rx="8" fill="rgba(255,160,64,0.07)" stroke="#7a5020" stroke-width="1.5" stroke-dasharray="5,3"/>
+      <text x="65" y="55" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#FFA040">(1, 2)</text>
+      <text x="65" y="80" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#FFA040">(3, 4)</text>
+      <text x="65" y="105" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#FFA040">(5, 6)</text>
+      <text x="65" y="128" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#5A6478">*args 解包 ↓</text>
+      <line x1="120" y1="85" x2="150" y2="85" stroke="#FFA040" stroke-width="1.5" marker-end="url(#ahO)"/>
+      <text x="200" y="24" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#5A6478">在 worker 内顺序执行</text>
+      <rect x="155" y="40" width="110" height="28" rx="8" fill="rgba(255,160,64,0.1)" stroke="#FFA040" stroke-width="1.5"/>
+      <text x="210" y="59" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#FFA040">add(1, 2) = 3</text>
+      <rect x="155" y="78" width="110" height="28" rx="8" fill="rgba(255,160,64,0.1)" stroke="#FFA040" stroke-width="1.5"/>
+      <text x="210" y="97" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#FFA040">add(3, 4) = 7</text>
+      <rect x="155" y="116" width="110" height="28" rx="8" fill="rgba(255,160,64,0.1)" stroke="#FFA040" stroke-width="1.5"/>
+      <text x="210" y="135" text-anchor="middle" style="font-family:monospace;font-size:11px;fill:#FFA040">add(5, 6) = 11</text>
+      <text x="210" y="175" text-anchor="middle" style="font-family:monospace;font-size:10px;fill:#5A6478">vs map: add.map([(1,2)...]) → add((1,2)) 整个元组作为第1个参数</text>
+    </svg>`,
+    code: `<span class="k">from</span> tasks <span class="k">import</span> add
+
+<span class="c"># starmap: 每个元素是元组，用 * 解包传入</span>
+pairs = [(<span class="d">1</span>, <span class="d">2</span>), (<span class="d">3</span>, <span class="d">4</span>), (<span class="d">5</span>, <span class="d">6</span>)]
+result = add.<span class="n">starmap</span>(pairs).<span class="n">delay</span>()
+result.<span class="n">get</span>()  <span class="c"># [3, 7, 11]</span>
+<span class="c"># 等价于: [add(*p) for p in pairs]</span>
+
+<span class="c"># map vs starmap 的本质区别：</span>
+add.<span class="n">map</span>([(<span class="d">1</span>,<span class="d">2</span>), (<span class="d">3</span>,<span class="d">4</span>)])
+<span class="c"># → add((1,2))  整个元组作为第1个参数 ❌</span>
+
+add.<span class="n">starmap</span>([(<span class="d">1</span>,<span class="d">2</span>), (<span class="d">3</span>,<span class="d">4</span>)])
+<span class="c"># → add(1, 2)   元组解包成多个参数  ✓</span>
+
+<span class="c"># 等价的 Python 内置</span>
+<span class="k">import</span> itertools
+list(itertools.<span class="n">starmap</span>(add_fn, pairs))  <span class="c"># 同理</span>
+
+<span class="c"># 两者都是顺序的，都只发 1 条消息！</span>`,
+    steps: ['发送 1 条消息', 'worker 接收 celery.starmap', 'add(1,2)=3', 'add(3,4)=7', 'add(5,6)=11', '返回 [3,7,11]']
+  },
+  complex: {
+    svg: `<svg width="380" height="220" viewBox="0 0 380 220" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#3D4D6A"/></marker></defs>
+      <g class="f-node yellow"><rect x="10" y="95" width="70" height="28" rx="8"/><text x="45" y="114" text-anchor="middle">upload()</text></g>
+      <line x1="80" y1="109" x2="105" y2="109" stroke="#E8C547" stroke-width="1.5" marker-end="url(#ah)"/>
+      <g class="f-node yellow"><rect x="108" y="95" width="70" height="28" rx="8"/><text x="143" y="114" text-anchor="middle">compress()</text></g>
+      <line x1="178" y1="104" x2="210" y2="60" stroke="#4ECDC4" stroke-width="1.5" marker-end="url(#ah)"/>
+      <line x1="178" y1="109" x2="210" y2="109" stroke="#4ECDC4" stroke-width="1.5" marker-end="url(#ah)"/>
+      <line x1="178" y1="114" x2="210" y2="158" stroke="#4ECDC4" stroke-width="1.5" marker-end="url(#ah)"/>
+      <g class="f-node teal"><rect x="213" y="44" width="70" height="28" rx="8"/><text x="248" y="63" text-anchor="middle">thumb_sm</text></g>
+      <g class="f-node teal"><rect x="213" y="95" width="70" height="28" rx="8"/><text x="248" y="114" text-anchor="middle">thumb_md</text></g>
+      <g class="f-node teal"><rect x="213" y="146" width="70" height="28" rx="8"/><text x="248" y="165" text-anchor="middle">thumb_lg</text></g>
+      <line x1="283" y1="58" x2="300" y2="109" stroke="#9B6DFF" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="283" y1="109" x2="300" y2="109" stroke="#9B6DFF" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="283" y1="160" x2="300" y2="109" stroke="#9B6DFF" stroke-width="1" stroke-dasharray="3,3"/>
+      <g class="f-node purple"><rect x="302" y="95" width="65" height="28" rx="8"/><text x="334" y="114" text-anchor="middle">save_urls</text></g>
+      <text x="10" y="200" style="font-family:monospace;font-size:10px;fill:#5A6478">chain( upload | compress | chord(group(...), save_urls) )</text>
+    </svg>`,
+    code: `<span class="k">from</span> celery <span class="k">import</span> chain, group, chord
+
+<span class="c"># 真实场景：上传→压缩→生成多规格缩略图→保存</span>
+workflow = chain(
+    upload_file.<span class="n">s</span>(raw_bytes),
+    compress_image.<span class="n">s</span>(),
+    chord(
+        group(
+            make_thumbnail.<span class="n">s</span>(<span class="s">'sm'</span>),  <span class="c"># 并行</span>
+            make_thumbnail.<span class="n">s</span>(<span class="s">'md'</span>),
+            make_thumbnail.<span class="n">s</span>(<span class="s">'lg'</span>),
+        ),
+        save_thumbnail_urls.<span class="n">s</span>()  <span class="c"># 汇聚</span>
+    )
+)
+
+task = workflow.<span class="n">delay</span>()
+<span class="c"># chain 保证顺序</span>
+<span class="c"># 内部的 group 保证并行</span>
+<span class="c"># chord 保证汇聚后才写 DB</span>`,
+    steps: ['upload()', 'compress()', '分发 group', 'thumb_sm', 'thumb_md', 'thumb_lg', 'chord callback: save_urls()']
+  }
+};
+
+let currentPrim = 'chain';
+let simTimer = null;
+
+function selectPrim(key) {
+  currentPrim = key;
+  ['chain','group','chord','chunks','map','starmap','complex'].forEach(k => {
+    const el = document.getElementById('prim-' + k);
+    if (el) el.classList.toggle('sel', k === key);
+    const btn = document.getElementById('pgbtn-' + k);
+    if (btn) btn.classList.toggle('active', k === key);
+  });
+  const d = primData[key];
+  document.getElementById('pg-viz').innerHTML = d.svg;
+  document.getElementById('pg-code').innerHTML = d.code;
+  document.getElementById('pg-trace').innerHTML = '<span style="color:var(--text3)">点击 ▶ 模拟执行，查看任务调度流程</span>';
+  if (simTimer) { clearTimeout(simTimer); simTimer = null; }
+}
+
+function runSimulation() {
+  if (simTimer) { clearTimeout(simTimer); simTimer = null; }
+  const d = primData[currentPrim];
+  const steps = d.steps;
+  const trace = document.getElementById('pg-trace');
+  trace.innerHTML = '';
+  const els = [];
+  steps.forEach((s, i) => {
+    const el = document.createElement('span');
+    el.className = 'trace-step';
+    el.textContent = s;
+    trace.appendChild(el);
+    els.push(el);
+  });
+
+  let i = 0;
+  function next() {
+    if (i > 0) els[i-1].className = 'trace-step done';
+    if (i < els.length) {
+      els[i].className = 'trace-step running';
+      i++;
+      simTimer = setTimeout(next, 700);
+    }
+  }
+  next();
+}
+
+selectPrim('chain');
+
+// ─── LIFECYCLE ───
+const lcData = {
+  PENDING: {
+    color: 'var(--text3)',
+    desc: '任务已经被创建（有了 task_id），但 worker 还没确认收到。',
+    detail: `有两种情况会进入 PENDING：① 任务刚刚 .delay() 发出，还在 Broker 队列里等待；② 未配置 result backend 时，所有任务的状态都是 PENDING（因为没地方存状态）。`,
+    code: `result = add.delay(1, 2)
+print(result.status)  # 'PENDING'
+# 注意：未知的 task_id 也会返回 PENDING，不会报错！
+r = AsyncResult('不存在的ID')
+print(r.status)  # 'PENDING'（不是 KeyError）`
+  },
+  RECEIVED: {
+    color: 'var(--blue)',
+    desc: 'Worker 已从 Broker 取到任务，但还没开始执行。',
+    detail: '这个状态只在 task_track_started = True 且 worker 收到任务时更新。大多数配置下这个状态很短暂，几乎观察不到。',
+    code: `# 通常配置下不会看到 RECEIVED
+# 开启追踪：
+app.conf.task_track_started = True`
+  },
+  STARTED: {
+    color: 'var(--yellow)',
+    desc: '任务已经开始执行。需要 task_track_started = True 才会出现。',
+    detail: '默认情况下 Celery 不会在开始执行时更新状态，因为这需要额外写一次 backend。如果你的任务执行时间很长，开启这个选项可以让你知道任务"还活着"。',
+    code: `# celeryconfig.py
+task_track_started = True
+
+# 任务函数里可以更新自定义状态
+@app.task(bind=True)
+def long_task(self, total):
+    for i in range(total):
+        self.update_state(
+            state='PROGRESS',
+            meta={'current': i, 'total': total}
+        )`
+  },
+  SUCCESS: {
+    color: 'var(--teal)',
+    desc: '任务执行成功，返回值已存入 result backend。',
+    detail: '进入 SUCCESS 后，result.get() 会立即返回值。默认情况下结果会在 result backend 里保留 1 天（由 result_expires 配置）。',
+    code: `result = add.delay(4, 6)
+# 轮询等待完成
+import time
+while not result.ready():
+    time.sleep(0.1)
+print(result.status)   # 'SUCCESS'
+print(result.result)   # 10
+print(result.get())    # 10`
+  },
+  FAILURE: {
+    color: 'var(--red)',
+    desc: '任务执行时抛出了未捕获的异常，且重试次数已耗尽。',
+    detail: '进入 FAILURE 时，backend 里存的是异常对象。调用 result.get() 会在客户端 re-raise 这个异常（除非传 propagate=False）。',
+    code: `result = bad_task.delay()
+try:
+    val = result.get()
+except Exception as e:
+    print(f"Task failed: {e}")
+
+# 不 re-raise，只是检查：
+result.get(propagate=False)
+print(result.traceback)  # 打印完整堆栈`
+  },
+  RETRY: {
+    color: 'var(--purple)',
+    desc: '任务失败后正在等待重试。会重新进入 PENDING 状态。',
+    detail: '每次重试都会生成同一个 task_id 的新消息。重试期间状态短暂显示为 RETRY，然后变回 PENDING（等待下次执行）。',
+    code: `@app.task(bind=True, max_retries=3)
+def fragile_task(self):
+    try:
+        call_external_api()
+    except APIError as exc:
+        # 状态变为 RETRY，60s 后重新进入队列
+        raise self.retry(exc=exc, countdown=60)`
+  },
+  REVOKED: {
+    color: 'var(--red-dim)',
+    desc: '任务被主动撤销，不会再被执行。',
+    detail: '通过 result.revoke() 或 celery control revoke <task_id> 撤销。如果任务已经开始执行，需要传 terminate=True 才能强制中止（发 SIGTERM）。撤销列表存在 worker 内存里，重启后清空。',
+    code: `result = slow_task.delay()
+
+# 撤销（如果还未开始，跳过执行）
+result.revoke()
+
+# 强制终止（如果已在执行）
+result.revoke(terminate=True, signal='SIGKILL')
+
+# 检查是否被撤销
+print(result.status)  # 'REVOKED'`
+  }
+};
+
+function selectLC(el) {
+  document.querySelectorAll('.lc-state').forEach(s => s.classList.remove('sel'));
+  el.classList.add('sel');
+  const state = el.dataset.state;
+  const d = lcData[state];
+  const detail = document.getElementById('lc-detail');
+  detail.innerHTML = `
+    <h3 style="color:${d.color};margin-bottom:8px">${state}</h3>
+    <p style="font-size:14px;margin-bottom:12px">${d.desc}</p>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:12px">${d.detail}</p>
+    <pre style="font-size:12px;">${d.code}</pre>
+  `;
+}
+
+// ─── PITFALLS ───
+function togglePitfall(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+}
+
+// ─── ACTIVE NAV ───
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('.nav-links a');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`.nav-links a[href="#${e.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-40% 0px -40% 0px', threshold: 0 });
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

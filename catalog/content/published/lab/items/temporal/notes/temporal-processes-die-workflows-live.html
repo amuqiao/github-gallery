@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Temporal —— 进程会死，流程不会</title>
+<style>
+:root{
+  --paper:#F3F5F1; --card:#FBFCFA; --ink:#17251F; --ink2:#51625A; --line:#D4DBD3;
+  --ok:#0E7A5A; --ok-soft:#E2F0EA; --crash:#C93A12; --crash-soft:#F9E7E0;
+  --warn:#8F6400; --warn-soft:#F6EEDB;
+  --term:#0F1B15; --term-line:#20342A; --term-text:#B9D6C6; --term-dim:#6E8B7C;
+  --serif:Georgia,"Times New Roman","Songti SC","Noto Serif SC","SimSun",serif;
+  --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Cascadia Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto} *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16.5px;line-height:1.85;
+  background-image:repeating-linear-gradient(to bottom,transparent 0 47px,rgba(23,37,31,.035) 47px 48px);}
+::selection{background:var(--ok);color:#fff}
+.wrap{max-width:880px;margin:0 auto;padding:0 22px}
+.wrap-wide{max-width:1080px;margin:0 auto;padding:0 22px}
+a{color:var(--ok)}
+em{font-style:normal;box-shadow:inset 0 -0.45em var(--ok-soft)}
+strong{font-weight:650}
+code{font-family:var(--mono);font-size:.86em;background:#E7ECE6;border:1px solid var(--line);border-radius:4px;padding:.08em .34em;white-space:nowrap}
+h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.35;letter-spacing:.01em}
+p{margin:0 0 1.1em}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--ok);outline-offset:2px;border-radius:4px}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 26px}
+.eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.22em;color:var(--ink2);text-transform:uppercase;margin-bottom:18px}
+.eyebrow b{color:var(--ok);font-weight:600}
+h1{font-size:clamp(34px,6vw,58px);margin-bottom:20px}
+h1 .dead{color:var(--crash);text-decoration:line-through;text-decoration-thickness:3px;text-decoration-color:rgba(201,58,18,.55)}
+h1 .live{color:var(--ok)}
+.lede{font-size:19px;max-width:46em;color:#2A3A32}
+.disamb{margin-top:14px;font-size:13.5px;color:var(--ink2);border-left:3px solid var(--line);padding-left:12px}
+
+/* ---------- demo ---------- */
+.demo{margin:38px auto 0;border:1.5px solid var(--ink);border-radius:14px;background:var(--card);
+  box-shadow:6px 6px 0 rgba(23,37,31,.10);overflow:hidden}
+.demo-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1.5px solid var(--ink);background:#EDF1EC}
+.demo-title{font-family:var(--mono);font-size:13px;letter-spacing:.08em;color:var(--ink2)}
+.demo-title b{color:var(--ink);font-weight:600}
+.demo-ctrl{display:flex;gap:10px;flex-wrap:wrap}
+.btn{border:1.5px solid var(--ink);border-radius:8px;padding:8px 16px;font-size:14.5px;font-weight:600;
+  background:var(--card);color:var(--ink);transition:transform .06s ease}
+.btn:active{transform:translate(1px,1px)}
+.btn[disabled]{opacity:.35;cursor:not-allowed}
+.btn-run{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn-kill{background:var(--crash);border-color:var(--crash);color:#fff}
+.demo-body{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr)}
+.demo-left{padding:20px 22px;border-right:1.5px solid var(--ink)}
+.worker-line{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:13.5px;margin-bottom:16px;min-height:22px}
+.dot{width:10px;height:10px;border-radius:50%;background:#9AA8A0;flex:none}
+.dot.on{background:var(--ok);box-shadow:0 0 0 4px rgba(14,122,90,.18);animation:pulse 1.4s infinite}
+.dot.dead{background:var(--crash)}
+.dot.replay{background:var(--warn);animation:pulse .5s infinite}
+@keyframes pulse{50%{opacity:.5}}
+.steps{list-style:none;display:flex;flex-direction:column}
+.step{position:relative;padding:10px 12px 10px 44px;border-radius:9px;margin-bottom:6px;border:1px solid transparent}
+.step::before{content:"";position:absolute;left:20px;top:44px;bottom:-8px;width:2px;background:var(--line)}
+.step:last-child::before{display:none}
+.step .ico{position:absolute;left:9px;top:11px;width:23px;height:23px;border-radius:50%;
+  border:2px solid var(--line);background:var(--card);display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-family:var(--mono);color:var(--ink2)}
+.step .nm{font-weight:650;font-size:15px}
+.step .sub{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.step.running{border-color:var(--ok);background:var(--ok-soft)}
+.step.running .ico,.step.done .ico,.step.replayed .ico{font-size:0}
+.step .ico::after{font-size:12px}
+.step.running .ico{border-color:var(--ok);color:var(--ok)}
+.step.running .ico::after{content:"";width:11px;height:11px;border:2px solid var(--ok);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.step.done .ico{background:var(--ok);border-color:var(--ok);color:#fff}
+.step.done .ico::after{content:"✓"}
+.step.replayed{background:var(--warn-soft)}
+.step.replayed .ico{background:var(--warn);border-color:var(--warn);color:#fff}
+.step.replayed .ico::after{content:"↺"}
+.step.replayed .sub{color:var(--warn)}
+.step.crashpoint{border-color:var(--crash);background:var(--crash-soft)}
+.step.crashpoint .ico{border-color:var(--crash);color:var(--crash)}
+.demo-msg{margin-top:14px;font-size:13.5px;line-height:1.6;border-radius:8px;padding:10px 12px;display:none}
+.demo-msg.show{display:block}
+.demo-msg.crash{background:var(--crash-soft);border:1px solid #E5B4A2;color:#7C2A0E}
+.demo-msg.ok{background:var(--ok-soft);border:1px solid #B9D8CB;color:#0A5A43}
+.demo-msg.warn{background:var(--warn-soft);border:1px solid #E0CD9B;color:#6E4E00}
+.demo-right{background:var(--term);display:flex;flex-direction:column;min-height:100%}
+.term-head{font-family:var(--mono);font-size:12px;color:var(--term-dim);padding:12px 16px 8px;border-bottom:1px solid var(--term-line);
+  display:flex;justify-content:space-between;gap:8px}
+.term{flex:1;overflow-y:auto;padding:10px 16px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.75;
+  color:var(--term-text);max-height:430px;min-height:300px}
+.ev{display:flex;gap:10px;white-space:nowrap}
+.ev .id{color:var(--term-dim);flex:none;width:3ch;text-align:right}
+.ev .ty{flex:none}
+.ev .pl{color:var(--term-dim);overflow:hidden;text-overflow:ellipsis}
+.ev.started .ty{color:#8FB8FF}
+.ev.sched .ty{color:#D9C77A}
+.ev.act .ty{color:var(--term-text)}
+.ev.comp .ty{color:#6FDCA8}
+.ev.wfdone .ty{color:#6FDCA8;font-weight:700}
+.ev.note{color:var(--term-dim);font-style:italic}
+.ev.flash{background:rgba(217,199,122,.22)}
+.term-empty{color:var(--term-dim);font-style:italic}
+.demo-foot{padding:11px 18px;border-top:1.5px solid var(--ink);background:#EDF1EC;font-size:13px;color:var(--ink2);
+  display:flex;flex-wrap:wrap;gap:6px 22px;font-family:var(--mono)}
+.demo-foot b{color:var(--ink)}
+
+/* ---------- sections ---------- */
+section{padding:54px 0 8px}
+.secno{font-family:var(--mono);font-size:13px;color:var(--ok);letter-spacing:.18em;margin-bottom:8px}
+h2{font-size:clamp(25px,3.6vw,33px);margin-bottom:6px}
+.sechint{color:var(--ink2);font-size:15px;margin-bottom:22px}
+h3{font-size:19.5px;margin:26px 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:18px 0}
+
+/* problem: two-panel diagram */
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+.vs .pane{border-radius:12px;padding:18px;border:1.5px solid var(--line);background:var(--card)}
+.pane h4{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.pane.bad h4{color:var(--crash)}
+.pane.good{border-color:var(--ok)}
+.pane.good h4{color:var(--ok)}
+.mess{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.mess .b{font-family:var(--mono);font-size:11.5px;padding:7px 9px;border:1px dashed #C79A8A;border-radius:7px;background:var(--crash-soft);color:#7C2A0E;line-height:1.4}
+.mess .b.g{border-color:#B7C2BB;background:#EEF1ED;color:var(--ink2)}
+.pane .cap{font-size:13px;color:var(--ink2);margin-top:12px;line-height:1.6}
+.tidy{font-family:var(--mono);font-size:12.5px;line-height:2;background:var(--term);color:var(--term-text);border-radius:8px;padding:12px 14px;overflow-x:auto}
+.tidy .c{color:var(--term-dim)}
+.tidy .k{color:#8FB8FF}
+
+/* replay toggle */
+.toggle{display:inline-flex;border:1.5px solid var(--ink);border-radius:9px;overflow:hidden;margin:6px 0 14px}
+.toggle button{border:none;background:var(--card);padding:9px 18px;font-size:14px;font-weight:600;color:var(--ink2)}
+.toggle button.on{background:var(--ink);color:#fff}
+.replaybox{border:1.5px solid var(--ink);border-radius:12px;overflow:hidden;background:var(--term)}
+.rline{display:grid;grid-template-columns:minmax(0,11fr) minmax(0,9fr);border-bottom:1px solid var(--term-line)}
+.rline:last-child{border-bottom:none}
+.rcode{font-family:var(--mono);font-size:13px;color:var(--term-text);padding:10px 16px;white-space:pre;overflow-x:auto}
+.rcode .kw{color:#8FB8FF}.rcode .fn{color:#D9C77A}.rcode .cm{color:var(--term-dim)}
+.rnote{font-size:12.5px;padding:10px 14px;border-left:1px solid var(--term-line);display:flex;align-items:center;line-height:1.55}
+.rnote.exec{color:#6FDCA8}.rnote.skip{color:#D9C77A}.rnote.dim{color:var(--term-dim)}
+.rnote.resume{color:#FF9C7A}
+
+/* architecture */
+.arch{display:grid;grid-template-columns:1fr auto 1.35fr auto 1fr;gap:0;align-items:stretch;margin:22px 0}
+.abox{border:1.5px solid var(--ink);border-radius:12px;background:var(--card);padding:16px}
+.abox h4{font-size:15px;margin-bottom:8px}
+.abox .tag{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;padding:2px 8px;border-radius:20px;margin-bottom:10px}
+.tag.you{background:var(--ok-soft);color:var(--ok);border:1px solid #B9D8CB}
+.tag.them{background:#E9E6F4;color:#4B3E8F;border:1px solid #CDC6E8}
+.abox ul{list-style:none;font-size:13px;color:var(--ink2);line-height:1.7}
+.abox ul li::before{content:"·  "}
+.arrow{display:flex;align-items:center;justify-content:center;padding:0 8px;font-family:var(--mono);font-size:11px;color:var(--ink2);flex-direction:column;gap:2px}
+.arrow span{font-size:18px;color:var(--ink)}
+.bigno{margin:18px 0;border:1.5px solid var(--crash);background:var(--crash-soft);border-radius:12px;padding:14px 18px;font-size:15px;color:#7C2A0E}
+
+/* quiz */
+.quiz{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:22px 0}
+.qcard{border:1.5px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
+.qcode{font-family:var(--mono);font-size:13px;background:var(--term);color:var(--term-text);padding:12px 14px;white-space:pre;overflow-x:auto}
+.qbody{padding:12px 14px}
+.qbtns{display:flex;gap:8px}
+.qbtns button{flex:1;border:1.5px solid var(--ink);border-radius:7px;padding:7px 0;font-size:13.5px;font-weight:600;background:var(--card)}
+.qverdict{display:none;font-size:13.5px;line-height:1.6;margin-top:4px}
+.qcard.answered .qbtns{display:none}
+.qcard.answered .qverdict{display:block}
+.qcard.ok-ans{border-color:var(--ok)}
+.qcard.bad-ans{border-color:var(--crash)}
+.qmark{font-weight:700}
+.qcard .fix{font-family:var(--mono);font-size:12px;background:#E7ECE6;border-radius:5px;padding:2px 7px;white-space:nowrap}
+.qscore{font-family:var(--mono);font-size:13px;color:var(--ink2)}
+
+/* code tabs */
+.tabs{display:flex;gap:0;border:1.5px solid var(--ink);border-bottom:none;border-radius:12px 12px 0 0;overflow:hidden;background:#EDF1EC}
+.tabs button{border:none;background:transparent;padding:10px 18px;font-family:var(--mono);font-size:13px;color:var(--ink2);border-right:1px solid var(--line)}
+.tabs button.on{background:var(--term);color:var(--term-text)}
+.codebox{border:1.5px solid var(--ink);border-radius:0 0 12px 12px;background:var(--term);overflow-x:auto}
+.codebox pre{display:none;padding:16px 18px;font-family:var(--mono);font-size:13px;line-height:1.75;color:var(--term-text)}
+.codebox pre.on{display:block}
+.codebox .kw{color:#8FB8FF}.codebox .st{color:#D9C77A}.codebox .cm{color:var(--term-dim)}.codebox .fn{color:#6FDCA8}
+
+/* table */
+.tblwrap{overflow-x:auto;margin:20px 0;border:1.5px solid var(--ink);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--card);min-width:640px}
+th,td{padding:11px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;line-height:1.6}
+th{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--ink2);background:#EDF1EC}
+tr:last-child td{border-bottom:none}
+td:first-child{font-weight:650;white-space:nowrap}
+td.hl{background:var(--ok-soft)}
+
+/* details */
+details{border:1px solid var(--line);border-radius:10px;background:var(--card);margin:10px 0;overflow:hidden}
+summary{cursor:pointer;padding:13px 16px;font-weight:650;font-size:15.5px;list-style:none;display:flex;gap:10px;align-items:baseline}
+summary::before{content:"✕";color:var(--crash);font-family:var(--mono);font-weight:700;flex:none}
+summary::marker{display:none}
+details[open] summary{border-bottom:1px solid var(--line)}
+details .dbody{padding:13px 16px;font-size:14.5px;color:#2A3A32}
+details .dbody p:last-child{margin-bottom:0}
+
+/* use / not use */
+.uses{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}
+.uses .pane{border-radius:12px;padding:18px 20px;border:1.5px solid var(--line);background:var(--card)}
+.uses ul{list-style:none;font-size:14.5px}
+.uses li{padding:6px 0 6px 26px;position:relative;line-height:1.6}
+.uses .yes li::before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:700}
+.uses .no li::before{content:"✕";position:absolute;left:0;color:var(--crash);font-weight:700}
+.uses h4{margin-bottom:8px;font-size:16px}
+
+footer{margin-top:70px;border-top:1.5px solid var(--ink);padding:34px 0 60px;background:var(--card)}
+.final{font-family:var(--serif);font-size:clamp(19px,2.6vw,24px);line-height:1.6;max-width:36em}
+.final b{color:var(--ok)}
+.next{margin-top:16px;font-size:14px;color:var(--ink2)}
+
+@media (max-width:860px){
+  .demo-body{grid-template-columns:1fr}
+  .demo-left{border-right:none;border-bottom:1.5px solid var(--ink)}
+  .vs,.quiz,.uses{grid-template-columns:1fr}
+  .arch{grid-template-columns:1fr}
+  .arrow{transform:rotate(90deg);padding:10px 0;height:44px}
+  .rline{grid-template-columns:1fr}
+  .rnote{border-left:none;border-top:1px dashed var(--term-line)}
+  .term{max-height:300px}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">一文读懂 · <b>TEMPORAL</b> · DURABLE EXECUTION</div>
+    <h1><span class="dead">进程会死</span>，<span class="live">流程不会。</span></h1>
+    <p class="lede">扣款成功了，但服务器在发货前崩溃了——这是分布式系统里最经典的噩梦。<strong>Temporal</strong> 的答案是把「可靠的多步业务流程」写成一段普通的顺序代码：崩溃、重启、断网、等 30 天，它都能从断点精确恢复。下面这个演示就是它的全部秘密，<em>请随时按下红色按钮</em>。</p>
+    <p class="disamb">注：本文讲的是工作流引擎 <strong>temporal.io</strong>。如果你在找 JavaScript 新的日期时间 API <code>Temporal</code>，那是另一个同名的东西。</p>
+  </div>
+
+  <div class="wrap-wide">
+    <div class="demo" id="demo">
+      <div class="demo-head">
+        <div class="demo-title">orderWorkflow(<b>"order-8102"</b>) — 一次真实的订单流程</div>
+        <div class="demo-ctrl">
+          <button class="btn btn-run" id="btnRun">▶ 启动流程</button>
+          <button class="btn btn-kill" id="btnKill" disabled>💥 杀掉 Worker</button>
+          <button class="btn" id="btnReset">↺ 重置</button>
+        </div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-left">
+          <div class="worker-line"><span class="dot" id="wdot"></span><span id="wtext">Worker 尚未启动</span></div>
+          <ul class="steps" id="steps"></ul>
+          <div class="demo-msg" id="dmsg" role="status"></div>
+        </div>
+        <div class="demo-right">
+          <div class="term-head"><span>EVENT HISTORY — 持久化在 Temporal Server 的数据库里</span><span id="evcount"></span></div>
+          <div class="term" id="term"><div class="term-empty">（空）事件会随执行逐条写入，这就是流程的“存档”。</div></div>
+        </div>
+      </div>
+      <div class="demo-foot">
+        <span>崩溃次数 <b id="crashN">0</b></span>
+        <span>当前 Worker <b id="workerN">—</b></span>
+        <span>已完成步骤 <b id="doneN">0 / 4</b></span>
+        <span>代码修改 <b>0 行</b></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ============ 1 问题 ============ -->
+<section id="s1">
+  <div class="wrap">
+    <div class="secno">§ 1</div>
+    <h2>它解决什么问题</h2>
+    <p class="sechint">先看清痛点，再谈机制。</p>
+    <p>一个再普通不过的订单流程：<strong>扣款 → 预留库存 → 创建物流单 → 通知用户</strong>。难点从来不是写这四步，而是回答四个问题：第 2 步失败了怎么重试？重试多次仍失败，第 1 步的钱怎么退（补偿）？机器在第 3 步之前断电，怎么知道“已经扣过款了”？如果第 4 步要等 7 天后再发一封提醒邮件呢？</p>
+    <p>传统做法是把流程<strong>拆碎</strong>，塞进一堆基础设施里：</p>
+
+    <div class="vs">
+      <div class="pane bad">
+        <h4>传统拼装：流程被打碎在 5 个地方</h4>
+        <div class="mess">
+          <div class="b">订单服务<br><span style="opacity:.7">发起扣款，写“进行中”</span></div>
+          <div class="b g">消息队列 (MQ)<br><span style="opacity:.7">解耦各步骤</span></div>
+          <div class="b">库存消费者<br><span style="opacity:.7">收消息，更新状态表</span></div>
+          <div class="b g">DB 状态机表<br><span style="opacity:.7">status = 'PAID' ?</span></div>
+          <div class="b">cron 补偿任务<br><span style="opacity:.7">扫“卡住”的单子</span></div>
+          <div class="b g">重试 + 死信队列<br><span style="opacity:.7">失败消息去哪了？</span></div>
+        </div>
+        <p class="cap">业务逻辑（先后顺序、重试、补偿、超时）散落在生产者、消费者、状态表和定时任务里。<strong>没有一处代码能读出完整流程</strong>，每个箭头都是一个可能丢状态的缝隙。</p>
+      </div>
+      <div class="pane good">
+        <h4>Temporal：流程就是一个函数</h4>
+        <div class="tidy"><span class="k">async function</span> orderWorkflow(order) {
+  <span class="k">await</span> charge(order);        <span class="c">// 自动重试</span>
+  <span class="k">await</span> reserveStock(order);  <span class="c">// 失败可补偿</span>
+  <span class="k">await</span> ship(order);
+  <span class="k">await</span> sleep(<span class="c">'7 days'</span>);      <span class="c">// 真的等 7 天</span>
+  <span class="k">await</span> notify(order);
+}</div>
+        <p class="cap">顺序、重试、补偿、定时器全部回到代码里，用 <code>if / for / try-catch</code> 表达。崩溃了？<strong>换台机器接着跑</strong>，就像什么都没发生过。</p>
+      </div>
+    </div>
+    <p>这种能力有个名字：<strong>Durable Execution（持久执行）</strong>——函数的执行状态不依赖任何一台机器的存活。听起来像魔法，机制其实只有两个词：<em>事件溯源 + 重放</em>。</p>
+  </div>
+</section>
+
+<!-- ============ 2 核心机制 ============ -->
+<section id="s2">
+  <div class="wrap">
+    <div class="secno">§ 2</div>
+    <h2>核心机制：Event History + Replay</h2>
+    <p class="sechint">理解了这一节，你就理解了 Temporal 的一切。</p>
+    <p>Temporal 把代码分成两种角色：</p>
+    <div class="card">
+      <p><strong>Workflow（工作流）</strong>——编排逻辑本身。它必须是<strong>确定性的</strong>：同样的输入、同样的历史，重跑一遍必须走到完全相同的地方。它不做任何真实的副作用。</p>
+      <p style="margin-bottom:0"><strong>Activity（活动）</strong>——所有“会碰真实世界”的操作：调支付 API、写数据库、发邮件。Activity 允许失败，由 Temporal 按策略自动重试；<strong>它的返回值会被记录进 Event History</strong>。</p>
+    </div>
+    <p>每当 Workflow 走一步——调了哪个 Activity、拿到什么结果、定时器何时到期——Temporal Server 就往这条流程的 <strong>Event History</strong>（事件历史）里追加一条记录。这份 History 存在数据库里，<strong>它才是流程的真身</strong>；内存里跑着的那个函数只是它的投影。</p>
+    <p>于是崩溃恢复变成了一件机械的事——<strong>重放（Replay）</strong>。切换下面的开关，看同一段代码在两种情形下的行为：</p>
+
+    <div class="toggle" role="tablist">
+      <button id="tgFirst" class="on">① 首次执行</button>
+      <button id="tgReplay">② 崩溃后，新 Worker 重放</button>
+    </div>
+    <div class="replaybox" id="replaybox">
+      <div class="rline"><div class="rcode"><span class="kw">async function</span> <span class="fn">orderWorkflow</span>(order) {</div><div class="rnote dim" data-f="从 History 读到输入参数" data-r="从 History 读到输入参数（Event #1）"></div></div>
+      <div class="rline"><div class="rcode">  <span class="kw">await</span> <span class="fn">charge</span>(order);</div><div class="rnote" data-cls-f="exec" data-cls-r="skip" data-f="真实调用支付 API → 结果写入 History" data-r="不执行！History 里已有结果，直接返回（微秒级）"></div></div>
+      <div class="rline"><div class="rcode">  <span class="kw">await</span> <span class="fn">reserveStock</span>(order);</div><div class="rnote" data-cls-f="exec" data-cls-r="skip" data-f="真实调用库存服务 → 结果写入 History" data-r="不执行！直接返回历史结果"></div></div>
+      <div class="rline"><div class="rcode">  <span class="kw">await</span> <span class="fn">ship</span>(order);  <span class="cm">// ← 💥 上一个 Worker 死在这里</span></div><div class="rnote" data-cls-f="exec" data-cls-r="resume" data-f="真实调用物流服务 → 结果写入 History" data-r="History 里没有它的结果 → 从这里恢复真实执行"></div></div>
+      <div class="rline"><div class="rcode">  <span class="kw">await</span> <span class="fn">notify</span>(order);<br>}</div><div class="rnote" data-cls-f="exec" data-cls-r="dim" data-f="真实发送通知 → 流程完成" data-r="接着正常执行，仿佛崩溃从未发生"></div></div>
+    </div>
+
+    <p style="margin-top:20px">重放时代码<strong>逐行重新运行</strong>，但每个 <code>await activity()</code> 都不再真的发请求，而是从 History 里取出当年的结果立刻返回——几毫秒内函数就“快进”回崩溃点，局部变量、调用栈、循环进度全部原样重建，然后继续向前。这也解释了 <code>sleep('30 days')</code> 为什么不浪费：定时器是 History 里的一条事件，由 Server 持久保管，<strong>等待期间 Workflow 直接从内存卸载，不占任何线程</strong>；到点后被唤醒、重放、继续。上百万个沉睡中的流程，成本几乎为零。</p>
+  </div>
+</section>
+
+<!-- ============ 3 架构 ============ -->
+<section id="s3">
+  <div class="wrap">
+    <div class="secno">§ 3</div>
+    <h2>三个角色，一条铁律</h2>
+    <p class="sechint">谁存状态，谁跑代码。</p>
+    <div class="arch">
+      <div class="abox">
+        <span class="tag you">你的代码</span>
+        <h4>Client / Starter</h4>
+        <ul>
+          <li>发起流程：<code>start(orderWorkflow)</code></li>
+          <li>发信号、查状态、拿结果</li>
+          <li>嵌在你的 API 服务里</li>
+        </ul>
+      </div>
+      <div class="arrow"><span>⇄</span>gRPC</div>
+      <div class="abox" style="border-width:2px">
+        <span class="tag them">Temporal Server（自建或 Cloud）</span>
+        <h4>调度与记账中枢</h4>
+        <ul>
+          <li>持久化每条流程的 Event History</li>
+          <li>管理 Task Queue（任务队列）</li>
+          <li>持久定时器、自动重试、超时判定</li>
+          <li><strong>从不执行你的任何代码</strong></li>
+        </ul>
+      </div>
+      <div class="arrow"><span>⇄</span>长轮询</div>
+      <div class="abox">
+        <span class="tag you">你的代码</span>
+        <h4>Worker（可以很多个）</h4>
+        <ul>
+          <li>从队列领任务</li>
+          <li>执行 Workflow 与 Activity</li>
+          <li>无状态，可随意重启、扩容</li>
+        </ul>
+      </div>
+    </div>
+    <div class="bigno"><strong>铁律：Temporal Server 只存事件、派任务，你的代码、依赖、数据库密码永远只存在于你自己的 Worker 进程里。</strong>这也是它能安全使用 Temporal Cloud 的原因——云端只看得到事件流水，看不到业务实现。Worker 死了随便再拉一个，因为状态全在 History 里，Worker 本身一无所有。首屏演示里你杀掉的正是 Worker。</div>
+  </div>
+</section>
+
+<!-- ============ 4 确定性 ============ -->
+<section id="s4">
+  <div class="wrap">
+    <div class="secno">§ 4</div>
+    <h2>代价：Workflow 必须确定性</h2>
+    <p class="sechint">重放的前提是“重跑一遍走同一条路”。</p>
+    <p>Replay 机制有一个硬前提：拿着同一份 History 重放代码，必须走出<strong>一模一样</strong>的执行路径。如果 Workflow 里混进了每次运行结果不同的东西（随机数、当前时间、直接的网络请求），重放时代码会拐进另一条分支，和 History 对不上——Temporal 会直接抛出 <strong>non-determinism error</strong>。</p>
+    <p>所以规则很简单：<strong>一切副作用进 Activity；Workflow 里的“时间”和“随机”用 SDK 提供的确定性替身</strong>。来做个小测验，下面这些代码能不能直接写在 Workflow 函数里？</p>
+
+    <div class="quiz" id="quiz"></div>
+    <p class="qscore" id="qscore"></p>
+
+    <p>同一条铁律还有一个推论：<strong>改代码也是一种“不确定性”</strong>。线上还有跑到一半的旧流程时，如果新代码的执行路径变了，旧实例重放就会崩。Temporal 为此提供 <code>patched()</code> / Worker Versioning 等版本化机制——这是上手后绕不开的第一个进阶课题，先知道它存在即可。</p>
+  </div>
+</section>
+
+<!-- ============ 5 最小例子 ============ -->
+<section id="s5">
+  <div class="wrap">
+    <div class="secno">§ 5</div>
+    <h2>最小可运行例子</h2>
+    <p class="sechint">四个文件，就是首屏演示的真实代码（TypeScript SDK，Go/Java/Python 结构相同）。</p>
+    <div class="tabs" id="tabs">
+      <button class="on" data-t="t1">workflows.ts</button>
+      <button data-t="t2">activities.ts</button>
+      <button data-t="t3">worker.ts</button>
+      <button data-t="t4">client.ts</button>
+    </div>
+    <div class="codebox">
+<pre id="t1" class="on"><span class="cm">// 编排逻辑：确定性代码，跑在“沙箱”里</span>
+<span class="kw">import</span> { proxyActivities, sleep } <span class="kw">from</span> <span class="st">'@temporalio/workflow'</span>;
+<span class="kw">import type</span> * <span class="kw">as</span> acts <span class="kw">from</span> <span class="st">'./activities'</span>;
+
+<span class="kw">const</span> { charge, reserveStock, ship, notify } =
+  proxyActivities&lt;<span class="kw">typeof</span> acts&gt;({
+    startToCloseTimeout: <span class="st">'30 seconds'</span>,
+    retry: { maximumAttempts: <span class="st">5</span> },   <span class="cm">// 每个 Activity 自动重试</span>
+  });
+
+<span class="kw">export async function</span> <span class="fn">orderWorkflow</span>(order: Order) {
+  <span class="kw">await</span> charge(order);          <span class="cm">// 每一步结果都写入 Event History</span>
+  <span class="kw">await</span> reserveStock(order);
+  <span class="kw">const</span> tracking = <span class="kw">await</span> ship(order);
+  <span class="kw">await</span> sleep(<span class="st">'7 days'</span>);        <span class="cm">// 持久定时器：重启也不会丢</span>
+  <span class="kw">await</span> notify(order.userId, tracking);
+  <span class="kw">return</span> tracking;
+}</pre>
+<pre id="t2"><span class="cm">// 副作用都在这里：普通函数，随便用 fetch / DB / SDK</span>
+<span class="kw">export async function</span> <span class="fn">charge</span>(order: Order) {
+  <span class="cm">// 注意幂等：用 order.id 做支付去重键，重试才安全</span>
+  <span class="kw">return</span> paymentApi.charge({ idempotencyKey: order.id, ...order });
+}
+<span class="kw">export async function</span> <span class="fn">reserveStock</span>(order: Order) { <span class="cm">/* ... */</span> }
+<span class="kw">export async function</span> <span class="fn">ship</span>(order: Order) { <span class="cm">/* ... */</span> }
+<span class="kw">export async function</span> <span class="fn">notify</span>(userId: string, tk: string) { <span class="cm">/* ... */</span> }</pre>
+<pre id="t3"><span class="cm">// Worker：你部署的长驻进程，从队列领任务执行上面两种代码</span>
+<span class="kw">import</span> { Worker } <span class="kw">from</span> <span class="st">'@temporalio/worker'</span>;
+<span class="kw">import</span> * <span class="kw">as</span> activities <span class="kw">from</span> <span class="st">'./activities'</span>;
+
+<span class="kw">const</span> worker = <span class="kw">await</span> Worker.create({
+  workflowsPath: require.resolve(<span class="st">'./workflows'</span>),
+  activities,
+  taskQueue: <span class="st">'orders'</span>,
+});
+<span class="kw">await</span> worker.run();   <span class="cm">// 多起几个进程即水平扩容</span></pre>
+<pre id="t4"><span class="cm">// 在你的 API 服务里发起一条流程</span>
+<span class="kw">import</span> { Client } <span class="kw">from</span> <span class="st">'@temporalio/client'</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> Client();
+<span class="kw">const</span> handle = <span class="kw">await</span> client.workflow.start(orderWorkflow, {
+  taskQueue: <span class="st">'orders'</span>,
+  workflowId: <span class="st">'order-8102'</span>,   <span class="cm">// 业务 ID = 天然去重</span>
+  args: [order],
+});
+<span class="cm">// 之后随时：await handle.result() / handle.signal(...) / handle.query(...)</span></pre>
+    </div>
+    <p style="margin-top:16px">本地体验只需 <code>temporal server start-dev</code>（官方 CLI 自带单机版 Server 和 Web UI），再 <code>npm run worker</code> 起 Worker。在 Web UI 里能看到每条流程的完整 Event History——和首屏演示右边那块一模一样。</p>
+  </div>
+</section>
+
+<!-- ============ 6 对比 ============ -->
+<section id="s6">
+  <div class="wrap">
+    <div class="secno">§ 6</div>
+    <h2>和相近方案摆在一起</h2>
+    <p class="sechint">名字都带“工作流”，定位差得很远。</p>
+    <div class="tblwrap">
+      <table>
+        <tr><th></th><th>自己拼：MQ + 状态表 + cron</th><th>Airflow / Dagster 类调度器</th><th>Temporal</th></tr>
+        <tr><td>定位</td><td>通用积木</td><td>数据管道（ETL / 批处理）</td><td class="hl">业务流程 / 长事务的持久执行</td></tr>
+        <tr><td>流程定义</td><td>散落在多个服务与配置里</td><td>静态 DAG，任务粒度是“作业”</td><td class="hl">通用代码：if / for / try-catch 任意组合</td></tr>
+        <tr><td>状态在哪</td><td>你自己设计的状态表，缝隙多</td><td>调度器元数据库（任务级）</td><td class="hl">Event History，精确到每个函数调用</td></tr>
+        <tr><td>崩溃之后</td><td>靠补偿任务扫表“捞”回来</td><td>重跑失败的任务节点</td><td class="hl">重放，秒级回到崩溃前一行代码</td></tr>
+        <tr><td>能等多久</td><td>等待逻辑要自己持久化</td><td>按调度周期（分钟级起步）</td><td class="hl">毫秒到数月，可等外部信号（如“用户点了确认”）</td></tr>
+        <tr><td>典型场景</td><td>——</td><td>每晚跑数、报表、ML 训练管道</td><td class="hl">支付/订单 Saga、注册引导、资源开通、AI Agent 编排</td></tr>
+      </table>
+    </div>
+    <p>一句话区分：<strong>Airflow 编排“数据的批处理作业”，Temporal 编排“每一个用户/订单各自的业务流程实例”</strong>。前者一天跑一次 DAG；后者可能同时有一千万条各走到不同步骤的流程在“活着”。AWS Step Functions 与 Temporal 定位最接近，但它用 JSON 状态机描述流程且绑定 AWS，而 Temporal 用你熟悉的编程语言、可自托管。</p>
+  </div>
+</section>
+
+<!-- ============ 7 误区 ============ -->
+<section id="s7">
+  <div class="wrap">
+    <div class="secno">§ 7</div>
+    <h2>五个常见误解</h2>
+    <p class="sechint">点开每一条，都是新手真实踩过的坑。</p>
+    <details><summary>“Workflow 等待时占着一个线程，等 30 天太浪费了”</summary><div class="dbody"><p>不占。<code>await sleep('30 days')</code> 会在 History 里记一条 <code>TimerStarted</code>，然后这个 Workflow 就从 Worker 内存中<strong>整个卸载</strong>。到期时 Server 派发任务，任意一个 Worker 通过重放把它复活。“沉睡的流程”只是数据库里的几行记录。</p></div></details>
+    <details><summary>“Temporal Server 会运行我的代码，把代码传上去就行”</summary><div class="dbody"><p>Server 从不运行用户代码，它只是记账员 + 派单员。代码永远部署在你自己的 Worker 里——所以升级依赖、连接内网数据库、读密钥都和普通服务一样，Temporal Cloud 也碰不到你的业务逻辑。</p></div></details>
+    <details><summary>“有自动重试了，Activity 就不用考虑幂等”</summary><div class="dbody"><p>恰恰相反。重试意味着 Activity 是<strong>至少执行一次</strong>：如果 Worker 在“扣款成功、结果还没写回 History”的瞬间崩溃，恢复后这个 Activity 会整个重跑。所以碰钱、碰库存的 Activity 必须用幂等键（如订单 ID）去重。首屏演示里如果你在某步“执行中”时杀掉 Worker，就能看到这条提示。</p></div></details>
+    <details><summary>“Event History 想记多长记多长”</summary><div class="dbody"><p>有硬上限（约 51,200 条事件 / 50MB）。永续型流程（比如“用户的整个订阅生命周期”）要定期调用 <code>continueAsNew</code>：结束当前流程，带着精简后的状态开一条新 History 接着跑，像链表一样续下去。</p></div></details>
+    <details><summary>“它这么可靠，用来处理高吞吐数据流吧”</summary><div class="dbody"><p>方向错了。可靠性的代价是<strong>每一步都要持久化事件</strong>（单步几十毫秒级开销）。每秒百万条消息的流式处理是 Kafka / Flink 的地盘；Temporal 的账按“流程的步骤数”算，适合“单条流程很值钱、必须万无一失”的场景，而不是海量廉价事件。</p></div></details>
+  </div>
+</section>
+
+<!-- ============ 8 适用与取舍 ============ -->
+<section id="s8">
+  <div class="wrap">
+    <div class="secno">§ 8</div>
+    <h2>什么时候该用，什么时候别用</h2>
+    <p class="sechint">迁移判断标准，拿走即用。</p>
+    <div class="uses">
+      <div class="pane">
+        <h4 style="color:var(--ok)">✓ 强信号：上 Temporal</h4>
+        <ul class="yes">
+          <li>跨多个服务、<strong>必须最终完成</strong>的流程：支付、退款、订单履约（Saga 补偿用 try-catch 写）</li>
+          <li>流程里有<strong>长时间等待</strong>：等人工审批、等回调、等 7 天后发提醒</li>
+          <li>注册引导、订阅计费周期、基础设施开通（provisioning）</li>
+          <li>AI Agent / LLM 多步任务：步骤贵、易失败、要断点续跑</li>
+          <li>你正打算“加一张状态表 + 一个补偿 cron”——这就是信号本身</li>
+        </ul>
+      </div>
+      <div class="pane">
+        <h4 style="color:var(--crash)">✕ 别硬套</h4>
+        <ul class="no">
+          <li>单次请求-响应、几十毫秒内要返回的同步路径（每步持久化有延迟开销）</li>
+          <li>高吞吐事件流、日志管道 → Kafka / Flink</li>
+          <li>面向数据表的定时批处理 → Airflow / Dagster 更顺手</li>
+          <li>一个简单 cron 能解决的事——别为它引入一套集群</li>
+          <li>团队无法承担新组件运维，又不接受托管云服务</li>
+        </ul>
+      </div>
+    </div>
+    <p><strong>真实的代价清单</strong>：要么自建 Temporal 集群（Server + 数据库，需要运维），要么付费用 Temporal Cloud；团队要学会确定性约束和版本化（<code>patched()</code>）；每一步几十毫秒的事件写入开销；History 上限与 <code>continueAsNew</code> 的心智负担。换来的是：删掉状态表、补偿 cron、重试框架和它们之间所有对不上账的缝隙。流程越关键、越长、分支越多，这笔交换越划算。</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="final">Temporal = <b>事件溯源</b> + <b>自动重放</b>。<br>它把“流程走到哪了”从每台机器的内存里拿走，变成一份谁都可以接着读的存档——于是进程的死活，第一次与流程的死活无关。</p>
+    <p class="next">下一步：用官方 CLI 跑 <code>temporal server start-dev</code>，在 Web UI 里亲眼看一条流程的 Event History；文档与各语言示例见 temporal.io/docs 与 GitHub 上的 temporalio/samples 系列仓库。</p>
+  </div>
+</footer>
+
+<script>
+/* ================= hero demo ================= */
+(function(){
+  const STEPS = [
+    {nm:'扣款', act:'charge', res:'{"txnId":"pay_7f3a"}'},
+    {nm:'预留库存', act:'reserveStock', res:'{"reserved":true}'},
+    {nm:'创建物流单', act:'ship', res:'{"tracking":"SF10492"}'},
+    {nm:'发送通知', act:'notify', res:'"ok"'}
+  ];
+  const $ = id => document.getElementById(id);
+  const stepsEl=$('steps'), term=$('term'), dmsg=$('dmsg'),
+        wdot=$('wdot'), wtext=$('wtext'),
+        btnRun=$('btnRun'), btnKill=$('btnKill'), btnReset=$('btnReset');
+  let phase='idle', cur=0, inFlight=false, workerId=0, crashes=0, evId=0, token=0, timers=[];
+  let events=[]; // {id, cls, ty, pl}
+
+  // build step list
+  STEPS.forEach((s,i)=>{
+    const li=document.createElement('li'); li.className='step'; li.id='st'+i;
+    li.innerHTML='<span class="ico">'+(i+1)+'</span><div class="nm">'+s.nm+
+      '</div><div class="sub">Activity: '+s.act+'()</div>';
+    stepsEl.appendChild(li);
+  });
+
+  function later(fn,ms){ const t=token; timers.push(setTimeout(()=>{ if(t===token) fn(); },ms)); }
+  function clearTimers(){ timers.forEach(clearTimeout); timers=[]; }
+
+  function addEv(cls,ty,pl){
+    evId++; events.push({id:evId,cls,ty,pl});
+    if(events.length===1) term.innerHTML='';
+    const d=document.createElement('div'); d.className='ev '+cls; d.id='ev'+evId;
+    d.innerHTML='<span class="id">'+evId+'</span><span class="ty">'+ty+'</span><span class="pl">'+(pl||'')+'</span>';
+    term.appendChild(d); term.scrollTop=term.scrollHeight;
+  }
+  function addNote(txt){
+    const d=document.createElement('div'); d.className='ev note'; d.textContent='── '+txt+' ──';
+    term.appendChild(d); term.scrollTop=term.scrollHeight;
+  }
+  function msg(cls,html){ dmsg.className='demo-msg show '+cls; dmsg.innerHTML=html; }
+  function hideMsg(){ dmsg.className='demo-msg'; }
+  function setWorker(cls,txt){ wdot.className='dot '+cls; wtext.textContent=txt; }
+  function stat(){
+    $('crashN').textContent=crashes;
+    $('workerN').textContent=workerId? '#'+workerId : '—';
+    $('doneN').textContent=cur+' / '+STEPS.length;
+    $('evcount').textContent=evId? evId+' events':'';
+  }
+  function stepCls(i,cls){ const el=$('st'+i); el.className='step'+(cls?' '+cls:''); }
+
+  function runStep(){
+    if(cur>=STEPS.length){
+      addEv('wfdone','WorkflowExecutionCompleted','result: "SF10492"');
+      phase='done'; setWorker('on','Worker #'+workerId+' 空闲（流程已完成）');
+      btnKill.disabled=true;
+      msg('ok','<strong>流程完成。</strong>共崩溃 '+crashes+' 次，没改一行代码，没丢一步状态。这就是 Durable Execution。'); stat();
+      return;
+    }
+    const s=STEPS[cur];
+    stepCls(cur,'running'); inFlight=true;
+    addEv('sched','ActivityTaskScheduled',s.act+'()');
+    later(()=>{
+      addEv('act','ActivityTaskStarted','attempt: 1');
+      later(()=>{
+        addEv('comp','ActivityTaskCompleted','result: '+s.res);
+        stepCls(cur,'done'); inFlight=false; cur++; stat();
+        later(runStep, 650);
+      }, 1050);
+    }, 600);
+  }
+
+  btnRun.onclick=()=>{
+    if(phase!=='idle') return;
+    token++; phase='running'; workerId=1;
+    setWorker('on','Worker #1 运行中 — 正在执行 orderWorkflow'); hideMsg();
+    addEv('started','WorkflowExecutionStarted','orderWorkflow("order-8102")');
+    btnRun.disabled=true; btnKill.disabled=false; stat();
+    later(runStep, 500);
+  };
+
+  btnKill.onclick=()=>{
+    if(phase!=='running') return;
+    token++; clearTimers(); phase='dead'; crashes++;
+    const wasInFlight=inFlight, killedStep=cur;
+    if(wasInFlight) stepCls(cur,'crashpoint');
+    setWorker('dead','Worker #'+workerId+' 已被杀死 💀（进程没了，内存清零）');
+    addNote('💥 Worker 崩溃。注意：History 一条不少，它存在 Server 的数据库里');
+    msg('crash','<strong>进程死了，但流程没死。</strong>已写入 History 的 '+evId+' 条事件安然无恙。Temporal Server 发现任务超时，正在把它派给别的 Worker……');
+    btnKill.disabled=true; stat();
+    later(()=>startReplay(wasInFlight,killedStep), 2300);
+  };
+
+  function startReplay(wasInFlight,killedStep){
+    workerId++; phase='replaying';
+    setWorker('replay','Worker #'+workerId+' 上线 — 正在重放 Event History');
+    addNote('↺ Worker #'+workerId+' 领到任务，开始重放（不重新调用任何外部 API）');
+    // visual: flash history events & fast-forward completed steps
+    const ids=events.map(e=>e.id); let k=0;
+    for(let i=0;i<killedStep;i++) stepCls(i,'');
+    function flash(){
+      if(k<ids.length){
+        const el=$('ev'+ids[k]); if(el){el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),260); el.scrollIntoView({block:'nearest'});}
+        // mark step replayed when its Completed event passes
+        const e=events[k];
+        if(e.ty==='ActivityTaskCompleted'){
+          const doneCount=events.slice(0,k+1).filter(x=>x.ty==='ActivityTaskCompleted').length;
+          stepCls(doneCount-1,'replayed');
+          const sub=$('st'+(doneCount-1)).querySelector('.sub');
+          sub.textContent='↺ 重放：读历史结果，未重新执行';
+        }
+        k++; later(flash, 130);
+      } else {
+        finishReplay(wasInFlight,killedStep);
+      }
+    }
+    later(flash, 400);
+  }
+
+  function finishReplay(wasInFlight,killedStep){
+    phase='running';
+    setWorker('on','Worker #'+workerId+' 运行中 — 已恢复到断点，继续真实执行');
+    if(wasInFlight){
+      stepCls(killedStep,'');
+      msg('warn','重放完成，用时几毫秒。⚠ 第 '+(killedStep+1)+' 步「'+STEPS[killedStep].nm+'」崩溃时正在执行、结果未写入 History，所以它会<strong>整个重跑</strong>——这就是 Activity 必须幂等的原因。');
+      addEv('act','ActivityTaskStarted','attempt: 2 ← 重试');
+      btnKill.disabled=false;
+      later(()=>{
+        addEv('comp','ActivityTaskCompleted','result: '+STEPS[killedStep].res);
+        stepCls(killedStep,'done'); inFlight=false; cur++; stat(); hideMsg();
+        later(runStep,650);
+      },1050);
+    } else {
+      msg('ok','重放完成，用时几毫秒：前 '+killedStep+' 步直接取历史结果，从第 '+(killedStep+1)+' 步继续真实执行。');
+      btnKill.disabled=false;
+      later(runStep, 700);
+    }
+    stat();
+  }
+
+  btnReset.onclick=()=>{
+    token++; clearTimers();
+    phase='idle'; cur=0; inFlight=false; workerId=0; crashes=0; evId=0; events=[];
+    term.innerHTML='<div class="term-empty">（空）事件会随执行逐条写入，这就是流程的“存档”。</div>';
+    STEPS.forEach((s,i)=>{ stepCls(i,''); $('st'+i).querySelector('.sub').textContent='Activity: '+s.act+'()'; });
+    setWorker('','Worker 尚未启动'); hideMsg();
+    btnRun.disabled=false; btnKill.disabled=true; stat();
+  };
+  stat();
+})();
+
+/* ================= §2 replay toggle ================= */
+(function(){
+  const f=document.getElementById('tgFirst'), r=document.getElementById('tgReplay');
+  const notes=document.querySelectorAll('#replaybox .rnote');
+  function set(mode){
+    f.classList.toggle('on',mode==='f'); r.classList.toggle('on',mode==='r');
+    notes.forEach(n=>{
+      n.textContent = mode==='f' ? (n.dataset.f||'') : (n.dataset.r||'');
+      const cls = mode==='f' ? (n.dataset.clsF||'dim') : (n.dataset.clsR||'dim');
+      n.className='rnote '+cls;
+    });
+  }
+  f.onclick=()=>set('f'); r.onclick=()=>set('r'); set('f');
+})();
+
+/* ================= §4 quiz ================= */
+(function(){
+  const Q=[
+    {code:'const id = Math.random();', ok:false,
+     why:'重放时会生成一个<strong>新的</strong>随机数，执行路径可能改变，History 对不上。',
+     fix:"用 SDK 的 uuid4() / sideEffect()，结果会记入 History"},
+    {code:'const total = items.reduce(\n  (s, i) => s + i.price, 0);', ok:true,
+     why:'纯计算。同样的输入永远得到同样的结果，重放安全。', fix:null},
+    {code:'if (Date.now() > deadline) {\n  await cancel(order);\n}', ok:false,
+     why:'重放发生在“未来”，<code>Date.now()</code> 会返回不同的值，可能拐进另一个分支。',
+     fix:"用 workflow.now()：重放时返回历史时刻"},
+    {code:'await sleep(\'30 days\');\n// workflow 提供的 sleep', ok:true,
+     why:'这是<strong>持久定时器</strong>：作为事件写入 History，由 Server 保管，重启不丢，等待期间不占资源。', fix:null},
+    {code:'const user = await fetch(\n  \'https://api.example.com/u/1\');', ok:false,
+     why:'直接 IO：可能失败、每次结果不同，且重放时会真的再发一次请求。',
+     fix:"包成 Activity，让 Temporal 负责重试并记录结果"},
+    {code:'const tx = await charge(order);\n// charge 是 Activity', ok:true,
+     why:'这正是副作用的正确位置：首次执行真实调用并记录结果，重放时直接读 History。', fix:null},
+  ];
+  const box=document.getElementById('quiz'), score=document.getElementById('qscore');
+  let done=0, right=0;
+  Q.forEach((q,i)=>{
+    const c=document.createElement('div'); c.className='qcard';
+    c.innerHTML='<div class="qcode">'+q.code+'</div><div class="qbody">'+
+      '<div class="qbtns"><button data-a="1">✓ 能写在 Workflow 里</button><button data-a="0">✕ 不能</button></div>'+
+      '<div class="qverdict"></div></div>';
+    box.appendChild(c);
+    c.querySelectorAll('.qbtns button').forEach(b=>{
+      b.onclick=()=>{
+        const ans = b.dataset.a==='1';
+        const correct = ans===q.ok;
+        done++; if(correct) right++;
+        c.classList.add('answered', q.ok?'ok-ans':'bad-ans');
+        const v=c.querySelector('.qverdict');
+        v.innerHTML='<span class="qmark" style="color:'+(correct?'var(--ok)':'var(--crash)')+'">'+
+          (correct?'答对了。':'答错了。')+'</span> '+
+          (q.ok?'<strong style="color:var(--ok)">✓ 可以。</strong>':'<strong style="color:var(--crash)">✕ 不行。</strong>')+
+          q.why + (q.fix? '<br>替代：<span class="fix">'+q.fix+'</span>':'');
+        score.textContent='已答 '+done+' / '+Q.length+'，答对 '+right+' 题'+(done===Q.length?'。规律：碰真实世界的进 Activity，时间与随机用 SDK 替身。':'');
+      };
+    });
+  });
+})();
+
+/* ================= §5 tabs ================= */
+(function(){
+  const tabs=document.querySelectorAll('#tabs button');
+  tabs.forEach(t=>t.onclick=()=>{
+    tabs.forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.codebox pre').forEach(p=>p.classList.remove('on'));
+    t.classList.add('on');
+    document.getElementById(t.dataset.t).classList.add('on');
+  });
+})();
+</script>
+</body>
+</html>

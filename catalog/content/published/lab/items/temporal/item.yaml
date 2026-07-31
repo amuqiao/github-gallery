@@ -1,0 +1,52 @@
+schema_version: 2
+id: temporal
+hall: lab
+kind: knowledge_article
+title: Temporal
+summary: Temporal.io durable execution 平台，用 Event History、Workflow、Activity 和 Worker 让长时间、多步骤业务流程可靠运行。
+source:
+  type: documentation
+  url: https://docs.temporal.io/
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  domain: 分布式系统
+  topics:
+    - Durable Execution
+    - Workflow Orchestration
+    - Event History
+    - Replay
+  audience:
+    - 后端开发者
+    - 自学者
+notes:
+  - id: temporal-processes-die-workflows-live
+    title: 一文读懂 Temporal · 进程会死，流程不会
+    type: html
+    path: ./notes/temporal-processes-die-workflows-live.html
+    summary: 用订单流程和故障恢复演示理解 Temporal 如何让多步骤业务流程在进程崩溃、重启和长时间等待后继续运行。
+    display: standalone
+    html_mode: document
+  - id: temporal-durable-execution-mental-model
+    title: 一文读懂 Temporal · Durable Execution 的心智模型
+    type: html
+    path: ./notes/temporal-durable-execution-mental-model.html
+    summary: 从 Temporal.io、Event History、Replay、Determinism、Workflow、Activity、Worker 和 Task Queue 建立 durable execution 的全局心智模型。
+    display: standalone
+    html_mode: document
+blocks:
+  - type: links
+    items:
+      - label: Documentation
+        url: https://docs.temporal.io/
+  - type: highlights
+    items:
+      - 用普通代码描述长期业务流程，由 Temporal 持久化执行历史和流程进度。
+      - 通过 Event History 与 replay 在 Worker 崩溃、重启或部署后恢复 Workflow 状态。
+      - 将确定性编排放在 Workflow 中，将外部副作用、I/O 和幂等处理放在 Activity 中。
+  - type: use-cases
+    items:
+      - 学习 durable execution、Workflow、Activity、Worker 和 Task Queue 的职责边界。
+      - 评估订单履约、审批流、支付补偿和跨服务长流程是否适合引入 Temporal。
+      - 对比 Temporal 与消息队列、cron、Airflow、BPMN 和手写 saga 状态机。

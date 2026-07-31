@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 RabbitMQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --ink:       #1C2B4A;
+  --ink2:      #2E4268;
+  --ink3:      #3D5585;
+  --border:    #2A3F6A;
+  --border2:   #3A5080;
+  --tan:       #C4935A;
+  --tan-dim:   #7A5830;
+  --tan-soft:  rgba(196,147,90,0.12);
+  --sky:       #4A90D9;
+  --sky-soft:  rgba(74,144,217,0.12);
+  --green:     #52B788;
+  --green-soft:rgba(82,183,136,0.12);
+  --red:       #E85D5D;
+  --red-soft:  rgba(232,93,93,0.12);
+  --paper:     #F5F0E8;
+  --paper2:    #EDE6D8;
+  --muted:     #8090B0;
+  --fraunces:  'Fraunces', Georgia, serif;
+  --mono:      'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --sans:      system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { background: var(--ink); color: var(--paper); font-family: var(--sans); line-height: 1.75; font-size: 15px; overflow-x: hidden; }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--ink); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── NAV ── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(28,43,74,0.94); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border); padding: 0 28px; height: 50px;
+  display: flex; align-items: center; gap: 6px;
+}
+.nav-logo {
+  font-family: var(--fraunces); font-size: 15px; font-weight: 600;
+  color: var(--tan); margin-right: 20px; white-space: nowrap; letter-spacing: 0.01em;
+}
+.nav-links { display: flex; overflow-x: auto; gap: 0; }
+.nav-links a {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em;
+  color: var(--muted); text-decoration: none; padding: 0 11px; height: 50px;
+  display: flex; align-items: center; white-space: nowrap;
+  border-bottom: 2px solid transparent; transition: color .2s, border-color .2s;
+}
+.nav-links a:hover { color: var(--paper); }
+.nav-links a.active { color: var(--tan); border-bottom-color: var(--tan); }
+
+main { padding-top: 50px; }
+section { padding: 72px 32px; max-width: 1080px; margin: 0 auto; }
+section + section { border-top: 1px solid var(--border); }
+
+/* ── TYPOGRAPHY ── */
+.eyebrow {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
+}
+h2 {
+  font-family: var(--fraunces); font-weight: 600;
+  font-size: clamp(1.7rem, 3.5vw, 2.6rem); line-height: 1.2;
+  letter-spacing: -0.01em; margin-bottom: 12px; color: var(--paper);
+}
+h2 em { color: var(--tan); font-style: italic; }
+h3 { font-family: var(--fraunces); font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; color: var(--paper); }
+p { color: rgba(245,240,232,0.75); line-height: 1.8; }
+p.lead { color: rgba(245,240,232,0.85); font-size: 15px; max-width: 680px; margin-bottom: 32px; }
+code {
+  font-family: var(--mono); font-size: 0.84em;
+  background: rgba(196,147,90,0.14); border: 1px solid rgba(196,147,90,0.25);
+  border-radius: 3px; padding: 1px 6px; color: var(--tan);
+}
+pre {
+  background: rgba(0,0,0,0.35); border: 1px solid var(--border);
+  border-radius: 8px; padding: 18px 20px; overflow-x: auto;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.75; color: var(--paper);
+}
+pre .cm  { color: #607090; }
+pre .kw  { color: var(--sky); }
+pre .st  { color: var(--green); }
+pre .fn  { color: var(--tan); }
+pre .nm  { color: #A8C0E8; }
+pre .bl  { color: #CF9FFF; }
+pre .op  { color: var(--muted); }
+a { color: var(--tan); }
+
+/* ── UTILS ── */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+@media(max-width:800px) { .grid2,.grid3 { grid-template-columns: 1fr; } }
+.card {
+  background: var(--ink2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px 22px;
+}
+.card.tan  { border-top: 2px solid var(--tan); }
+.card.sky  { border-top: 2px solid var(--sky); }
+.card.green{ border-top: 2px solid var(--green); }
+.card.red  { border-top: 2px solid var(--red); }
+.tag-label {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.tag-label.tan   { color: var(--tan); }
+.tag-label.sky   { color: var(--sky); }
+.tag-label.green { color: var(--green); }
+.tag-label.red   { color: var(--red); }
+.pill {
+  display: inline-block; font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.1em; padding: 2px 9px; border-radius: 99px;
+  border: 1px solid; margin: 2px 2px;
+}
+.pill.tan   { color: var(--tan);   border-color: var(--tan-dim);  background: var(--tan-soft); }
+.pill.sky   { color: var(--sky);   border-color: #2a5888;         background: var(--sky-soft); }
+.pill.green { color: var(--green); border-color: #2a6648;         background: var(--green-soft); }
+.pill.red   { color: var(--red);   border-color: #8a3333;         background: var(--red-soft); }
+.insight {
+  border-left: 3px solid var(--tan); padding: 12px 16px;
+  background: var(--tan-soft); border-radius: 0 8px 8px 0; margin: 16px 0;
+  font-size: 14px; color: rgba(245,240,232,0.85);
+}
+.insight strong { color: var(--tan); }
+.warn {
+  border-left: 3px solid var(--red); padding: 12px 16px;
+  background: var(--red-soft); border-radius: 0 8px 8px 0; margin: 16px 0;
+  font-size: 14px; color: rgba(245,240,232,0.85);
+}
+.warn strong { color: var(--red); }
+
+/* ── CODE TABS ── */
+.code-block { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.code-tabs { display: flex; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); overflow-x: auto; }
+.code-tab {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.07em;
+  padding: 9px 16px; color: var(--muted); cursor: pointer;
+  border: none; background: none; white-space: nowrap;
+  border-bottom: 2px solid transparent; transition: all .18s;
+}
+.code-tab.on { color: var(--tan); border-bottom-color: var(--tan); }
+.code-tab:hover:not(.on) { color: var(--paper); }
+.code-pane { display: none; }
+.code-pane.on { display: block; }
+.code-pane pre { border: none; border-radius: 0; }
+.code-note { padding: 10px 18px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: rgba(0,0,0,0.15); border-top: 1px solid var(--border); }
+
+/* ── DETAILS/EXPAND ── */
+details.expand { background: var(--ink2); border: 1px solid var(--border); border-radius: 9px; margin-bottom: 10px; overflow: hidden; }
+details.expand summary {
+  list-style: none; padding: 15px 18px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; user-select: none;
+  font-size: 14px; color: var(--paper); transition: background .18s;
+}
+details.expand summary::-webkit-details-marker { display: none; }
+details.expand summary:hover { background: rgba(255,255,255,0.04); }
+details.expand summary .chevron { color: var(--muted); font-size: 11px; margin-left: auto; transition: transform .2s; }
+details.expand[open] summary .chevron { transform: rotate(90deg); }
+details.expand .dbody { padding: 0 18px 16px; border-top: 1px solid var(--border); }
+details.expand .dicon { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+details.expand .dicon.warn { background: var(--red-soft); color: var(--red); border: 1px solid #8a3333; }
+details.expand .dicon.info { background: var(--tan-soft); color: var(--tan); border: 1px solid var(--tan-dim); }
+
+/* ── TABLE ── */
+.tbl-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); margin: 20px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 11px 14px; text-align: left; background: rgba(0,0,0,0.25); color: var(--muted); border-bottom: 1px solid var(--border); }
+td { padding: 10px 14px; border-bottom: 1px solid rgba(42,63,106,0.5); color: rgba(245,240,232,0.75); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+td.hl { color: var(--tan); font-family: var(--mono); font-weight: 600; font-size: 12px; }
+td.y { color: var(--green); font-weight: 600; }
+td.n { color: var(--red); font-weight: 600; }
+td.m { color: var(--tan); font-weight: 600; }
+th:first-child, td:first-child { padding-left: 18px; }
+
+/* ── FOOTER ── */
+footer { border-top: 1px solid var(--border); padding: 28px 32px; text-align: center; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.07em; }
+
+/* ═══════════════ HERO ═══════════════ */
+#hero { padding: 0; max-width: 100%; border: none; }
+.hero-wrap {
+  min-height: calc(100vh - 50px);
+  display: grid; grid-template-columns: 1fr 1fr;
+  max-width: 1080px; margin: 0 auto; padding: 72px 32px;
+  align-items: center; gap: 48px;
+}
+@media(max-width:800px) { .hero-wrap { grid-template-columns: 1fr; } }
+.hero-left {}
+.hero-stamp {
+  display: inline-block; font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.24em; text-transform: uppercase; color: var(--tan);
+  border: 1.5px solid var(--tan-dim); padding: 4px 12px; border-radius: 2px;
+  margin-bottom: 22px; background: var(--tan-soft);
+}
+.hero-h1 {
+  font-family: var(--fraunces); font-weight: 700;
+  font-size: clamp(2.2rem, 5vw, 3.8rem); line-height: 1.08;
+  letter-spacing: -0.03em; margin-bottom: 20px;
+}
+.hero-h1 em { color: var(--tan); font-style: italic; }
+.hero-sub { color: rgba(245,240,232,0.7); font-size: 15px; line-height: 1.8; max-width: 440px; margin-bottom: 30px; }
+.hero-meta { display: flex; gap: 24px; flex-wrap: wrap; }
+.hero-meta-item { display: flex; flex-direction: column; gap: 2px; }
+.hero-meta-n { font-family: var(--fraunces); font-size: 1.5rem; font-weight: 600; color: var(--tan); }
+.hero-meta-l { font-family: var(--mono); font-size: 9.5px; color: var(--muted); letter-spacing: 0.1em; }
+
+/* Postal sorting animation */
+.postal-canvas {
+  background: var(--ink2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; position: relative; overflow: hidden;
+  min-height: 320px;
+}
+.postal-label {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
+}
+.postal-svg { width: 100%; display: block; }
+
+/* ═══════════════ AMQP LAYER ═══════════════ */
+.layer-diagram {
+  display: flex; flex-direction: column; gap: 10px; margin: 28px 0;
+  background: var(--ink2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 20px;
+}
+.layer-row {
+  display: flex; align-items: stretch; gap: 10px;
+  cursor: pointer; border-radius: 7px; padding: 10px;
+  transition: background .18s;
+}
+.layer-row:hover { background: rgba(255,255,255,0.04); }
+.layer-row.sel { background: var(--tan-soft); border: 1px solid var(--tan-dim); }
+.layer-icon { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.layer-content { flex: 1; }
+.layer-name { font-family: var(--mono); font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.layer-desc { font-size: 12px; color: var(--muted); }
+.layer-detail {
+  margin-top: 12px; background: var(--ink3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px 18px; font-size: 13px;
+  color: rgba(245,240,232,0.8);
+}
+
+/* ═══════════════ EXCHANGE TYPES ═══════════════ */
+.extype-tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  margin-bottom: 0; overflow-x: auto;
+}
+.extype-tab {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+  padding: 12px 20px; color: var(--muted); cursor: pointer;
+  border: none; background: none; border-bottom: 2px solid transparent;
+  transition: all .18s; white-space: nowrap;
+}
+.extype-tab.on { color: var(--tan); border-bottom-color: var(--tan); background: var(--tan-soft); }
+.extype-tab:hover:not(.on) { color: var(--paper); }
+.extype-shell {
+  background: var(--ink2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+}
+.extype-body { display: none; }
+.extype-body.on { display: block; }
+.extype-split {
+  display: grid; grid-template-columns: 1fr 1fr;
+}
+@media(max-width:800px) { .extype-split { grid-template-columns: 1fr; } }
+.extype-left { padding: 20px 22px; border-right: 1px solid var(--border); }
+.extype-right { padding: 0; background: rgba(0,0,0,0.25); }
+.extype-right pre { border: none; border-radius: 0; height: 100%; min-height: 260px; }
+.extype-viz { padding: 16px 18px; border-top: 1px solid var(--border); overflow-x: auto; }
+.extype-note { padding: 10px 18px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: rgba(0,0,0,0.15); }
+
+/* ═══════════════ ACK MACHINE ═══════════════ */
+.ack-states { display: flex; align-items: stretch; margin: 20px 0; }
+.ack-state {
+  flex: 1; padding: 14px 10px; text-align: center; cursor: pointer;
+  border: 1px solid var(--border); border-right: none;
+  background: var(--ink2); transition: all .2s;
+}
+.ack-state:first-child { border-radius: 8px 0 0 8px; }
+.ack-state:last-child  { border-right: 1px solid var(--border); border-radius: 0 8px 8px 0; }
+.ack-state.on { z-index: 1; }
+.ack-dot { width: 8px; height: 8px; border-radius: 50%; margin: 0 auto 6px; background: var(--muted); }
+.ack-name { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+.ack-state[data-s="UNACKED"] .ack-dot { background: var(--sky); }
+.ack-state[data-s="UNACKED"].on { background: var(--sky-soft); border-color: var(--sky); }
+.ack-state[data-s="ACKED"]   .ack-dot { background: var(--green); }
+.ack-state[data-s="ACKED"].on   { background: var(--green-soft); border-color: var(--green); }
+.ack-state[data-s="NACKED"]  .ack-dot { background: var(--red); }
+.ack-state[data-s="NACKED"].on  { background: var(--red-soft); border-color: var(--red); }
+.ack-state[data-s="REJECTED"].ack-dot { background: var(--tan); }
+.ack-state[data-s="REJECTED"].on { background: var(--tan-soft); border-color: var(--tan); }
+.ack-state[data-s="DEAD"].ack-dot { background: var(--muted); }
+.ack-detail { margin-top: 14px; background: var(--ink3); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; min-height: 60px; transition: opacity .18s; }
+
+/* ═══════════════ RELIABILITY CHECKLIST ═══════════════ */
+.checklist { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
+.check-item {
+  background: var(--ink2); border: 1px solid var(--border); border-radius: 9px;
+  padding: 14px 16px; display: flex; align-items: flex-start; gap: 12px;
+  cursor: pointer; transition: border-color .18s;
+}
+.check-item.done { border-color: var(--green); background: var(--green-soft); }
+.check-box {
+  width: 20px; height: 20px; border-radius: 4px; border: 1.5px solid var(--border2);
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  transition: all .18s; margin-top: 1px;
+}
+.check-item.done .check-box { background: var(--green); border-color: var(--green); color: var(--ink); font-size: 12px; }
+.check-label { font-size: 13.5px; color: var(--paper); }
+.check-label small { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">✉ RabbitMQ</div>
+  <div class="nav-links">
+    <a href="#hero">概览</a>
+    <a href="#amqp">三件套</a>
+    <a href="#exchanges">Exchange 类型</a>
+    <a href="#queue-props">Queue 属性</a>
+    <a href="#ack">确认机制</a>
+    <a href="#reliability">可靠性</a>
+    <a href="#patterns">常用模式</a>
+    <a href="#compare">对比选型</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- ════════════════════════════════════ HERO ════════════════════════════════════ -->
+<section id="hero" style="padding:0;max-width:100%;border:none">
+<div class="hero-wrap">
+  <div class="hero-left">
+    <div class="hero-stamp">AMQP 0-9-1 Message Broker</div>
+    <div class="hero-h1">
+      消息不是<br>直接投递的—<br>它先经过一个<em>邮局</em>
+    </div>
+    <p class="hero-sub">
+      RabbitMQ 不是"把消息放进队列"那么简单。它在 Producer 和 Queue 之间插入了一个 <strong>Exchange</strong>——一个可编程的邮件分拣系统。这一层决定了它为什么比 Redis 的 List 更强大，也决定了它的学习曲线在哪里。
+    </p>
+    <div class="hero-meta">
+      <div class="hero-meta-item">
+        <div class="hero-meta-n">2007</div>
+        <div class="hero-meta-l">首次发布</div>
+      </div>
+      <div class="hero-meta-item">
+        <div class="hero-meta-n">AMQP</div>
+        <div class="hero-meta-l">协议标准</div>
+      </div>
+      <div class="hero-meta-item">
+        <div class="hero-meta-n">Erlang</div>
+        <div class="hero-meta-l">实现语言</div>
+      </div>
+      <div class="hero-meta-item">
+        <div class="hero-meta-n">4种</div>
+        <div class="hero-meta-l">Exchange 类型</div>
+      </div>
+    </div>
+  </div>
+  <div class="hero-right">
+    <div class="postal-canvas">
+      <div class="postal-label">// 消息路由动画 — 邮局分拣隐喻</div>
+      <svg class="postal-svg" viewBox="0 0 420 280" id="heroSvg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 z" fill="#607090"/>
+          </marker>
+          <marker id="ahTan" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 z" fill="#C4935A"/>
+          </marker>
+          <marker id="ahGreen" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 z" fill="#52B788"/>
+          </marker>
+        </defs>
+        <!-- Producer -->
+        <rect x="10" y="120" width="80" height="38" rx="7" fill="#2E4268" stroke="#4A90D9" stroke-width="1.5"/>
+        <text x="50" y="135" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#4A90D9">Producer</text>
+        <text x="50" y="150" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#8090B0">publish()</text>
+        <!-- Exchange -->
+        <rect x="140" y="105" width="88" height="68" rx="7" fill="#2E4268" stroke="#C4935A" stroke-width="1.5"/>
+        <text x="184" y="127" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#C4935A">Exchange</text>
+        <text x="184" y="143" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#8090B0">路由分拣</text>
+        <text x="184" y="158" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8.5" fill="#8090B0" id="exTypeLabel">type: direct</text>
+        <!-- Queues -->
+        <rect x="275" y="60" width="80" height="32" rx="6" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+        <text x="315" y="77" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="#52B788">queue.a</text>
+        <rect x="275" y="120" width="80" height="32" rx="6" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+        <text x="315" y="137" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="#52B788">queue.b</text>
+        <rect x="275" y="180" width="80" height="32" rx="6" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+        <text x="315" y="197" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="#52B788">queue.c</text>
+        <!-- Consumers -->
+        <rect x="373" y="67" width="42" height="22" rx="4" fill="#1C2B4A" stroke="#3D5585" stroke-width="1"/>
+        <text x="394" y="82" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="#8090B0">con-1</text>
+        <rect x="373" y="127" width="42" height="22" rx="4" fill="#1C2B4A" stroke="#3D5585" stroke-width="1"/>
+        <text x="394" y="142" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="#8090B0">con-2</text>
+        <rect x="373" y="187" width="42" height="22" rx="4" fill="#1C2B4A" stroke="#3D5585" stroke-width="1"/>
+        <text x="394" y="202" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="#8090B0">con-3</text>
+        <!-- Static arrows: exchange → queues -->
+        <line x1="228" y1="128" x2="273" y2="76" stroke="#607090" stroke-width="1" marker-end="url(#ah)"/>
+        <line x1="228" y1="139" x2="273" y2="136" stroke="#607090" stroke-width="1" marker-end="url(#ah)"/>
+        <line x1="228" y1="148" x2="273" y2="196" stroke="#607090" stroke-width="1" marker-end="url(#ah)"/>
+        <!-- queue → consumer -->
+        <line x1="355" y1="76" x2="371" y2="78" stroke="#607090" stroke-width="1" marker-end="url(#ah)"/>
+        <line x1="355" y1="136" x2="371" y2="138" stroke="#607090" stroke-width="1" marker-end="url(#ah)"/>
+        <line x1="355" y1="196" x2="371" y2="198" stroke="#607090" stroke-width="1" marker-end="url(#ah)"/>
+        <!-- Binding labels -->
+        <text x="248" y="96" font-family="JetBrains Mono,monospace" font-size="8" fill="#C4935A" id="bk1">key: "a"</text>
+        <text x="248" y="137" font-family="JetBrains Mono,monospace" font-size="8" fill="#C4935A" id="bk2">key: "b"</text>
+        <text x="248" y="170" font-family="JetBrains Mono,monospace" font-size="8" fill="#C4935A" id="bk3">key: "c"</text>
+        <!-- Animated message ball -->
+        <circle id="msgBall" r="5" fill="#C4935A" opacity="0">
+          <animate id="msgAnim" attributeName="cx" values="90;140;228;228;275" keyTimes="0;0.3;0.6;0.6;1" dur="2.4s" begin="0s" repeatCount="indefinite"/>
+          <animate attributeName="cy" values="139;139;139;76;76" keyTimes="0;0.3;0.6;0.7;1" dur="2.4s" begin="0s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.05;0.85;0.95;1" dur="2.4s" begin="0s" repeatCount="indefinite"/>
+        </circle>
+        <!-- producer→exchange arrow -->
+        <line x1="90" y1="139" x2="138" y2="139" stroke="#4A90D9" stroke-width="1.5" marker-end="url(#ah)" id="prodArrow"/>
+        <!-- routing_key label -->
+        <text x="95" y="130" font-family="JetBrains Mono,monospace" font-size="8" fill="#4A90D9">rk="a"</text>
+        <!-- Bottom legend -->
+        <text x="10" y="262" font-family="JetBrains Mono,monospace" font-size="9" fill="#8090B0">Producer 只认识 Exchange。</text>
+        <text x="10" y="276" font-family="JetBrains Mono,monospace" font-size="9" fill="#8090B0">Exchange 根据 routing_key 决定消息去哪个 Queue。</text>
+      </svg>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ════════════════════════════════════ AMQP ════════════════════════════════════ -->
+<section id="amqp">
+  <div class="eyebrow">核心模型</div>
+  <h2>三件套之前，还有三层<em>连接抽象</em></h2>
+  <p class="lead">RabbitMQ 用 AMQP 0-9-1 协议。你和它打交道时，会经过 Virtual Host → Connection → Channel 三层，理解这三层才能理解为什么代码要那样写。点击各行查看详情。</p>
+
+  <div class="layer-diagram">
+    <div class="layer-row sel" id="lr-vhost" onclick="selectLayer('vhost')">
+      <div class="layer-icon" style="background:rgba(196,147,90,0.12)">📮</div>
+      <div class="layer-content">
+        <div class="layer-name" style="color:var(--tan)">Virtual Host (vhost)</div>
+        <div class="layer-desc">完全隔离的命名空间，等于一个独立的 RabbitMQ 实例</div>
+      </div>
+    </div>
+    <div class="layer-row" id="lr-conn" onclick="selectLayer('conn')">
+      <div class="layer-icon" style="background:rgba(74,144,217,0.12)">🔌</div>
+      <div class="layer-content">
+        <div class="layer-name" style="color:var(--sky)">Connection</div>
+        <div class="layer-desc">一条 TCP 长连接，建立开销大，应复用</div>
+      </div>
+    </div>
+    <div class="layer-row" id="lr-chan" onclick="selectLayer('chan')">
+      <div class="layer-icon" style="background:rgba(82,183,136,0.12)">📡</div>
+      <div class="layer-content">
+        <div class="layer-name" style="color:var(--green)">Channel</div>
+        <div class="layer-desc">Connection 内的虚拟轻量通道，实际操作都在 Channel 上</div>
+      </div>
+    </div>
+  </div>
+  <div class="layer-detail" id="layerDetail">
+    <strong style="color:var(--tan)">Virtual Host</strong> 是 RabbitMQ 里的多租户单元。不同应用（如 staging/production）部署在同一个 RabbitMQ 实例时，各自使用不同 vhost，Exchange/Queue/Binding 互不可见，权限独立管理。默认 vhost 是 <code>/</code>。<br><br>
+    <strong>类比：</strong>一栋邮政大楼（RabbitMQ 实例）里有多个独立的营业厅（vhost），每个厅有自己的前台、分拣系统和信箱墙，互不干扰。
+  </div>
+
+  <div style="height:32px"></div>
+  <h3 style="margin-bottom:14px">Producer → Exchange → Queue → Consumer：核心数据流</h3>
+
+  <div class="insight">
+    <strong>最重要的一句话：</strong>Producer 从不直接向 Queue 发消息。它只跟 Exchange 说话，由 Exchange 根据路由规则决定消息去哪里。Queue 对 Producer 不可见。
+  </div>
+
+  <div class="code-block" style="margin-top:20px">
+    <div class="code-tabs">
+      <button class="code-tab on" onclick="switchCode(this,'cc-producer')">Producer（发消息）</button>
+      <button class="code-tab" onclick="switchCode(this,'cc-consumer')">Consumer（收消息）</button>
+      <button class="code-tab" onclick="switchCode(this,'cc-setup')">声明资源</button>
+    </div>
+    <div class="code-pane on" id="cc-producer">
+<pre><span class="kw">import</span> pika
+
+<span class="cm"># 1. 建立连接（TCP，开销大，生产中应复用）</span>
+connection = pika.BlockingConnection(
+    pika.ConnectionParameters(
+        host=<span class="st">'localhost'</span>,
+        port=<span class="nm">5672</span>,
+        virtual_host=<span class="st">'/'</span>,
+        credentials=pika.PlainCredentials(<span class="st">'guest'</span>, <span class="st">'guest'</span>),
+        heartbeat=<span class="nm">60</span>,            <span class="cm"># 心跳（秒），防断连</span>
+        blocked_connection_timeout=<span class="nm">300</span>
+    )
+)
+
+<span class="cm"># 2. 开 Channel（轻量，同一 Connection 可开多个）</span>
+channel = connection.channel()
+
+<span class="cm"># 3. 发消息到 exchange，带 routing_key</span>
+channel.basic_publish(
+    exchange=<span class="st">'order_events'</span>,    <span class="cm"># 目标 exchange</span>
+    routing_key=<span class="st">'order.created'</span>, <span class="cm"># 路由键</span>
+    body=<span class="st">b'{"order_id": 42}'</span>,
+    properties=pika.BasicProperties(
+        delivery_mode=<span class="nm">2</span>,        <span class="cm"># 2=持久化，1=不持久</span>
+        content_type=<span class="st">'application/json'</span>,
+        message_id=<span class="st">'msg-uuid-001'</span>,
+    )
+)
+connection.close()</pre>
+      <div class="code-note">📌 <code>delivery_mode=2</code> 只是消息层的持久化声明，还需要 exchange 和 queue 都是 durable 才真正不丢</div>
+    </div>
+    <div class="code-pane" id="cc-consumer">
+<pre><span class="kw">import</span> pika
+
+connection = pika.BlockingConnection(pika.ConnectionParameters(<span class="st">'localhost'</span>))
+channel = connection.channel()
+
+<span class="cm"># 设置预取数量（QoS）：每次最多给我 1 条，处理完再要下一条</span>
+channel.basic_qos(prefetch_count=<span class="nm">1</span>)
+
+<span class="cm"># 回调函数：每收到一条消息就调用一次</span>
+<span class="kw">def</span> <span class="fn">on_message</span>(channel, method, properties, body):
+    <span class="kw">print</span>(<span class="st">f"收到: {body}"</span>)
+    <span class="kw">print</span>(<span class="st">f"routing_key: {method.routing_key}"</span>)
+    <span class="kw">print</span>(<span class="st">f"delivery_tag: {method.delivery_tag}"</span>)
+
+    <span class="cm"># 手动 ack：告诉 broker 这条消息处理完了，可以删除</span>
+    channel.basic_ack(delivery_tag=method.delivery_tag)
+
+    <span class="cm"># 如果处理失败，nack 并重新入队</span>
+    <span class="cm"># channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)</span>
+
+<span class="cm"># 注册消费，auto_ack=False = 手动确认模式</span>
+channel.basic_consume(
+    queue=<span class="st">'order_queue'</span>,
+    on_message_callback=on_message,
+    auto_ack=<span class="bl">False</span>          <span class="cm"># ⚠️ 生产中务必 False</span>
+)
+
+<span class="kw">print</span>(<span class="st">'等待消息...'</span>)
+channel.start_consuming()  <span class="cm"># 阻塞，持续消费</span></pre>
+      <div class="code-note">📌 <code>auto_ack=True</code> 时消息从 broker 推出去的瞬间就被删除，consumer 崩溃则消息丢失</div>
+    </div>
+    <div class="code-pane" id="cc-setup">
+<pre><span class="cm"># 声明 Exchange、Queue、Binding（幂等，不存在则创建，存在则验证）</span>
+channel.exchange_declare(
+    exchange=<span class="st">'order_events'</span>,
+    exchange_type=<span class="st">'topic'</span>,
+    durable=<span class="bl">True</span>,          <span class="cm"># broker 重启后保留</span>
+    auto_delete=<span class="bl">False</span>,      <span class="cm"># 没有绑定时不自动删除</span>
+)
+
+channel.queue_declare(
+    queue=<span class="st">'order_queue'</span>,
+    durable=<span class="bl">True</span>,          <span class="cm"># 持久化队列</span>
+    exclusive=<span class="bl">False</span>,        <span class="cm"># True=仅当前 connection 可用，断连后删除</span>
+    auto_delete=<span class="bl">False</span>,
+    arguments={
+        <span class="st">'x-message-ttl'</span>: <span class="nm">86400000</span>,         <span class="cm"># 消息 24h 过期（毫秒）</span>
+        <span class="st">'x-dead-letter-exchange'</span>: <span class="st">'dlx'</span>,    <span class="cm"># 死信转发到 dlx</span>
+        <span class="st">'x-max-length'</span>: <span class="nm">10000</span>,              <span class="cm"># 队列最多 1 万条</span>
+    }
+)
+
+<span class="cm"># 绑定：让 order.# 路由到 order_queue</span>
+channel.queue_bind(
+    queue=<span class="st">'order_queue'</span>,
+    exchange=<span class="st">'order_events'</span>,
+    routing_key=<span class="st">'order.#'</span>   <span class="cm"># topic 模式：# 匹配零或多个词</span>
+)</pre>
+      <div class="code-note">📌 声明是幂等的。Consumer 和 Producer 都应该在启动时声明，谁先启动都不会出错</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════ EXCHANGES ════════════════════════════════════ -->
+<section id="exchanges">
+  <div class="eyebrow">路由核心</div>
+  <h2><em>Exchange</em> 是邮局的分拣规则</h2>
+  <p class="lead">Exchange 本身不存储消息，它只负责路由——按规则把消息转发到一个或多个 Queue。不同 Exchange 类型，就是不同的分拣规则。</p>
+
+  <div class="extype-shell">
+    <div class="extype-tabs">
+      <button class="extype-tab on" onclick="selectEx('direct')">direct</button>
+      <button class="extype-tab" onclick="selectEx('fanout')">fanout</button>
+      <button class="extype-tab" onclick="selectEx('topic')">topic</button>
+      <button class="extype-tab" onclick="selectEx('headers')">headers</button>
+      <button class="extype-tab" onclick="selectEx('default')">default（特殊）</button>
+    </div>
+
+    <!-- direct -->
+    <div class="extype-body on" id="ex-direct">
+      <div class="extype-split">
+        <div class="extype-left">
+          <h3 style="color:var(--tan);margin-bottom:10px">精确匹配路由键</h3>
+          <p style="font-size:13.5px;margin-bottom:14px">消息只投递到 binding_key 与 routing_key <strong style="color:var(--paper)">完全相同</strong>的队列。最常用，也最好理解。</p>
+          <div class="pill tan">精确匹配</div>
+          <div class="pill sky">1对1 或 N对1</div>
+          <p style="font-size:12.5px;color:var(--muted);margin-top:14px">一个 queue 可以绑多个 routing key；多个 queue 也可以绑同一个 key（广播效果）。</p>
+          <div style="margin-top:14px">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px">使用场景</div>
+            <div style="font-size:13px;color:rgba(245,240,232,0.8)">任务分发、明确类型的事件路由、RPC 回调队列</div>
+          </div>
+        </div>
+        <div class="extype-right">
+<pre style="font-size:12px"><span class="cm"># Direct exchange 示例</span>
+channel.exchange_declare(<span class="st">'logs'</span>, <span class="st">'direct'</span>, durable=<span class="bl">True</span>)
+
+<span class="cm"># 两个队列绑定不同的 routing_key</span>
+channel.queue_bind(<span class="st">'error_queue'</span>, <span class="st">'logs'</span>, <span class="st">'error'</span>)
+channel.queue_bind(<span class="st">'info_queue'</span>,  <span class="st">'logs'</span>, <span class="st">'info'</span>)
+channel.queue_bind(<span class="st">'info_queue'</span>,  <span class="st">'logs'</span>, <span class="st">'warning'</span>)
+
+<span class="cm"># 发送 routing_key='error' → 只去 error_queue</span>
+channel.basic_publish(<span class="st">'logs'</span>, <span class="st">'error'</span>, <span class="st">b'disk full'</span>)
+
+<span class="cm"># 发送 routing_key='info' → 只去 info_queue</span>
+channel.basic_publish(<span class="st">'logs'</span>, <span class="st">'info'</span>, <span class="st">b'server started'</span>)
+
+<span class="cm"># 发送 routing_key='debug' → 没有队列绑定，消息丢弃！</span>
+<span class="cm"># （除非设置了 mandatory=True 或有 alternate exchange）</span></pre>
+        </div>
+      </div>
+      <div class="extype-viz">
+        <svg viewBox="0 0 500 120" style="min-width:420px;width:100%" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="44" width="76" height="32" rx="6" fill="#2E4268" stroke="#C4935A" stroke-width="1.5"/>
+          <text x="58" y="64" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#C4935A">direct</text>
+          <line x1="96" y1="55" x2="168" y2="40" stroke="#C4935A" stroke-width="1" stroke-dasharray="3,2"/>
+          <text x="122" y="40" font-family="JetBrains Mono,monospace" font-size="9" fill="#C4935A">"error"</text>
+          <line x1="96" y1="60" x2="168" y2="80" stroke="#C4935A" stroke-width="1" stroke-dasharray="3,2"/>
+          <text x="102" y="78" font-family="JetBrains Mono,monospace" font-size="9" fill="#C4935A">"info"</text>
+          <rect x="170" y="24" width="90" height="24" rx="5" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+          <text x="215" y="40" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="#52B788">error_queue</text>
+          <rect x="170" y="68" width="90" height="24" rx="5" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+          <text x="215" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="#52B788">info_queue</text>
+          <text x="280" y="40" font-family="JetBrains Mono,monospace" font-size="8.5" fill="#8090B0">← "error" msg</text>
+          <text x="280" y="84" font-family="JetBrains Mono,monospace" font-size="8.5" fill="#8090B0">← "info" msg</text>
+          <text x="20" y="110" font-family="JetBrains Mono,monospace" font-size="9.5" fill="#8090B0">routing_key="warning" 的消息也去 info_queue（因为绑了两个 key）</text>
+        </svg>
+      </div>
+      <div class="extype-note">⚠️ 如果 routing_key 没有任何 binding 匹配，消息会被 broker 丢弃（或 mandatory=True 时返回给 producer）</div>
+    </div>
+
+    <!-- fanout -->
+    <div class="extype-body" id="ex-fanout">
+      <div class="extype-split">
+        <div class="extype-left">
+          <h3 style="color:var(--tan);margin-bottom:10px">广播：无视 routing_key</h3>
+          <p style="font-size:13.5px;margin-bottom:14px">消息投递到<strong style="color:var(--paper)">所有绑定的队列</strong>，完全忽略 routing_key（写什么都一样）。</p>
+          <div class="pill tan">广播</div>
+          <div class="pill sky">1 → N</div>
+          <div class="warn" style="margin-top:14px">
+            <strong>常见误区：</strong>fanout 并非"发多少份"——它只发一条消息，但路由到多个队列。每个队列里各有一份副本。
+          </div>
+          <div style="margin-top:14px;font-size:13px;color:rgba(245,240,232,0.8)">
+            <strong style="color:var(--paper)">使用场景：</strong>实时通知推送、缓存失效广播、日志多点存储
+          </div>
+        </div>
+        <div class="extype-right">
+<pre style="font-size:12px"><span class="cm"># Fanout exchange：routing_key 无效</span>
+channel.exchange_declare(<span class="st">'notifications'</span>, <span class="st">'fanout'</span>, durable=<span class="bl">True</span>)
+
+<span class="cm"># 三个不同的服务各自绑一个队列</span>
+channel.queue_bind(<span class="st">'push_queue'</span>,   <span class="st">'notifications'</span>, routing_key=<span class="st">''</span>)
+channel.queue_bind(<span class="st">'email_queue'</span>,  <span class="st">'notifications'</span>, routing_key=<span class="st">''</span>)
+channel.queue_bind(<span class="st">'audit_queue'</span>,  <span class="st">'notifications'</span>, routing_key=<span class="st">''</span>)
+
+<span class="cm"># 发一条，三个队列都收到</span>
+channel.basic_publish(
+    exchange=<span class="st">'notifications'</span>,
+    routing_key=<span class="st">''</span>,  <span class="cm"># fanout 下写什么都无效</span>
+    body=<span class="st">b'user_login:user_42'</span>
+)
+<span class="cm"># → push_queue, email_queue, audit_queue 各得一份</span></pre>
+        </div>
+      </div>
+      <div class="extype-viz">
+        <svg viewBox="0 0 460 100" style="min-width:380px;width:100%" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="34" width="76" height="32" rx="6" fill="#2E4268" stroke="#C4935A" stroke-width="1.5"/>
+          <text x="58" y="54" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#C4935A">fanout</text>
+          <line x1="96" y1="44" x2="168" y2="24" stroke="#C4935A" stroke-width="1.5"/>
+          <line x1="96" y1="50" x2="168" y2="50" stroke="#C4935A" stroke-width="1.5"/>
+          <line x1="96" y1="56" x2="168" y2="76" stroke="#C4935A" stroke-width="1.5"/>
+          <rect x="170" y="12" width="80" height="22" rx="5" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+          <text x="210" y="27" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#52B788">push_queue</text>
+          <rect x="170" y="39" width="80" height="22" rx="5" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+          <text x="210" y="54" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#52B788">email_queue</text>
+          <rect x="170" y="66" width="80" height="22" rx="5" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+          <text x="210" y="81" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#52B788">audit_queue</text>
+          <text x="22" y="90" font-family="JetBrains Mono,monospace" font-size="9.5" fill="#8090B0">routing_key 无效。发 1 条消息 → 三个队列各得 1 份副本</text>
+        </svg>
+      </div>
+      <div class="extype-note">如果此刻没有任何队列绑定 fanout exchange，消息被静默丢弃</div>
+    </div>
+
+    <!-- topic -->
+    <div class="extype-body" id="ex-topic">
+      <div class="extype-split">
+        <div class="extype-left">
+          <h3 style="color:var(--tan);margin-bottom:10px">通配符模式匹配</h3>
+          <p style="font-size:13.5px;margin-bottom:10px">routing_key 是<strong style="color:var(--paper)">用 . 分隔的词组</strong>，binding_key 可以含通配符：</p>
+          <div style="background:rgba(0,0,0,0.3);border-radius:7px;padding:12px;font-family:var(--mono);font-size:12px;margin-bottom:12px">
+            <div style="margin-bottom:6px"><span style="color:var(--tan);font-weight:600">*</span>  <span style="color:var(--muted)">匹配</span> <span style="color:var(--paper)">恰好一个词</span></div>
+            <div><span style="color:var(--tan);font-weight:600">#</span>  <span style="color:var(--muted)">匹配</span> <span style="color:var(--paper)">零个或多个词</span></div>
+          </div>
+          <div class="pill tan">通配符</div>
+          <div class="pill sky">灵活分层</div>
+          <div style="margin-top:14px;font-size:13px;color:rgba(245,240,232,0.8)">
+            <strong style="color:var(--paper)">使用场景：</strong>日志分级路由（<code>logs.*.error</code>）、多维度事件过滤
+          </div>
+        </div>
+        <div class="extype-right">
+<pre style="font-size:12px"><span class="cm"># Topic exchange：通配符路由</span>
+channel.exchange_declare(<span class="st">'events'</span>, <span class="st">'topic'</span>, durable=<span class="bl">True</span>)
+
+channel.queue_bind(<span class="st">'all_logs'</span>,    <span class="st">'events'</span>, <span class="st">'logs.#'</span>)
+channel.queue_bind(<span class="st">'error_logs'</span>,  <span class="st">'events'</span>, <span class="st">'logs.*.error'</span>)
+channel.queue_bind(<span class="st">'app_events'</span>,  <span class="st">'events'</span>, <span class="st">'app.*'</span>)
+
+<span class="cm"># 消息路由结果：</span>
+<span class="cm"># routing_key='logs.app.error' → all_logs, error_logs</span>
+<span class="cm"># routing_key='logs.db.error'  → all_logs, error_logs</span>
+<span class="cm"># routing_key='logs.app.info'  → all_logs（不匹配 *.error）</span>
+<span class="cm"># routing_key='app.login'      → app_events</span>
+<span class="cm"># routing_key='logs'           → all_logs（# 匹配零个词）</span>
+<span class="cm"># routing_key='payment.done'   → 无匹配，消息丢弃</span>
+
+channel.basic_publish(<span class="st">'events'</span>, <span class="st">'logs.app.error'</span>, <span class="st">b'NullPointerException'</span>)</pre>
+        </div>
+      </div>
+      <div class="extype-viz">
+        <svg viewBox="0 0 520 110" style="min-width:440px;width:100%" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="39" width="70" height="30" rx="6" fill="#2E4268" stroke="#C4935A" stroke-width="1.5"/>
+          <text x="55" y="58" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#C4935A">topic</text>
+          <text x="100" y="30" font-family="JetBrains Mono,monospace" font-size="8.5" fill="#C4935A">"logs.#"</text>
+          <text x="100" y="58" font-family="JetBrains Mono,monospace" font-size="8.5" fill="#C4935A">"logs.*.error"</text>
+          <text x="100" y="82" font-family="JetBrains Mono,monospace" font-size="8.5" fill="#C4935A">"app.*"</text>
+          <line x1="90" y1="50" x2="175" y2="30" stroke="#C4935A" stroke-width="1" stroke-dasharray="3,2"/>
+          <line x1="90" y1="54" x2="175" y2="54" stroke="#C4935A" stroke-width="1" stroke-dasharray="3,2"/>
+          <line x1="90" y1="58" x2="175" y2="80" stroke="#C4935A" stroke-width="1" stroke-dasharray="3,2"/>
+          <rect x="177" y="18" width="78" height="22" rx="5" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+          <text x="216" y="33" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#52B788">all_logs</text>
+          <rect x="177" y="43" width="78" height="22" rx="5" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+          <text x="216" y="58" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#52B788">error_logs</text>
+          <rect x="177" y="68" width="78" height="22" rx="5" fill="#2E4268" stroke="#52B788" stroke-width="1"/>
+          <text x="216" y="83" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#52B788">app_events</text>
+          <text x="270" y="20" font-family="JetBrains Mono,monospace" font-size="8.5" fill="#8090B0">"logs.app.error" → ✓ ✓</text>
+          <text x="270" y="55" font-family="JetBrains Mono,monospace" font-size="8.5" fill="#8090B0">"logs.app.info"  → ✓</text>
+          <text x="270" y="83" font-family="JetBrains Mono,monospace" font-size="8.5" fill="#8090B0">"app.login"      →     ✓</text>
+        </svg>
+      </div>
+      <div class="extype-note">topic exchange 可以模拟 direct（不用通配符）和 fanout（binding_key="#"）的行为</div>
+    </div>
+
+    <!-- headers -->
+    <div class="extype-body" id="ex-headers">
+      <div class="extype-split">
+        <div class="extype-left">
+          <h3 style="color:var(--tan);margin-bottom:10px">按消息头属性路由</h3>
+          <p style="font-size:13.5px;margin-bottom:14px">忽略 routing_key，改为匹配消息的<strong style="color:var(--paper)"> headers 字典</strong>。binding 时用 <code>x-match: all</code>（AND）或 <code>x-match: any</code>（OR）控制匹配逻辑。</p>
+          <div class="pill tan">按属性</div>
+          <div class="pill sky">AND / OR</div>
+          <div class="insight" style="margin-top:10px">
+            <strong>实际中较少使用。</strong>headers exchange 功能强大但性能较差（需要解析消息头），大多数场景用 topic 就够了。适合：需要多维度条件路由，且维度多于一两个时。
+          </div>
+        </div>
+        <div class="extype-right">
+<pre style="font-size:12px"><span class="cm"># Headers exchange：按消息属性路由</span>
+channel.exchange_declare(<span class="st">'file_events'</span>, <span class="st">'headers'</span>, durable=<span class="bl">True</span>)
+
+<span class="cm"># x-match: all = 必须 format=pdf AND action=upload 都满足</span>
+channel.queue_bind(
+    queue=<span class="st">'pdf_uploads'</span>,
+    exchange=<span class="st">'file_events'</span>,
+    routing_key=<span class="st">''</span>,  <span class="cm"># 忽略</span>
+    arguments={
+        <span class="st">'x-match'</span>: <span class="st">'all'</span>,
+        <span class="st">'format'</span>: <span class="st">'pdf'</span>,
+        <span class="st">'action'</span>: <span class="st">'upload'</span>,
+    }
+)
+
+<span class="cm"># 发消息时在 headers 里带属性</span>
+channel.basic_publish(
+    exchange=<span class="st">'file_events'</span>,
+    routing_key=<span class="st">''</span>,
+    body=<span class="st">b'file data...'</span>,
+    properties=pika.BasicProperties(
+        headers={<span class="st">'format'</span>: <span class="st">'pdf'</span>, <span class="st">'action'</span>: <span class="st">'upload'</span>}
+    )
+)  <span class="cm"># → 命中 pdf_uploads</span></pre>
+        </div>
+      </div>
+      <div class="extype-note">headers exchange 的 binding_key 参数写什么都没用，关键在 arguments 字典里的 x-match</div>
+    </div>
+
+    <!-- default -->
+    <div class="extype-body" id="ex-default">
+      <div class="extype-split">
+        <div class="extype-left">
+          <h3 style="color:var(--tan);margin-bottom:10px">隐藏的 direct exchange</h3>
+          <p style="font-size:13.5px;margin-bottom:14px">每个 RabbitMQ 都有一个名为 <strong style="color:var(--paper)">""（空字符串）</strong> 的 default exchange，类型是 direct。每个 queue 声明后，自动绑定到 default exchange，binding key = queue 名。</p>
+          <div class="pill tan">名称=""</div>
+          <div class="pill sky">自动绑定</div>
+          <div class="insight" style="margin-top:12px">
+            <strong>为什么你一开始觉得 RabbitMQ 很简单？</strong>因为初学例子直接向 exchange="" 发消息，routing_key=队列名，消息就到了队列——这绕开了整套路由系统，让人误以为消息是"直接发给队列"的。
+          </div>
+        </div>
+        <div class="extype-right">
+<pre style="font-size:12px"><span class="cm"># 初学例子常用写法（via default exchange）</span>
+channel.queue_declare(queue=<span class="st">'hello'</span>)
+
+channel.basic_publish(
+    exchange=<span class="st">''</span>,         <span class="cm"># 空字符串 = default exchange</span>
+    routing_key=<span class="st">'hello'</span>, <span class="cm"># routing_key = 队列名时，消息到该队列</span>
+    body=<span class="st">b'Hello World!'</span>
+)
+
+<span class="cm"># 这背后发生了什么：</span>
+<span class="cm"># 1. queue_declare('hello') 自动创建了:</span>
+<span class="cm">#    default_exchange --[binding: "hello"]--> queue "hello"</span>
+<span class="cm"># 2. basic_publish 到 default exchange + rk='hello'</span>
+<span class="cm">#    → 匹配到 binding "hello" → 消息进入 queue "hello"</span>
+
+<span class="cm"># ⚠️ 不能手动向 default exchange 添加 binding</span>
+<span class="cm"># ⚠️ 不能删除 default exchange</span></pre>
+        </div>
+      </div>
+      <div class="extype-note">生产代码里请避免使用 default exchange，明确声明你的 exchange 和 binding，代码意图更清晰</div>
+    </div>
+
+  </div><!-- extype-shell -->
+</section>
+
+<!-- ════════════════════════════════════ QUEUE PROPS ════════════════════════════════════ -->
+<section id="queue-props">
+  <div class="eyebrow">队列深入</div>
+  <h2>Queue 不只是个<em>列表</em></h2>
+  <p class="lead">Queue 的属性决定了它的行为边界。这里有几个参数的组合，弄错了会在生产环境里留下隐患。</p>
+
+  <div class="grid2" style="margin-bottom:20px">
+    <div>
+      <h3 style="margin-bottom:14px">声明参数</h3>
+      <div class="tbl-wrap" style="margin:0">
+        <table>
+          <thead><tr><th>参数</th><th>含义</th><th>默认</th></tr></thead>
+          <tbody>
+            <tr><td class="hl">durable</td><td>broker 重启后队列是否保留</td><td>False</td></tr>
+            <tr><td class="hl">exclusive</td><td>仅限当前 connection，断连后删除</td><td>False</td></tr>
+            <tr><td class="hl">auto_delete</td><td>最后一个 consumer 断开后删除</td><td>False</td></tr>
+            <tr><td class="hl">passive</td><td>仅检查是否存在，不创建</td><td>False</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h3 style="margin-bottom:14px">x-arguments（扩展行为）</h3>
+      <div class="tbl-wrap" style="margin:0">
+        <table>
+          <thead><tr><th>参数</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td class="hl">x-message-ttl</td><td>队列里消息的过期时间（毫秒）</td></tr>
+            <tr><td class="hl">x-expires</td><td>队列本身的空闲过期时间（毫秒）</td></tr>
+            <tr><td class="hl">x-max-length</td><td>最大消息条数，超出按策略处理</td></tr>
+            <tr><td class="hl">x-max-length-bytes</td><td>最大总字节数</td></tr>
+            <tr><td class="hl">x-dead-letter-exchange</td><td>死信转发到的 exchange</td></tr>
+            <tr><td class="hl">x-dead-letter-routing-key</td><td>死信的 routing key（可选）</td></tr>
+            <tr><td class="hl">x-max-priority</td><td>开启优先级队列（1-255）</td></tr>
+            <tr><td class="hl">x-queue-type</td><td>quorum / classic / stream</td></tr>
+            <tr><td class="hl">x-overflow</td><td>满时策略：drop-head / reject-publish</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="warn">
+    <strong>持久化的三层陷阱：</strong>要实现消息不丢失，需要同时满足 ① exchange durable=True ② queue durable=True ③ 消息 delivery_mode=2。三个条件缺一不可。很多人只设了队列持久化，忘了消息本身。
+  </div>
+
+  <h3 style="margin-top:32px;margin-bottom:14px">Dead Letter Exchange（DLX）——消息的最终归宿</h3>
+  <p style="font-size:14px;color:rgba(245,240,232,0.75);margin-bottom:16px">消息在以下情况变成"死信"：被 nack/reject 且 requeue=False、TTL 过期、队列达到最大长度。死信不会消失，而是被转发到配置的 DLX，从而可以被监控、重试或人工处理。</p>
+
+  <div class="code-block">
+    <div class="code-tabs">
+      <button class="code-tab on" onclick="switchCode(this,'dlx-setup')">DLX 配置</button>
+      <button class="code-tab" onclick="switchCode(this,'dlx-retry')">延迟重试模式</button>
+    </div>
+    <div class="code-pane on" id="dlx-setup">
+<pre><span class="cm"># 1. 声明死信处理 exchange 和队列</span>
+channel.exchange_declare(<span class="st">'dlx'</span>, <span class="st">'direct'</span>, durable=<span class="bl">True</span>)
+channel.queue_declare(<span class="st">'dead_letter_queue'</span>, durable=<span class="bl">True</span>)
+channel.queue_bind(<span class="st">'dead_letter_queue'</span>, <span class="st">'dlx'</span>, routing_key=<span class="st">'failed'</span>)
+
+<span class="cm"># 2. 业务队列：配置 DLX 和 TTL</span>
+channel.queue_declare(
+    queue=<span class="st">'order_queue'</span>, durable=<span class="bl">True</span>,
+    arguments={
+        <span class="st">'x-dead-letter-exchange'</span>: <span class="st">'dlx'</span>,
+        <span class="st">'x-dead-letter-routing-key'</span>: <span class="st">'failed'</span>, <span class="cm"># 可选</span>
+        <span class="st">'x-message-ttl'</span>: <span class="nm">30000</span>,  <span class="cm"># 30s 未消费 → 死信</span>
+        <span class="st">'x-max-length'</span>: <span class="nm">5000</span>,    <span class="cm"># 超出则最老消息 → 死信</span>
+    }
+)
+
+<span class="cm"># 3. consumer 处理失败时主动 nack 并不重入队</span>
+<span class="kw">def</span> <span class="fn">on_message</span>(ch, method, props, body):
+    <span class="kw">try</span>:
+        process(body)
+        ch.basic_ack(method.delivery_tag)
+    <span class="kw">except</span> PermanentError:
+        <span class="cm"># requeue=False → 触发死信流转</span>
+        ch.basic_nack(method.delivery_tag, requeue=<span class="bl">False</span>)</pre>
+      <div class="code-note">死信队列最好有独立的监控和告警，它是生产问题的"最后一道防线"</div>
+    </div>
+    <div class="code-pane" id="dlx-retry">
+<pre><span class="cm"># 延迟重试模式：利用 TTL + DLX 实现"30s 后重试"</span>
+
+<span class="cm"># 1. 等待队列：消息在这里等待 TTL 到期</span>
+channel.queue_declare(
+    queue=<span class="st">'order_wait_queue'</span>, durable=<span class="bl">True</span>,
+    arguments={
+        <span class="st">'x-message-ttl'</span>: <span class="nm">30000</span>,          <span class="cm"># 30s 后过期</span>
+        <span class="st">'x-dead-letter-exchange'</span>: <span class="st">'orders'</span>, <span class="cm"># 过期后→业务 exchange</span>
+        <span class="st">'x-dead-letter-routing-key'</span>: <span class="st">'order.retry'</span>,
+        <span class="cm"># ⚠️ 等待队列不要绑 consumer！</span>
+    }
+)
+
+<span class="cm"># 2. 业务失败时，把消息发到等待队列</span>
+<span class="kw">def</span> <span class="fn">on_message</span>(ch, method, props, body):
+    retry_count = props.headers.get(<span class="st">'x-retry-count'</span>, <span class="nm">0</span>)
+    <span class="kw">try</span>:
+        process(body)
+        ch.basic_ack(method.delivery_tag)
+    <span class="kw">except</span> TemporaryError:
+        ch.basic_ack(method.delivery_tag)  <span class="cm"># ack 原消息</span>
+        <span class="kw">if</span> retry_count &lt; <span class="nm">3</span>:
+            <span class="cm"># 发到等待队列，30s 后重新进入业务队列</span>
+            ch.basic_publish(
+                exchange=<span class="st">''</span>, routing_key=<span class="st">'order_wait_queue'</span>,
+                body=body,
+                properties=pika.BasicProperties(
+                    headers={<span class="st">'x-retry-count'</span>: retry_count + <span class="nm">1</span>},
+                    delivery_mode=<span class="nm">2</span>
+                )
+            )
+        <span class="kw">else</span>:
+            <span class="cm"># 超过重试次数，发到死信队列</span>
+            ch.basic_publish(<span class="st">'dlx'</span>, <span class="st">'failed'</span>, body)</pre>
+      <div class="code-note">这是在 RabbitMQ 里实现延迟重试的经典方法，不依赖 rabbitmq-delayed-message-exchange 插件</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════ ACK ════════════════════════════════════ -->
+<section id="ack">
+  <div class="eyebrow">可靠性基础</div>
+  <h2>消息确认：谁保证消息<em>不丢</em></h2>
+  <p class="lead">RabbitMQ 的"至少一次"投递保证，依赖两个方向的确认：Consumer 告诉 broker 消息处理完了（consumer ack），Producer 确认 broker 收到了消息（publisher confirm）。两个方向都有坑。</p>
+
+  <div class="ack-states" id="ackStates">
+    <div class="ack-state on" data-s="UNACKED" onclick="selectAck(this)">
+      <div class="ack-dot"></div>
+      <div class="ack-name" style="color:var(--sky)">Unacked</div>
+    </div>
+    <div class="ack-state" data-s="ACKED" onclick="selectAck(this)">
+      <div class="ack-dot"></div>
+      <div class="ack-name">Acked</div>
+    </div>
+    <div class="ack-state" data-s="NACKED" onclick="selectAck(this)">
+      <div class="ack-dot"></div>
+      <div class="ack-name">Nacked</div>
+    </div>
+    <div class="ack-state" data-s="REJECTED" onclick="selectAck(this)">
+      <div class="ack-dot"></div>
+      <div class="ack-name">Rejected</div>
+    </div>
+    <div class="ack-state" data-s="DEAD" onclick="selectAck(this)">
+      <div class="ack-dot"></div>
+      <div class="ack-name">Dead Letter</div>
+    </div>
+  </div>
+  <div class="ack-detail" id="ackDetail">
+    <strong style="color:var(--sky)">Unacked（已投递未确认）</strong><br>
+    Broker 已将消息推送给 consumer，但还没收到 ack。消息此时<strong>同时存在于 broker 和 consumer</strong>（逻辑上的"飞行中"状态）。如果 consumer 断连，broker 会把这条消息重新入队，投递给其他 consumer。<br>
+    <code style="margin-top:6px;display:block">channel.basic_consume(queue, callback, auto_ack=False)  # 手动 ack 模式</code>
+  </div>
+
+  <div style="margin-top:28px">
+    <h3 style="margin-bottom:14px">QoS / prefetch_count：流量控制的关键</h3>
+    <div class="grid2">
+      <div class="card tan">
+        <div class="tag-label tan">prefetch_count</div>
+        <h3>限制未 ack 消息数量</h3>
+        <p style="font-size:13.5px;margin-bottom:12px">告诉 broker "每次最多给我 N 条"，处理并 ack 完一条后，才能收到下一条。</p>
+        <pre style="font-size:12px"><span class="cm"># 每次最多拿 1 条（最保守，适合重任务）</span>
+channel.basic_qos(prefetch_count=<span class="nm">1</span>)
+
+<span class="cm"># 允许预取 10 条（吞吐量更高）</span>
+channel.basic_qos(prefetch_count=<span class="nm">10</span>)</pre>
+      </div>
+      <div class="card red">
+        <div class="tag-label red">⚠ prefetch_count=0（默认）</div>
+        <h3>无限预取——危险！</h3>
+        <p style="font-size:13.5px;margin-bottom:10px">broker 会把队列里所有消息都推给第一个连上的 consumer，后来的 consumer 收不到任何消息。</p>
+        <div class="warn" style="margin:0;font-size:12.5px">
+          多个 worker 时，<strong>务必设置 prefetch_count</strong>，否则负载完全不均衡。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px">
+    <h3 style="margin-bottom:14px">Publisher Confirms：发布端的保证</h3>
+    <p style="font-size:14px;color:rgba(245,240,232,0.75);margin-bottom:14px">默认情况下，<code>basic_publish</code> 是"fire and forget"——broker 收没收到，你不知道。开启 Publisher Confirms 后，broker 会对每条消息回一个 ack/nack。</p>
+    <div class="code-block">
+      <div class="code-tabs">
+        <button class="code-tab on" onclick="switchCode(this,'pc-sync')">同步确认</button>
+        <button class="code-tab" onclick="switchCode(this,'pc-async')">异步回调确认</button>
+      </div>
+      <div class="code-pane on" id="pc-sync">
+<pre><span class="cm"># 开启 Publisher Confirms</span>
+channel.confirm_delivery()
+
+<span class="kw">try</span>:
+    channel.basic_publish(
+        exchange=<span class="st">'orders'</span>,
+        routing_key=<span class="st">'order.created'</span>,
+        body=<span class="st">b'{"id":42}'</span>,
+        properties=pika.BasicProperties(delivery_mode=<span class="nm">2</span>),
+        mandatory=<span class="bl">True</span>  <span class="cm"># 无匹配路由时返回给 producer 而非丢弃</span>
+    )
+    <span class="kw">print</span>(<span class="st">'Broker 已确认接收'</span>)
+<span class="kw">except</span> pika.exceptions.UnroutableError:
+    <span class="kw">print</span>(<span class="st">'消息无法路由！'</span>)
+<span class="kw">except</span> pika.exceptions.NackError:
+    <span class="kw">print</span>(<span class="st">'Broker 拒绝了消息（内部错误？）'</span>)</pre>
+        <div class="code-note">同步确认会阻塞，吞吐量低但代码简单。生产高吞吐场景用异步确认</div>
+      </div>
+      <div class="code-pane" id="pc-async">
+<pre><span class="kw">import</span> threading
+
+<span class="cm"># 开启异步确认</span>
+channel.confirm_delivery(
+    ack_nack_callback=<span class="kw">lambda</span> method: <span class="kw">print</span>(<span class="st">f'Broker 回复: {method}'</span>)
+)
+
+<span class="cm"># 用字典跟踪未确认的消息</span>
+unconfirmed = {}
+delivery_tag = <span class="nm">1</span>
+
+<span class="kw">def</span> <span class="fn">publish</span>(body):
+    <span class="kw">global</span> delivery_tag
+    unconfirmed[delivery_tag] = body
+    channel.basic_publish(<span class="st">'orders'</span>, <span class="st">'order.created'</span>, body,
+        properties=pika.BasicProperties(delivery_mode=<span class="nm">2</span>))
+    delivery_tag += <span class="nm">1</span>
+
+<span class="kw">def</span> <span class="fn">on_ack</span>(method):
+    <span class="kw">if</span> method.NAME == <span class="st">'Basic.Ack'</span>:
+        unconfirmed.pop(method.delivery_tag, <span class="bl">None</span>)
+    <span class="kw">elif</span> method.NAME == <span class="st">'Basic.Nack'</span>:
+        body = unconfirmed.pop(method.delivery_tag, <span class="bl">None</span>)
+        <span class="kw">if</span> body: republish(body)  <span class="cm"># 重发</span></pre>
+        <div class="code-note">异步确认适合高吞吐批量发送，需要自己跟踪未确认的消息</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════ RELIABILITY ════════════════════════════════════ -->
+<section id="reliability">
+  <div class="eyebrow">生产清单</div>
+  <h2>上生产前的<em>可靠性</em>检查</h2>
+  <p class="lead">点击每一项确认你已经处理。所有项都勾选，才算做了基本的可靠性保证。</p>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">Exchange 声明了 <code>durable=True</code>
+        <small>broker 重启后 exchange 依然存在，否则消息无法投递</small>
+      </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">Queue 声明了 <code>durable=True</code>
+        <small>broker 重启后队列和其中消息依然存在</small>
+      </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">消息发布时设置 <code>delivery_mode=2</code>（持久化）
+        <small>exchange + queue durable 还不够，消息本身也要持久化</small>
+      </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">Consumer 使用 <code>auto_ack=False</code>（手动确认）
+        <small>任务处理完成后再 ack；处理失败时 nack(requeue=True/False)</small>
+      </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">设置了合理的 <code>prefetch_count</code>（非 0）
+        <small>避免一个 consumer 吃满所有消息，保证多 worker 负载均衡</small>
+      </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">配置了 Dead Letter Exchange（DLX）
+        <small>失败/过期消息有地方收，而不是静默丢弃</small>
+      </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">开启了 Publisher Confirms（高可靠场景）
+        <small>确认 broker 真的收到了消息，而不是 fire and forget</small>
+      </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">Consumer 幂等（允许重复投递）
+        <small>broker 在网络抖动后可能重发同一条消息，consumer 必须能处理重复</small>
+      </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">Connection 配置了心跳和重连逻辑
+        <small>heartbeat 防止 broker 或中间件超时断连；应用层需要自动重连</small>
+      </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+      <div class="check-box">✓</div>
+      <div class="check-label">使用 Quorum Queue（RabbitMQ 3.8+）代替 Classic Mirrored Queue
+        <small>Quorum Queue 基于 Raft，数据安全性更强，是新项目的推荐选择</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════ PATTERNS ════════════════════════════════════ -->
+<section id="patterns">
+  <div class="eyebrow">常用模式</div>
+  <h2>三个你会反复用到的<em>消息模式</em></h2>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <details class="expand" open>
+      <summary>
+        <span class="dicon info">⚡</span>
+        <span><strong>Work Queue（任务分发）</strong><span style="color:var(--muted);font-size:13px;margin-left:10px">多个 worker 竞争消费，负载均衡</span></span>
+        <span class="chevron">▶</span>
+      </summary>
+      <div class="dbody" style="padding-top:14px">
+        <p style="font-size:13.5px;margin-bottom:12px">同一队列绑多个 consumer，broker 轮流分发（round-robin）。配合 <code>prefetch_count=1</code> 实现能者多劳（处理快的 worker 拿更多消息）。</p>
+        <div class="grid2">
+          <pre style="font-size:11.5px"><span class="cm"># Consumer（多个实例并行运行）</span>
+channel.basic_qos(prefetch_count=<span class="nm">1</span>)
+
+<span class="kw">def</span> <span class="fn">do_work</span>(ch, method, props, body):
+    <span class="kw">import</span> time
+    time.sleep(body.count(<span class="st">b'.'</span>))  <span class="cm"># 模拟耗时</span>
+    ch.basic_ack(method.delivery_tag)
+
+channel.basic_consume(<span class="st">'task_queue'</span>, do_work, auto_ack=<span class="bl">False</span>)
+channel.start_consuming()</pre>
+          <pre style="font-size:11.5px"><span class="cm"># Producer</span>
+channel.queue_declare(<span class="st">'task_queue'</span>, durable=<span class="bl">True</span>)
+
+<span class="kw">for</span> i <span class="kw">in</span> range(<span class="nm">10</span>):
+    channel.basic_publish(
+        exchange=<span class="st">''</span>, routing_key=<span class="st">'task_queue'</span>,
+        body=<span class="st">f'task {i}...'</span>.encode(),
+        properties=pika.BasicProperties(delivery_mode=<span class="nm">2</span>)
+    )
+<span class="cm"># 启动多个 consumer 进程，消息被均衡分发</span></pre>
+        </div>
+        <div class="insight" style="margin-top:10px;margin-bottom:0">prefetch_count=1 让慢 worker 不会被撑死，快 worker 能做更多工作——这是 Work Queue 的灵魂设置。</div>
+      </div>
+    </details>
+
+    <details class="expand">
+      <summary>
+        <span class="dicon info">📢</span>
+        <span><strong>Pub/Sub（发布订阅）</strong><span style="color:var(--muted);font-size:13px;margin-left:10px">一条消息广播给所有订阅者</span></span>
+        <span class="chevron">▶</span>
+      </summary>
+      <div class="dbody" style="padding-top:14px">
+        <p style="font-size:13.5px;margin-bottom:12px">每个 subscriber 声明一个<strong>独占的、临时的</strong>队列，绑到 fanout exchange。消息发到 exchange，所有在线 subscriber 各得一份。</p>
+        <pre style="font-size:11.5px"><span class="cm"># Subscriber（每个实例独立的临时队列）</span>
+channel.exchange_declare(<span class="st">'news'</span>, <span class="st">'fanout'</span>)
+
+<span class="cm"># 独占队列：不指定名字，broker 自动生成；断连后自动删除</span>
+result = channel.queue_declare(queue=<span class="st">''</span>, exclusive=<span class="bl">True</span>)
+queue_name = result.method.queue  <span class="cm"># 形如 'amq.gen-xyz123'</span>
+
+channel.queue_bind(queue_name, <span class="st">'news'</span>)
+channel.basic_consume(queue_name, <span class="kw">lambda</span> ch,m,p,b: <span class="kw">print</span>(b), auto_ack=<span class="bl">True</span>)
+channel.start_consuming()
+
+<span class="cm"># Publisher</span>
+channel.basic_publish(<span class="st">'news'</span>, routing_key=<span class="st">''</span>, body=<span class="st">b'Breaking news!'</span>)
+<span class="cm"># → 所有在线 subscriber 各收一份。离线的 subscriber 收不到历史消息</span></pre>
+        <div class="warn" style="margin-top:10px;margin-bottom:0">Pub/Sub 中的临时队列不持久化——subscriber 离线期间的消息会丢失。如果需要"离线也能补发"，要用持久队列，并用不同消费者组区分。</div>
+      </div>
+    </details>
+
+    <details class="expand">
+      <summary>
+        <span class="dicon info">🔁</span>
+        <span><strong>RPC（请求-响应）</strong><span style="color:var(--muted);font-size:13px;margin-left:10px">通过消息实现同步调用语义</span></span>
+        <span class="chevron">▶</span>
+      </summary>
+      <div class="dbody" style="padding-top:14px">
+        <p style="font-size:13.5px;margin-bottom:12px">RPC 的关键是两个字段：<code>reply_to</code>（回调队列名）和 <code>correlation_id</code>（请求 ID，用于匹配响应和请求）。</p>
+        <div class="grid2">
+          <pre style="font-size:11.5px"><span class="cm"># RPC Client</span>
+<span class="kw">import</span> uuid
+
+<span class="cm"># 独占回调队列</span>
+cb = channel.queue_declare(<span class="st">''</span>, exclusive=<span class="bl">True</span>)
+callback_queue = cb.method.queue
+
+corr_id = str(uuid.uuid4())
+response = <span class="bl">None</span>
+
+<span class="kw">def</span> <span class="fn">on_response</span>(ch, m, props, body):
+    <span class="kw">global</span> response
+    <span class="kw">if</span> props.correlation_id == corr_id:
+        response = body
+
+channel.basic_consume(callback_queue, on_response, auto_ack=<span class="bl">True</span>)
+
+channel.basic_publish(
+    exchange=<span class="st">''</span>, routing_key=<span class="st">'rpc_queue'</span>,
+    body=<span class="st">b'30'</span>,  <span class="cm"># 参数</span>
+    properties=pika.BasicProperties(
+        reply_to=callback_queue,
+        correlation_id=corr_id,
+    )
+)
+<span class="kw">while</span> response <span class="kw">is</span> <span class="bl">None</span>:
+    connection.process_data_events()
+<span class="kw">print</span>(<span class="st">f'结果: {response}'</span>)</pre>
+          <pre style="font-size:11.5px"><span class="cm"># RPC Server</span>
+channel.queue_declare(<span class="st">'rpc_queue'</span>)
+
+<span class="kw">def</span> <span class="fn">fibonacci</span>(n):
+    <span class="kw">if</span> n == <span class="nm">0</span>: <span class="kw">return</span> <span class="nm">0</span>
+    <span class="kw">if</span> n == <span class="nm">1</span>: <span class="kw">return</span> <span class="nm">1</span>
+    <span class="kw">return</span> fibonacci(n-<span class="nm">2</span>) + fibonacci(n-<span class="nm">1</span>)
+
+<span class="kw">def</span> <span class="fn">on_request</span>(ch, m, props, body):
+    result = fibonacci(int(body))
+    <span class="cm"># 把结果发回 reply_to 队列</span>
+    ch.basic_publish(
+        exchange=<span class="st">''</span>, routing_key=props.reply_to,
+        body=str(result).encode(),
+        properties=pika.BasicProperties(
+            correlation_id=props.correlation_id
+        )
+    )
+    ch.basic_ack(m.delivery_tag)
+
+channel.basic_qos(prefetch_count=<span class="nm">1</span>)
+channel.basic_consume(<span class="st">'rpc_queue'</span>, on_request)
+channel.start_consuming()</pre>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════ COMPARE ════════════════════════════════════ -->
+<section id="compare">
+  <div class="eyebrow">对比与选型</div>
+  <h2>为什么<em>不用</em> Redis List 做消息队列</h2>
+  <p class="lead">Redis List（LPUSH/BRPOP）可以做简单队列，Kafka 适合流处理，RabbitMQ 在中间——它适合的是"需要复杂路由和可靠投递的任务分发"。</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>能力</th>
+          <th>RabbitMQ</th>
+          <th>Redis List/Streams</th>
+          <th>Kafka</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>消息路由</td>
+          <td class="y">✓ Exchange 4 种路由规则</td>
+          <td class="n">✗ 只能点对点</td>
+          <td class="m">△ Topic/Partition</td>
+        </tr>
+        <tr>
+          <td>消息确认（ack）</td>
+          <td class="y">✓ 内置 ack/nack</td>
+          <td class="m">△ Streams 支持</td>
+          <td class="y">✓ offset commit</td>
+        </tr>
+        <tr>
+          <td>消息持久化</td>
+          <td class="y">✓ 三层持久化</td>
+          <td class="m">△ RDB/AOF，非专为队列</td>
+          <td class="y">✓ 磁盘存储，可回放</td>
+        </tr>
+        <tr>
+          <td>消息回放</td>
+          <td class="n">✗ 消费即删除</td>
+          <td class="m">△ Streams 支持</td>
+          <td class="y">✓ 核心能力</td>
+        </tr>
+        <tr>
+          <td>复杂 workflow</td>
+          <td class="y">✓ DLX、延迟、优先级</td>
+          <td class="n">✗ 需自建</td>
+          <td class="n">✗ 需自建</td>
+        </tr>
+        <tr>
+          <td>吞吐量</td>
+          <td class="m">△ 万级/s（带 ack）</td>
+          <td class="y">✓ 十万级/s</td>
+          <td class="y">✓ 百万级/s</td>
+        </tr>
+        <tr>
+          <td>运维复杂度</td>
+          <td class="m">△ 中等（需管理 vhost/exchange/binding）</td>
+          <td class="y">✓ 低（已有 Redis）</td>
+          <td class="n">✗ 高（ZK/KRaft + 集群）</td>
+        </tr>
+        <tr>
+          <td>适合场景</td>
+          <td>任务分发、事件路由、RPC、工作流</td>
+          <td>简单任务队列、缓存辅助队列</td>
+          <td>日志采集、事件溯源、大数据管道</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid2" style="margin-top:20px">
+    <div class="card green">
+      <div class="tag-label green">选 RabbitMQ 的理由</div>
+      <ul style="list-style:none;padding:0;font-size:14px">
+        <li style="padding:5px 0;padding-left:18px;position:relative;color:rgba(245,240,232,0.8)"><span style="position:absolute;left:0;color:var(--green)">✓</span>消息需要按类型路由到不同处理器</li>
+        <li style="padding:5px 0;padding-left:18px;position:relative;color:rgba(245,240,232,0.8)"><span style="position:absolute;left:0;color:var(--green)">✓</span>需要可靠的"至少一次"投递保证</li>
+        <li style="padding:5px 0;padding-left:18px;position:relative;color:rgba(245,240,232,0.8)"><span style="position:absolute;left:0;color:var(--green)">✓</span>需要 DLX、延迟重试、优先级队列</li>
+        <li style="padding:5px 0;padding-left:18px;position:relative;color:rgba(245,240,232,0.8)"><span style="position:absolute;left:0;color:var(--green)">✓</span>已有团队，熟悉 AMQP 生态</li>
+        <li style="padding:5px 0;padding-left:18px;position:relative;color:rgba(245,240,232,0.8)"><span style="position:absolute;left:0;color:var(--green)">✓</span>Celery/Dramatiq 的默认 broker</li>
+      </ul>
+    </div>
+    <div class="card red">
+      <div class="tag-label red">考虑其他方案的情况</div>
+      <ul style="list-style:none;padding:0;font-size:14px">
+        <li style="padding:5px 0;padding-left:18px;position:relative;color:rgba(245,240,232,0.8)"><span style="position:absolute;left:0;color:var(--red)">✗</span>需要消息回放/事件溯源 → Kafka</li>
+        <li style="padding:5px 0;padding-left:18px;position:relative;color:rgba(245,240,232,0.8)"><span style="position:absolute;left:0;color:var(--red)">✗</span>已有 Redis，任务很简单 → Redis Streams</li>
+        <li style="padding:5px 0;padding-left:18px;position:relative;color:rgba(245,240,232,0.8)"><span style="position:absolute;left:0;color:var(--red)">✗</span>吞吐量 &gt; 几十万/s → Kafka/Pulsar</li>
+        <li style="padding:5px 0;padding-left:18px;position:relative;color:rgba(245,240,232,0.8)"><span style="position:absolute;left:0;color:var(--red)">✗</span>不想管理额外基础设施 → 云原生 SQS/Pub-Sub</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 style="margin-top:36px;margin-bottom:14px">常见误区汇总</h3>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <details class="expand">
+      <summary><span class="dicon warn">!</span><span>Exchange 存储消息 <span style="color:var(--muted);font-size:12px">（错误）</span></span><span class="chevron">▶</span></summary>
+      <div class="dbody"><p style="font-size:13.5px;padding-top:10px">Exchange 只做路由，<strong>不存储任何消息</strong>。如果消息无法匹配任何绑定，会被丢弃（或 mandatory=True 时退回给 producer）。只有 Queue 存储消息。</p></div>
+    </details>
+    <details class="expand">
+      <summary><span class="dicon warn">!</span><span>durable queue 就能保证消息不丢 <span style="color:var(--muted);font-size:12px">（不够）</span></span><span class="chevron">▶</span></summary>
+      <div class="dbody"><p style="font-size:13.5px;padding-top:10px">durable 只保证队列结构在重启后存在。消息本身必须也设置 <code>delivery_mode=2</code> 才会持久化到磁盘。另外，消息在内存缓冲区到磁盘之间有一个短暂的窗口期，极端情况下仍可能丢失——Quorum Queue 通过多副本 Raft 日志解决这个问题。</p></div>
+    </details>
+    <details class="expand">
+      <summary><span class="dicon warn">!</span><span>auto_ack=True 更高效，应该用 <span style="color:var(--muted);font-size:12px">（危险权衡）</span></span><span class="chevron">▶</span></summary>
+      <div class="dbody"><p style="font-size:13.5px;padding-top:10px">auto_ack=True 时消息在 broker 推给 consumer 的瞬间就被删除，consumer 崩溃会导致消息丢失。吞吐量确实略高，但只适用于"允许丢消息"的场景（如实时日志）。任何需要保证处理的场景都应用手动 ack。</p></div>
+    </details>
+    <details class="expand">
+      <summary><span class="dicon warn">!</span><span>fanout exchange 会"复制"消息，增加 N 倍存储 <span style="color:var(--muted);font-size:12px">（部分正确）</span></span><span class="chevron">▶</span></summary>
+      <div class="dbody"><p style="font-size:13.5px;padding-top:10px">fanout 确实会在每个绑定的 queue 里放一份消息，但 RabbitMQ 内部会尽量共享消息体（reference counting），不一定是 N 份物理拷贝。不过从应用层角度，每个 queue 各自独立持有一份，管理上确实是 N 份。</p></div>
+    </details>
+    <details class="expand">
+      <summary><span class="dicon warn">!</span><span>一个 Connection 开很多 Channel，Channel 数量无所谓 <span style="color:var(--muted);font-size:12px">（有上限）</span></span><span class="chevron">▶</span></summary>
+      <div class="dbody"><p style="font-size:13.5px;padding-top:10px">Channel 虽然轻量，但每个 Channel 都占用服务器内存，且 AMQP 协议层有 <code>channel-max</code> 限制（默认 65535）。更重要的是，<strong>Channel 不是线程安全的</strong>，多线程应用中每个线程应独立持有一个 Channel（但可以共享 Connection）。</p></div>
+    </details>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  整理自 RabbitMQ 官方文档 (rabbitmq.com/docs) · pika 0.13+ · 适用于 RabbitMQ 3.8+ · 离线可用
+</footer>
+
+<script>
+// ─── NAV active ───
+const sec = document.querySelectorAll('section[id]');
+const navAs = document.querySelectorAll('.nav-links a');
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navAs.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-35% 0px -35% 0px' });
+sec.forEach(s => obs.observe(s));
+
+// ─── CODE TABS ───
+function switchCode(btn, paneId) {
+  const block = btn.closest('.code-block');
+  block.querySelectorAll('.code-tab').forEach(t => t.classList.remove('on'));
+  block.querySelectorAll('.code-pane').forEach(p => p.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById(paneId).classList.add('on');
+}
+
+// ─── LAYER SELECTOR ───
+const layerData = {
+  vhost: {
+    html: `<strong style="color:var(--tan)">Virtual Host（vhost）</strong>：完全隔离的命名空间。<br><br>
+    默认 vhost 是 <code>/</code>。不同 vhost 之间的 Exchange、Queue、Binding、权限完全隔离，就像独立的 RabbitMQ 实例。<br><br>
+    <strong>典型用法：</strong>同一台 RabbitMQ 服务器上，<code>/dev</code>、<code>/staging</code>、<code>/prod</code> 各一个 vhost，互不干扰。<br><br>
+    创建 vhost：<code>rabbitmqctl add_vhost /myapp</code><br>
+    授权用户：<code>rabbitmqctl set_permissions -p /myapp myuser ".*" ".*" ".*"</code>`
+  },
+  conn: {
+    html: `<strong style="color:var(--sky)">Connection</strong>：一条真实的 TCP 长连接。<br><br>
+    建立开销大（TCP 握手 + TLS + SASL 认证），应该<strong>尽量复用</strong>，而不是每次发消息都新建。<br><br>
+    一个进程通常维持 1-2 个 Connection。<br><br>
+    <strong>连接字符串：</strong><code>amqp://user:pass@host:5672/vhost</code><br>
+    <strong>TLS 端口：</strong>5671<br>
+    <strong>Management UI：</strong>15672（HTTP）<br><br>
+    Connection 断开时，所有在其上的 Channel 也会关闭，Exclusive Queue 会被删除。`
+  },
+  chan: {
+    html: `<strong style="color:var(--green)">Channel</strong>：Connection 内的轻量虚拟通道。<br><br>
+    所有 AMQP 操作（publish、consume、declare）都在 Channel 上进行。<br><br>
+    <strong>⚠️ Channel 不是线程安全的</strong>——多线程应用中，每个线程必须有自己的 Channel，不能共享。<br><br>
+    <strong>推荐模式：</strong><br>
+    • 1 个 Connection / 进程<br>
+    • 每个线程/协程有自己的 Channel<br>
+    • publish-only 和 consume-only 最好用不同的 Channel<br><br>
+    <code>channel = connection.channel()</code>`
+  }
+};
+function selectLayer(key) {
+  document.querySelectorAll('.layer-row').forEach(r => r.classList.remove('sel'));
+  document.getElementById('lr-' + key).classList.add('sel');
+  document.getElementById('layerDetail').innerHTML = layerData[key].html;
+}
+
+// ─── EXCHANGE TYPE SELECTOR ───
+function selectEx(key) {
+  document.querySelectorAll('.extype-tab').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('.extype-body').forEach(b => b.classList.remove('on'));
+  document.querySelector(`.extype-tab[onclick="selectEx('${key}')"]`).classList.add('on');
+  document.getElementById('ex-' + key).classList.add('on');
+}
+
+// ─── ACK STATES ───
+const ackData = {
+  UNACKED: {
+    color: 'var(--sky)',
+    html: `<strong style="color:var(--sky)">Unacked（已投递，等待确认）</strong><br><br>
+    消息已从 broker 推送给 consumer，但 consumer 还没调用 <code>basic_ack</code>。此时消息处于"飞行中"状态。<br><br>
+    如果 consumer 断连（channel 关闭），broker 会自动将所有 unacked 消息重新入队，投递给其他 consumer。<br><br>
+    <strong>管理 UI 里可以看到 unacked 消息数量</strong>——如果它持续增长，说明 consumer 处理太慢或者忘了 ack。`
+  },
+  ACKED: {
+    color: 'var(--green)',
+    html: `<strong style="color:var(--green)">Acked（确认处理完成）</strong><br><br>
+    Consumer 调用 <code>channel.basic_ack(delivery_tag)</code>，告诉 broker 这条消息已成功处理，可以安全删除。<br><br>
+    <pre style="font-size:12px;margin-top:8px">channel.basic_ack(delivery_tag=method.delivery_tag)
+# multiple=True 时同时 ack 所有 tag <= 该值的消息（批量）
+channel.basic_ack(delivery_tag=method.delivery_tag, multiple=True)</pre>`
+  },
+  NACKED: {
+    color: 'var(--red)',
+    html: `<strong style="color:var(--red)">Nacked（处理失败，指示 broker 重新处理）</strong><br><br>
+    Consumer 调用 <code>basic_nack</code>，告诉 broker 处理失败。<code>requeue=True</code> 时消息重新入队（注意：重新入队的消息排到队首，可能导致无限循环）；<code>requeue=False</code> 时消息被丢弃或发送到 DLX。<br><br>
+    <pre style="font-size:12px;margin-top:8px">channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+# → 触发 DLX 转发（如果配置了的话）</pre>`
+  },
+  REJECTED: {
+    color: 'var(--tan)',
+    html: `<strong style="color:var(--tan)">Rejected（拒绝单条消息）</strong><br><br>
+    <code>basic_reject</code> 与 <code>basic_nack</code> 类似，但只能拒绝单条消息（nack 支持 <code>multiple=True</code>）。<br><br>
+    <pre style="font-size:12px;margin-top:8px">channel.basic_reject(delivery_tag=method.delivery_tag, requeue=False)
+# requeue=True  → 重新入队
+# requeue=False → 丢弃或发到 DLX</pre>
+    实践中，<code>basic_nack</code> 更常用，因为支持批量操作。`
+  },
+  DEAD: {
+    color: 'var(--muted)',
+    html: `<strong style="color:var(--muted)">Dead Letter（死信）</strong><br><br>
+    消息在以下三种情况下变为死信：<br>
+    ① 被 nack/reject 且 requeue=False<br>
+    ② 消息 TTL 过期（x-message-ttl）<br>
+    ③ 队列达到最大长度，且 overflow=drop-head<br><br>
+    死信会被转发到该队列配置的 <code>x-dead-letter-exchange</code>（DLX）。如果没配置 DLX，消息被静默丢弃。<br><br>
+    <strong>务必配置 DLX + 告警</strong>，它是生产环境排查问题的关键。`
+  }
+};
+function selectAck(el) {
+  document.querySelectorAll('.ack-state').forEach(s => s.classList.remove('on'));
+  el.classList.add('on');
+  const d = ackData[el.dataset.s];
+  document.getElementById('ackDetail').innerHTML = d.html;
+}
+
+// ─── RELIABILITY CHECKLIST ───
+function toggleCheck(el) {
+  el.classList.toggle('done');
+}
+
+// ─── EXPAND DETAILS (toggle section) ───
+// handled by native <details>
+
+// Initialize
+selectLayer('vhost');
+selectEx('direct');
+</script>
+</body>
+</html>

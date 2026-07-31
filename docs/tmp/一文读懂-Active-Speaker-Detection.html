@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Active Speaker Detection · 谁在说话？</title>
+<style>
+:root{
+  --paper:#E9ECF1; --card:#FFFFFF; --card2:#F4F6FA;
+  --ink:#0C131F; --mid:#56657E; --faint:#93A0B6;
+  --grid:rgba(12,19,31,.045); --grid2:rgba(12,19,31,.085);
+  --rule:#C9D1DF; --rule2:#DFE4EC;
+  --aud:#C0246A; --aud-bg:rgba(192,36,106,.09);
+  --vis:#1657C7; --vis-bg:rgba(22,87,199,.09);
+  --yes:#0B7A4B; --yes-bg:rgba(11,122,75,.10);
+  --no:#7C879C;  --no-bg:rgba(124,135,156,.10);
+  --warn:#A85C00; --warn-bg:rgba(168,92,0,.10);
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,"Liberation Mono",Menlo,monospace;
+  --sans:"Inter","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+body{
+  background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.8;
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+    linear-gradient(var(--grid2) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid2) 1px,transparent 1px);
+  background-size:24px 24px,24px 24px,120px 120px,120px 120px;
+}
+::selection{background:rgba(22,87,199,.18)}
+code,pre,.mono{font-family:var(--mono)}
+a{color:var(--vis)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 26px}
+b,strong{font-weight:700}
+
+/* nav */
+nav{position:sticky;top:0;z-index:60;background:rgba(233,236,241,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
+nav .wrap{display:flex;align-items:center;gap:20px;height:50px}
+nav .brand{font-family:var(--mono);font-size:12.5px;font-weight:700;letter-spacing:.6px;white-space:nowrap}
+nav .brand .sq{display:inline-block;width:8px;height:8px;background:var(--aud);margin-right:6px;vertical-align:0}
+nav .brand .sq2{background:var(--vis);margin-left:-3px}
+nav .links{display:flex;gap:1px;overflow-x:auto;scrollbar-width:none}
+nav .links::-webkit-scrollbar{display:none}
+nav .links a{font-size:13px;color:var(--mid);text-decoration:none;padding:5px 9px;border-radius:3px;white-space:nowrap}
+nav .links a:hover{color:var(--ink);background:rgba(12,19,31,.06)}
+a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--vis);outline-offset:2px}
+
+/* section scaffolding */
+section{padding:80px 0 10px}
+.eyebrow{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.eyebrow .kind{font-family:var(--mono);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--card);background:var(--ink);padding:3px 9px;border-radius:2px}
+.eyebrow .line{flex:1;height:1px;background:var(--rule)}
+h2{font-size:clamp(24px,3.1vw,32px);font-weight:800;letter-spacing:-.4px;line-height:1.35;margin-bottom:12px}
+h3{font-size:17px;font-weight:750;margin-bottom:7px}
+.lead{color:var(--mid);max-width:860px;margin-bottom:30px;font-size:16.5px}
+.lead b{color:var(--ink)}
+p+p{margin-top:12px}
+.note{font-size:13px;color:var(--faint);font-family:var(--mono);line-height:1.7}
+
+/* hero */
+header{padding:54px 0 46px;border-bottom:1px solid var(--rule)}
+.htop{display:flex;align-items:baseline;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.htop .tagline{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--faint);text-transform:uppercase}
+h1{font-size:clamp(30px,5.2vw,50px);font-weight:850;letter-spacing:-1.2px;line-height:1.18;max-width:15em}
+h1 .aud{color:var(--aud)} h1 .vis{color:var(--vis)}
+.hsub{color:var(--mid);max-width:640px;margin-top:16px;font-size:16.5px}
+.hsub b{color:var(--ink)}
+
+/* scene */
+.scene{margin-top:32px;background:var(--card);border:1px solid var(--rule);border-radius:4px;overflow:hidden;box-shadow:0 1px 0 rgba(12,19,31,.05),0 14px 40px -22px rgba(12,19,31,.35)}
+.scene-head{display:flex;align-items:center;gap:12px;padding:9px 16px;border-bottom:1px solid var(--rule2);font-family:var(--mono);font-size:11.5px;color:var(--faint);background:var(--card2)}
+.scene-head .q{color:var(--ink);font-weight:700}
+.scene-head .st{margin-left:auto}
+.scene svg{display:block;width:100%;height:auto}
+.verdict-bar{border-top:1px solid var(--rule2);padding:14px 18px;min-height:74px;background:var(--card2);font-size:14.5px;color:var(--mid)}
+.verdict-bar .vh{font-family:var(--mono);font-size:12px;letter-spacing:1px;margin-right:8px;padding:2px 7px;border-radius:2px}
+.verdict-bar .vh.y{background:var(--yes-bg);color:var(--yes)}
+.verdict-bar .vh.n{background:var(--no-bg);color:var(--no)}
+.verdict-bar .vh.w{background:var(--warn-bg);color:var(--warn)}
+.verdict-bar b{color:var(--ink)}
+.face-hit{cursor:pointer}
+.face-hit:hover .fbox{stroke-width:2.6}
+
+/* cards */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:20px 22px}
+.card.rail-a{border-left:3px solid var(--aud)}
+.card.rail-v{border-left:3px solid var(--vis)}
+.card.rail-y{border-left:3px solid var(--yes)}
+.card.rail-n{border-left:3px solid var(--no)}
+.card.rail-w{border-left:3px solid var(--warn)}
+.card p,.card li{font-size:14.5px;color:var(--mid)}
+.card ul{padding-left:17px;margin-top:4px}
+.card li+li{margin-top:5px}
+.card .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:1.2px;color:var(--faint);display:block;margin-bottom:8px}
+
+/* io spec */
+.iospec{display:grid;grid-template-columns:1fr auto 1fr;gap:0;align-items:stretch;border:1px solid var(--rule);border-radius:4px;background:var(--card);overflow:hidden;margin-bottom:20px}
+.iospec .side{padding:18px 22px}
+.iospec .mid{background:var(--ink);color:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 26px;text-align:center}
+.iospec .mid .fn{font-family:var(--mono);font-size:13px;font-weight:700}
+.iospec .mid .fs{font-family:var(--mono);font-size:10.5px;color:#9FB0CC;margin-top:4px}
+.iospec h4{font-family:var(--mono);font-size:11px;letter-spacing:1.2px;color:var(--faint);margin-bottom:9px}
+.iospec .item{font-size:14px;color:var(--mid);margin-bottom:6px}
+.iospec .item .k{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--card2);border:1px solid var(--rule2);padding:1px 6px;border-radius:2px}
+.iospec .item.a .k{color:var(--aud);border-color:rgba(192,36,106,.3);background:var(--aud-bg)}
+.iospec .item.v .k{color:var(--vis);border-color:rgba(22,87,199,.3);background:var(--vis-bg)}
+
+/* table */
+.tscroll{overflow-x:auto;border:1px solid var(--rule);border-radius:4px;background:var(--card)}
+.tscroll table{border:none;min-width:660px}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);border:1px solid var(--rule)}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--rule2);vertical-align:top}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);background:var(--card2);border-bottom:1px solid var(--rule)}
+td{color:var(--mid)}
+tr:last-child td{border-bottom:none}
+tr.self td{background:rgba(22,87,199,.045)}
+tr.self td:first-child{font-weight:700;color:var(--ink)}
+td .k{color:var(--ink);font-weight:650}
+td.mono{font-family:var(--mono);font-size:12.5px}
+
+/* 2x2 matrix */
+.mx{display:grid;grid-template-columns:118px 1fr 1fr;gap:8px;align-items:stretch}
+.mx .corner{}
+.mx .colhead,.mx .rowhead{display:flex;align-items:center;justify-content:center;text-align:center;font-family:var(--mono);font-size:12px;letter-spacing:.5px;padding:8px;border-radius:3px}
+.mx .colhead{background:var(--aud-bg);color:var(--aud);font-weight:700}
+.mx .rowhead{background:var(--vis-bg);color:var(--vis);font-weight:700;writing-mode:horizontal-tb}
+.mx .cell{background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:14px 16px;cursor:pointer;transition:box-shadow .15s,transform .12s,border-color .15s;text-align:left}
+.mx .cell:hover{border-color:var(--ink);transform:translateY(-2px);box-shadow:0 8px 20px -14px rgba(12,19,31,.6)}
+.mx .cell.on{border-color:var(--ink);box-shadow:0 0 0 2px rgba(12,19,31,.12)}
+.mx .cell .ttl{font-size:14.5px;font-weight:700;display:block;margin-bottom:3px}
+.mx .cell .ex{font-size:12.8px;color:var(--faint);display:block;line-height:1.6}
+.mx .cell .gt{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:2px;display:inline-block;margin-top:8px}
+.mx .cell .gt.y{background:var(--yes-bg);color:var(--yes)}
+.mx .cell .gt.n{background:var(--no-bg);color:var(--no)}
+.mx-detail{margin-top:16px;background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--ink);border-radius:4px;padding:18px 22px;min-height:150px}
+.mx-detail h4{font-size:15.5px;margin-bottom:8px}
+.mx-detail p{font-size:14.5px;color:var(--mid)}
+.judge{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.judge .j{flex:1;min-width:170px;border:1px solid var(--rule2);border-radius:3px;padding:9px 12px;background:var(--card2)}
+.judge .j .who{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;color:var(--faint);display:block}
+.judge .j .say{font-size:13.5px;font-weight:650;margin-top:2px;display:block}
+.judge .j.ok .say{color:var(--yes)} .judge .j.bad .say{color:var(--aud)}
+.judge .j.ok{border-color:rgba(11,122,75,.35)} .judge .j.bad{border-color:rgba(192,36,106,.3)}
+
+/* scope (signature) */
+.scope{background:var(--card);border:1px solid var(--rule);border-radius:4px;overflow:hidden;box-shadow:0 14px 40px -26px rgba(12,19,31,.45)}
+.scope-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--rule2);background:var(--card2)}
+.scope-head .t{font-family:var(--mono);font-size:11.5px;letter-spacing:1.2px;color:var(--faint);margin-right:6px}
+.chip{font-family:var(--mono);font-size:12px;padding:5px 12px;border:1px solid var(--rule);background:var(--card);border-radius:3px;cursor:pointer;color:var(--mid)}
+.chip:hover{border-color:var(--ink);color:var(--ink)}
+.chip.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.scope-body{display:grid;grid-template-columns:1.55fr 1fr}
+.scope-left{border-right:1px solid var(--rule2);padding:6px 0 0}
+.scope-right{padding:16px 18px}
+.scope svg{display:block;width:100%;height:auto}
+.ctrl{padding:10px 18px 14px;border-top:1px solid var(--rule2)}
+.ctrl .row{display:flex;align-items:center;gap:12px}
+.ctrl label{font-family:var(--mono);font-size:11.5px;color:var(--faint);white-space:nowrap}
+.ctrl input[type=range]{flex:1;accent-color:var(--aud)}
+.ctrl .val{font-family:var(--mono);font-size:12.5px;font-weight:700;min-width:72px;text-align:right}
+.ctrl .btns{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.readout .r{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--rule2);gap:10px}
+.readout .r .n{font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.4px}
+.readout .r .v{font-family:var(--mono);font-size:14px;font-weight:700}
+.meter{height:8px;background:var(--card2);border:1px solid var(--rule2);border-radius:2px;position:relative;margin:12px 0 4px;overflow:hidden}
+.meter .fill{position:absolute;top:0;bottom:0;background:var(--yes);transition:none}
+.meter .zero{position:absolute;top:-3px;bottom:-3px;left:50%;width:1px;background:var(--faint)}
+.meter-lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--faint)}
+.decision{margin-top:16px;border:1px solid var(--rule);border-radius:3px;padding:13px 15px;background:var(--card2)}
+.decision .dv{font-family:var(--mono);font-size:15px;font-weight:800;letter-spacing:.5px;display:block;margin-bottom:5px}
+.decision .why{font-size:13.2px;color:var(--mid);line-height:1.65}
+.decision.y{border-color:rgba(11,122,75,.4);background:var(--yes-bg)} .decision.y .dv{color:var(--yes)}
+.decision.n{border-color:rgba(124,135,156,.45)} .decision.n .dv{color:var(--no)}
+.decision.w{border-color:rgba(168,92,0,.4);background:var(--warn-bg)} .decision.w .dv{color:var(--warn)}
+.scope-foot{border-top:1px solid var(--rule2);padding:12px 18px;font-size:13.5px;color:var(--mid);background:var(--card2)}
+.scope-foot b{color:var(--ink)}
+
+/* pipeline */
+.flow{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-bottom:16px}
+.fstep{background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:12px 10px;cursor:pointer;text-align:center;transition:border-color .15s,transform .12s}
+.fstep:hover{transform:translateY(-2px)}
+.fstep .ix{font-family:var(--mono);font-size:10px;color:var(--faint);display:block}
+.fstep .nm{font-size:13.5px;font-weight:700;display:block;margin-top:3px;line-height:1.4}
+.fstep .md{font-family:var(--mono);font-size:9.5px;display:block;margin-top:5px;color:var(--faint)}
+.fstep.on{border-color:var(--ink);box-shadow:0 0 0 2px rgba(12,19,31,.1)}
+.fstep[data-m="a"] .md{color:var(--aud)} .fstep[data-m="v"] .md{color:var(--vis)} .fstep[data-m="av"] .md{color:var(--yes)}
+.fdetail{background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--ink);border-radius:4px;padding:20px 22px;min-height:190px}
+.fdetail h4{font-size:16px;margin-bottom:3px}
+.fdetail .sub{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-bottom:12px}
+.fdetail .two{display:grid;grid-template-columns:1.2fr .95fr;gap:20px}
+.fdetail p{font-size:14.5px;color:var(--mid)}
+.fdetail .io{font-family:var(--mono);font-size:12px;line-height:2}
+.fdetail .io .tag{color:var(--faint)}
+.fdetail .io .in{color:var(--vis)} .fdetail .io .out{color:var(--yes)}
+.fdetail .risk{margin-top:10px;font-size:13px;color:var(--warn);border-top:1px dashed var(--rule2);padding-top:9px}
+.fdetail .risk b{color:var(--warn)}
+
+/* tradeoff */
+.axis{background:var(--card);border:1px solid var(--rule);border-radius:4px;margin-bottom:12px;overflow:hidden}
+.axis .ah{padding:13px 18px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--rule2);background:var(--card2)}
+.axis .ah .an{font-size:15px;font-weight:750}
+.axis .ah .aq{font-size:13px;color:var(--faint)}
+.axis .ab{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.axis .opt{padding:15px 18px;border-right:1px solid var(--rule2)}
+.axis .opt:last-child{border-right:none}
+.axis .opt .on{font-family:var(--mono);font-size:12px;font-weight:700;display:block;margin-bottom:6px}
+.axis .opt.l .on{color:var(--vis)} .axis .opt.r .on{color:var(--aud)}
+.axis .opt p{font-size:13.8px;color:var(--mid)}
+.axis .opt .cost{font-size:12.5px;color:var(--faint);margin-top:7px;display:block;font-family:var(--mono)}
+
+/* pitfalls */
+.pit{background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--warn);border-radius:4px;margin-bottom:9px}
+.pit summary{padding:13px 18px;cursor:pointer;list-style:none;display:flex;gap:12px;align-items:baseline;font-size:15px;font-weight:650}
+.pit summary::-webkit-details-marker{display:none}
+.pit summary .x{font-family:var(--mono);color:var(--warn);flex:none;font-size:13px}
+.pit summary::after{content:"+";margin-left:auto;color:var(--faint);font-family:var(--mono);font-weight:400}
+.pit[open] summary::after{content:"−"}
+.pit[open] summary{border-bottom:1px solid var(--rule2)}
+.pit .bd{padding:14px 18px 16px 46px;font-size:14.3px;color:var(--mid)}
+.pit .bd code{font-family:var(--mono);font-size:12.5px;background:var(--card2);border:1px solid var(--rule2);padding:1px 5px;border-radius:2px}
+.pit .bd .fix{margin-top:9px;padding-top:9px;border-top:1px dashed var(--rule2);font-size:13.5px}
+.pit .bd .fix b{color:var(--yes)}
+
+/* closing */
+.close{background:var(--ink);color:#DCE3EE;border-radius:4px;padding:28px 30px;margin-top:24px}
+.close h3{color:#fff;font-size:18px;margin-bottom:10px}
+.close p{font-size:15px;color:#AEBACD}
+.close p+p{margin-top:10px}
+.close b{color:#fff}
+.close .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:20px;padding-top:20px;border-top:1px solid rgba(255,255,255,.14)}
+.close .kv div .n{font-family:var(--mono);font-size:10.5px;letter-spacing:1.2px;color:#7E8DA6;display:block;margin-bottom:4px}
+.close .kv div .t{font-size:14px;color:#DCE3EE}
+
+footer{margin-top:60px;border-top:1px solid var(--rule);padding:22px 0 44px;font-size:12.5px;color:var(--faint);font-family:var(--mono);line-height:1.9}
+
+@media (max-width:960px){
+  .grid2,.grid3,.scope-body,.fdetail .two,.axis .ab,.iospec{grid-template-columns:1fr}
+  .iospec .mid{padding:12px}
+  .scope-left{border-right:none;border-bottom:1px solid var(--rule2)}
+  .axis .opt{border-right:none;border-bottom:1px solid var(--rule2)}
+  .flow{grid-template-columns:repeat(3,1fr)}
+  .mx{grid-template-columns:70px 1fr 1fr}
+  .mx .rowhead{font-size:10.5px;padding:4px}
+  .close .kv{grid-template-columns:1fr}
+  section{padding:56px 0 8px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <span class="brand"><i class="sq"></i><i class="sq sq2"></i> ASD · 一文读懂</span>
+    <div class="links">
+      <a href="#what">是什么</a><a href="#matrix">证据矩阵</a><a href="#scope">同步实验台</a><a href="#system">系统怎么搭</a><a href="#axes">设计取舍</a><a href="#traps">误区与难例</a><a href="#eval">怎么评测</a><a href="#use">怎么用</a>
+    </div>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <div class="htop"><span class="tagline">Active Speaker Detection — 活跃说话人检测</span></div>
+    <h1>声音只有<span class="aud">一路</span>，<br>画面里有<span class="vis">三张脸</span>。<br>这句话该记在谁头上？</h1>
+    <p class="hsub">这就是 ASD 要解决的全部问题：<b>把一段音频里的"正在说话"这件事，逐帧归属到画面中某一张具体的脸上。</b>它听起来像个小任务，却是说话人日志、会议自动导播、视听语音识别、多模态数据清洗共同的地基。下面三张脸的嘴<b>都在动</b>——先别往下读，猜猜是谁在说话。</p>
+
+    <div class="scene">
+      <div class="scene-head">
+        <span class="q">meeting_042.mp4 · 第 3.2 秒</span>
+        <span>3 face tracks · 1 audio stream</span>
+        <span class="st" id="sceneState">点击你认为在说话的那张脸 →</span>
+      </div>
+      <svg id="hero" viewBox="0 0 900 340" role="img" aria-label="三张人脸的检测框与一条音频波形，三张嘴都在动，需要判断谁在说话"></svg>
+      <div class="verdict-bar" id="heroVerdict">
+        <span class="vh n mono">待判定</span> 三张脸的嘴都在动，所以<b>"嘴动 = 说话"是错的</b>。也别指望音频——音轨里确实有清晰的人声，但音频自己不会告诉你声音属于画面里的哪张脸，甚至不会告诉你说话人是否在画面里。
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ===== 是什么 ===== -->
+<section id="what">
+  <div class="wrap">
+    <div class="eyebrow"><span class="kind">问题</span><span class="line"></span></div>
+    <h2>它解决什么、不解决什么</h2>
+    <p class="lead">ASD 的定义可以写得非常窄，而这个"窄"正是它好用的原因：<b>给定一张脸在一段时间内的连续画面，加上同一时段的音频，判断这个人在每一帧是否正在发出可听见的语音。</b>不认人、不转写、不分离声音——只回答"是不是他，此刻，在说"。</p>
+
+    <div class="iospec">
+      <div class="side">
+        <h4>INPUT · 输入</h4>
+        <div class="item v"><span class="k">face track</span> 一条人脸轨迹：连续帧上同一个人的人脸裁剪图（通常已对齐到固定尺寸）</div>
+        <div class="item a"><span class="k">audio</span> 同一时段的整段音频（<b>不是</b>这个人的独立音轨——现实中拿不到）</div>
+      </div>
+      <div class="mid"><span class="fn">ASD</span><span class="fs">f(face_track, audio)<br>→ score per frame</span></div>
+      <div class="side">
+        <h4>OUTPUT · 输出</h4>
+        <div class="item"><span class="k">per-frame score</span> 该轨迹每一帧的说话置信分，阈值化后得到 0/1</div>
+        <div class="item"><span class="k">→ 时间轴</span> 聚合后即"这个人在 [1.2s, 4.7s] 说话"的区间</div>
+      </div>
+    </div>
+    <p class="note">注意"轨迹"而不是"帧"是处理单位：单帧的嘴形几乎没有信息量，判断说话必须看一段时间。这个约定贯穿整个领域。</p>
+
+    <div class="grid3" style="margin-top:26px">
+      <div class="card rail-a"><span class="lbl">为什么音频不够</span><h3>音频是"混"的</h3><p>麦克风收到的是<span class="k">一路混合信号</span>。它能告诉你"有人在说话"（这是 VAD 的活），但当画面里有三个人、或说话人根本不在画面里（画外音、背景人声）时，音频没有任何空间线索能指认是谁。</p></div>
+      <div class="card rail-v"><span class="lbl">为什么视觉不够</span><h3>嘴动 ≠ 在说</h3><p>咀嚼、打哈欠、微笑、跟唱、无声地做口型、甚至只是转头造成的嘴部形变，都会产生和说话高度相似的唇部运动。反过来，说话时嘴的动作也可能极小（低声、侧脸、被麦克风遮挡）。</p></div>
+      <div class="card rail-y"><span class="lbl">所以核心信号是</span><h3>音画同步性</h3><p>唯一可靠的判据是<span class="k">这张嘴的运动与这段声音在时间上是否对应</span>：音节的起止、能量的涨落、张合的节奏能不能对上。ASD 本质上是一个<b>跨模态时间对应性</b>问题，而不是"识别嘴形"或"识别声音"。</p></div>
+    </div>
+
+    <h3 style="margin-top:34px">和它长得像的那些任务</h3>
+    <p class="lead" style="margin-bottom:14px">初学者最容易把 ASD 和下面几个混为一谈。区分它们的关键是问三个问题：<b>输入有没有视频？输出是不是绑定到某张脸？需不需要知道"这个人是谁"？</b></p>
+    <div class="tscroll"><table>
+      <thead><tr><th>任务</th><th>输入</th><th>输出</th><th>它回答的问题</th><th>与 ASD 的关系</th></tr></thead>
+      <tbody>
+        <tr><td class="k">VAD<br><span class="note">语音活动检测</span></td><td>纯音频</td><td>时间段 0/1</td><td>此刻<b>有没有人</b>在说话</td><td>ASD 的必要不充分条件；VAD 说"有"，ASD 才需要回答"是谁"</td></tr>
+        <tr class="self"><td>ASD<br><span class="note">活跃说话人检测</span></td><td>视频 + 音频</td><td>每条人脸轨迹逐帧 0/1</td><td>屏幕上<b>这张脸</b>此刻在说话吗</td><td>——</td></tr>
+        <tr><td class="k">Speaker Diarization<br><span class="note">说话人日志</span></td><td>音频（可选视频）</td><td>"谁在何时说"的分段</td><td>把语音切成<b>不同身份</b>的段</td><td>ASD 是它的视觉增强模块：ASD 给"脸-时间"，还需要人脸聚类才能得到"身份-时间"</td></tr>
+        <tr><td class="k">Lip Reading / AVSR<br><span class="note">唇读 / 视听语音识别</span></td><td>唇部视频（+音频）</td><td>文字</td><td>他说了<b>什么内容</b></td><td>典型下游：先用 ASD 挑出真正在说话的片段，再做识别；也常共享视觉前端</td></tr>
+        <tr><td class="k">Sound Source Localization<br><span class="note">声源定位</span></td><td>多麦克风阵列 / 音视频</td><td>方位角或热力图</td><td>声音<b>从哪个方向</b>来</td><td>另一条技术路线；靠几何而非语义，需要阵列硬件，单目视频用不了</td></tr>
+        <tr><td class="k">Speaker Verification<br><span class="note">声纹识别</span></td><td>音频</td><td>身份 / 相似度</td><td>说话的<b>是不是某个人</b></td><td>正交能力；ASD 完全不关心身份，换个人只要脸在动就照样判</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note" style="margin-top:10px">一句话记忆：VAD 回答 <b>有没有</b>，ASD 回答 <b>是不是这张脸</b>，Diarization 回答 <b>是不是同一个人</b>，ASR 回答 <b>说了什么</b>。</p>
+  </div>
+</section>
+
+<!-- ===== 证据矩阵 ===== -->
+<section id="matrix">
+  <div class="wrap">
+    <div class="eyebrow"><span class="kind">最小例子</span><span class="line"></span></div>
+    <h2>四种情况，就能说清为什么必须做融合</h2>
+    <p class="lead">把两条单模态线索各自二值化——<b style="color:var(--aud)">音频里有没有语音</b>、<b style="color:var(--vis)">这张嘴动没动</b>——一共只有四种组合。这是一个可以在自己视频上手工验证的最小例子：找几个片段对号入座，你会立刻看到单模态判据在哪两格上崩掉。点击任意一格。</p>
+    <div class="mx" id="mx">
+      <div class="corner"></div>
+      <div class="colhead">音频：有语音</div>
+      <div class="colhead">音频：无语音</div>
+      <div class="rowhead">视觉：<br>嘴在动</div>
+      <button class="cell" data-c="0"></button>
+      <button class="cell" data-c="1"></button>
+      <div class="rowhead">视觉：<br>嘴不动</div>
+      <button class="cell" data-c="2"></button>
+      <button class="cell" data-c="3"></button>
+    </div>
+    <div class="mx-detail" id="mxDetail"></div>
+    <p class="note" style="margin-top:12px">结论：对角线（左上、右下）两格靠任何单一线索都能蒙对，真正的难度全部集中在<b>左上格内部的歧义</b>——"有语音 + 嘴在动"既可能是他在说，也可能是他在嚼东西而旁边的人在说。要拆开这一格，只剩下一条路：看这段声音和这张嘴动<b>是不是同一件事的两个侧面</b>。</p>
+  </div>
+</section>
+
+<!-- ===== 同步实验台 ===== -->
+<section id="scope">
+  <div class="wrap">
+    <div class="eyebrow"><span class="kind">动手实验台</span><span class="line"></span></div>
+    <h2>亲手量一次"音画同步性"</h2>
+    <p class="lead">下面是一个可操作的简化实验台。<span style="color:var(--vis)">蓝色曲线</span>是从视频里量出的<b>唇部张合度</b>，<span style="color:var(--aud)">品红曲线</span>是同一时段的<b>音频能量包络</b>。你可以左右平移音频，用皮尔逊相关系数 r 当作"同步性"的粗糙度量，右边的<b>互相关曲线</b>展示了所有平移量下的 r。三个案例、三种窗长，请依次试完——真实模型学到的东西，本质上就是这条曲线的高级版本。</p>
+    <div class="scope">
+      <div class="scope-head">
+        <span class="t">CASE</span>
+        <button class="chip on" data-case="speak">① 他真的在说话</button>
+        <button class="chip" data-case="chew">② 他在咀嚼，旁边的人在说</button>
+        <button class="chip" data-case="dub">③ 音画不同步（配音 / 转码漂移）</button>
+        <span class="t" style="margin-left:14px">窗长</span>
+        <button class="chip" data-win="0.4">0.4s</button>
+        <button class="chip" data-win="1.2">1.2s</button>
+        <button class="chip on" data-win="3.0">3.0s</button>
+      </div>
+      <div class="scope-body">
+        <div class="scope-left">
+          <svg id="traces" viewBox="0 0 640 250" role="img" aria-label="唇部张合度与音频能量包络的双轨曲线，可平移音频"></svg>
+          <div class="ctrl">
+            <div class="row">
+              <label for="offset">音频平移 Δ</label>
+              <input type="range" id="offset" min="-500" max="500" value="0" step="10">
+              <span class="val" id="offVal">0 ms</span>
+            </div>
+            <div class="btns">
+              <button class="chip" id="autoAlign">自动对齐（找 r 的峰值）</button>
+              <button class="chip" id="resetOff">归零</button>
+            </div>
+          </div>
+        </div>
+        <div class="scope-right">
+          <svg id="xcorr" viewBox="0 0 300 150" role="img" aria-label="互相关曲线：不同平移量下的相关系数"></svg>
+          <div class="readout" id="readout"></div>
+          <div class="decision" id="decision"></div>
+        </div>
+      </div>
+      <div class="scope-foot" id="scopeFoot"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 系统怎么搭 ===== -->
+<section id="system">
+  <div class="wrap">
+    <div class="eyebrow"><span class="kind">机制</span><span class="line"></span></div>
+    <h2>从"量相关系数"到一个真的 ASD 系统</h2>
+    <p class="lead">上面的实验台有两个致命简化：真实的唇部张合度<b>没人给你</b>（需要从像素里学），而且音画的对应关系<b>远不是线性相关</b>（同一句话可以嘴张得大或小、快或慢）。所以现代 ASD 用神经网络把"提取特征"和"度量对应性"一起学出来。整条链路长这样——点开每一步。</p>
+    <div class="flow" id="flow"></div>
+    <div class="fdetail" id="fdetail"></div>
+    <p class="note" style="margin-top:12px">注意第 1–3 步全是<b>非学习的工程环节</b>，却决定了后面模型能不能工作。ASD 落地失败的案例里，一多半死在这三步而不是模型上。</p>
+  </div>
+</section>
+
+<!-- ===== 设计取舍 ===== -->
+<section id="axes">
+  <div class="wrap">
+    <div class="eyebrow"><span class="kind">取舍</span><span class="line"></span></div>
+    <h2>三条设计轴：不同 ASD 方法的分歧点全在这里</h2>
+    <p class="lead">领域里的各种方法看起来眼花缭乱，但绝大多数差异可以归到这三条轴上。读论文或选型时，先在这三条轴上定位它，就不会被名词淹没。</p>
+
+    <div class="axis">
+      <div class="ah"><span class="an">轴一 · 时间跨度</span><span class="aq">一次判断要看多长的上下文？</span></div>
+      <div class="ab">
+        <div class="opt l"><span class="on">短窗（0.2 ~ 0.5s）</span><p>只看几帧的嘴动 + 一小段声音。早期方法的主流做法，接近"同步检测器"。</p><span class="cost">优势：延迟低、可流式 · 代价：极易被瞬时巧合骗到（回看实验台案例②的 0.4s 窗）</span></div>
+        <div class="opt r"><span class="on">长窗（1 ~ 6s）</span><p>把整条轨迹的长时序节奏纳入判断，用时序卷积或注意力聚合。目前主流。</p><span class="cost">优势：显著更稳、能利用说话的韵律结构 · 代价：延迟高、短片段样本吃亏、显存占用大</span></div>
+      </div>
+    </div>
+
+    <div class="axis">
+      <div class="ah"><span class="an">轴二 · 上下文范围</span><span class="aq">判断一张脸时，看不看同屏的其他脸？</span></div>
+      <div class="ab">
+        <div class="opt l"><span class="on">单轨迹独立判断</span><p>每条人脸轨迹单独打分，互不通信。实现简单、可并行、脸数任意。</p><span class="cost">优势：工程干净、易部署 · 代价：丢掉了强先验——同一时刻通常只有一个人在说</span></div>
+        <div class="opt r"><span class="on">跨人脸联合建模</span><p>把同屏多张脸放进同一个上下文里相互比较，"谁更像声音的来源"。近年提升精度的主要来源。</p><span class="cost">优势：利用互斥性与轮次结构，精度更高 · 代价：结构复杂、脸数变化难处理、推理更重</span></div>
+      </div>
+    </div>
+
+    <div class="axis">
+      <div class="ah"><span class="an">轴三 · 融合方式</span><span class="aq">两条模态在哪一层汇合？</span></div>
+      <div class="ab">
+        <div class="opt l"><span class="on">晚融合 / 拼接</span><p>两条流各自编码到底，最后拼起来过分类头。</p><span class="cost">优势：结构简单、单模态可复用预训练 · 代价：无法建模细粒度时间对齐，同步信息容易丢</span></div>
+        <div class="opt r"><span class="on">交叉注意力</span><p>让音频序列去"查询"视觉序列、反之亦然，在中间层就完成逐时刻对齐。</p><span class="cost">优势：直接对上"同步性"这个本质信号 · 代价：计算量与序列长度平方相关</span></div>
+      </div>
+    </div>
+    <p class="note" style="margin-top:6px">还有一条隐藏的轴：<b>训练时是否加单模态辅助损失</b>。只用融合后的损失，网络很容易走捷径——只靠音频判断"有没有人说话"就能拿到不错的准确率，视觉分支形同虚设。给每条流各加一个弱监督损失是常见的对策。</p>
+  </div>
+</section>
+
+<!-- ===== 误区与难例 ===== -->
+<section id="traps">
+  <div class="wrap">
+    <div class="eyebrow"><span class="kind">反例</span><span class="line"></span></div>
+    <h2>误区、难例与不适用场景</h2>
+    <p class="lead">下面每一条都是真实项目里付出过代价的地方。前四条是<b>概念误区</b>，后四条是<b>工程难例</b>。</p>
+
+    <details class="pit"><summary><span class="x">误区 1</span>把 ASD 当成"说话人日志"直接用</summary><div class="bd">ASD 的输出是<b>"轨迹 × 时间"</b>，不是"人 × 时间"。同一个人在镜头切换后会变成一条新轨迹，ASD 不知道这两条轨迹是同一个人；两个长得像的人也不会被区分。<div class="fix"><b>正确做法：</b>ASD 之后接人脸重识别/聚类（或声纹聚类）把轨迹归并成身份，才能得到真正的 diarization 结果。</div></div></details>
+
+    <details class="pit"><summary><span class="x">误区 2</span>以为它能处理"说话人不在画面里"的情况</summary><div class="bd">ASD 的假设是<b>封闭的</b>：它只能对检出的人脸打分。旁白、画外音、镜头外提问者说话时，正确输出是"所有脸都不在说话"——但很多模型会把此时的语音错误地归给某张恰好在动的嘴。这是评测集上常见的假阳性来源。<div class="fix"><b>正确做法：</b>把"无人说话"当作合法且高频的输出状态来对待，评估时单独统计这类片段；必要时用一个独立的 VAD 做交叉校验。</div></div></details>
+
+    <details class="pit"><summary><span class="x">误区 3</span>只要嘴动就是说话 / 只要有语音就有人在说</summary><div class="bd">这两条捷径在数据集上都能拿到看起来不错的分数，因为大部分样本落在证据矩阵的对角线上。<b>模型也会学到这个捷径</b>——如果不加约束，网络倾向于退化成一个 VAD。判断一个 ASD 模型有没有真正学到同步性，有个简单的诊断：<code>把音频替换成同类型但错误的语音</code>，看输出会不会掉下来；不掉，说明它根本没在听。<div class="fix"><b>正确做法：</b>训练时构造"错误配对"的负样本（同一张脸配别人的语音、或时间偏移过的语音），逼模型学对应关系而不是存在性。</div></div></details>
+
+    <details class="pit"><summary><span class="x">误区 4</span>换一个人脸检测器是"即插即用"的</summary><div class="bd">这是最隐蔽的一条。ASD 模型吃的是<b>裁剪并对齐后的人脸图</b>，不同检测器给出的框大小、松紧、居中方式都不一样。用 A 检测器裁的数据训练、用 B 检测器裁的数据推理，输入分布已经偏移，精度会<b>无声地</b>下降——不报错、不崩溃，只是变差。<div class="fix"><b>正确做法：</b>推理端严格复刻训练时的检测器与裁剪参数（外扩比例、对齐方式、灰度化与归一化常数）；若必须换，要么重训，要么先做一次可比实验确认掉点幅度。</div></div></details>
+
+    <details class="pit"><summary><span class="x">难例 1</span>侧脸、小脸、遮挡与低分辨率</summary><div class="bd">视觉分支依赖可见的唇部区域。侧脸超过一定角度、脸在画面里只有几十像素、被话筒或手遮住嘴时，视觉证据接近于零，模型只能退化为靠音频猜。会议全景镜头、监控视角、后排听众是重灾区。<div class="fix"><b>缓解：</b>对脸的尺寸/姿态做门控，低于阈值时输出"不确定"而不是硬判；下游逻辑要能接受三值输出。</div></div></details>
+
+    <details class="pit"><summary><span class="x">难例 2</span>短片段与边界帧</summary><div class="bd">长时序方法在轨迹短于 1 秒时几乎没有优势可言，而镜头频繁切换的影视素材里短轨迹非常多。另外说话的<b>起止边界</b>天然模糊——起音前的张嘴、句末的余音都算不算，标注标准本身就有分歧。<div class="fix"><b>缓解：</b>对输出做时间平滑（滑动平均或中值滤波）再阈值化，并在评测时区分"片段级"与"帧级"指标。</div></div></details>
+
+    <details class="pit"><summary><span class="x">难例 3</span>重叠语音与合唱</summary><div class="bd">两人同时说话时，音频能量包络是两个人的叠加，与任一张嘴的运动都只有部分相关。多数模型此时会两张脸都给高分或都给低分。齐声朗读、跟唱、翻译同传场景同理。<div class="fix"><b>缓解：</b>接受多标签输出（允许同帧多人说话），不要在系统里硬编码"同时只有一人说话"的假设。</div></div></details>
+
+    <details class="pit"><summary><span class="x">难例 4</span>后期音频：配音、转码漂移、静音替换</summary><div class="bd">影视剧的配音本就与口型不严格同步（尤其译制片）；转码或直播链路带来的固定音视频偏移（几十到几百毫秒）会系统性地拉低所有样本的同步性；背景音乐或加了强噪声的音轨会淹没能量包络。实验台的案例③演示的正是这种情况：<b>互相关有明显峰值但不在零点</b>。<div class="fix"><b>缓解：</b>先做全局音视频对齐（估计一个恒定偏移并补偿），这比重训模型便宜得多；对译制内容直接标记为不适用场景。</div></div></details>
+
+    <div class="grid2" style="margin-top:22px">
+      <div class="card rail-y"><span class="lbl">适合用 ASD</span><ul>
+        <li>会议 / 访谈 / 播客录像的<span class="k">说话人时间轴</span>生成</li>
+        <li>自动导播、说话人特写切换（可接受数百毫秒延迟时）</li>
+        <li>构建视听数据集：从海量视频里筛出<span class="k">口型与语音真正对齐</span>的干净片段</li>
+        <li>为字幕/翻译标注"这句话是谁说的"</li>
+      </ul></div>
+      <div class="card rail-n"><span class="lbl">不适合 / 先别用</span><ul>
+        <li>画面里根本<span class="k">没有可见人脸</span>的音频（此时该用 VAD + 声纹）</li>
+        <li>需要<span class="k">严格实时、低于百毫秒延迟</span>的链路——长时序方法天然不满足</li>
+        <li>只想知道"有没有人在说"——用 VAD，便宜几个数量级</li>
+        <li>译制配音内容、口型与语音本就不同源的素材</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 评测 ===== -->
+<section id="eval">
+  <div class="wrap">
+    <div class="eyebrow"><span class="kind">评测</span><span class="line"></span></div>
+    <h2>为什么不看准确率，而看 mAP</h2>
+    <div class="grid2">
+      <div class="card rail-w"><span class="lbl">陷阱</span><h3>类别极不平衡</h3><p>在多人场景里，任意时刻绝大多数脸都<b>不在</b>说话。一个永远输出"没说话"的模型，帧级准确率可以轻松到 80% 以上。<b>准确率在这个任务上几乎不携带信息。</b></p></div>
+      <div class="card rail-y"><span class="lbl">标准做法</span><h3>用 mAP / F1，并给出阈值曲线</h3><p>学术评测普遍用<b>帧级 mAP</b>（在 AVA-ActiveSpeaker 上）或<b>F1</b>（在小规模的 Columbia 等集上）。它们对正类稀疏不敏感，也不需要事先选定阈值。工程上还应报告 precision-recall 曲线，因为不同下游对误报/漏报的容忍度差别极大。</p></div>
+    </div>
+    <div class="tscroll" style="margin-top:18px"><table>
+      <thead><tr><th>你要判断的事</th><th>该看的指标</th><th>为什么</th></tr></thead>
+      <tbody>
+        <tr><td class="k">模型整体好不好</td><td class="mono">帧级 mAP</td><td>与阈值无关，对不平衡稳健，是横向比较论文的通用语言</td></tr>
+        <tr><td class="k">上线用哪个阈值</td><td class="mono">PR 曲线 + 业务代价</td><td>导播场景怕误切（重 precision），检索场景怕漏掉（重 recall）</td></tr>
+        <tr><td class="k">时间轴准不准</td><td class="mono">片段级 IoU / 边界误差</td><td>帧级指标对"起止各偏 5 帧"不敏感，但下游剪辑很在意</td></tr>
+        <tr><td class="k">有没有退化成 VAD</td><td class="mono">错配音频的消融</td><td>把音频换成不匹配的语音，分数不掉说明视觉分支没起作用</td></tr>
+        <tr><td class="k">难例上表现如何</td><td class="mono">按脸尺寸/人数分桶</td><td>总体 mAP 会被大量简单样本拉高，必须分桶看小脸、多人、短轨迹</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note" style="margin-top:10px">标注口径也要留意：主流数据集会区分"说话且可听见"与"说话但听不见"（远处的人张嘴但声音没被录到），后者在最终评测中通常被<b>合并进"未说话"</b>——因为任务定义的是"可听见的语音"。用自己的数据时先把这条口径定死，否则标注一致性会很难看。</p>
+  </div>
+</section>
+
+<!-- ===== 怎么用 ===== -->
+<section id="use">
+  <div class="wrap">
+    <div class="eyebrow"><span class="kind">迁移</span><span class="line"></span></div>
+    <h2>把它接进自己的系统</h2>
+    <div class="grid3">
+      <div class="card rail-v"><span class="lbl">上游你必须自己保证</span><h3>检测与跟踪的质量</h3><p>脸检不出来，ASD 就无从谈起；轨迹接错（跨镜头把两个人接成一条）会直接产出错误的时间轴。<b>先把镜头切分做对</b>，跟踪只在镜头内部进行。</p></div>
+      <div class="card rail-a"><span class="lbl">中间必须对齐的三件事</span><h3>帧率、采样率、裁剪</h3><p>视频统一到固定帧率（常见 25fps），音频统一到 16kHz 单声道，人脸裁剪严格复刻训练配置。这三条任何一条不一致，都会以"精度莫名偏低"的形式表现出来。</p></div>
+      <div class="card rail-y"><span class="lbl">下游你还要补的</span><h3>平滑、聚合、归并</h3><p>逐帧分数要先平滑再阈值化；连续区间聚合成段并丢弃过短的段；需要"谁"的话，再用人脸聚类把轨迹归并到身份。</p></div>
+    </div>
+
+    <div class="close">
+      <h3>如果只记三句话</h3>
+      <p>第一，<b>ASD 的本质不是"识别说话"，而是"度量一段声音和一张嘴是不是同一件事"</b>。理解了这一点，所有模型结构上的选择——长时序、交叉注意力、错配负样本——都会变得顺理成章。</p>
+      <p>第二，<b>它的难点在歧义而不在识别</b>：真正难的样本永远是"有语音 + 嘴在动"这一格里的内部区分，评测和调试都应该往这里使劲。</p>
+      <p>第三，<b>它是一个中间件，不是一个答案</b>。上游给它人脸轨迹，下游拿走时间轴。单独的 ASD 输出对业务几乎没有直接价值，价值在于把它接进那条链路里。</p>
+      <div class="kv">
+        <div><span class="n">最小可跑通路径</span><span class="t">取一段双人对话视频 → 人脸检测+跟踪 → 用开源预训练 ASD 模型逐轨迹打分 → 平滑后画框，肉眼验收</span></div>
+        <div><span class="n">最先该做的诊断</span><span class="t">换掉音频跑一遍。分数不变，说明模型在偷懒，一切调参都是浪费</span></div>
+        <div><span class="n">最容易被忽略的成本</span><span class="t">人脸检测通常比 ASD 模型本身贵得多，是端到端吞吐的真正瓶颈</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    本页为 Active Speaker Detection 的概念讲解，非特定实现文档；实验台中的信号为便于理解而合成，用皮尔逊相关系数近似"同步性"，真实系统由神经网络端到端学习该对应关系。<br>
+    单文件、无外部依赖、可离线打开。
+  </div>
+</footer>
+
+<script>
+const NS='http://www.w3.org/2000/svg';
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function txt(parent,x,y,s,attrs){const t=el('text',Object.assign({x,y},attrs||{}),parent);t.textContent=s;return t;}
+const REDUCE=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const C={aud:'#C0246A',vis:'#1657C7',ink:'#0C131F',mid:'#56657E',faint:'#93A0B6',rule:'#C9D1DF',rule2:'#DFE4EC',yes:'#0B7A4B',warn:'#A85C00',paper:'#F4F6FA'};
+
+/* ============ shared signal helpers ============ */
+function bumpTrain(times,width,amps){return t=>{let s=0;for(let i=0;i<times.length;i++){const d=t-times[i];s+=(amps?amps[i]:1)*Math.exp(-(d*d)/(2*width*width));}return s;};}
+function jitter(t,seed){return 0.06*Math.sin(t*37.1+seed)+0.04*Math.sin(t*61.7+seed*2)+0.03*Math.sin(t*13.3+seed*3);}
+
+/* ================================================================
+   HERO — 一路声音，三张脸
+   ================================================================ */
+(function(){
+  const svg=document.getElementById('hero'); if(!svg)return;
+  const DUR=6.0;
+  const syl=[0.35,0.62,0.9,1.5,1.78,2.1,2.42,2.9,3.2,3.5,3.8,4.15,4.6,4.95,5.3,5.6];
+  const ampA=[.8,.85,.95,.9,.7,.85,.8,.95,.9,.8,.75,.9,.85,.8,1,.7];
+  const ampL=[.9,.7,1,.85,.6,.95,.7,1,.75,.9,.65,.85,.95,.7,.9,.8];
+  const audio=bumpTrain(syl,0.075,ampA);
+  const lipSpeak=bumpTrain(syl,0.085,ampL);
+  const syl3=[0.15,0.5,0.78,1.15,1.95,2.25,2.6,3.05,3.9,4.3,4.7,5.15,5.75];
+  const lipMime=bumpTrain(syl3,0.09,syl3.map(()=>0.85));
+  const F=[
+    {id:'face_01',cx:150,label:'左',lip:t=>0.30+0.70*Math.max(0,Math.sin(2*Math.PI*1.35*t)),
+     kind:'w',title:'不是他。他在<b>咀嚼</b>。',
+     why:'嘴动得很规律，但那是 1.35 Hz 的周期性咬合——把它的曲线和音频包络叠在一起看：<b>波峰完全对不上</b>。语音的节奏是不规则的音节序列，咀嚼是近似正弦的匀速运动。'},
+    {id:'face_02',cx:450,label:'中',lip:t=>0.18+0.82*Math.min(1,lipSpeak(t)),
+     kind:'y',title:'就是他。',
+     why:'他的唇部张合曲线和音频能量包络<b>逐个音节对齐</b>：声音起，嘴就张；声音落，嘴就合。这种时间上的对应关系，是把语音归属到这张脸的唯一充分证据。'},
+    {id:'face_03',cx:750,label:'右',lip:t=>0.20+0.80*Math.min(1,lipMime(t)),
+     kind:'w',title:'不是他。他在<b>小声跟旁边人说话</b>（没被麦克风收到）。',
+     why:'这是最有迷惑性的一个：他的嘴动<b>看起来非常像在说话</b>——不规则的音节式张合，和真正的说话者难以用肉眼区分。但把曲线叠到音频上就露馅了：他的音节和这段声音<b>各说各的</b>，峰值互相错开。'}
+  ];
+  // scenery
+  el('rect',{x:0,y:0,width:900,height:340,fill:'#FFFFFF'},svg);
+  el('rect',{x:0,y:236,width:900,height:104,fill:C.paper},svg);
+  el('line',{x1:0,y1:236,x2:900,y2:236,stroke:C.rule2},svg);
+
+  const mouths=[],boxes=[],labels=[];
+  F.forEach((f,i)=>{
+    const g=el('g',{class:'face-hit',tabindex:'0',role:'button','aria-label':f.id+' 判定为说话人'},svg);
+    const cx=f.cx, cy=112;
+    // detector box
+    const box=el('rect',{x:cx-64,y:cy-78,width:128,height:150,fill:'none',stroke:C.faint,'stroke-width':1.6,class:'fbox'},g);
+    el('rect',{x:cx-64,y:cy-78,width:128,height:150,fill:'transparent'},g); // hit area
+    [[-64,-78,1,1],[64,-78,-1,1],[-64,72,1,-1],[64,72,-1,-1]].forEach(([x,y,sx,sy])=>{
+      el('path',{d:`M ${cx+x} ${cy+y+sy*16} L ${cx+x} ${cy+y} L ${cx+x+sx*16} ${cy+y}`,fill:'none',stroke:C.ink,'stroke-width':2.2},g);
+    });
+    txt(g,cx-64,cy-86,f.id,{'font-family':'ui-monospace,monospace','font-size':11,fill:C.faint});
+    // wireframe face
+    const fg=el('g',{stroke:C.ink,fill:'none','stroke-width':1.3,'stroke-linecap':'round'},g);
+    el('path',{d:`M ${cx-34} ${cy-24} C ${cx-38} ${cy+18}, ${cx-20} ${cy+50}, ${cx} ${cy+52} C ${cx+20} ${cy+50}, ${cx+38} ${cy+18}, ${cx+34} ${cy-24}`},fg);
+    el('path',{d:`M ${cx-34} ${cy-24} C ${cx-32} ${cy-58}, ${cx+32} ${cy-58}, ${cx+34} ${cy-24}`,'stroke-dasharray':'2 3',stroke:C.faint},fg);
+    el('path',{d:`M ${cx-26} ${cy-30} q 10 -7 20 -1`},fg);
+    el('path',{d:`M ${cx+6} ${cy-31} q 10 -6 20 1`},fg);
+    el('circle',{cx:cx-16,cy:cy-16,r:3.4,fill:C.ink},fg);
+    el('circle',{cx:cx+16,cy:cy-16,r:3.4,fill:C.ink},fg);
+    el('path',{d:`M ${cx} ${cy-10} L ${cx-4} ${cy+8} L ${cx+3} ${cy+9}`},fg);
+    // landmark dots along jaw
+    for(let k=0;k<=8;k++){const a=Math.PI*(0.12+0.76*k/8);const px=cx-Math.cos(a)*33, py=cy-24+Math.sin(a)*66;el('circle',{cx:px,cy:py,r:1.5,fill:C.faint,stroke:'none'},fg);}
+    // mouth
+    const mg=el('g',{},g);
+    const lip=el('ellipse',{cx:cx,cy:cy+26,rx:15,ry:2,fill:'rgba(12,19,31,.86)',stroke:'none'},mg);
+    el('path',{d:`M ${cx-19} ${cy+26} q 19 -8 38 0`,fill:'none',stroke:C.ink,'stroke-width':1.2},mg);
+    txt(g,cx,cy+96,f.label+'侧的人',{'text-anchor':'middle','font-size':12.5,fill:C.mid,'font-family':'ui-monospace,monospace'});
+    mouths.push(lip);boxes.push(box);
+    const pick=()=>select(i);
+    g.addEventListener('click',pick);
+    g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();}});
+  });
+
+  // audio strip
+  txt(svg,26,258,'AUDIO ENVELOPE · 单路混合音频',{'font-family':'ui-monospace,monospace','font-size':10.5,fill:C.aud,'letter-spacing':'.6'});
+  const X0=26,X1=874,BASE=322,H=54;
+  const bars=el('g',{},svg);
+  const NB=170;
+  for(let i=0;i<NB;i++){
+    const t=i/NB*DUR, v=Math.min(1,Math.max(0,audio(t)+jitter(t,2)*0.5));
+    const h=4+v*H, x=X0+i/NB*(X1-X0);
+    el('rect',{x:x,y:BASE-h,width:(X1-X0)/NB-1.4,height:h,fill:C.aud,opacity:.30+v*.55},bars);
+  }
+  const lipTrace=el('path',{d:'',fill:'none',stroke:C.vis,'stroke-width':2,opacity:0},svg);
+  const traceLbl=txt(svg,300,258,'',{'font-family':'ui-monospace,monospace','font-size':10.5,fill:C.vis,opacity:0});
+  const head=el('line',{x1:X0,y1:246,x2:X0,y2:BASE+4,stroke:C.ink,'stroke-width':1.2,opacity:.55},svg);
+
+  let sel=-1, t=0, raf=null, last=null;
+  const state=document.getElementById('sceneState'), vb=document.getElementById('heroVerdict');
+  function drawTrace(i){
+    let d='';
+    for(let k=0;k<=200;k++){const tt=k/200*DUR;const v=Math.min(1,F[i].lip(tt));const x=X0+k/200*(X1-X0);const y=BASE-4-v*(H-4);d+=(k?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)+' ';}
+    lipTrace.setAttribute('d',d);lipTrace.setAttribute('opacity','.95');
+    traceLbl.textContent='◆ '+F[i].id+' 唇部张合度（叠加对比）';traceLbl.setAttribute('opacity','1');
+  }
+  function select(i){
+    sel=i;
+    boxes.forEach((b,j)=>{
+      b.setAttribute('stroke', j===i? (F[j].kind==='y'?C.yes:C.warn) : C.faint);
+      b.setAttribute('stroke-width', j===i? 3 : 1.6);
+    });
+    drawTrace(i);
+    const f=F[i];
+    state.textContent='已选 '+f.id+' · 点其他脸继续对比';
+    vb.innerHTML=`<span class="vh ${f.kind==='y'?'y':'w'} mono">${f.kind==='y'?'✓ 正确':'✗ 不是他'}</span> ${f.title} ${f.why}`
+      + (f.kind==='y'? ' <b>这就是 ASD 的判据。</b>' : ' <span style="color:var(--faint)">试试另外两张脸。</span>');
+  }
+  function frame(ts){
+    if(last!=null) t=(t+(ts-last)/1000)%DUR; last=ts;
+    for(let i=0;i<F.length;i++){
+      const v=Math.min(1,Math.max(0,F[i].lip(t)));
+      mouths[i].setAttribute('ry',(1.2+v*11).toFixed(2));
+      mouths[i].setAttribute('rx',(15-v*2.5).toFixed(2));
+    }
+    const x=X0+t/DUR*(X1-X0);head.setAttribute('x1',x);head.setAttribute('x2',x);
+    raf=requestAnimationFrame(frame);
+  }
+  if(REDUCE){ t=2.1; for(let i=0;i<F.length;i++){const v=Math.min(1,Math.max(0,F[i].lip(t)));mouths[i].setAttribute('ry',(1.2+v*11).toFixed(2));} head.setAttribute('opacity',0);}
+  else raf=requestAnimationFrame(frame);
+})();
+
+/* ================================================================
+   2x2 evidence matrix
+   ================================================================ */
+(function(){
+  const cells=[
+    {t:'歧义格 · 全部难度在这里',ex:'他在说话 ／ 他在嚼东西而旁人在说 ／ 他跟着笑而画外音在说',gt:'?',gtc:'n',
+     h:'"有语音 + 嘴在动" —— 这一格无法用单模态拆开',
+     p:'现实中绝大多数误判都发生在这里。音频告诉你"有人在说"，视觉告诉你"这张嘴在动"，两条线索<b>各自都成立，但可能指向不同的人</b>。多人会议、餐桌对话、课堂场景里这一格的样本占比极高。',
+     a:{s:'在说话',ok:false},v:{s:'在说话',ok:false},real:'必须看同步性才能判定',realok:null},
+    {t:'无声口型',ex:'默念、做口型、打哈欠、咀嚼时全场安静',gt:'未说话',gtc:'n',
+     h:'"无语音 + 嘴在动" —— 视觉判据在这里翻车',
+     p:'音频里根本没有语音，那么无论嘴动得多像说话，正确答案都是"未说话"（ASD 定义的是<b>可听见的</b>语音）。只看视觉的模型会在这一格大量误报。',
+     a:{s:'没人说话 ✓',ok:true},v:{s:'在说话 ✗',ok:false},real:'未说话',realok:false},
+    {t:'画外音 / 旁人说话',ex:'镜头外提问、旁白、背景人声、他在安静听',gt:'未说话',gtc:'n',
+     h:'"有语音 + 嘴不动" —— 音频判据在这里翻车',
+     p:'语音存在，但不属于这张脸。只看音频的模型（退化成 VAD 的那种）会把这段语音<b>误归给画面里任意一张脸</b>。这也是"说话人不在画面里"这一合法状态的典型形态。',
+     a:{s:'在说话 ✗',ok:false},v:{s:'没在说 ✓',ok:true},real:'未说话',realok:false},
+    {t:'静默',ex:'全场安静、听众在听、空镜',gt:'未说话',gtc:'n',
+     h:'"无语音 + 嘴不动" —— 唯一没有争议的一格',
+     p:'两条线索一致，任何方法都能判对。数据集里这类样本占比很大，也正因如此，<b>帧级准确率会被这一格严重灌水</b>——这是评测必须用 mAP 而非 accuracy 的直接原因。',
+     a:{s:'没人说话 ✓',ok:true},v:{s:'没在说 ✓',ok:true},real:'未说话',realok:false}
+  ];
+  const wrap=document.getElementById('mx'),det=document.getElementById('mxDetail');
+  const btns=wrap.querySelectorAll('.cell');
+  btns.forEach((b,i)=>{
+    const c=cells[i];
+    b.innerHTML=`<span class="ttl">${c.t}</span><span class="ex">${c.ex}</span><span class="gt ${c.gtc}">真值：${c.gt}</span>`;
+    b.addEventListener('click',()=>show(i));
+  });
+  function show(i){
+    btns.forEach((b,j)=>b.classList.toggle('on',j===i));
+    const c=cells[i];
+    det.innerHTML=`<h4>${c.h}</h4><p>${c.p}</p>
+      <div class="judge">
+        <div class="j ${c.a.ok?'ok':'bad'}"><span class="who">只看音频会说</span><span class="say">${c.a.s}</span></div>
+        <div class="j ${c.v.ok?'ok':'bad'}"><span class="who">只看视觉会说</span><span class="say">${c.v.s}</span></div>
+        <div class="j ${c.realok===null?'':'ok'}"><span class="who">正确答案</span><span class="say" style="color:var(--ink)">${c.real}</span></div>
+      </div>`;
+  }
+  show(0);
+})();
+
+/* ================================================================
+   SYNCHRONY SCOPE (signature)
+   ================================================================ */
+(function(){
+  const FS=100,DUR=6.0,N=Math.round(FS*DUR),CENTER=3.0;
+  const syl=[0.35,0.62,0.9,1.5,1.78,2.1,2.42,2.9,3.2,3.5,3.8,4.15,4.6,4.95,5.3,5.6];
+  const ampL=[.9,.7,1,.85,.6,.95,.7,1,.75,.9,.65,.85,.95,.7,.9,.8];
+  const ampA=[.8,.85,.95,.9,.7,.85,.8,.95,.9,.8,.75,.9,.85,.8,1,.7];
+  const syl2=[0.2,0.55,1.1,1.4,1.9,2.3,2.7,3.35,3.7,4.2,4.55,5.0,5.45];
+  const f_lipSpeak=bumpTrain(syl,0.085,ampL), f_audSpeak=bumpTrain(syl,0.075,ampA);
+  const f_lipChew=t=>0.55+0.45*Math.sin(2*Math.PI*1.35*t), f_audOff=bumpTrain(syl2,0.08,syl2.map(()=>0.9));
+  const f_audDub=bumpTrain(syl.map(s=>s+0.28),0.075,ampA);
+  const ser=(f,seed)=>{const a=new Array(N);for(let i=0;i<N;i++){const t=i/FS;a[i]=Math.max(0,f(t)+jitter(t,seed));}return a;};
+  const CASES={
+    speak:{lip:ser(f_lipSpeak,1),aud:ser(f_audSpeak,2),
+      foot:'<b>这是"同步"长什么样。</b>互相关曲线有一个又高又尖的峰，而且正好落在 Δ=0 上——声音和嘴动是同一件事的两个侧面。把窗长切到 0.4s 你会发现结论依然成立，只是 r 开始抖动：真信号在任何窗长下都稳。'},
+    chew:{lip:ser(f_lipChew,3),aud:ser(f_audOff,4),
+      foot:'<b>这是最重要的一个案例。</b>在 3.0s 窗下，无论怎么平移音频，r 都上不去——互相关曲线是平的，没有峰，正确结论是"不是他"。但现在把窗长切到 <b>0.4s</b>：峰值会跳到 0.8 以上，给你一个自信而错误的结论。<b>这就是为什么现代 ASD 方法要看长时序上下文</b>——短窗里，任何周期性的嘴动都可能和某个音节偶然对齐。'},
+    dub:{lip:ser(f_lipSpeak,1),aud:ser(f_audDub,5),
+      foot:'<b>峰很高，但不在零点。</b>这说明音频和嘴动确实同源，只是整体错开了约 280ms——典型的转码/直播链路音视频漂移，或译制配音。此时把 Δ 拖到峰值位置，一切就对上了：<b>先做全局对齐再判断</b>，比重训模型便宜得多。反过来，如果你的系统里所有样本都在同一个非零 Δ 上达到峰值，那不是模型的问题，是链路的问题。'}
+  };
+  let curCase='speak',curWin=3.0,curOff=0;
+
+  function pearson(a,b){const n=a.length;if(n<3)return 0;let ma=0,mb=0;for(let i=0;i<n;i++){ma+=a[i];mb+=b[i];}ma/=n;mb/=n;
+    let va=0,vb=0,cv=0;for(let i=0;i<n;i++){const da=a[i]-ma,db=b[i]-mb;va+=da*da;vb+=db*db;cv+=da*db;}
+    if(va<1e-9||vb<1e-9)return 0;return cv/Math.sqrt(va*vb);}
+  function corrAt(center,win,off){
+    const lip=CASES[curCase].lip,aud=CASES[curCase].aud;
+    const half=Math.round(win*FS/2),c=Math.round(center*FS),o=Math.round(off*FS);
+    const A=[],B=[];
+    for(let i=c-half;i<c+half;i++){const j=i+o;if(i>=0&&i<N&&j>=0&&j<N){A.push(lip[i]);B.push(aud[j]);}}
+    return pearson(A,B);
+  }
+  function xcorrCurve(){const out=[];for(let k=-50;k<=50;k++){const off=k/100;out.push([off,corrAt(CENTER,curWin,off)]);}return out;}
+  function stability(off){
+    const half=curWin/2;const rs=[];
+    for(let c=half+0.05;c<=DUR-half-0.05;c+=0.1)rs.push(corrAt(c,curWin,off));
+    return [Math.min(...rs),Math.max(...rs)];
+  }
+
+  const tSvg=document.getElementById('traces'),xSvg=document.getElementById('xcorr');
+  const X0=42,X1=624,W=X1-X0;
+  function drawTraces(){
+    tSvg.innerHTML='';
+    const lip=CASES[curCase].lip,aud=CASES[curCase].aud;
+    // window shade
+    const wx0=X0+(CENTER-curWin/2)/DUR*W, wx1=X0+(CENTER+curWin/2)/DUR*W;
+    el('rect',{x:wx0,y:14,width:wx1-wx0,height:214,fill:'rgba(12,19,31,.055)'},tSvg);
+    el('line',{x1:wx0,y1:14,x2:wx0,y2:228,stroke:C.ink,'stroke-dasharray':'3 3','stroke-width':1},tSvg);
+    el('line',{x1:wx1,y1:14,x2:wx1,y2:228,stroke:C.ink,'stroke-dasharray':'3 3','stroke-width':1},tSvg);
+    txt(tSvg,(wx0+wx1)/2,241,'分析窗 '+curWin.toFixed(1)+'s',{'text-anchor':'middle','font-size':10.5,'font-family':'ui-monospace,monospace',fill:C.ink});
+    // axes
+    [[20,105,'唇部张合度 · 来自视频',C.vis],[133,218,'音频能量包络 · 来自声道',C.aud]].forEach(([yt,yb,label,col],idx)=>{
+      el('line',{x1:X0,y1:yb,x2:X1,y2:yb,stroke:C.rule},tSvg);
+      txt(tSvg,X0,yt-4,label,{'font-size':10.5,'font-family':'ui-monospace,monospace',fill:col});
+      const src=idx===0?lip:aud;
+      let d='',dArea='M '+X0+' '+yb+' ';
+      for(let k=0;k<=290;k++){
+        const t=k/290*DUR;
+        let v;
+        if(idx===0){v=src[Math.min(N-1,Math.max(0,Math.round(t*FS)))];}
+        else{const j=Math.round((t+curOff)*FS);v=(j>=0&&j<N)?src[j]:0;}
+        v=Math.min(1.35,v);
+        const x=X0+k/290*W, y=yb-(v/1.35)*(yb-yt);
+        d+=(k?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)+' ';dArea+='L '+x.toFixed(1)+' '+y.toFixed(1)+' ';
+      }
+      dArea+='L '+X1+' '+yb+' Z';
+      el('path',{d:dArea,fill:col,opacity:.10},tSvg);
+      el('path',{d,fill:'none',stroke:col,'stroke-width':1.8},tSvg);
+    });
+    // time ticks
+    for(let s=0;s<=6;s++){const x=X0+s/DUR*W;el('line',{x1:x,y1:218,x2:x,y2:222,stroke:C.faint},tSvg);txt(tSvg,x,233,s+'s',{'text-anchor':'middle','font-size':9.5,fill:C.faint,'font-family':'ui-monospace,monospace'});}
+    if(curOff!==0){
+      const dir=curOff>0?'← 音频已提前':'音频已延后 →';
+      txt(tSvg,X1,131,dir+' '+Math.abs(Math.round(curOff*1000))+'ms',{'text-anchor':'end','font-size':10,fill:C.aud,'font-family':'ui-monospace,monospace'});
+    }
+  }
+  function drawXcorr(curve,peak){
+    xSvg.innerHTML='';
+    const ax0=34,ax1=292,ay0=16,ay1=118;
+    txt(xSvg,0,10,'互相关：所有平移量下的 r',{'font-size':10.5,'font-family':'ui-monospace,monospace',fill:C.mid});
+    el('rect',{x:ax0,y:ay0,width:ax1-ax0,height:ay1-ay0,fill:'#FAFBFD',stroke:C.rule2},xSvg);
+    const yFor=r=>ay1-((r+1)/2)*(ay1-ay0), xFor=o=>ax0+((o+0.5)/1.0)*(ax1-ax0);
+    // grid
+    [-1,-0.5,0,0.5,1].forEach(r=>{
+      el('line',{x1:ax0,y1:yFor(r),x2:ax1,y2:yFor(r),stroke:r===0?C.faint:C.rule2,'stroke-dasharray':r===0?'':'2 3'},xSvg);
+      txt(xSvg,ax0-4,yFor(r)+3.5,r.toFixed(1),{'text-anchor':'end','font-size':9,fill:C.faint,'font-family':'ui-monospace,monospace'});
+    });
+    el('line',{x1:xFor(0),y1:ay0,x2:xFor(0),y2:ay1,stroke:C.faint,'stroke-dasharray':'2 3'},xSvg);
+    el('line',{x1:ax0,y1:yFor(0.6),x2:ax1,y2:yFor(0.6),stroke:C.yes,'stroke-dasharray':'4 3','stroke-width':1},xSvg);
+    txt(xSvg,ax1,yFor(0.6)-3,'判定门限 0.6',{'text-anchor':'end','font-size':8.5,fill:C.yes,'font-family':'ui-monospace,monospace'});
+    let d='';curve.forEach(([o,r],i)=>{d+=(i?'L':'M')+xFor(o).toFixed(1)+' '+yFor(r).toFixed(1)+' ';});
+    el('path',{d,fill:'none',stroke:C.ink,'stroke-width':1.8},xSvg);
+    // peak marker
+    el('circle',{cx:xFor(peak[1]),cy:yFor(peak[0]),r:3.6,fill:peak[0]>=0.6?C.yes:C.faint},xSvg);
+    // current offset marker
+    el('line',{x1:xFor(curOff),y1:ay0,x2:xFor(curOff),y2:ay1,stroke:C.aud,'stroke-width':1.4},xSvg);
+    txt(xSvg,ax0,ay1+13,'-500ms',{'font-size':9,fill:C.faint,'font-family':'ui-monospace,monospace'});
+    txt(xSvg,(ax0+ax1)/2,ay1+13,'Δ=0',{'text-anchor':'middle','font-size':9,fill:C.faint,'font-family':'ui-monospace,monospace'});
+    txt(xSvg,ax1,ay1+13,'+500ms',{'text-anchor':'end','font-size':9,fill:C.faint,'font-family':'ui-monospace,monospace'});
+  }
+  const readout=document.getElementById('readout'),decision=document.getElementById('decision'),foot=document.getElementById('scopeFoot');
+  function fmtR(r){return (r>=0?'+':'')+r.toFixed(2);}
+  function update(){
+    const curve=xcorrCurve();
+    let peak=[-2,0];curve.forEach(([o,r])=>{if(r>peak[0])peak=[r,o];});
+    const rNow=corrAt(CENTER,curWin,curOff);
+    const stab=stability(peak[1]);const spread=stab[1]-stab[0];
+    drawTraces();drawXcorr(curve,peak);
+    const barW=Math.abs(rNow)*50;
+    readout.innerHTML=`
+      <div class="meter"><div class="fill" style="left:${rNow>=0?50:50-barW}%;width:${barW}%;background:${rNow>=0.6?C.yes:(rNow>=0?C.faint:C.aud)}"></div><div class="zero"></div></div>
+      <div class="meter-lbl"><span>r = −1</span><span>0</span><span>+1</span></div>
+      <div class="r"><span class="n">当前 Δ 下的 r</span><span class="v" style="color:${rNow>=0.6?C.yes:C.ink}">${fmtR(rNow)}</span></div>
+      <div class="r"><span class="n">互相关峰值</span><span class="v" style="color:${peak[0]>=0.6?C.yes:C.ink}">${fmtR(peak[0])} @ ${(peak[1]>=0?'+':'')+Math.round(peak[1]*1000)}ms</span></div>
+      <div class="r"><span class="n">峰值处滑窗稳定性</span><span class="v" style="color:${spread>1?C.warn:C.ink};font-size:12.5px">r ∈ [${fmtR(stab[0])}, ${fmtR(stab[1])}]</span></div>
+      <div class="r"><span class="n">窗口内采样点</span><span class="v" style="font-size:12.5px">${Math.round(curWin*FS)} 帧</span></div>`;
+    let cls,label,why;
+    const unstable=spread>1.0;
+    if(peak[0]>=0.6&&Math.abs(peak[1])<=0.08&&!unstable){cls='y';label='SPEAKING · 判定为在说话';
+      why='峰值高（'+fmtR(peak[0])+'）且落在零点附近，滑窗时也稳定——嘴动与语音在整段时间上逐音节对应。';}
+    else if(peak[0]>=0.6&&unstable){cls='w';label='UNRELIABLE · 疑似巧合';
+      why='峰值看起来很高，但把窗口滑到别处，r 在 ['+fmtR(stab[0])+', '+fmtR(stab[1])+'] 之间剧烈摆动。<b>窗太短，高相关很可能只是偶然对齐</b>——换 3.0s 窗再看一次。';}
+    else if(peak[0]>=0.6){cls='w';label='OUT OF SYNC · 相关但不同步';
+      why='存在明显峰值，但偏移了 '+Math.round(peak[1]*1000)+'ms。声音与嘴动同源却整体错开，典型的音视频漂移或配音。'
+        + (Math.abs(curOff-peak[1])<=0.03
+           ? '<b>你现在已经把 Δ 对到峰值上了：补偿掉这个固定偏移后 r = '+fmtR(rNow)+'，这张脸就会被正确判为在说话。</b>'
+           : '把 Δ 拖到 '+Math.round(peak[1]*1000)+'ms 看看会发生什么。');}
+    else{cls='n';label='NOT SPEAKING · 判定为未说话';
+      why='互相关曲线没有超过门限的峰（最高仅 '+fmtR(peak[0])+'）——无论怎么平移，这段声音都对不上这张嘴的运动。';}
+    decision.className='decision '+cls;
+    decision.innerHTML='<span class="dv">'+label+'</span><span class="why">'+why+'</span>';
+    foot.innerHTML=CASES[curCase].foot;
+  }
+  document.querySelectorAll('.scope-head .chip').forEach(b=>{
+    b.addEventListener('click',()=>{
+      if(b.dataset.case){document.querySelectorAll('[data-case]').forEach(x=>x.classList.remove('on'));b.classList.add('on');curCase=b.dataset.case;}
+      else{document.querySelectorAll('[data-win]').forEach(x=>x.classList.remove('on'));b.classList.add('on');curWin=parseFloat(b.dataset.win);}
+      update();
+    });
+  });
+  const off=document.getElementById('offset'),offVal=document.getElementById('offVal');
+  function setOff(ms){curOff=ms/1000;off.value=ms;offVal.textContent=(ms>0?'+':'')+ms+' ms';update();}
+  off.addEventListener('input',()=>setOff(parseInt(off.value)));
+  document.getElementById('resetOff').addEventListener('click',()=>setOff(0));
+  document.getElementById('autoAlign').addEventListener('click',()=>{
+    const curve=xcorrCurve();let peak=[-2,0];curve.forEach(([o,r])=>{if(r>peak[0])peak=[r,o];});
+    const target=Math.round(peak[1]*1000/10)*10;
+    if(REDUCE){setOff(target);return;}
+    const start=Math.round(curOff*1000);const t0=performance.now();
+    (function step(now){const k=Math.min(1,(now-t0)/420);const e=1-Math.pow(1-k,3);
+      setOff(Math.round((start+(target-start)*e)/10)*10);if(k<1)requestAnimationFrame(step);})(t0);
+  });
+  update();
+})();
+
+/* ================================================================
+   pipeline flow
+   ================================================================ */
+(function(){
+  const steps=[
+    {ix:'01',nm:'人脸检测',md:'visual',m:'v',title:'逐帧找出画面里所有的脸',sub:'纯视觉，非学习目标之外的现成模块',
+     desc:'ASD 的作用域完全由这一步决定：<b>检不出的脸，永远不会被判为说话人</b>。小脸、侧脸、遮挡在这里就被丢掉了，后面再好的模型也救不回来。这一步通常也是整条链路里最慢的部分。',
+     io:'<span class="tag">输入</span> <span class="in">video frames</span><br><span class="tag">输出</span> <span class="out">每帧的人脸框列表</span>',
+     risk:'<b>风险：</b>检测器的选择会一路影响到最后——它决定了人脸裁剪的风格，而模型对裁剪风格非常敏感。'},
+    {ix:'02',nm:'镜头切分 + 跟踪',md:'visual',m:'v',title:'把逐帧的框串成"一个人的一段时间"',sub:'先切镜头，再在镜头内部关联',
+     desc:'处理单位必须从"帧"变成"轨迹"，因为判断说话需要一段连续时间。关联通常靠相邻帧检测框的重叠度。<b>务必先做镜头切分</b>：跨越剪辑点的关联会把两个不同的人接成一条轨迹，产出彻底错误的时间轴。',
+     io:'<span class="tag">输入</span> <span class="in">人脸框列表</span><br><span class="tag">输出</span> <span class="out">face tracks（帧号 + 框序列）</span>',
+     risk:'<b>风险：</b>过短的轨迹（&lt;1s）信息量不足，一般直接丢弃；但影视素材里短轨迹很多，丢弃率要监控。'},
+    {ix:'03',nm:'裁剪与特征对齐',md:'audio+visual',m:'av',title:'把轨迹变成模型能吃的标准输入',sub:'统一帧率、采样率、尺寸与归一化',
+     desc:'视觉侧：按框裁人脸、外扩一定比例、缩放到固定尺寸（常见 112×112）、常转灰度并做均值方差归一化。音频侧：重采样到 16kHz 单声道，提取 MFCC 或梅尔谱。两侧的<b>时间轴必须严格对齐</b>——视频 25fps、音频特征 100fps 时，一个视频帧正好对应 4 个音频特征帧。',
+     io:'<span class="tag">输入</span> <span class="in">face track + 整段音频</span><br><span class="tag">输出</span> <span class="out">(T×H×W) 人脸序列 + (4T×D) 音频特征</span>',
+     risk:'<b>风险：</b>这一步的任何参数（外扩比例、归一化常数、采样率）与训练时不一致，都会造成"不报错但精度下降"。'},
+    {ix:'04',nm:'双流时序编码',md:'audio+visual',m:'av',title:'各自把原始信号压成时间序列表征',sub:'视觉用 3D/2D 卷积 + 时序网络，音频用卷积网络',
+     desc:'视觉分支要学出的东西，本质上就是实验台里那条"唇部张合度"曲线的高维版本——但由网络自己决定看什么（唇形、下颌、面颊运动）。音频分支把频谱编码成同样帧率的序列。两条流输出<b>等长、等维、逐帧对齐</b>的表征，为下一步的比较做准备。',
+     io:'<span class="tag">输入</span> <span class="in">人脸序列 / 音频特征</span><br><span class="tag">输出</span> <span class="out">视觉 (T×d) + 音频 (T×d)</span>',
+     risk:'<b>关键：</b>时序建模的跨度决定了方法的上限——只看几帧的编码器无法表达"节奏"，也就无法区分咀嚼和说话。'},
+    {ix:'05',nm:'跨模态融合',md:'audio×visual',m:'av',title:'度量两条序列的时间对应性',sub:'交叉注意力 / 拼接 + 自注意力',
+     desc:'这是整条链路的核心，对应实验台里"算互相关"那一步，但学习到的是一个<b>远比线性相关灵活的对应函数</b>：允许幅度不匹配、允许非线性形变、允许每个时刻用不同的权重去比较。交叉注意力让音频序列去查询视觉序列（反之亦然），在中间层就完成逐时刻对齐。',
+     io:'<span class="tag">输入</span> <span class="in">视觉 (T×d) + 音频 (T×d)</span><br><span class="tag">输出</span> <span class="out">融合表征 (T×2d)</span>',
+     risk:'<b>风险：</b>若只用融合后的单一损失，网络会走捷径退化成 VAD；常见对策是给每条流加辅助损失，并构造错配音频的负样本。'},
+    {ix:'06',nm:'打分与后处理',md:'audio+visual',m:'av',title:'逐帧分数 → 平滑 → 可用的时间轴',sub:'二分类头 + 时间平滑 + 区间聚合',
+     desc:'分类头对每一帧输出一个说话置信分。原始分数逐帧抖动，直接阈值化会得到破碎的结果，所以要先做<b>滑动平均或中值滤波</b>，再阈值化成 0/1，最后把连续的 1 聚合成区间并丢掉过短的碎片。想要"谁在说"而不只是"哪张脸在说"，还需要在这之后接人脸聚类。',
+     io:'<span class="tag">输入</span> <span class="in">融合表征 (T×2d)</span><br><span class="tag">输出</span> <span class="out">逐帧 score → [t_start, t_end] 说话区间</span>',
+     risk:'<b>提醒：</b>平滑窗口和阈值是两个必须按业务调的超参——它们不改变模型好坏，却直接决定用户看到的效果。'}
+  ];
+  const bar=document.getElementById('flow'),det=document.getElementById('fdetail');
+  steps.forEach((s,i)=>{
+    const b=document.createElement('button');
+    b.className='fstep';b.dataset.m=s.m;
+    b.innerHTML=`<span class="ix">${s.ix}</span><span class="nm">${s.nm}</span><span class="md">${s.md}</span>`;
+    b.addEventListener('click',()=>show(i));
+    bar.appendChild(b);
+  });
+  function show(i){
+    [...bar.children].forEach((c,j)=>c.classList.toggle('on',j===i));
+    const s=steps[i];
+    det.innerHTML=`<h4>${s.ix} · ${s.title}</h4><div class="sub">${s.sub}</div>
+      <div class="two"><div><p>${s.desc}</p><p class="risk">${s.risk}</p></div>
+      <div class="io">${s.io}</div></div>`;
+  }
+  show(4);
+})();
+</script>
+</body>
+</html>
