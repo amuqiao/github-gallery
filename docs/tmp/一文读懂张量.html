@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂张量</title>
+<style>
+:root{
+  --paper:#F2F4F6;
+  --panel:#FFFFFF;
+  --ink:#17232E;
+  --muted:#5C6D7C;
+  --line:#CBD6DE;
+  --grid:#E2E9EE;
+  --mem:#A15E12;        /* 物理内存：琥珀 */
+  --mem-bg:#FBF0DC;
+  --mem-line:#D9B36A;
+  --log:#2455B8;        /* 逻辑视图：蓝 */
+  --log-bg:#E7EEFB;
+  --log-line:#9DB6E8;
+  --virt:#7A3E9D;       /* 广播虚拟格：紫 */
+  --virt-bg:#F1E7F8;
+  --bad:#C0362C;        /* 报错 / 拷贝警示 */
+  --bad-bg:#FAE7E4;
+  --ok:#0B7A53;         /* 共享 / 通过 */
+  --ok-bg:#E3F2EA;
+  --warn:#8F6400;
+  --warn-bg:#FFF3D1;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"JetBrains Mono",Menlo,"Courier New",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --radius:10px;
+  --shadow:0 1px 2px rgba(23,35,46,.06),0 4px 14px rgba(23,35,46,.05);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+body{
+  margin:0;color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.85;
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:26px 26px;
+}
+::selection{background:#F0DFC0}
+a{color:var(--log);text-decoration:none;border-bottom:1px dashed rgba(36,85,184,.4)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+code{background:#EBF0F3;border:1px solid var(--grid);border-radius:4px;padding:.05em .35em;white-space:nowrap}
+pre code{background:none;border:none;padding:0;white-space:pre}
+h1,h2,h3,h4{line-height:1.35;font-weight:700}
+h2{font-size:1.5rem;margin:.2rem 0 .4rem}
+h3{font-size:1.12rem;margin:1.6rem 0 .5rem}
+p{margin:.7rem 0}
+ul,ol{padding-left:1.4em}
+li{margin:.3rem 0}
+
+/* ---------- 语义色 ---------- */
+.cm{color:var(--mem);font-family:var(--mono);font-weight:700}
+.cl{color:var(--log);font-family:var(--mono);font-weight:700}
+.cv{color:var(--virt);font-family:var(--mono);font-weight:700}
+.cbad{color:var(--bad);font-family:var(--mono);font-weight:700}
+.cok{color:var(--ok);font-family:var(--mono);font-weight:700}
+.tag{display:inline-block;font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;
+  padding:.1em .55em;border-radius:99px;border:1px solid;vertical-align:middle}
+.tag.m{color:var(--mem);background:var(--mem-bg);border-color:var(--mem-line)}
+.tag.l{color:var(--log);background:var(--log-bg);border-color:var(--log-line)}
+.tag.v{color:var(--virt);background:var(--virt-bg);border-color:#D5BCE6}
+
+/* ---------- 顶部导航 ---------- */
+.topnav{
+  position:sticky;top:0;z-index:50;background:rgba(242,244,246,.92);
+  backdrop-filter:blur(6px);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;padding:8px 16px;overflow-x:auto;white-space:nowrap;
+  scrollbar-width:thin;
+}
+.topnav .brand{font-family:var(--mono);font-weight:700;font-size:.85rem;color:var(--ink);flex:0 0 auto;border:none}
+.topnav a.chip{
+  flex:0 0 auto;font-family:var(--mono);font-size:.74rem;color:var(--muted);
+  border:1px solid var(--line);border-radius:99px;padding:.15em .7em;background:var(--panel)}
+.topnav a.chip:hover{color:var(--ink);border-color:var(--muted)}
+
+.wrap{max-width:1020px;margin:0 auto;padding:0 20px 80px}
+
+/* ---------- 首屏 ---------- */
+.hero{padding:44px 0 8px}
+.hero .kicker{font-family:var(--mono);font-size:.78rem;letter-spacing:.18em;color:var(--muted);margin:0 0 10px}
+.hero h1{font-size:clamp(1.7rem,4.5vw,2.6rem);margin:0 0 14px;letter-spacing:.01em}
+.hero .thesis{
+  font-size:1.06rem;border-left:4px solid var(--mem);
+  background:linear-gradient(90deg,var(--mem-bg),transparent 70%);
+  padding:10px 16px;border-radius:0 8px 8px 0;max-width:780px}
+.legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin:16px 0 6px;font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:16px;height:16px;display:inline-block;border-radius:3px;border:1.5px solid}
+.legend i.m{background:var(--mem-bg);border-color:var(--mem)}
+.legend i.l{background:var(--log-bg);border-color:var(--log)}
+.legend i.v{background:var(--virt-bg);border-color:var(--virt)}
+
+/* ---------- 面板与控件 ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:18px;margin:20px 0}
+.panel-title{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;color:var(--muted);
+  text-transform:uppercase;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.panel-title::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--mem);display:inline-block}
+.panel-q{margin:0 0 12px;font-size:.95rem}
+.panel-q b{color:var(--log)}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font-family:var(--mono);
+  font-size:.8rem;border-radius:8px;padding:.42em 1em;cursor:pointer;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--log);border-color:var(--log);color:#fff}
+.btn.primary:hover{background:#1d479c}
+.btn.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:center}
+.btnrow .rlbl{font-family:var(--mono);font-size:.74rem;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#F6F8FA}
+.seg button{border:none;background:transparent;padding:.35em .8em;font-family:var(--mono);font-size:.78rem;
+  color:var(--muted);cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--ink);color:#fff}
+input[type=text].shapein{font-family:var(--mono);font-size:.9rem;border:1px solid var(--line);
+  border-radius:8px;padding:.35em .7em;width:150px;background:#FDFEFE;color:var(--ink)}
+input[type=text].shapein:focus{outline:2px solid var(--log-line)}
+label.chk{font-family:var(--mono);font-size:.78rem;color:var(--muted);display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+
+.readout{
+  font-family:var(--mono);font-size:.84rem;background:#F7F9FA;border:1px solid var(--grid);
+  border-radius:8px;padding:10px 14px;margin-top:12px;overflow-x:auto;line-height:2}
+.readout .lbl{color:var(--muted)}
+.note{background:var(--warn-bg);border:1px solid #EAD9A0;border-radius:8px;padding:8px 14px;
+  font-size:.88rem;color:var(--warn);margin-top:10px}
+.errbox{background:var(--bad-bg);border:1px solid #EBB7B1;border-radius:8px;padding:8px 14px;
+  font-size:.86rem;color:var(--bad);margin-top:10px;font-family:var(--mono)}
+.hide{display:none!important}
+.hint{font-size:.9rem;color:var(--muted);margin-top:10px}
+
+/* ---------- 内存条与逻辑网格（全文签名元素） ---------- */
+.memstrip{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0;align-items:flex-end}
+.memstrip .mcell{
+  width:36px;height:40px;border:1.5px solid var(--mem-line);background:var(--mem-bg);
+  border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:var(--mono);cursor:default;position:relative;transition:transform .08s}
+.memstrip .mcell .v{font-size:.86rem;font-weight:700;color:var(--mem)}
+.memstrip .mcell .idx{font-size:.6rem;color:#C29A55;line-height:1}
+.memstrip .mcell.hl{background:var(--mem);border-color:var(--mem)}
+.memstrip .mcell.hl .v{color:#fff}
+.memstrip .mcell.hl .idx{color:#F3DFBC}
+.memstrip .mcell.dim{opacity:.32}
+.memstrip .mcell.ptr{outline:3px solid var(--bad);outline-offset:1px}
+.striplabel{font-family:var(--mono);font-size:.72rem;color:var(--mem);letter-spacing:.08em;margin-top:6px}
+
+.tgrid{display:inline-grid;gap:3px;margin:4px 0}
+.tgrid .tcell{
+  width:36px;height:36px;border:1.5px solid var(--log-line);background:var(--log-bg);
+  border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:.86rem;font-weight:700;color:var(--log);cursor:default;position:relative}
+.tgrid .tcell .sub{font-size:.58rem;font-weight:400;color:#7A93C9;line-height:1}
+.tgrid .tcell.hl{background:var(--log);border-color:var(--log);color:#fff}
+.tgrid .tcell.hl .sub{color:#CBD9F5}
+.tgrid .tcell.virt{background:var(--virt-bg);border-color:#CDA9E2;color:var(--virt)}
+.tgrid .tcell.virt .sub{color:#B08CC9}
+.blocks{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}
+.blocks .blk{display:flex;flex-direction:column;gap:2px}
+.blocks .blk .blbl{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.viewzone{background:#FBFCFE;border:1px dashed var(--log-line);border-radius:8px;padding:12px;margin:10px 0}
+.memzone{background:#FEFBF4;border:1px dashed var(--mem-line);border-radius:8px;padding:12px;margin:10px 0}
+.zlbl{font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;margin:0 0 6px}
+.memzone .zlbl{color:var(--mem)}
+.viewzone .zlbl{color:var(--log)}
+
+/* ---------- 章节 = 内存格子 ---------- */
+.sec{position:relative;padding:34px 0 10px;margin-top:14px}
+.sec-head{display:flex;gap:16px;align-items:flex-start}
+.sec-node{
+  flex:0 0 auto;width:46px;height:46px;border-radius:8px;background:var(--mem-bg);color:var(--mem);
+  font-family:var(--mono);font-weight:700;font-size:.92rem;display:flex;align-items:center;justify-content:center;
+  border:2px solid var(--mem);position:relative;z-index:2}
+.sec-eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;color:var(--muted);margin:2px 0 2px}
+.sec-body{margin-left:62px;max-width:880px}
+@media (max-width:640px){.sec-body{margin-left:0}}
+.rail{position:absolute;left:22px;top:-14px;bottom:-14px;width:2px;
+  background:repeating-linear-gradient(180deg,var(--mem-line) 0 7px,transparent 7px 13px);z-index:1}
+@media (max-width:640px){.rail{display:none}.sec-node{width:38px;height:38px;font-size:.82rem}}
+
+/* ---------- 表格 ---------- */
+.tbl{width:100%;border-collapse:collapse;font-size:.88rem;background:var(--panel)}
+.tblwrap{overflow-x:auto;margin:14px 0;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.tblwrap .tbl{min-width:680px}
+.tbl th{background:#EDF1F4;font-family:var(--mono);font-size:.76rem;letter-spacing:.05em;
+  text-align:left;padding:9px 12px;border-bottom:2px solid var(--line)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--grid);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl td:first-child{font-weight:700;white-space:nowrap}
+
+/* ---------- 代码块 ---------- */
+.codeblock{background:#101820;color:#D7E2EA;border-radius:var(--radius);margin:16px 0;overflow:hidden;box-shadow:var(--shadow)}
+.codeblock .codehead{display:flex;justify-content:space-between;align-items:center;
+  padding:7px 14px;background:#1A242E;font-family:var(--mono);font-size:.74rem;color:#8FA3B3}
+.codeblock pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;line-height:1.7}
+.codeblock .c{color:#6D8496}
+.codeblock .k{color:#7FB4E8}
+.codeblock .s{color:#A8D49B}
+.codeblock .n{color:#E8C07F}
+.codeblock .hlrow{background:rgba(212,87,76,.22);display:inline-block;width:100%}
+
+/* ---------- 误区卡片 ---------- */
+details.myth{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  margin:10px 0;box-shadow:var(--shadow);overflow:hidden}
+details.myth summary{cursor:pointer;padding:12px 16px;font-weight:700;list-style:none;display:flex;gap:10px;align-items:baseline}
+details.myth summary::-webkit-details-marker{display:none}
+details.myth summary::before{content:"✕";color:var(--bad);font-family:var(--mono);font-weight:700;flex:0 0 auto}
+details.myth[open] summary{border-bottom:1px solid var(--grid)}
+details.myth .body{padding:10px 16px 14px;font-size:.93rem}
+details.myth .body p:first-child::before{content:"✓ ";color:var(--ok);font-family:var(--mono);font-weight:700}
+
+/* ---------- 自检卡片 ---------- */
+.quiz{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:16px;margin:14px 0}
+.quiz .scene{font-size:.9rem;background:#F7F9FA;border-left:3px solid var(--muted);
+  padding:8px 12px;border-radius:0 6px 6px 0;font-family:var(--mono);line-height:1.8;overflow-x:auto}
+.quiz .opts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.quiz .opts button{border:1px solid var(--line);background:#F6F8FA;border-radius:8px;
+  padding:.4em .9em;font-size:.85rem;cursor:pointer;font-family:var(--mono)}
+.quiz .opts button:hover{border-color:var(--muted)}
+.quiz .opts button.right{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:700}
+.quiz .opts button.wrong{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+.quiz .explain{font-size:.9rem;border-top:1px dashed var(--grid);margin-top:10px;padding-top:10px}
+
+/* ---------- 广播对齐表 ---------- */
+.bcrow{display:flex;gap:4px;font-family:var(--mono);font-size:.86rem;align-items:center;margin:2px 0}
+.bcrow .bclbl{width:110px;color:var(--muted);font-size:.76rem;flex:0 0 auto}
+.bcrow .bcd{width:56px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  border:1.5px solid var(--line);background:#F6F8FA;flex:0 0 auto}
+.bcrow .bcd.one{background:var(--virt-bg);border-color:#CDA9E2;color:var(--virt)}
+.bcrow .bcd.pad{background:transparent;border-style:dashed;color:var(--muted)}
+.bcrow .bcd.err{background:var(--bad-bg);border-color:var(--bad);color:var(--bad);font-weight:700}
+.bcrow .bcd.out{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:700}
+
+footer{margin-top:60px;border-top:1px solid var(--line);padding-top:18px;
+  font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<nav class="topnav" aria-label="目录">
+  <span class="brand">tensor[...]</span>
+  <a class="chip" href="#hero">首屏·换一副眼镜</a>
+  <a class="chip" href="#s1">01 为什么是张量</a>
+  <a class="chip" href="#s2">02 内存与 stride</a>
+  <a class="chip" href="#s3">03 视图 vs 拷贝</a>
+  <a class="chip" href="#s4">04 reshape ≠ transpose</a>
+  <a class="chip" href="#s5">05 广播</a>
+  <a class="chip" href="#s6">06 轴与归约</a>
+  <a class="chip" href="#s7">07 常见误区</a>
+  <a class="chip" href="#s8">08 自检</a>
+  <a class="chip" href="#s9">09 最小代码</a>
+  <a class="chip" href="#s10">速查表</a>
+</nav>
+
+<div class="wrap">
+<!-- ================= 首屏 ================= -->
+<section class="hero" id="hero">
+  <p class="kicker">TENSORS · 交互式自学文档</p>
+  <h1>一文读懂张量</h1>
+  <p class="thesis"><strong>张量不是神秘的"n 维盒子"，而是一段平平无奇的一维内存，加上一副决定"怎么读它"的眼镜——shape 和 stride。</strong>换一副眼镜，同一段内存就长成另一个形状。</p>
+  <p>下面这 24 个数在内存里<b>永远是一条直线</b>。点击不同的 shape，看逻辑视图如何变化，而琥珀色的内存条纹丝不动；把鼠标悬停在任何一个蓝色格子上，可以看到它"住在"内存的哪个位置，以及这是怎么算出来的。理解了这一屏，视图与拷贝、<code>reshape</code> 与 <code>transpose</code> 的区别、广播为什么不费内存，全都是推论。</p>
+  <div class="legend">
+    <span><i class="m"></i>物理内存（一维、连续、不动）</span>
+    <span><i class="l"></i>逻辑视图（shape/stride 决定的"读法"）</span>
+    <span><i class="v"></i>广播出的虚拟格（不占内存）</span>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">换镜片模拟器：一段内存的多种读法</p>
+    <p class="panel-q">回答的问题：<b>shape 变了，内存里的数据动了吗？每个逻辑位置是如何映射到内存下标的？</b></p>
+    <div class="btnrow" id="h-shapes">
+      <span class="rlbl">shape：</span>
+      <button class="btn" data-shape="24">(24,)</button>
+      <button class="btn" data-shape="2,12">(2, 12)</button>
+      <button class="btn on" data-shape="4,6">(4, 6)</button>
+      <button class="btn" data-shape="6,4">(6, 4)</button>
+      <button class="btn" data-shape="2,3,4">(2, 3, 4)</button>
+      <button class="btn" data-shape="4,3,2">(4, 3, 2)</button>
+    </div>
+    <div class="memzone">
+      <p class="zlbl">物理内存 storage（下标 0 ~ 23，永远一维）</p>
+      <div class="memstrip" id="h-mem"></div>
+    </div>
+    <div class="viewzone">
+      <p class="zlbl">逻辑视图 tensor（悬停任意格子 ⇄ 内存联动）</p>
+      <div id="h-view"></div>
+    </div>
+    <div class="readout">
+      <div><span class="lbl">shape = </span><span class="cl" id="h-shape-o">(4, 6)</span>　<span class="lbl">ndim = </span><span class="cl" id="h-ndim-o">2</span>　<span class="lbl">stride = </span><span class="cm" id="h-stride-o">(6, 1)</span><span class="lbl">（第 k 维下标 +1，内存下标要跳几格）</span></div>
+      <div id="h-formula"><span class="lbl">悬停一个蓝色格子，这里会显示寻址公式 内存下标 = i₀×s₀ + i₁×s₁ + …</span></div>
+    </div>
+    <p class="hint">六种 shape 试下来你会发现：<b>数据从没动过，动的只有 stride 这副眼镜。</b>这就是框架里 <code>reshape</code>/<code>view</code> 常常"零成本"的原因——它们多数时候只改元数据，不搬数据。什么时候必须搬？第 3、4 章见。</p>
+  </div>
+</section>
+
+<!-- ================= 01 为什么是张量 ================= -->
+<section class="sec" id="s1">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[0]</span>
+    <div><p class="sec-eyebrow">WHY / 它解决什么问题</p><h2>为什么是张量：真实数据天生有"轴"</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>先看一个具体场景：你要把 32 张 224×224 的 RGB 图片喂给模型。这份数据有四个互相独立的"方向"——第几张图、哪个颜色通道、第几行、第几列。用 Python 嵌套列表存是 <code>list[list[list[list[float]]]]</code>，取一个像素要四层循环，做一次"所有图片整体调亮"要手写四重 for。这就是张量要解决的问题：<b>给"有多个独立方向的数据"一个统一的容器，让整块数据可以一次性参与运算。</b></p>
+    <p>所以张量的定义可以很朴素：<b>标量是 0 维张量，向量是 1 维，矩阵是 2 维，再往上就只是"轴更多"，没有新概念。</b>每根轴（axis / dim）都有自己的语义和长度，把各轴长度排在一起就是 shape：</p>
+    <div class="tblwrap"><table class="tbl">
+      <thead><tr><th>数据</th><th>典型 shape</th><th>每根轴的语义</th><th>ndim</th></tr></thead>
+      <tbody>
+        <tr><td>一个标量（loss 值）</td><td class="mono">()</td><td>没有轴</td><td class="mono">0</td></tr>
+        <tr><td>一条词向量</td><td class="mono">(768,)</td><td>特征维</td><td class="mono">1</td></tr>
+        <tr><td>一张灰度图</td><td class="mono">(28, 28)</td><td>高 H × 宽 W</td><td class="mono">2</td></tr>
+        <tr><td>一批 RGB 图（PyTorch 习惯）</td><td class="mono">(32, 3, 224, 224)</td><td>batch N × 通道 C × 高 H × 宽 W</td><td class="mono">4</td></tr>
+        <tr><td>一批文本的隐状态</td><td class="mono">(16, 512, 768)</td><td>batch × 序列长度 seq × 隐藏维 hidden</td><td class="mono">3</td></tr>
+        <tr><td>一段批量视频</td><td class="mono">(8, 16, 3, 224, 224)</td><td>batch × 帧 T × C × H × W</td><td class="mono">5</td></tr>
+      </tbody>
+    </table></div>
+    <p>两个立刻可用的习惯：</p>
+    <ul>
+      <li><b>轴是有名字的。</b>读任何 shape 时，先在心里给每根轴标注语义（"这是 batch 轴、这是通道轴"），而不是背数字。形状 bug 的根源几乎都是"轴的语义对不上"——比如 OpenCV 给你 <code>(H, W, C)</code>，PyTorch 卷积要 <code>(C, H, W)</code>，数字都是 224×224×3，语义顺序完全不同。</li>
+      <li><b>一个张量 = 数据 + 四要素元数据：</b><code>shape</code>（各轴多长）、<code>dtype</code>（每个元素是什么类型，float32/int64/bool…，决定精度和显存）、<code>device</code>（数据躺在 CPU 还是 GPU 上）、以及本文的主角 <code>stride</code>（数据在内存里怎么排）。前三个大家都会看，第四个才是理解一切"形状操作"的钥匙。</li>
+    </ul>
+    <p>边界也说清楚：物理和数学里的"张量"另有更严格的定义（随坐标变换的对象）。深度学习语境的 tensor 就是<b>多维数组</b>——NumPy 叫 <code>ndarray</code>，PyTorch 叫 <code>Tensor</code>，概念一致。本文讲的是后者。</p>
+  </div>
+</section>
+
+<!-- ================= 02 内存与 stride ================= -->
+<section class="sec" id="s2">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[1]</span>
+    <div><p class="sec-eyebrow">MECHANISM / 核心机制</p><h2>内存与 stride：张量的"读法"是怎么算的</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>计算机内存没有"二维"，只有一条编了号的直线。所以任何多维张量落到内存里都要先"拍扁"。默认的拍法叫<b>行优先（row-major / C order）</b>：最后一根轴先走完，再进位到前一根轴——就像数字"个位先转，转满进十位"。</p>
+    <p>拍扁之后，"第 i 行第 j 列在哪"就成了一道乘加算术题。每根轴配一个 <b>stride（步长）</b>：<b>这根轴的下标 +1 时，内存下标要跳几格。</b>寻址公式：</p>
+    <p style="text-align:center"><code style="font-size:1.02rem">内存下标 = i₀ × stride₀ + i₁ × stride₁ + … + offset</code></p>
+    <p>对一个行优先的 <code>(3, 4)</code> 矩阵：列下标 +1 挪 1 格（<code>stride₁ = 1</code>），行下标 +1 要跨过整整一行 4 个元素（<code>stride₀ = 4</code>）。所以 stride 是 <code>(4, 1)</code>。</p>
+
+    <div class="panel">
+      <p class="panel-title">寻址与行走演示：stride = 每根轴的"步幅"</p>
+      <p class="panel-q">回答的问题：<b>逻辑上相邻的两个元素，内存里也相邻吗？"沿行走"和"沿列走"差在哪？</b></p>
+      <div class="btnrow">
+        <button class="btn primary" id="w-row">▶ 沿第 0 行走（j: 0→3）</button>
+        <button class="btn primary" id="w-col">▶ 沿第 0 列走（i: 0→2）</button>
+        <span class="rlbl">或点击任意格子看寻址公式</span>
+      </div>
+      <div class="viewzone">
+        <p class="zlbl">逻辑视图 A：shape (3, 4)　stride (4, 1)</p>
+        <div id="w-grid"></div>
+      </div>
+      <div class="memzone">
+        <p class="zlbl">物理内存（红框 = 当前指针位置）</p>
+        <div class="memstrip" id="w-mem"></div>
+      </div>
+      <div class="readout" id="w-info"><span class="lbl">点一个格子，或让指针走一趟。</span></div>
+      <p class="hint">沿行走，指针每步 <span class="cm">+1</span>，内存访问连续；沿列走，每步 <span class="cm">+4</span>，跳着读。对 12 个元素无所谓，对 GPU 上的 <code>(32, 3, 224, 224)</code>，连续访问能吃满缓存和内存带宽，跳跃访问则慢得多——<b>这就是"内存布局影响性能"的全部原理，也是 <code>contiguous</code>（连续）这个词后面反复出现的原因。</b></p>
+    </div>
+
+    <p>现在回看首屏的规律就一目了然了：行优先下，stride 可以从 shape 直接推出来——<b>每根轴的 stride = 它右边所有轴长度的乘积</b>。比如 <code>(2, 3, 4)</code> → stride <code>(12, 4, 1)</code>。而"改变形状"从此有了两种本质不同的做法：<b>只换眼镜（改 shape/stride，数据不动）</b>，或者<b>真的搬数据（按新顺序重新抄一份）</b>。下一章把这条线讲透。</p>
+  </div>
+</section>
+<!-- ================= 03 视图 vs 拷贝 ================= -->
+<section class="sec" id="s3">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[2]</span>
+    <div><p class="sec-eyebrow">VIEW vs COPY / 视图与拷贝</p><h2>视图 vs 拷贝：哪些操作只是"换眼镜"</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>有了 stride，很多"看起来在改数据"的操作其实一个字节都没动：</p>
+    <ul>
+      <li><b>转置 <code>transpose</code>/<code>.T</code></b>：把 shape 和 stride 一起交换。<code>(4,6)</code>+stride<code>(6,1)</code> 变成 <code>(6,4)</code>+stride<code>(1,6)</code>——按列读的眼镜。</li>
+      <li><b>切片 <code>a[1:3]</code></b>：改 offset（起点后移）和 shape，stride 不变。</li>
+      <li><b>隔步切片 <code>a[::2]</code></b>：stride 直接乘 2，跳着读。</li>
+      <li><b>squeeze / unsqueeze / expand</b>：增删长度为 1 的轴、或把 1 长轴"虚拟拉伸"（stride 设成 0，第 5 章细讲）。</li>
+    </ul>
+    <p>这类操作产出的叫<b>视图（view）</b>：新张量、新元数据、<b>同一段内存</b>。代价是 O(1)，但有个必须刻进脑子的副作用——<b>改视图 = 改原张量</b>，因为它们本来就是同一份数据。</p>
+    <p>而有些操作躲不开搬数据：转置后想按新顺序"重新拍扁"（<code>view</code> 会直接报错，<code>reshape</code> 会默默拷贝）、显式调用 <code>.contiguous()</code> / <code>.clone()</code>。拷贝之后才是真正独立的两份数据。判断标准只有一条：<b>新读法能不能用"同一段内存 + 某组 stride"表达出来？能 → 视图；不能 → 拷贝。</b></p>
+
+    <div class="panel">
+      <p class="panel-title">视图实验台：对同一段内存连续施加操作</p>
+      <p class="panel-q">回答的问题：<b>每个操作动了元数据还是动了内存？什么时候两个张量还"藕断丝连"？</b></p>
+      <div class="btnrow">
+        <span class="rlbl">对当前张量执行：</span>
+        <button class="btn" id="l-op-t">.T 转置</button>
+        <button class="btn" id="l-op-slice">a[1:3] 取两行</button>
+        <button class="btn" id="l-op-step">a[::2] 隔行取</button>
+        <button class="btn" id="l-op-view">.view(2, 12)</button>
+        <button class="btn" id="l-op-reshape">.reshape(2, 12)</button>
+        <button class="btn" id="l-op-contig">.contiguous()</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn primary" id="l-op-poke">把当前张量 [0,0] 改成 99，看原内存变不变</button>
+        <button class="btn" id="l-op-reset">↺ 重置为 (4,6) 原张量</button>
+      </div>
+      <div class="readout" style="margin-top:4px">
+        <div><span class="lbl">操作链：</span><span class="mono" id="l-chain">a = arange(24).reshape(4, 6)</span></div>
+        <div><span class="lbl">shape = </span><span class="cl" id="l-shape">(4, 6)</span>　<span class="lbl">stride = </span><span class="cm" id="l-stride">(6, 1)</span>　<span class="lbl">offset = </span><span class="cm" id="l-off">0</span></div>
+        <div><span class="lbl">与原张量共享内存：</span><b id="l-shared" class="cok">是（视图）</b>　<span class="lbl">contiguous：</span><b id="l-contig" class="cok">是</b></div>
+      </div>
+      <div class="errbox hide" id="l-msg"></div>
+      <div class="viewzone">
+        <p class="zlbl">当前张量（逻辑视图）</p>
+        <div id="l-view"></div>
+      </div>
+      <div class="memzone">
+        <p class="zlbl" id="l-memlbl">原张量的物理内存（亮 = 被当前视图引用；暗 = 引用不到）</p>
+        <div class="memstrip" id="l-mem"></div>
+      </div>
+      <div class="memzone hide" id="l-mem2wrap">
+        <p class="zlbl">拷贝出的新内存（当前张量独享，与上面那段再无关系）</p>
+        <div class="memstrip" id="l-mem2"></div>
+      </div>
+      <p class="hint">四个必做实验：① 先 <code>.T</code> 再 <code>.view(2,12)</code>——真实框架会抛的那个 <code>RuntimeError</code> 会在这里出现，因为转置后的读法无法在原内存上"重新拍扁"；② 换成 <code>.reshape(2,12)</code>——它悄悄拷贝了，注意"共享内存"翻红；③ 在视图状态下点"改 [0,0]"，原内存跟着变——切片、转置都只是别名；④ <code>.contiguous()</code> 之后再改，原内存安然无恙。</p>
+    </div>
+
+    <p>工程上的两条推论：<b>其一</b>，见到"莫名其妙被改了"的张量，先怀疑某处拿到的是视图而不是副本（尤其切片后就地修改）；需要独立数据就 <code>.clone()</code>。<b>其二</b>，<code>view</code> 报 not contiguous 时，别机械地补 <code>.contiguous()</code> 完事——它是一次真实的整块拷贝，先想清楚是哪一步（通常是 transpose/permute）打乱了布局、能否换个操作顺序绕开。</p>
+  </div>
+</section>
+
+<!-- ================= 04 reshape ≠ transpose ================= -->
+<section class="sec" id="s4">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[3]</span>
+    <div><p class="sec-eyebrow">CLASSIC PITFALL / 经典翻车点</p><h2>reshape ≠ transpose：形状相同，数据两回事</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>这是张量世界的第一大坑：<code>reshape(3, 2)</code> 和 <code>transpose</code> 都能把 <code>(2, 3)</code> 变成 <code>(3, 2)</code>，但它们做的是完全不同的事——</p>
+    <ul>
+      <li><b><code>reshape</code>：保持内存阅读顺序，重新断行。</b>像把一段文字从"每行 3 字"重排成"每行 2 字"，字的先后顺序一个没变，只是换行位置变了。它回答"我想把这串数据<b>重新分组</b>"。</li>
+      <li><b><code>transpose</code>：交换轴的语义。</b>原来的第 i 行第 j 列，现在住到第 j 行第 i 列。元素之间的邻接关系被改变。它回答"我想让<b>行和列互换角色</b>"。</li>
+    </ul>
+    <p>光说不够，用一张"图片"看后果。下面是一个 6×10 的位图，画着字母 F。把它变成 (10, 6)——两种做法，两种命运：</p>
+
+    <div class="panel">
+      <p class="panel-title">对比器：同一张图，transpose 是旋转，reshape 是绞碎</p>
+      <p class="panel-q">回答的问题：<b>为什么"想转图片却用了 reshape"会得到一堆条纹？</b></p>
+      <div class="btnrow">
+        <label class="chk"><input type="checkbox" id="rt-idx"> 在每个格子里显示"内存阅读序号"（第几个被读到）</label>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+        <div><p class="zlbl" style="color:var(--ink)">原图 img：shape (6, 10)</p><div id="rt-orig"></div></div>
+        <div><p class="zlbl" style="color:var(--ok)">img.T → (10, 6)：F 躺下了，笔画完好</p><div id="rt-t"></div></div>
+        <div><p class="zlbl" style="color:var(--bad)">img.reshape(10, 6)：条纹碎片</p><div id="rt-r"></div></div>
+      </div>
+      <p class="hint">勾选"内存阅读序号"看机制：reshape 那张里序号仍然是 0,1,2,… 逐行连续——它老老实实按原内存顺序读，只是每 6 个断一行，于是 F 的每行笔画被硬生生折断错位。transpose 那张序号是 0,10,20,…——按列跳着读，读法变了，但每个像素的"身份"跟着搬家，图形因此保住。<b>口诀：合并 / 拆分轴，用 reshape；交换轴的语义（HWC↔CHW、行列互换、矩阵乘前对齐），必须 transpose / permute。</b></p>
+    </div>
+
+    <p>真实世界的高频翻车现场：把 OpenCV 读进来的 <code>(H, W, C)</code> 图片喂给要 <code>(C, H, W)</code> 的 PyTorch 卷积。正确写法是 <code>img.permute(2, 0, 1)</code>（permute 就是多轴版 transpose）；写成 <code>img.reshape(3, H, W)</code> 不会报任何错——shape 完全合法——但每个"通道"里装的都是三色像素交错的碎条纹，模型对着一堆噪声也能训练，只是永远不收敛。<b>形状对了、数据错了，是最难排查的一类 bug，因为它静默无声。</b></p>
+  </div>
+</section>
+
+<!-- ================= 05 广播 ================= -->
+<section class="sec" id="s5">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[4]</span>
+    <div><p class="sec-eyebrow">BROADCASTING / 广播</p><h2>广播：形状不同的张量如何直接运算</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>需求无处不在：给 <code>(32, 3, 224, 224)</code> 的一批图片减去逐通道均值 <code>(3, 1, 1)</code>；给 <code>(batch, seq, 768)</code> 的激活加一个 <code>(768,)</code> 的 bias。逐元素运算要求形状一致，难道要先把小张量物理复制成大形状？<b>广播（broadcasting）说：不用复制，我帮你"假装"它是大形状。</b></p>
+    <p>规则只有两条，从<b>最右边的轴开始对齐</b>，逐轴比较：</p>
+    <ol>
+      <li>两边相等，或其中一边是 <b>1</b> → 兼容；是 1 的那边被"拉伸"到另一边的长度；</li>
+      <li>某一边缺这根轴 → 当作 1 处理（等价于左侧补 1）。任何一轴不满足 → 直接报错。</li>
+    </ol>
+    <p>而"拉伸"的实现正是第 2 章的 stride 魔法：<b>把这根轴的 stride 设成 0</b>——下标怎么加，内存指针都不动，所有虚拟位置读到的是同一个元素。零拷贝，零额外内存。</p>
+
+    <div class="panel">
+      <p class="panel-title">广播检查器 + 虚拟格演示</p>
+      <p class="panel-q">回答的问题：<b>任给两个 shape，能不能广播、结果是什么、哪些格子是"虚拟"的？</b></p>
+      <div class="btnrow">
+        <span class="rlbl">shape A：</span><input type="text" class="shapein" id="bc-a" value="3, 1">
+        <span class="rlbl">shape B：</span><input type="text" class="shapein" id="bc-b" value="4">
+      </div>
+      <div class="btnrow">
+        <span class="rlbl">预设：</span>
+        <button class="btn" data-bca="3, 1" data-bcb="4">(3,1) ⊕ (4,)</button>
+        <button class="btn" data-bca="32, 3, 224, 224" data-bcb="3, 1, 1">图片批 ⊕ 通道均值</button>
+        <button class="btn" data-bca="16, 512, 768" data-bcb="768">激活 ⊕ bias</button>
+        <button class="btn" data-bca="8, 1, 6, 1" data-bcb="7, 1, 5">(8,1,6,1) ⊕ (7,1,5)</button>
+        <button class="btn" data-bca="5, 4" data-bcb="5">(5,4) ⊕ (5,) 会怎样？</button>
+      </div>
+      <div id="bc-table" style="margin:12px 0 4px"></div>
+      <div class="readout" id="bc-out"></div>
+      <div id="bc-demo" style="margin-top:14px"></div>
+    </div>
+
+    <p>最后一个高价值边界——<b><code>expand</code> vs <code>repeat</code></b>，它们都能"把小张量变大"：</p>
+    <ul>
+      <li><code>expand</code>：手动广播。只把 1 长轴的 stride 置 0，<b>零拷贝</b>；代价是所有虚拟位置共享同一元素，对它写入会同时"改到所有副本"（PyTorch 干脆禁止对 expand 结果就地写）。</li>
+      <li><code>repeat</code>：真实平铺，<b>物理复制</b>数据；各副本独立可写，但 <code>(768,).repeat(16, 512, 1)</code> 会实打实吃掉 16×512 倍内存。</li>
+    </ul>
+    <p>选择法则：<b>只读（参与运算）用 expand / 直接靠自动广播；需要独立修改副本才用 repeat。</b>顺带一提：广播省的是<b>输入</b>的内存，输出 <code>(3, 4)</code> 该多大还是多大，别指望它压缩结果。</p>
+  </div>
+</section>
+
+<!-- ================= 06 轴与归约 ================= -->
+<section class="sec" id="s6">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[5]</span>
+    <div><p class="sec-eyebrow">AXES &amp; REDUCTION / 轴与归约</p><h2>dim=0 到底沿着谁：归约的方向感</h2></div>
+  </header>
+  <div class="sec-body">
+    <p><code>sum</code>、<code>mean</code>、<code>max</code>、<code>softmax</code>、<code>argmax</code>……几乎所有聚合操作都带一个 <code>dim</code>（NumPy 叫 <code>axis</code>）参数，而"dim=0 是按行还是按列"大概是被问得最多的问题。别背"行/列"，记一条对所有维度都成立的法则：</p>
+    <p style="text-align:center"><b style="font-size:1.05rem">dim=k 的意思是：把第 k 根轴"压扁消掉"，结果的 shape 就是原 shape 删去第 k 项。</b></p>
+    <p>比如 <code>(3, 4).sum(dim=0)</code>：消掉长度为 3 的第 0 轴 → 结果 <code>(4,)</code>。求和的方向自然是"沿着被消掉的那根轴"——3 个行向量叠在一起压成 1 个。</p>
+
+    <div class="panel">
+      <p class="panel-title">归约方向演示器</p>
+      <p class="panel-q">回答的问题：<b>选定 dim 后，哪些元素被合成一组？结果的 shape 怎么变？</b></p>
+      <div class="btnrow">
+        <span class="rlbl">操作：</span>
+        <div class="seg" id="r-op"><button data-v="sum" class="on">sum</button><button data-v="mean">mean</button><button data-v="max">max</button></div>
+        <span class="rlbl">dim：</span>
+        <div class="seg" id="r-dim"><button data-v="0" class="on">dim=0</button><button data-v="1">dim=1</button><button data-v="none">不传（全归约）</button></div>
+        <label class="chk"><input type="checkbox" id="r-keep"> keepdim=True（保留长度 1 的轴占位）</label>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:30px;align-items:flex-start;margin-top:8px">
+        <div><p class="zlbl" style="color:var(--ink)">输入 x：shape (3, 4)（同色 = 被合成一组）</p><div id="r-grid"></div></div>
+        <div><p class="zlbl" style="color:var(--ok)" id="r-reslbl">结果</p><div id="r-res"></div></div>
+      </div>
+      <div class="readout" id="r-read"></div>
+      <p class="hint">切到 dim=1 看颜色怎么"转向"；再开 keepdim——shape 从 <code>(3,)</code> 变成 <code>(3, 1)</code>，值一模一样，只是留了个长度 1 的轴。为什么要留？<b>为了接下来能广播回去</b>：均值归一化 <code>x - x.mean(dim=1, keepdim=True)</code> 里，<code>(3,1)</code> 能自动广播到 <code>(3,4)</code>，而 <code>(3,)</code> 右对齐后是 3 对 4，直接报错。keepdim 不是装饰，是给广播留的接口。</p>
+    </div>
+
+    <p>把这套方向感迁移到高维就是日常操作：<code>(batch, seq, hidden)</code> 上，<code>mean(dim=1)</code> 消掉 seq 轴 → 句向量 <code>(batch, hidden)</code>；<code>softmax(dim=-1)</code> 沿最后一根轴归一化（<code>-1</code> 是"最后一轴"的通用写法，与具体 ndim 解耦，值得优先使用）。<b>写任何带 dim 的操作前，先自问：我想消掉（或沿着）哪根有名字的轴？</b></p>
+  </div>
+</section>
+<!-- ================= 07 常见误区 ================= -->
+<section class="sec" id="s7">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[6]</span>
+    <div><p class="sec-eyebrow">MISCONCEPTIONS / 常见误区</p><h2>常见误区与反例</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>每张卡片的标题是一个流传很广的错误说法（✕），点开看正确版本（✓）和一个能当场戳破它的反例。</p>
+
+    <details class="myth"><summary>"维度越高，张量越难理解"</summary><div class="body">
+      <p>难的从来不是维数，是<b>轴的语义</b>。任何维数的张量都是同一个模型：一段一维内存 + 每根轴一个 (长度, stride)。读高维 shape 的正确姿势是逐轴标注名字，而不是想象四维立方体。</p>
+      <p><b>反例</b>：<code>(8, 16, 3, 224, 224)</code> 看着吓人，念成"8 段视频 × 每段 16 帧 × RGB × 高 × 宽"之后，取第 3 段视频的第 5 帧就是 <code>v[2, 4]</code>，和二维取元素没有任何区别。</p></div></details>
+
+    <details class="myth"><summary>"reshape 和 transpose 都是改形状，随便用哪个"</summary><div class="body">
+      <p>reshape 保持内存阅读顺序、重新断行；transpose 交换轴的语义、改变元素邻接关系。目标 shape 相同，得到的数据完全不同。</p>
+      <p><b>反例</b>：第 4 章的 F 字图——transpose 得到躺倒的 F，reshape 得到条纹碎片。HWC 转 CHW 必须 <code>permute(2,0,1)</code>，用 reshape 不报错但图像已绞碎，模型静默地训不动。</p></div></details>
+
+    <details class="myth"><summary>"切片 / 转置得到的是新张量，改它不影响原来的"</summary><div class="body">
+      <p>它们是<b>视图</b>：新的元数据，同一段内存。就地修改视图，原张量同步变化，反之亦然。需要独立数据必须 <code>.clone()</code>（NumPy 用 <code>.copy()</code>）。</p>
+      <p><b>反例</b>：第 3 章实验台——<code>b = a[1:3]</code> 后执行 <code>b[0,0] = 99</code>，原内存对应位置立刻变成 99。这类"远程改动"是最常见的静默 bug 来源之一。</p></div></details>
+
+    <details class="myth"><summary>"广播会把小张量复制成大张量，很浪费内存"</summary><div class="body">
+      <p>广播是 stride=0 的虚拟拉伸，<b>输入侧零拷贝</b>。真正做物理复制的是 <code>repeat</code>。</p>
+      <p><b>反例</b>：<code>(768,)</code> 的 bias 加到 <code>(16, 512, 768)</code> 上，bias 依然只占 768 个数的内存；用 <code>repeat(16, 512, 1)</code> 实现同样效果则要多占 8192 倍。可用 <code>expand</code> 后查 <code>storage</code> 大小验证。</p></div></details>
+
+    <details class="myth"><summary>"view 报错 not contiguous？加个 .contiguous() 就完了"</summary><div class="body">
+      <p><code>.contiguous()</code> 是一次<b>整块物理拷贝</b>，不是免费咒语。报错本质是"transpose/permute 后的读法无法零拷贝地重新拍扁"——先想想能否调整操作顺序（例如先 reshape 再 transpose），避免不必要的大张量拷贝；确实需要再加。</p>
+      <p><b>反例</b>：在 <code>(32, 512, 768)</code> 上，一个多余的 contiguous 就是一次约 50MB 的显存搬运，出现在训练热路径里会被放大百万倍。</p></div></details>
+
+    <details class="myth"><summary>"reshape 里的 -1 是随便占位的"</summary><div class="body">
+      <p><code>-1</code> 的语义是"这一轴的长度<b>由总元素数除出来</b>"：只能出现一次，且其余轴的乘积必须整除总元素数，否则报错。</p>
+      <p><b>反例</b>：24 个元素 <code>reshape(-1, 5)</code> 直接报错（24 不被 5 整除）；<code>reshape(-1, -1)</code> 也是非法的——两个未知数一道方程解不出来。</p></div></details>
+
+    <details class="myth"><summary>"dim=0 就是'对每一行操作'"</summary><div class="body">
+      <p>"行/列"话术只在二维勉强成立且极易记反。可靠法则：<b>dim=k 消掉第 k 根轴</b>，操作沿被消掉的轴进行；结果 shape = 原 shape 删去第 k 项（keepdim 则改成 1）。</p>
+      <p><b>反例</b>：<code>(3,4).sum(dim=0)</code> 得 <code>(4,)</code>——是把 3 行"竖着"压在一起（每列内求和），恰恰不是"对每一行求和"。到了 <code>(batch, seq, hidden)</code>，"行列"话术彻底失效，"消轴"法则照常工作。</p></div></details>
+
+    <details class="myth"><summary>"dtype 差不多就行，反正都是数"</summary><div class="body">
+      <p>dtype 决定精度、取值范围、显存占用，还决定运算行为：整型除法会截断、int64 索引是硬性要求、float16 容易上溢/下溢、不同 dtype 混算要么报错要么按提升规则悄悄转型。</p>
+      <p><b>反例</b>：像素张量是 uint8 时，<code>img.mean()</code> 在部分框架直接报错或先溢出；<code>(a/b)</code> 两个 int 张量在 NumPy 里得 float、在某些旧代码里被 <code>//</code> 截断成 0——同一行代码，dtype 不同结果天差地别。习惯：进模型前统一 <code>float32</code>（或明确的混合精度策略）。</p></div></details>
+  </div>
+</section>
+
+<!-- ================= 08 自检 ================= -->
+<section class="sec" id="s8">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[7]</span>
+    <div><p class="sec-eyebrow">SELF CHECK / 自检</p><h2>自检卡片：口算 shape，预判报错</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>形状直觉的唯一检验标准：看到代码能口算出结果 shape，或者预判它会炸。每题四选一，选后有讲解。</p>
+    <div class="panel">
+      <div id="q-list"></div>
+      <div class="readout"><span class="lbl">得分：</span><span class="mono" id="q-score">0 / 0</span>　<button class="btn" id="q-reset" style="margin-left:10px">重做全部</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 09 最小代码 ================= -->
+<section class="sec" id="s9">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[8]</span>
+    <div><p class="sec-eyebrow">CODE / 最小代码示例</p><h2>最小代码：把每个结论亲手验证一遍</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>每段十几行，对应前文一个论断，复制即可运行（需要 PyTorch；NumPy 版思路一致，注释里给出对应 API）。</p>
+
+    <h3>9.1 亲眼看到 stride（对应第 2 章）</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · shape / stride / 元数据四要素</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code><span class="k">import</span> torch
+
+a = torch.arange(<span class="n">24</span>).reshape(<span class="n">4</span>, <span class="n">6</span>)
+print(a.shape, a.stride(), a.dtype, a.device)
+<span class="c"># torch.Size([4, 6]) (6, 1) torch.int64 cpu</span>
+<span class="c"># stride (6, 1)：行下标 +1 内存跳 6 格，列下标 +1 跳 1 格</span>
+
+print(a.reshape(<span class="n">2</span>, <span class="n">3</span>, <span class="n">4</span>).stride())   <span class="c"># (12, 4, 1)：右边轴长度的连乘</span>
+print(a.T.stride())                  <span class="c"># (1, 6)：转置 = shape 和 stride 一起交换</span>
+<span class="c"># NumPy 对应：a.strides（单位是字节，要除以 itemsize）</span>
+</code></pre></div>
+
+    <h3>9.2 视图是别名：改一个，动两个（对应第 3 章）</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · 共享内存验证 + clone 解耦</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code>a = torch.arange(<span class="n">24</span>).reshape(<span class="n">4</span>, <span class="n">6</span>)
+b = a[<span class="n">1</span>:<span class="n">3</span>]                       <span class="c"># 切片 → 视图</span>
+print(b.data_ptr() == a[<span class="n">1</span>].data_ptr())   <span class="c"># True：同一段内存，起点后移</span>
+
+<span class="hlrow">b[<span class="n">0</span>, <span class="n">0</span>] = <span class="n">99</span>                    <span class="c"># 改视图……</span></span>
+print(a[<span class="n">1</span>, <span class="n">0</span>])                  <span class="c"># tensor(99) —— 原张量被"远程"改了</span>
+
+c = a[<span class="n">1</span>:<span class="n">3</span>].clone()              <span class="c"># 想要独立数据：clone（NumPy 用 .copy()）</span>
+c[<span class="n">0</span>, <span class="n">0</span>] = -<span class="n">1</span>
+print(a[<span class="n">1</span>, <span class="n">0</span>])                  <span class="c"># 还是 99，不受影响</span>
+</code></pre></div>
+
+    <h3>9.3 那个著名的 RuntimeError（对应第 3 章）</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · view 要求 contiguous；reshape 会默默拷贝</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code>a = torch.arange(<span class="n">24</span>).reshape(<span class="n">4</span>, <span class="n">6</span>)
+t = a.T                          <span class="c"># 视图，stride (1, 6)，不再连续</span>
+print(t.is_contiguous())         <span class="c"># False</span>
+
+<span class="hlrow">t.view(<span class="n">2</span>, <span class="n">12</span>)   <span class="c"># RuntimeError: view size is not compatible ...</span></span>
+
+r = t.reshape(<span class="n">2</span>, <span class="n">12</span>)             <span class="c"># 能跑：但内部做了一次物理拷贝</span>
+print(r.data_ptr() == a.data_ptr())      <span class="c"># False：已不共享内存</span>
+tc = t.contiguous()              <span class="c"># 显式拷贝成连续布局，之后 view 随意</span>
+print(tc.view(<span class="n">2</span>, <span class="n">12</span>).data_ptr() == tc.data_ptr())  <span class="c"># True</span>
+</code></pre></div>
+
+    <h3>9.4 permute 对，reshape 错：静默绞碎一张图（对应第 4 章）</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · HWC → CHW 的正误写法</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code>img_hwc = torch.rand(<span class="n">224</span>, <span class="n">224</span>, <span class="n">3</span>)          <span class="c"># OpenCV/PIL 常见布局</span>
+
+chw_ok  = img_hwc.permute(<span class="n">2</span>, <span class="n">0</span>, <span class="n">1</span>)        <span class="c"># 正确：交换轴的语义</span>
+<span class="hlrow">chw_bad = img_hwc.reshape(<span class="n">3</span>, <span class="n">224</span>, <span class="n">224</span>)     <span class="c"># 不报错，但数据已绞碎！</span></span>
+
+print(chw_ok.shape == chw_bad.shape)        <span class="c"># True —— shape 完全一样</span>
+print(torch.equal(chw_ok, chw_bad))         <span class="c"># False —— 内容天差地别</span>
+print(chw_ok[<span class="n">0</span>, <span class="n">0</span>, :<span class="n">3</span>])                    <span class="c"># R 通道第一行：正常像素</span>
+print(chw_bad[<span class="n">0</span>, <span class="n">0</span>, :<span class="n">3</span>])                   <span class="c"># R/G/B 交错的碎条纹</span>
+</code></pre></div>
+
+    <h3>9.5 广播零拷贝：expand vs repeat（对应第 5 章）</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · 用 storage 大小验证"虚拟拉伸"</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code>bias = torch.randn(<span class="n">768</span>)
+
+e = bias.expand(<span class="n">16</span>, <span class="n">512</span>, <span class="n">768</span>)     <span class="c"># 手动广播</span>
+r = bias.repeat(<span class="n">16</span>, <span class="n">512</span>, <span class="n">1</span>)       <span class="c"># 物理平铺</span>
+
+print(e.shape == r.shape)                    <span class="c"># True，都是 (16, 512, 768)</span>
+print(e.stride())                            <span class="c"># (0, 0, 1) —— 前两轴 stride=0！</span>
+print(e.untyped_storage().nbytes())          <span class="c"># ≈ 768×4 字节：没复制</span>
+print(r.untyped_storage().nbytes())          <span class="c"># ≈ 16×512×768×4：真复制，8192 倍</span>
+
+x = torch.randn(<span class="n">16</span>, <span class="n">512</span>, <span class="n">768</span>)
+print(torch.allclose(x + bias, x + e))       <span class="c"># True：自动广播 ≡ expand</span>
+</code></pre></div>
+
+    <h3>9.6 keepdim 是给广播留的接口（对应第 6 章）</h3>
+    <div class="codeblock"><div class="codehead"><span>pytorch · 逐行标准化的正误对比</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code>x = torch.randn(<span class="n">3</span>, <span class="n">4</span>)
+
+m1 = x.mean(dim=<span class="n">1</span>)                <span class="c"># shape (3,)   —— 消掉第 1 轴</span>
+m2 = x.mean(dim=<span class="n">1</span>, keepdim=<span class="k">True</span>)  <span class="c"># shape (3, 1) —— 留下长度 1 的占位轴</span>
+
+print((x - m2).shape)             <span class="c"># (3, 4)：(3,1) 广播到 (3,4)，正确</span>
+<span class="hlrow">x - m1   <span class="c"># RuntimeError：右对齐后是 4 vs 3，广播失败</span></span>
+<span class="c"># 若 shape 恰好凑巧（如方阵），x - m1 甚至不报错、只是悄悄算错——更危险</span>
+</code></pre></div>
+  </div>
+</section>
+
+<!-- ================= 10 速查表 ================= -->
+<section class="sec" id="s10">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">[Σ]</span>
+    <div><p class="sec-eyebrow">CHEAT SHEET / 速查表</p><h2>张量操作速查表</h2></div>
+  </header>
+  <div class="sec-body">
+    <div class="tblwrap"><table class="tbl">
+      <thead><tr><th>操作</th><th>做什么</th><th>视图还是拷贝</th><th>典型用途</th><th>易错点</th></tr></thead>
+      <tbody>
+        <tr><td>索引/切片 <code>a[1:3]</code></td><td>改 offset 和 shape，取子区域</td><td class="mono" style="color:var(--ok)">视图</td><td>取 batch 子集、裁剪</td><td>改切片会改原张量；整数索引 <code>a[0]</code> 会消掉一根轴，<code>a[:1]</code> 才保轴</td></tr>
+        <tr><td><code>transpose</code> / <code>permute</code></td><td>交换轴的语义（shape+stride 同步换）</td><td class="mono" style="color:var(--ok)">视图（变非连续）</td><td>HWC↔CHW、矩阵乘对齐、注意力换轴</td><td>之后 <code>view</code> 会报错；元素邻接关系已改变</td></tr>
+        <tr><td><code>reshape</code> / <code>view</code></td><td>保持内存阅读顺序，重新断行/分组</td><td class="mono">连续时视图；<span style="color:var(--bad)">否则 view 报错、reshape 拷贝</span></td><td>拉平接全连接、拆分 head、合并 batch 维</td><td>不能代替 transpose；<code>-1</code> 只能一个且需整除</td></tr>
+        <tr><td><code>contiguous()</code> / <code>clone()</code></td><td>按当前读法物理重排/复制一份</td><td class="mono" style="color:var(--bad)">拷贝</td><td>transpose 后要 view；求独立副本</td><td>有真实搬运成本，别当免费咒语</td></tr>
+        <tr><td><code>squeeze</code> / <code>unsqueeze</code></td><td>删/加长度为 1 的轴</td><td class="mono" style="color:var(--ok)">视图</td><td>补 batch 维、对齐广播</td><td>无参 <code>squeeze()</code> 会把所有 1 长轴全删，batch=1 时误伤</td></tr>
+        <tr><td><code>expand</code></td><td>把 1 长轴 stride 置 0，虚拟拉伸</td><td class="mono" style="color:var(--ok)">视图（零拷贝）</td><td>手动广播、只读平铺</td><td>共享元素，禁止就地写入</td></tr>
+        <tr><td><code>repeat</code>（np.tile）</td><td>物理平铺复制</td><td class="mono" style="color:var(--bad)">拷贝</td><td>需要可独立修改的副本</td><td>内存倍增；参数是"重复次数"不是目标 shape</td></tr>
+        <tr><td><code>cat</code> / <code>stack</code></td><td>cat 沿<b>已有</b>轴拼接；stack <b>新建</b>一根轴再叠</td><td class="mono" style="color:var(--bad)">拷贝</td><td>拼 batch 用 cat(dim=0)；把 n 个样本叠成 batch 用 stack</td><td>cat 不增加 ndim，stack 增加；混用 shape 直接对不上</td></tr>
+        <tr><td><code>sum/mean/max(dim=k)</code></td><td>消掉第 k 根轴，沿它聚合</td><td class="mono" style="color:var(--bad)">新张量</td><td>池化、句向量、softmax 方向</td><td>用"消轴"法则而非"行列"话术；配广播时记 keepdim</td></tr>
+        <tr><td>广播（自动）</td><td>右对齐，1 或缺失轴虚拟拉伸（stride=0）</td><td class="mono" style="color:var(--ok)">输入零拷贝</td><td>加 bias、减均值、掩码</td><td>只认"相等或 1"；(5,4)⊕(5,) 会炸，需 (5,1)</td></tr>
+      </tbody>
+    </table></div>
+    <p>四条随身法则：</p>
+    <ol>
+      <li><b>张量 = 一维内存 + shape/stride 眼镜</b>——先问"数据动没动"，再谈一切形状操作。</li>
+      <li><b>合并/拆分轴用 reshape，交换轴语义用 permute</b>——目标 shape 相同不代表数据相同，静默错误最致命。</li>
+      <li><b>视图是别名</b>——切片、转置、expand 改的都是同一份数据；要独立就 clone。</li>
+      <li><b>读 shape 先给轴命名，写 dim 先想消哪根轴</b>——形状 bug 的解药是语义，不是试错。</li>
+    </ol>
+    <footer>《一文读懂张量》 · 单文件离线交互文档 · 琥珀=物理内存 / 蓝=逻辑视图 / 紫=广播虚拟格</footer>
+  </div>
+</section>
+
+</div><!-- /wrap -->
+<style>
+/* 补充：小像素网格与滚动 */
+.viewzone{overflow-x:auto}
+.mini .tcell{width:22px;height:22px;font-size:.52rem;border-radius:3px}
+.mini .tcell.px1{background:var(--ink);border-color:var(--ink);color:#B9C6D2}
+.mini .tcell.px0{background:#FDFEFE;border-color:var(--grid);color:#B4C0CA}
+.mini.bad .tcell.px1{background:var(--bad);border-color:var(--bad);color:#F6D9D6}
+.grp0{background:#DCE9FB!important;border-color:#7FA3E0!important;color:#2455B8!important}
+.grp1{background:#FBE9D6!important;border-color:#E0AE6E!important;color:#A15E12!important}
+.grp2{background:#DFF2E4!important;border-color:#7CC49A!important;color:#0B7A53!important}
+.grp3{background:#F3E5F8!important;border-color:#C79ADB!important;color:#7A3E9D!important}
+</style>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+function copyCode(btn){
+  const pre = btn.closest(".codeblock").querySelector("pre");
+  const txt = pre.innerText;
+  const done = ok => { btn.textContent = ok ? "已复制" : "复制失败"; setTimeout(()=>btn.textContent="复制", 1400); };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>done(true), ()=>fb());
+  } else fb();
+  function fb(){
+    const ta = document.createElement("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { done(document.execCommand("copy")); } catch(e){ done(false); }
+    document.body.removeChild(ta);
+  }
+}
+const prod = a => a.reduce((x,y)=>x*y,1);
+const rowMajor = shape => { const s=[]; let acc=1; for(let i=shape.length-1;i>=0;i--){ s[i]=acc; acc*=shape[i]; } return s; };
+const shapeStr = a => a.length===0 ? "()" : "(" + a.join(", ") + (a.length===1?",":"") + ")";
+function segInit(segId, onChange){
+  const seg = $(segId);
+  seg.querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => {
+    seg.querySelectorAll("button").forEach(b => b.classList.remove("on"));
+    btn.classList.add("on"); onChange(btn.dataset.v);
+  }));
+  return () => seg.querySelector("button.on").dataset.v;
+}
+/* 内存条渲染：values 数组 → cells，返回 cell 元素数组 */
+function renderMem(container, values, showIdx=true){
+  container.innerHTML = "";
+  return values.map((v,i) => {
+    const c = document.createElement("div"); c.className = "mcell"; c.dataset.flat = i;
+    c.innerHTML = `<span class="v">${v}</span>` + (showIdx?`<span class="idx">#${i}</span>`:"");
+    container.appendChild(c); return c;
+  });
+}
+/* 逻辑网格渲染：支持 1/2/3 维，cellFn(idx数组, flat) 可定制 */
+function renderView(container, shape, strides, offset, mem, subMode="idx"){
+  container.innerHTML = "";
+  const cells = [];
+  const makeCell = (idx) => {
+    const flat = offset + idx.reduce((s,x,k)=>s+x*strides[k],0);
+    const c = document.createElement("div"); c.className = "tcell";
+    c.dataset.flat = flat; c.dataset.idx = idx.join(",");
+    const sub = subMode==="idx" ? idx.join(",") : "";
+    c.innerHTML = `<span>${mem[flat]}</span>` + (sub?`<span class="sub">[${sub}]</span>`:"");
+    cells.push(c); return c;
+  };
+  if (shape.length === 1){
+    const g = document.createElement("div"); g.className = "tgrid";
+    g.style.gridTemplateColumns = `repeat(${shape[0]}, auto)`;
+    for (let i=0;i<shape[0];i++) g.appendChild(makeCell([i]));
+    container.appendChild(g);
+  } else if (shape.length === 2){
+    const g = document.createElement("div"); g.className = "tgrid";
+    g.style.gridTemplateColumns = `repeat(${shape[1]}, auto)`;
+    for (let i=0;i<shape[0];i++) for (let j=0;j<shape[1];j++) g.appendChild(makeCell([i,j]));
+    container.appendChild(g);
+  } else {
+    const wrap = document.createElement("div"); wrap.className = "blocks";
+    for (let b=0;b<shape[0];b++){
+      const blk = document.createElement("div"); blk.className = "blk";
+      blk.innerHTML = `<span class="blbl">i₀ = ${b}</span>`;
+      const g = document.createElement("div"); g.className = "tgrid";
+      g.style.gridTemplateColumns = `repeat(${shape[2]}, auto)`;
+      for (let i=0;i<shape[1];i++) for (let j=0;j<shape[2];j++) g.appendChild(makeCell([b,i,j]));
+      blk.appendChild(g); wrap.appendChild(blk);
+    }
+    container.appendChild(wrap);
+  }
+  return cells;
+}
+
+/* ================= 首屏：换镜片模拟器 ================= */
+const HMEM = Array.from({length:24}, (_,i)=>i);
+let hMemCells = [];
+function heroRender(shape){
+  const strides = rowMajor(shape);
+  hMemCells = renderMem($("h-mem"), HMEM);
+  const cells = renderView($("h-view"), shape, strides, 0, HMEM);
+  $("h-shape-o").textContent = shapeStr(shape);
+  $("h-ndim-o").textContent = shape.length;
+  $("h-stride-o").textContent = shapeStr(strides);
+  $("h-formula").innerHTML = '<span class="lbl">悬停一个蓝色格子，这里会显示寻址公式 内存下标 = i₀×s₀ + i₁×s₁ + …</span>';
+  cells.forEach(c => {
+    c.addEventListener("mouseenter", () => {
+      const flat = +c.dataset.flat, idx = c.dataset.idx.split(",").map(Number);
+      c.classList.add("hl");
+      hMemCells.forEach(m => m.classList.toggle("hl", +m.dataset.flat === flat));
+      const terms = idx.map((x,k)=>`${x}×${strides[k]}`).join(" + ");
+      $("h-formula").innerHTML = `<span class="lbl">逻辑位置 </span><span class="cl">[${idx.join(", ")}]</span><span class="lbl"> → 内存下标 = </span><span class="cm">${terms} = ${flat}</span><span class="lbl">，取到值 </span><span class="cm">${HMEM[flat]}</span>`;
+    });
+    c.addEventListener("mouseleave", () => { c.classList.remove("hl"); hMemCells.forEach(m=>m.classList.remove("hl")); });
+  });
+  hMemCells.forEach(m => {
+    m.addEventListener("mouseenter", () => {
+      m.classList.add("hl");
+      cells.forEach(c => c.classList.toggle("hl", c.dataset.flat === m.dataset.flat));
+    });
+    m.addEventListener("mouseleave", () => { m.classList.remove("hl"); cells.forEach(c=>c.classList.remove("hl")); });
+  });
+}
+document.querySelectorAll("#h-shapes button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#h-shapes button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on");
+  heroRender(b.dataset.shape.split(",").map(Number));
+}));
+
+/* ================= 02 寻址与行走 ================= */
+const WMEM = Array.from({length:12}, (_,i)=>i*3%10 + (i>5?10:0)); // 有区分度的一组值
+let wTimer = null;
+function wInit(){
+  const memCells = renderMem($("w-mem"), WMEM);
+  const cells = renderView($("w-grid"), [3,4], [4,1], 0, WMEM);
+  cells.forEach(c => c.addEventListener("click", () => {
+    const idx = c.dataset.idx.split(",").map(Number), flat = +c.dataset.flat;
+    cells.forEach(x=>x.classList.remove("hl")); c.classList.add("hl");
+    memCells.forEach(m=>{m.classList.remove("hl","ptr");});
+    memCells[flat].classList.add("hl");
+    $("w-info").innerHTML = `<span class="lbl">A[${idx[0]}, ${idx[1]}] → 内存下标 = </span><span class="cm">${idx[0]}×4 + ${idx[1]}×1 = ${flat}</span><span class="lbl">，值 </span><span class="cm">${WMEM[flat]}</span>`;
+  }));
+  const walk = (flats, stepTxt) => {
+    if (wTimer) clearInterval(wTimer);
+    cells.forEach(x=>x.classList.remove("hl"));
+    memCells.forEach(m=>m.classList.remove("hl","ptr"));
+    let k = 0;
+    wTimer = setInterval(() => {
+      memCells.forEach(m=>m.classList.remove("ptr"));
+      if (k >= flats.length){ clearInterval(wTimer); wTimer=null;
+        $("w-info").innerHTML += `<span class="lbl">　走完了。</span>`; return; }
+      const f = flats[k];
+      memCells[f].classList.add("hl","ptr");
+      cells.forEach(c => c.classList.toggle("hl", +c.dataset.flat === f));
+      $("w-info").innerHTML = `<span class="lbl">第 ${k+1} 步：指针在内存 </span><span class="cm">#${f}</span>` +
+        (k>0 ? `<span class="lbl">，相比上一步 </span><span class="cm">${stepTxt}</span>` : `<span class="lbl">（起点）</span>`);
+      k++;
+    }, 650);
+  };
+  $("w-row").addEventListener("click", () => walk([0,1,2,3], "+1（stride₁ = 1，连续）"));
+  $("w-col").addEventListener("click", () => walk([0,4,8], "+4（stride₀ = 4，跳跃）"));
+}
+
+/* ================= 03 视图实验台 ================= */
+const L_ORIG = () => Array.from({length:24}, (_,i)=>i);
+const L = { mem: L_ORIG(), st: null };
+function lReset(){
+  L.mem = L_ORIG();
+  L.st = { shape:[4,6], strides:[6,1], offset:0, shared:true, own:null, chain:"a = arange(24).reshape(4, 6)" };
+  lRender("");
+}
+function lIsContig(st){ const rm = rowMajor(st.shape); return st.strides.every((s,i)=>s===rm[i]); }
+function lNumel(st){ return prod(st.shape); }
+function lFlats(st){ // 当前视图引用到的所有内存下标
+  const out = [];
+  const rec = (idx) => {
+    if (idx.length === st.shape.length){ out.push(st.offset + idx.reduce((s,x,k)=>s+x*st.strides[k],0)); return; }
+    for (let i=0;i<st.shape[idx.length];i++) rec([...idx, i]);
+  };
+  rec([]); return out;
+}
+function lMemOf(st){ return st.shared ? L.mem : st.own; }
+function lRender(msg, isErr=true){
+  const st = L.st;
+  renderView($("l-view"), st.shape, st.strides, st.offset, lMemOf(st));
+  $("l-chain").textContent = st.chain;
+  $("l-shape").textContent = shapeStr(st.shape);
+  $("l-stride").textContent = shapeStr(st.strides);
+  $("l-off").textContent = st.offset;
+  const contig = lIsContig(st);
+  $("l-contig").textContent = contig ? "是" : "否（读法跳跃）";
+  $("l-contig").className = contig ? "cok" : "cbad";
+  $("l-shared").textContent = st.shared ? "是（视图，藕断丝连）" : "否（已拷贝，各自独立）";
+  $("l-shared").className = st.shared ? "cok" : "cbad";
+  const memCells = renderMem($("l-mem"), L.mem);
+  if (st.shared){
+    const used = new Set(lFlats(st));
+    memCells.forEach(m => m.classList.toggle("dim", !used.has(+m.dataset.flat)));
+    $("l-memlbl").textContent = "原张量的物理内存（亮 = 被当前视图引用；暗 = 引用不到）";
+    $("l-mem2wrap").classList.add("hide");
+  } else {
+    $("l-memlbl").textContent = "原张量的物理内存（当前张量已不引用它）";
+    memCells.forEach(m => m.classList.add("dim"));
+    $("l-mem2wrap").classList.remove("hide");
+    renderMem($("l-mem2"), st.own);
+  }
+  const box = $("l-msg");
+  if (msg){ box.textContent = msg; box.classList.remove("hide");
+    box.style.background = isErr ? "var(--bad-bg)" : "var(--ok-bg)";
+    box.style.borderColor = isErr ? "#EBB7B1" : "#A9D8C3";
+    box.style.color = isErr ? "var(--bad)" : "var(--ok)";
+  } else box.classList.add("hide");
+}
+function lCopyOut(newShape){ // 按当前逻辑顺序抄进新内存
+  const st = L.st, src = lMemOf(st);
+  const data = lFlats(st).map(f => src[f]);
+  st.own = data; st.shared = false;
+  st.shape = newShape.slice(); st.strides = rowMajor(newShape); st.offset = 0;
+}
+$("l-op-t").addEventListener("click", () => {
+  const st = L.st;
+  if (st.shape.length !== 2){ lRender("演示台只支持二维转置，先重置试试。"); return; }
+  st.shape = [st.shape[1], st.shape[0]];
+  st.strides = [st.strides[1], st.strides[0]];
+  st.chain += ".T";
+  lRender("转置完成：shape 和 stride 一起交换，offset 不变，内存一个字节没动 —— O(1) 视图。", false);
+});
+$("l-op-slice").addEventListener("click", () => {
+  const st = L.st;
+  if (st.shape[0] < 3){ lRender(`IndexError：第 0 轴长度只有 ${st.shape[0]}，取不出 [1:3]。`); return; }
+  st.offset += st.strides[0];
+  st.shape = st.shape.slice(); st.shape[0] = 2;
+  st.chain += "[1:3]";
+  lRender("切片完成：offset 后移一行、shape 第 0 轴变 2，stride 不变 —— 还是同一段内存。", false);
+});
+$("l-op-step").addEventListener("click", () => {
+  const st = L.st;
+  const n = Math.ceil(st.shape[0]/2);
+  st.strides = st.strides.slice(); st.strides[0] *= 2;
+  st.shape = st.shape.slice(); st.shape[0] = n;
+  st.chain += "[::2]";
+  lRender("隔行切片完成：第 0 轴 stride ×2，跳着读 —— 依旧零拷贝，但布局已不连续。", false);
+});
+$("l-op-view").addEventListener("click", () => {
+  const st = L.st;
+  if (lNumel(st) !== 24){ lRender(`RuntimeError: shape (2, 12) is invalid for input of size ${lNumel(st)} —— view 不改变元素个数。`); return; }
+  if (!lIsContig(st)){ lRender("RuntimeError: view size is not compatible with input tensor's size and stride (at least one dimension spans across two contiguous subspaces). Use .reshape(...) instead. —— 当前读法是跳跃的，无法零拷贝地重新拍扁。"); return; }
+  st.shape = [2,12]; st.strides = rowMajor([2,12]);
+  st.chain += ".view(2, 12)";
+  lRender("view 成功：布局连续，直接换一副 (2,12) 的眼镜，零拷贝。", false);
+});
+$("l-op-reshape").addEventListener("click", () => {
+  const st = L.st;
+  if (lNumel(st) !== 24){ lRender(`RuntimeError: shape (2, 12) is invalid for input of size ${lNumel(st)} —— reshape 同样不改变元素个数。`); return; }
+  if (lIsContig(st)){
+    st.shape = [2,12]; st.strides = rowMajor([2,12]);
+    st.chain += ".reshape(2, 12)";
+    lRender("reshape 成功：布局连续时，它和 view 一样只换眼镜，零拷贝。", false);
+  } else {
+    lCopyOut([2,12]);
+    st.chain += ".reshape(2, 12)";
+    lRender("reshape 成功——但注意\u201C共享内存\u201D翻红了：布局不连续，它在背后按逻辑顺序拷贝了一份新内存。不报错 ≠ 没代价。", false);
+    lRender.lastWasCopy = true;
+  }
+});
+$("l-op-contig").addEventListener("click", () => {
+  const st = L.st;
+  if (!st.shared){ lRender("当前张量已拥有独立内存，无需再 contiguous。", false); return; }
+  if (lIsContig(st)){ lRender("已是连续布局：contiguous() 直接返回自身，没有任何拷贝发生。", false); return; }
+  lCopyOut(st.shape.slice());
+  st.chain += ".contiguous()";
+  lRender("contiguous 完成：按当前逻辑顺序把数据物理重排进一段新内存。shape 没变，stride 变回行优先，代价是一次整块拷贝。", false);
+});
+$("l-op-poke").addEventListener("click", () => {
+  const st = L.st, mem = lMemOf(st);
+  const flat = st.offset; // [0,0]
+  mem[flat] = 99;
+  st.chain += "；t[0,0]=99";
+  if (st.shared)
+    lRender(`写入 t[0,0] = 99 → 落到原内存 #${flat}。看上面琥珀条：原张量对应位置已经变成 99 —— 视图就是别名。`, false);
+  else
+    lRender("写入 t[0,0] = 99 → 落在拷贝出的新内存里。原张量的内存（上面那条）安然无恙 —— 拷贝之后才真正独立。", false);
+});
+$("l-op-reset").addEventListener("click", lReset);
+
+/* ================= 04 reshape vs transpose ================= */
+const F_BMP5 = ["11111","10000","11110","10000","10000","10000"]; // 6×5 的 F
+const F_FLAT = []; // 6×10
+F_BMP5.forEach(row => { let r=[]; for (const ch of row){ r.push(+ch, +ch); } F_FLAT.push(...r); });
+function rtRender(){
+  const showIdx = $("rt-idx").checked;
+  const draw = (el, rows, cols, srcFlatFn, bad) => {
+    el.innerHTML = "";
+    const g = document.createElement("div"); g.className = "tgrid mini" + (bad?" bad":"");
+    g.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+    for (let i=0;i<rows;i++) for (let j=0;j<cols;j++){
+      const src = srcFlatFn(i,j);
+      const c = document.createElement("div");
+      c.className = "tcell " + (F_FLAT[src] ? "px1" : "px0");
+      c.textContent = showIdx ? src : "";
+      c.title = `读的是内存 #${src}`;
+      g.appendChild(c);
+    }
+    el.appendChild(g);
+  };
+  draw($("rt-orig"), 6, 10, (i,j)=>i*10+j, false);
+  draw($("rt-t"),   10, 6, (i,j)=>j*10+i, false);   // transpose：交换下标
+  draw($("rt-r"),   10, 6, (i,j)=>i*6+j,  true);    // reshape：顺序重断行
+}
+$("rt-idx").addEventListener("change", rtRender);
+
+/* ================= 05 广播检查器 ================= */
+function bcParse(s){
+  const t = s.trim().replace(/[()（）]/g,"");
+  if (!t) return null;
+  const dims = t.split(/[,，\s]+/).filter(x=>x!=="").map(Number);
+  if (dims.some(d => !Number.isInteger(d) || d < 1 || d > 100000)) return null;
+  return dims;
+}
+function bcRender(){
+  const A = bcParse($("bc-a").value), B = bcParse($("bc-b").value);
+  const tb = $("bc-table"), out = $("bc-out");
+  tb.innerHTML = "";
+  if (!A || !B){ out.innerHTML = '<span class="cbad">shape 解析失败：请输入逗号分隔的正整数，如 3, 1</span>'; return; }
+  const n = Math.max(A.length, B.length);
+  const pa = Array(n-A.length).fill(null).concat(A);
+  const pb = Array(n-B.length).fill(null).concat(B);
+  const res = []; let errAt = -1;
+  for (let k=0;k<n;k++){
+    const a = pa[k]===null?1:pa[k], b = pb[k]===null?1:pb[k];
+    if (a===b || a===1 || b===1) res.push(Math.max(a,b));
+    else { res.push(null); if (errAt<0) errAt = k; }
+  }
+  const mkRow = (lbl, dims, kind) => {
+    const row = document.createElement("div"); row.className = "bcrow";
+    row.innerHTML = `<span class="bclbl">${lbl}</span>`;
+    dims.forEach((d,k) => {
+      const c = document.createElement("div"); c.className = "bcd";
+      if (kind==="out"){
+        if (errAt>=0 && k===errAt){ c.classList.add("err"); c.textContent = "✕"; }
+        else if (errAt>=0){ c.textContent = "–"; }
+        else { c.classList.add("out"); c.textContent = d; }
+      } else if (d === null){ c.classList.add("pad"); c.textContent = "补1"; }
+      else {
+        c.textContent = d;
+        const other = kind==="a" ? (pb[k]===null?1:pb[k]) : (pa[k]===null?1:pa[k]);
+        if (d===1 && other!==1) c.classList.add("one");
+        if (errAt===k && d!==1) c.classList.add("err");
+      }
+      row.appendChild(c);
+    });
+    return row;
+  };
+  tb.appendChild(mkRow("A（右对齐）", pa, "a"));
+  tb.appendChild(mkRow("B（右对齐）", pb, "b"));
+  tb.appendChild(mkRow("结果", res, "out"));
+  if (errAt >= 0){
+    out.innerHTML = `<span class="cbad">✕ 不能广播：</span><span class="lbl">从右数第 ${n-errAt} 根轴上是 </span><span class="cbad">${pa[errAt]===null?1:pa[errAt]} vs ${pb[errAt]===null?1:pb[errAt]}</span><span class="lbl">，既不相等、也没有一边是 1。常见修法：给较小的张量补一根长度 1 的轴（unsqueeze / [:, None]）。</span>`;
+  } else {
+    const virtA = pa.filter((d,k)=>(d===null||d===1)&&res[k]>1).length;
+    const virtB = pb.filter((d,k)=>(d===null||d===1)&&res[k]>1).length;
+    out.innerHTML = `<span class="cok">✓ 可以广播</span><span class="lbl">，结果 shape = </span><span class="cok">${shapeStr(res)}</span><span class="lbl">。A 有 ${virtA} 根轴、B 有 ${virtB} 根轴被虚拟拉伸（stride 置 0，零拷贝）。</span>`;
+  }
+}
+["bc-a","bc-b"].forEach(id => $(id).addEventListener("input", bcRender));
+document.querySelectorAll("[data-bca]").forEach(b => b.addEventListener("click", () => {
+  $("bc-a").value = b.dataset.bca; $("bc-b").value = b.dataset.bcb; bcRender();
+}));
+function bcDemoBuild(){
+  const A = [10,20,30], B = [1,2,3,4];
+  const el = $("bc-demo");
+  const grid = (title, cellFn, cls) => {
+    let h = `<div><p class="zlbl" style="color:${cls}">${title}</p><div class="tgrid" style="grid-template-columns:repeat(4,auto)">`;
+    for (let i=0;i<3;i++) for (let j=0;j<4;j++) h += cellFn(i,j);
+    return h + "</div></div>";
+  };
+  el.innerHTML = `<p class="zlbl" style="color:var(--ink)">具体到一次 (3,1) + (1,4)：紫色 = 虚拟格（stride=0，读的都是同一个真实元素）</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center">
+  ${grid("A：(3,1) 拉伸到 (3,4)", (i,j)=> j===0
+    ? `<div class="tcell">${A[i]}</div>`
+    : `<div class="tcell virt">${A[i]}</div>`, "var(--log)")}
+  <span style="font-size:1.3rem;color:var(--muted)">+</span>
+  ${grid("B：(1,4) 拉伸到 (3,4)", (i,j)=> i===0
+    ? `<div class="tcell">${B[j]}</div>`
+    : `<div class="tcell virt">${B[j]}</div>`, "var(--log)")}
+  <span style="font-size:1.3rem;color:var(--muted)">=</span>
+  ${grid("结果：(3,4)，实打实的新张量", (i,j)=>`<div class="tcell" style="background:var(--ok-bg);border-color:#7CC49A;color:var(--ok)">${A[i]+B[j]}</div>`, "var(--ok)")}
+  </div>`;
+}
+
+/* ================= 06 归约方向演示器 ================= */
+const RX = [[3,1,4,1],[5,9,2,6],[8,5,3,5]];
+let rOp = "sum", rDim = "0";
+function rCalc(vals, op){
+  if (op==="sum") return vals.reduce((a,b)=>a+b,0);
+  if (op==="max") return Math.max(...vals);
+  const s = vals.reduce((a,b)=>a+b,0); return Math.round(s/vals.length*100)/100;
+}
+function rRender(){
+  const keep = $("r-keep").checked;
+  const gEl = $("r-grid"); gEl.innerHTML = "";
+  const g = document.createElement("div"); g.className = "tgrid";
+  g.style.gridTemplateColumns = "repeat(4, auto)";
+  for (let i=0;i<3;i++) for (let j=0;j<4;j++){
+    const c = document.createElement("div"); c.className = "tcell";
+    if (rDim==="0") c.classList.add("grp"+j);
+    else if (rDim==="1") c.classList.add("grp"+i);
+    else c.classList.add("grp0");
+    c.innerHTML = `<span>${RX[i][j]}</span><span class="sub">[${i},${j}]</span>`;
+    g.appendChild(c);
+  }
+  gEl.appendChild(g);
+  const rEl = $("r-res"); rEl.innerHTML = "";
+  let vals, resShape, dir;
+  if (rDim==="0"){
+    vals = [0,1,2,3].map(j => rCalc([RX[0][j],RX[1][j],RX[2][j]], rOp));
+    resShape = keep ? [1,4] : [4]; dir = "把 3 行竖着压成 1 行（每列内聚合）";
+    const rg = document.createElement("div"); rg.className = "tgrid";
+    rg.style.gridTemplateColumns = "repeat(4, auto)";
+    vals.forEach((v,j)=>{ const c=document.createElement("div"); c.className="tcell grp"+j; c.textContent=v; rg.appendChild(c); });
+    rEl.appendChild(rg);
+  } else if (rDim==="1"){
+    vals = [0,1,2].map(i => rCalc(RX[i], rOp));
+    resShape = keep ? [3,1] : [3]; dir = "把 4 列横着压成 1 列（每行内聚合）";
+    const rg = document.createElement("div"); rg.className = "tgrid";
+    rg.style.gridTemplateColumns = "auto";
+    vals.forEach((v,i)=>{ const c=document.createElement("div"); c.className="tcell grp"+i; c.textContent=v; rg.appendChild(c); });
+    rEl.appendChild(rg);
+  } else {
+    const v = rCalc(RX.flat(), rOp);
+    resShape = []; dir = "所有轴一起消掉，得到一个标量";
+    const c=document.createElement("div"); c.className="tcell grp0"; c.style.width="52px"; c.textContent=v; rEl.appendChild(c);
+  }
+  $("r-reslbl").textContent = `结果：shape ${shapeStr(resShape)}`;
+  const dimTxt = rDim==="none" ? "不传 dim" : `dim=${rDim}`;
+  $("r-read").innerHTML = `<span class="lbl">x.${rOp}(${rDim==="none"?"":`dim=${rDim}${keep?", keepdim=True":""}`}) ：</span>`
+    + `<span class="cl">(3, 4)</span><span class="lbl"> → </span><span class="cok">${shapeStr(resShape)}</span>`
+    + `<span class="lbl">　｜　${dimTxt} → ${dir}${keep&&rDim!=="none"?"；keepdim 用长度 1 占住被消的轴":""}</span>`;
+}
+segInit("r-op", v => { rOp = v; rRender(); });
+segInit("r-dim", v => { rDim = v; rRender(); });
+$("r-keep").addEventListener("change", rRender);
+
+/* ================= 08 自检卡片 ================= */
+const QUIZ = [
+  { scene:"x = torch.rand(3, 1, 5)\ny = torch.rand(2, 5)\n(x * y).shape 是？",
+    opts:["(3, 2, 5)","(3, 1, 5)","RuntimeError","(2, 3, 5)"], ans:0,
+    exp:"右对齐：y 先被视作 (1,2,5)。逐轴看：5=5 ✓；1 vs 2 → 拉到 2；3 vs 1 → 拉到 3。结果 (3,2,5)。广播只认\u201C相等或 1\u201D，与轴的先后语义无关。" },
+  { scene:"a = torch.arange(6).view(2, 3)\nb = a.T          # shape (3, 2)\nb.view(6) 会得到什么？",
+    opts:["tensor([0,3,1,4,2,5])","tensor([0,1,2,3,4,5])","RuntimeError","shape 变 (6,1)"], ans:2,
+    exp:"转置后 stride 是 (1,3)，读法跳跃、不再 contiguous，而 view 只肯换眼镜不肯搬数据 → RuntimeError。想要 [0,3,1,4,2,5] 得用 b.reshape(6) 或 b.contiguous().view(6)，二者都发生了一次拷贝。" },
+  { scene:"a = torch.rand(4, 6)\na[:, 0].shape 和 a[:, :1].shape 分别是？",
+    opts:["都是 (4,)","都是 (4, 1)","(4,) 和 (4, 1)","(1, 4) 和 (4, 1)"], ans:2,
+    exp:"整数索引消掉一根轴：a[:, 0] → (4,)；切片保住轴：a[:, :1] → (4,1)。要拿去广播（比如按列归一化）就得用后者——这也是 keepdim 存在的同一个理由。" },
+  { scene:"b = bias.expand(16, 512, 768)\nb[0, 0, 0] = 1.0   # 就地写入\n会发生什么？",
+    opts:["只有这一个位置变 1","所有 16×512 个\u201C副本\u201D同时变 1","PyTorch 直接抛错，禁止写入","静默忽略这次写入"], ans:2,
+    exp:"expand 的前两轴 stride=0，全部虚拟位置共享同一批真实元素——写一个等于写全部。为避免这种反直觉后果，PyTorch 禁止对 expand 出的非连续视图就地写入并抛错。需要可写副本，用 repeat（代价是真实复制）。" },
+  { scene:"img.shape == (224, 224, 3)   # HWC\n想得到 (3, 224, 224) 喂给卷积，\nimg.reshape(3, 224, 224) 行吗？",
+    opts:["行，和 permute 等价","不行，必须 img.permute(2, 0, 1)","要先 .contiguous() 再 reshape 才行","reshape 会报错"], ans:1,
+    exp:"reshape 不报错、shape 也完全正确，但它只是把原内存顺序重新断行——每个\u201C通道\u201D里是 RGB 交错的碎条纹。交换轴的语义必须 permute。这是静默错误的教科书案例：形状对了，数据错了。" },
+  { scene:"x = torch.rand(2, 3, 4)\nx.sum(dim=1).shape 是？",
+    opts:["(2, 4)","(3, 4)","(2, 3)","(24,)"], ans:0,
+    exp:"消轴法则：dim=1 就是删掉 shape 里的第 1 项（长度 3），剩 (2,4)。不要用\u201C行/列\u201D去套三维——法则对任意维数都成立。" },
+  { scene:"a.shape == b.shape == (3, 4)\ntorch.stack([a, b], dim=0).shape 是？",
+    opts:["(2, 3, 4)","(6, 4)","(3, 8)","(3, 4, 2)"], ans:0,
+    exp:"stack 先新建一根轴再把两个张量叠上去：(2,3,4)，ndim +1。若想得到 (6,4)（不新增轴、沿已有轴接长），用 torch.cat([a, b], dim=0)。\u201C要不要多出一根轴\u201D就是 stack 和 cat 的分界线。" }
+];
+const qState = { right:0, done:0 };
+function qRender(){
+  const list = $("q-list"); list.innerHTML = "";
+  qState.right = 0; qState.done = 0;
+  QUIZ.forEach((q,qi) => {
+    const card = document.createElement("div"); card.className = "quiz";
+    const sc = document.createElement("div"); sc.className = "scene";
+    sc.textContent = "第 " + (qi+1) + " 题\n" + q.scene; sc.style.whiteSpace = "pre-wrap";
+    card.appendChild(sc);
+    const opts = document.createElement("div"); opts.className = "opts";
+    let answered = false;
+    q.opts.forEach((o,oi) => {
+      const b = document.createElement("button"); b.textContent = o;
+      b.addEventListener("click", () => {
+        if (answered) return; answered = true;
+        qState.done++;
+        if (oi === q.ans){ b.classList.add("right"); qState.right++; }
+        else { b.classList.add("wrong"); opts.children[q.ans].classList.add("right"); }
+        const ex = document.createElement("div"); ex.className = "explain";
+        ex.innerHTML = (oi===q.ans ? "<b style='color:var(--ok)'>答对了。</b>" : "<b style='color:var(--bad)'>再看一眼。</b>") + q.exp;
+        card.appendChild(ex);
+        $("q-score").textContent = qState.right + " / " + qState.done;
+      });
+      opts.appendChild(b);
+    });
+    card.appendChild(opts); list.appendChild(card);
+  });
+  $("q-score").textContent = "0 / 0";
+}
+$("q-reset").addEventListener("click", qRender);
+
+/* ---------- 初始渲染 ---------- */
+heroRender([4,6]); wInit(); lReset(); rtRender(); bcRender(); bcDemoBuild(); rRender(); qRender();
+</script>
+</body>
+</html>

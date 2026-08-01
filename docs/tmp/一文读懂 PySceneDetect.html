@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 PySceneDetect —— 把视频按镜头切开</title>
+<style>
+:root{
+  --bg:#0F1216; --bg2:#12161C; --panel:#161C24; --panel2:#1C2431;
+  --line:#2A3342; --line2:#39465C;
+  --ink:#E9EDF3; --mut:#95A1B5; --dim:#5F6D83;
+  --amber:#FFB454; --amber-dim:rgba(255,180,84,.14);
+  --cyan:#5FC6FF; --cyan-dim:rgba(95,198,255,.13);
+  --green:#7FD9A0; --red:#FF7A76; --violet:#B49CFF;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:64px}
+body{background:var(--bg);color:var(--ink);font:16px/1.85 var(--sans);-webkit-font-smoothing:antialiased}
+::selection{background:var(--amber);color:#1a1206}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:4px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+code,pre,kbd{font-family:var(--mono)}
+code{font-size:.88em;background:#0C1015;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#CFE6FF}
+pre.code{background:#0B0E13;border:1px solid var(--line);border-radius:12px;padding:15px 18px;overflow:auto;font-size:12.8px;line-height:1.75;color:#D6DEEA}
+pre.code code{background:none;border:none;padding:0;color:inherit;font-size:inherit}
+.c-cmt{color:#5F6D83}.c-str{color:#A8D98F}.c-kw{color:#FFB454}.c-fn{color:#5FC6FF}.c-num{color:#B49CFF}.c-out{color:#8A97AB}
+
+/* ---------- 顶栏时间线导航 ---------- */
+.topbar{position:fixed;inset:0 0 auto 0;height:48px;z-index:60;background:rgba(15,18,22,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.tb-in{max-width:1080px;margin:0 auto;padding:0 22px;height:48px;display:flex;align-items:center;gap:18px}
+.tb-title{font:600 12px/1 var(--mono);color:var(--amber);letter-spacing:.06em;white-space:nowrap}
+.tb-nav{display:flex;gap:2px;margin-left:auto;overflow:auto;scrollbar-width:none}
+.tb-nav::-webkit-scrollbar{display:none}
+.tick{font:11px/1 var(--mono);color:var(--dim);padding:8px 9px;border-top:2px solid transparent;white-space:nowrap}
+.tick b{font-weight:600;color:inherit}
+.tick:hover{color:var(--mut);text-decoration:none}
+.tick.on{color:var(--amber);border-top-color:var(--amber)}
+@media (max-width:820px){.tick span{display:none}}
+
+/* ---------- 首屏 ---------- */
+.hero{padding:104px 0 56px;background:
+  radial-gradient(1100px 500px at 78% -10%, rgba(95,198,255,.07), transparent 60%),
+  radial-gradient(800px 400px at 8% 8%, rgba(255,180,84,.05), transparent 60%)}
+.eyebrow{font:600 12px/1.5 var(--mono);letter-spacing:.14em;color:var(--amber);text-transform:uppercase}
+h1{font-size:clamp(34px,5.2vw,56px);line-height:1.12;letter-spacing:-.02em;font-weight:800;margin:14px 0 16px}
+h1 .en{color:var(--cyan)}
+.lede{color:var(--mut);max-width:760px;font-size:17px}
+.lede b{color:var(--ink);font-weight:600}
+.task{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:26px 0 18px;font-family:var(--mono);font-size:12.5px}
+.tk{border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:8px 12px;color:var(--mut)}
+.tk b{color:var(--ink);font-weight:600}
+.tk.in{border-color:rgba(95,198,255,.45);color:var(--cyan)}
+.tk.cmd{border-color:var(--line2);color:#D6DEEA;background:#0B0E13}
+.tk.cmd .c-kw{color:var(--amber)}
+.tk.out{border-color:rgba(127,217,160,.4);color:var(--green)}
+.task .arr{color:var(--dim);font-size:15px}
+.hero-note{font-size:13.5px;color:var(--dim);margin-top:14px}
+.hero-note a{color:var(--amber)}
+
+/* ---------- 章节骨架 ---------- */
+section.sec{padding:72px 0 64px;border-top:1px solid var(--line)}
+.ch-eyebrow{font:600 12px/1 var(--mono);letter-spacing:.16em;color:var(--amber)}
+.ch-eyebrow .tc{color:var(--dim);margin-left:10px;letter-spacing:.04em}
+h2{font-size:clamp(24px,3vw,31px);letter-spacing:-.01em;font-weight:750;margin:12px 0 10px}
+.sec-lede{color:var(--mut);max-width:780px;margin-bottom:28px}
+h3{font-size:18px;font-weight:700;margin:34px 0 12px}
+h4{font-size:14.5px;font-weight:650;margin:0 0 6px}
+p+p{margin-top:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media (max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:18px 20px}
+.card h4{display:flex;align-items:center;gap:8px}
+.card p,.card li{font-size:14px;color:var(--mut)}
+.card ul{padding-left:18px;margin-top:6px}
+.card li{margin:5px 0}
+.card li b,.card p b{color:var(--ink);font-weight:600}
+.mark-ok{color:var(--green)}.mark-no{color:var(--red)}.mark-warn{color:var(--amber)}
+.chiprow{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 12px;font:12px/1.7 var(--mono);color:var(--mut);background:var(--bg2)}
+.note{border-left:3px solid var(--amber);background:var(--amber-dim);border-radius:0 10px 10px 0;padding:12px 16px;font-size:14px;color:var(--mut);margin:18px 0}
+.note b{color:var(--ink)}
+
+/* ---------- 表格 ---------- */
+.tbl{width:100%;border-collapse:collapse;font-size:13.8px;margin-top:6px}
+.tbl th{font:600 11px/1.6 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line2)}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--mut);vertical-align:top}
+.tbl td:first-child{white-space:nowrap}
+.tbl td b{color:var(--ink);font-weight:600}
+.tbl code{white-space:nowrap}
+.tblwrap{overflow-x:auto}
+
+/* ---------- 命令解剖 ---------- */
+.tokrow{display:flex;flex-wrap:wrap;gap:7px;background:#0B0E13;border:1px solid var(--line);border-radius:12px;padding:14px}
+.tok{font:12.6px/1.5 var(--mono);color:#C6D2E2;background:var(--panel);border:1px solid var(--line2);border-radius:8px;padding:7px 11px;cursor:pointer;transition:all .12s}
+.tok:hover{border-color:var(--amber);color:var(--ink)}
+.tok.on{border-color:var(--amber);color:var(--amber);background:var(--amber-dim)}
+.tok .k{display:block;font-size:9.5px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;margin-bottom:2px}
+.tok.on .k{color:var(--amber)}
+.tokdetail{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:0 12px 12px 0;padding:14px 18px;min-height:96px}
+.tokdetail h4{font-family:var(--mono);color:var(--amber);font-size:13px}
+.tokdetail p{font-size:14px;color:var(--mut);margin-top:6px}
+.tokdetail .var{font-size:13px;color:var(--dim);margin-top:8px}
+.tokdetail .var b{color:var(--cyan);font-weight:500}
+
+/* ---------- 标签页 ---------- */
+.tabbtns{display:flex;flex-wrap:wrap;gap:6px;margin:22px 0 0}
+.tabbtn{font:12.5px/1 var(--mono);color:var(--mut);background:var(--panel);border:1px solid var(--line);border-bottom:none;border-radius:9px 9px 0 0;padding:9px 14px;cursor:pointer}
+.tabbtn.on{color:var(--amber);background:#0B0E13;border-color:var(--line2)}
+.tabpane{display:none}
+.tabpane.on{display:block}
+.tabpane pre.code{border-radius:0 12px 12px 12px;margin:0}
+
+/* ---------- 调参台 playground ---------- */
+.pg{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px 20px;margin-top:8px}
+.pg-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
+.pg-title{font:600 12px/1 var(--mono);letter-spacing:.12em;color:var(--dim);text-transform:uppercase}
+.pg-count{margin-left:auto;font:600 13px/1 var(--mono);color:var(--green);background:rgba(127,217,160,.1);border:1px solid rgba(127,217,160,.35);border-radius:8px;padding:7px 12px}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden}
+.seg button{font:12.3px/1 var(--mono);color:var(--mut);background:transparent;border:none;padding:8px 12px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:none}
+.seg button.on{color:#141005;background:var(--amber);font-weight:600}
+.pg-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:14px 20px;margin:4px 0 12px;font:12.5px/1.6 var(--mono);color:var(--mut)}
+.pg-ctl label{display:flex;align-items:center;gap:9px}
+.pg-ctl input[type=range]{width:190px;accent-color:var(--amber)}
+.pg-ctl select{font:12.5px var(--mono);color:var(--ink);background:var(--bg2);border:1px solid var(--line2);border-radius:7px;padding:5px 8px}
+.pg-ctl .val{color:var(--amber);font-weight:700;min-width:38px;display:inline-block}
+.pg-legend{font-size:12px;color:var(--dim);margin:-4px 0 10px;font-family:var(--mono)}
+.pg svg{display:block;width:100%;height:auto;background:#0B0E13;border:1px solid var(--line);border-radius:10px}
+.striplab{font:10.5px/1 var(--mono);letter-spacing:.1em;color:var(--dim);text-transform:uppercase;margin:12px 0 5px}
+.strip{position:relative;height:36px;border-radius:7px;overflow:hidden;background:#0B0E13;border:1px solid var(--line)}
+.strip .sg{position:absolute;top:0;bottom:0}
+.strip .cut{position:absolute;top:0;bottom:0;width:2px;background:var(--amber);box-shadow:0 0 6px rgba(255,180,84,.8)}
+.strip .lab{position:absolute;top:50%;transform:translateY(-50%);font:10px/1.2 var(--mono);color:rgba(233,237,243,.85);padding-left:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.strip .zone{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(-55deg,rgba(180,156,255,.35) 0 4px,transparent 4px 9px)}
+.strip .zfade{background:linear-gradient(90deg,transparent,#000 85%)}
+.strip .flash{position:absolute;top:-1px;font-size:12px;transform:translateX(-50%)}
+.pg-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.dchip{font:12px/1.7 var(--mono);border-radius:999px;padding:2px 12px;border:1px solid}
+.dchip.ok{color:var(--green);border-color:rgba(127,217,160,.4);background:rgba(127,217,160,.08)}
+.dchip.bad{color:var(--red);border-color:rgba(255,122,118,.4);background:rgba(255,122,118,.08)}
+.dchip.info{color:var(--cyan);border-color:rgba(95,198,255,.4);background:rgba(95,198,255,.07)}
+.dchip.dim{color:var(--dim);border-color:var(--line)}
+.pg-cmd{display:flex;align-items:center;gap:10px;margin-top:14px;background:#0B0E13;border:1px solid var(--line);border-radius:10px;padding:10px 14px;overflow-x:auto}
+.pg-cmd code{background:none;border:none;padding:0;font-size:12.6px;color:#D6DEEA;white-space:nowrap}
+.pg-cmd code .c-kw{color:var(--amber)}
+.copybtn{margin-left:auto;flex:none;font:11px/1 var(--mono);color:var(--mut);background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:6px 10px;cursor:pointer}
+.copybtn:hover{color:var(--amber);border-color:var(--amber)}
+.autobtn{margin-left:auto;color:var(--amber);border-color:rgba(255,180,84,.5);background:rgba(255,180,84,.08)}
+.autobtn:hover{background:rgba(255,180,84,.18)}
+.sc-tbl{margin-top:14px;max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.sc-tbl table{width:100%;border-collapse:collapse;font:12px/1.7 var(--mono)}
+.sc-tbl th{position:sticky;top:0;background:var(--panel2);color:var(--dim);font-weight:600;text-align:left;padding:7px 12px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+.sc-tbl td{padding:5px 12px;border-top:1px solid var(--line);color:var(--mut)}
+.sc-tbl td:first-child{color:var(--cyan)}
+
+/* ---------- 工作流 ---------- */
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin:20px 0 8px}
+.fnode{flex:1 1 150px;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+.fnode.hot{border-color:var(--amber);background:linear-gradient(180deg,var(--amber-dim),var(--panel))}
+.fnode h4{font:600 13px/1.5 var(--sans)}
+.fnode h4 small{display:block;font:10.5px/1.6 var(--mono);letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+.fnode p{font-size:12.3px;color:var(--mut);margin-top:5px;line-height:1.65}
+.fnode code{font-size:11px}
+.farr{align-self:center;color:var(--dim);font-size:19px;flex:none}
+@media (max-width:820px){.flow{flex-direction:column}.farr{transform:rotate(90deg);align-self:flex-start;margin-left:22px}}
+
+/* ---------- 失败边界卡片 ---------- */
+.lim h4{color:var(--ink)}
+.lim .sym{font:11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--red);display:block;margin-bottom:7px}
+.lim .fix{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line);font-size:13.4px}
+.lim .fix b{color:var(--green)}
+
+footer{border-top:1px solid var(--line);padding:56px 0 72px;color:var(--dim);font-size:13px}
+footer h2{margin-bottom:14px}
+.up{display:inline-block;margin-top:26px;font:12px var(--mono);color:var(--dim)}
+
+@media (prefers-reduced-motion:no-preference){
+  .strip .cut{animation:cutin .5s both}
+  @keyframes cutin{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+@media (max-width:640px){
+  body{font-size:15px}
+  .hero{padding-top:86px}
+  .pg{padding:14px}
+  .pg-ctl input[type=range]{width:140px}
+}
+</style>
+</head>
+<body>
+<nav class="topbar" aria-label="章节导航">
+  <div class="tb-in">
+    <div class="tb-title">PySceneDetect · 一文读懂</div>
+    <div class="tb-nav" id="tbnav">
+      <a class="tick" href="#hero"><b>00</b> <span>任务</span></a>
+      <a class="tick" href="#contract"><b>01</b> <span>契约</span></a>
+      <a class="tick" href="#minimal"><b>02</b> <span>最小调用</span></a>
+      <a class="tick" href="#params"><b>03</b> <span>参数</span></a>
+      <a class="tick" href="#verify"><b>04</b> <span>验证</span></a>
+      <a class="tick" href="#automation"><b>05</b> <span>自动化</span></a>
+      <a class="tick" href="#workflow"><b>06</b> <span>工作流</span></a>
+      <a class="tick" href="#limits"><b>07</b> <span>边界</span></a>
+      <a class="tick" href="#compare"><b>08</b> <span>取舍</span></a>
+    </div>
+  </div>
+</nav>
+
+<!-- ============ 00 首屏 ============ -->
+<header class="hero" id="hero">
+  <div class="wrap">
+    <div class="eyebrow">PySceneDetect · 镜头边界检测(shot boundary detection) · CLI + Python 库</div>
+    <h1>一文读懂 <span class="en">PySceneDetect</span><br>把视频按镜头切开</h1>
+    <p class="lede">贯穿全文的任务只有一个:手里有一条 <b>58 秒的产品评测粗剪 demo.mp4</b>(1080p / 25fps),想按<b>镜头</b>拆成独立片段,交给剪辑挑素材、给数据标注建 clip 数据集。看 PySceneDetect 如何把<b>帧间像素差异</b>变成<b>时间码清单</b>,再变成一组 <code>.mp4</code> 和一张 <code>CSV</code>。</p>
+    <div class="task" aria-label="输入到输出的路径">
+      <span class="tk in">▸ demo.mp4 <b>58s · 1080p · 25fps</b></span>
+      <span class="arr">→</span>
+      <span class="tk cmd"><span class="c-kw">scenedetect</span> -i demo.mp4 detect-adaptive list-scenes split-video</span>
+      <span class="arr">→</span>
+      <span class="tk out">✓ demo-Scene-001…006.mp4</span>
+      <span class="tk out">✓ demo-Scenes.csv</span>
+    </div>
+    <div class="pg" id="pgHero"></div>
+    <p class="hero-note">上面是可以拖的:这条曲线就是 PySceneDetect 逐帧算出的 <code>content_val</code>(相邻帧的内容差异),越过阈值线就切一刀。为什么有的切点会漏、有的会误切,<a href="#params">CH03 的完整调参台</a>里对着答案讲。</p>
+  </div>
+</header>
+
+<!-- ============ 01 能力契约 ============ -->
+<section class="sec" id="contract">
+  <div class="wrap">
+    <div class="ch-eyebrow">CH 01<span class="tc">// CAPABILITY · 能力契约</span></div>
+    <h2>它负责一件窄而硬的事:找到镜头切换的那一帧</h2>
+    <p class="sec-lede">PySceneDetect 是一个开源 Python 工具(BSD 协议,<code>pip install scenedetect</code>),名字里的 "scene" 其实是剪辑意义上的<b style="color:var(--ink)">镜头(shot)</b>:一次连续拍摄。它不理解剧情,只回答一个问题——<b style="color:var(--ink)">这条视频在哪些时间点从一个镜头切到了另一个镜头</b>,然后把答案落成清单、缩略图或切好的片段。</p>
+    <div class="grid2">
+      <div class="card">
+        <h4><span class="mark-ok">✓</span> 交给它的事</h4>
+        <ul>
+          <li><b>输入</b>:一个本地视频文件——mp4 / mkv / mov / avi 等,凡是本机 FFmpeg / OpenCV 解不开的它也解不开。输入只读,不会被修改。</li>
+          <li><b>处理</b>:逐帧计算相邻帧差异(色相/亮度/饱和度/边缘的加权变化,或亮度均值),按检测器规则判定切点;硬切(hard cut)是它的主场。</li>
+          <li><b>输出</b>:① 场景时间码清单(stdout 表格 + <code>*-Scenes.csv</code>);② 每场景抽帧 JPEG(<code>save-images</code>);③ 调 ffmpeg 切出的独立视频(<code>split-video</code>);④ 每帧指标 <code>stats.csv</code> 供复盘。</li>
+          <li><b>典型使用者</b>:剪辑/后期拆素材;ML 数据工程把长视频切成训练 clip;媒资系统给视频建镜头索引;自动化集锦/二创流水线。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4><span class="mark-no">✗</span> 不该指望它的事</h4>
+        <ul>
+          <li><b>语义"场景"</b>:它不知道"咖啡馆这场戏"由 12 个镜头组成。同一地点聚类、剧情分段属于下游任务。</li>
+          <li><b>复杂渐变转场的高召回</b>:长 dissolve、划像、花字转场靠帧差很难稳定抓到,这是深度模型(如 TransNetV2)的领域,见 <a href="#limits">CH07</a>。</li>
+          <li><b>转码与画质</b>:它切片时只是调用 ffmpeg,裁剪、缩放、修复变帧率都应该在上游用 ffmpeg 自己做。</li>
+          <li><b>音频、字幕、内容理解</b>:完全不看声音,不打语义标签。</li>
+          <li><b>流媒体 URL</b>:先把文件下载/录制到本地。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note"><b>一句话契约:</b>视频文件进,时间码(以及按时间码派生的片段/缩略图)出。所有下游价值都建立在"切点找得准"这一件事上——所以这篇文章一半篇幅在讲怎么让它切得准、以及怎么验证它切准了。</div>
+    <div class="note"><b>先别追求"单工具完美":</b>PySceneDetect 更准确的定位是<b>可解释、可脚本化的候选切点生成器</b>,不是理解剧情和摄影意图的最终裁判。闪光灯、频闪、快速甩镜和真实硬切在帧差曲线上可能长得几乎一样;dissolve 又会把一次切换摊薄到几十帧里。真实业务里要先决定"宁可多切一点"还是"宁可少切一点",再用验证、过滤、人工审核或深度模型升级把结果接住。</div>
+  </div>
+</section>
+
+<!-- ============ 02 最小可运行调用 ============ -->
+<section class="sec" id="minimal">
+  <div class="wrap">
+    <div class="ch-eyebrow">CH 02<span class="tc">// MINIMAL RUN · 最小可运行</span></div>
+    <h2>一条命令,从 demo.mp4 到六个片段</h2>
+    <p class="sec-lede">先装好两样东西:PySceneDetect 本体(带 OpenCV 后端)和 ffmpeg(<code>split-video</code> 靠它切片)。然后就是下面这条命令——<b style="color:var(--ink)">点击每一段 token</b>,看它在这条流水线里各管什么。</p>
+    <pre class="code"><code><span class="c-cmt"># 安装:核心 + OpenCV 解码后端;切片功能另需 ffmpeg 在 PATH 上</span>
+pip install <span class="c-str">"scenedetect[opencv]"</span>
+scenedetect version && ffmpeg -version   <span class="c-cmt"># 两个都能打印版本,环境就绪</span></code></pre>
+
+    <h3>命令解剖(可点击)</h3>
+    <div class="tokrow" id="tokrow" role="tablist" aria-label="命令各部分"></div>
+    <div class="tokdetail" id="tokdetail"></div>
+    <p style="font-size:13.5px;color:var(--dim);margin-top:12px">顺序有讲究:<b style="color:var(--mut)">全局选项(<code>-i</code> / <code>-o</code> / <code>-s</code>)在前 → 一个 <code>detect-*</code> 检测器居中 → 输出命令随意叠加在后</b>。一条命令只解码一遍视频,<code>list-scenes</code>、<code>save-images</code>、<code>split-video</code> 共享同一次检测结果。</p>
+
+    <h3>跑起来之后你会看到什么</h3>
+    <div class="tabbtns" id="tabs-min" role="tablist">
+      <button class="tabbtn on" data-pane="p-stdout">终端输出</button>
+      <button class="tabbtn" data-pane="p-tree">产物文件树</button>
+      <button class="tabbtn" data-pane="p-csv">demo-Scenes.csv</button>
+      <button class="tabbtn" data-pane="p-py">Python 等价写法</button>
+    </div>
+    <div class="tabpane on" id="p-stdout"><pre class="code"><code><span class="c-fn">$ scenedetect -i demo.mp4 -s stats.csv detect-adaptive list-scenes save-images split-video</span>
+<span class="c-out">[PySceneDetect] Loaded 1 video, framerate: 25.000 FPS, resolution: 1920 x 1080
+[PySceneDetect] Detecting scenes...
+  Detected: 6 | 100%|██████████| 1450/1450 [00:04<00:00, 337.2 frames/s]</span>
+<span class="c-out">[PySceneDetect] Processed 1450 frames in 4.3 seconds (average 337.2 FPS).</span>
+[PySceneDetect] <span class="c-kw">Detected 6 scenes</span>, average shot length 9.7 seconds.
+<span class="c-out">[PySceneDetect] Writing scene list to CSV file: demo-Scenes.csv
+[PySceneDetect] Scene List:
+ | Scene # | Start Frame |  Start Time  | End Frame |   End Time   |
+ |    1    |          1  | 00:00:00.000 |      185  | 00:00:07.400 |
+ |    2    |        186  | 00:00:07.400 |      395  | 00:00:15.800 |
+ |    3    |        396  | 00:00:15.800 |      575  | 00:00:23.000 |
+ |    4    |        576  | 00:00:23.000 |      755  | 00:00:30.200 |
+ |    5    |        756  | 00:00:30.200 |     1225  | 00:00:49.000 |
+ |    6    |       1226  | 00:00:49.000 |     1450  | 00:00:58.000 |</span>
+<span class="c-out">[PySceneDetect] Splitting input video... 100%|██████████| 6/6 [00:11<00:00]</span>
+[PySceneDetect] <span class="c-kw">Video splitting completed</span>, individual scenes written to disk.</code></pre>
+    <p style="font-size:13.5px;color:var(--dim);margin-top:10px">进度条和日志走 <b style="color:var(--mut)">stderr</b>,场景表走 stdout——但机器解析别抓 stdout,用旁边那张 CSV(见 <a href="#automation">CH05</a>)。</p></div>
+    <div class="tabpane" id="p-tree"><pre class="code"><code>work/
+├── demo.mp4                <span class="c-cmt"># 输入,原样不动</span>
+├── stats.csv               <span class="c-cmt"># -s 产物:每帧指标,换阈值重跑可复用、可画图复盘</span>
+├── demo-Scenes.csv         <span class="c-cmt"># list-scenes 产物:机器可读的时间码清单(下游契约)</span>
+├── demo-Scene-001.mp4      <span class="c-cmt"># split-video 产物:命名固定为 $VIDEO_NAME-Scene-$NUM.mp4</span>
+├── demo-Scene-002.mp4
+├── …
+├── demo-Scene-006.mp4
+├── demo-Scene-001-01.jpg   <span class="c-cmt"># save-images 产物:每场景默认 3 张(首/中/尾附近)</span>
+├── demo-Scene-001-02.jpg
+└── …                       <span class="c-cmt"># 6 场景 × 3 = 18 张 JPEG</span></code></pre></div>
+    <div class="tabpane" id="p-csv"><pre class="code"><code><span class="c-cmt"># 第 1 行是切点时间码汇总,第 2 行起才是表头 + 每场景一行</span>
+Timecode List:,00:00:07.400,00:00:15.800,00:00:23.000,00:00:30.200,00:00:49.000
+Scene Number,Start Frame,Start Timecode,Start Time (seconds),End Frame,End Timecode,End Time (seconds),Length (frames),Length (timecode),Length (seconds)
+<span class="c-num">1,1,00:00:00.000,0.000,185,00:00:07.400,7.400,185,00:00:07.400,7.400
+2,186,00:00:07.400,7.400,395,00:00:15.800,15.800,210,00:00:08.400,8.400
+3,396,00:00:15.800,15.800,575,00:00:23.000,23.000,180,00:00:07.200,7.200
+…</span></code></pre>
+    <p style="font-size:13.5px;color:var(--dim);margin-top:10px">用 pandas 读的时候记得 <code>skiprows=1</code> 跳过第一行汇总。帧号从 1 起、区间左闭右开:上一场景的 End 就是下一场景的 Start。</p></div>
+    <div class="tabpane" id="p-py"><pre class="code"><code><span class="c-kw">from</span> scenedetect <span class="c-kw">import</span> detect, AdaptiveDetector, split_video_ffmpeg
+
+<span class="c-cmt"># detect() 一步到位:打开视频 → 逐帧检测 → 返回 [(start, end), ...] 时间码对</span>
+scenes = <span class="c-fn">detect</span>(<span class="c-str">"demo.mp4"</span>, AdaptiveDetector(), stats_file_path=<span class="c-str">"stats.csv"</span>)
+
+<span class="c-kw">for</span> i, (start, end) <span class="c-kw">in</span> <span class="c-fn">enumerate</span>(scenes, <span class="c-num">1</span>):
+    <span class="c-fn">print</span>(<span class="c-str">f"Scene {i}: {start.get_timecode()} → {end.get_timecode()}  "</span>
+          <span class="c-str">f"({(end - start).get_seconds():.1f}s)"</span>)
+
+split_video_ffmpeg(<span class="c-str">"demo.mp4"</span>, scenes, show_progress=<span class="c-kw">True</span>)</code></pre>
+    <p style="font-size:13.5px;color:var(--dim);margin-top:10px">返回值是 <code>FrameTimecode</code> 对象对,能直接换算帧号(<code>.get_frames()</code>)、秒(<code>.get_seconds()</code>)、时间码字符串——这就是嵌进自己脚本时的数据结构,不用解析任何文本。要更细的控制(多检测器叠加、逐帧回调、复用 <code>StatsManager</code>)再下探 <code>SceneManager</code> 这一层 API。</p></div>
+
+    <h3>什么时候用哪个入口</h3>
+    <div class="tblwrap"><table class="tbl">
+      <tr><th>入口</th><th>适合</th><th>不适合</th></tr>
+      <tr><td><b>CLI</b> <code>scenedetect …</code></td><td>交互式调参、一次性拆素材、shell 流水线里当一个步骤;输出命令组合即开即用</td><td>需要把场景列表作为数据结构继续加工的程序</td></tr>
+      <tr><td><b>Python API</b> <code>detect()</code> / <code>SceneManager</code></td><td>嵌进服务或批处理脚本,拿到 <code>scene_list</code> 直接喂下游(裁剪、标注、入库)</td><td>只想切个视频却写 30 行代码</td></tr>
+      <tr><td><b>配置文件</b> <code>scenedetect.cfg</code></td><td>团队统一默认参数(检测器、阈值、输出目录),CLI 不用每次重复长参数</td><td>参数需要随每条素材变化的场合</td></tr>
+    </table></div>
+  </div>
+</section>
+<!-- ============ 03 参数心智模型 ============ -->
+<section class="sec" id="params">
+  <div class="wrap">
+    <div class="ch-eyebrow">CH 03<span class="tc">// PARAMETERS · 参数心智模型</span></div>
+    <h2>三个旋钮决定 90% 的结果:检测器、阈值、最短场景</h2>
+    <p class="sec-lede">PySceneDetect 的参数不少,但真正改变行为的只有一小撮。下面这台调参台里埋了四个"考点"——一处画面变化很小的<b style="color:var(--ink)">弱切</b>、一次<b style="color:var(--ink)">闪光灯</b>、一段 <b style="color:var(--ink)">dissolve 渐变</b>、一个<b style="color:var(--ink)">片尾 fade</b>。切换检测器、拖动阈值,底部"检测结果 vs 真实镜头"两条带子会立刻告诉你代价是什么。</p>
+    <div class="pg" id="pgFull"></div>
+
+    <h3>从上面能拧出来的几条经验</h3>
+    <div class="grid3">
+      <div class="card"><h4>detect-content:绝对差越线就切</h4><p>默认阈值 <code>-t 27</code> 抓硬切又稳又快。但它是"一刀切"的绝对标准:想抓到 00:30.2 那次弱切(帧差仅 24)得降到 20 附近,顺便就把闪光(帧差 30)放了进来;再往下探到能抓渐变的 16,离手持噪声的洪水(12 以下)只剩一步——<b>灵敏度和误切是同一个旋钮</b>。</p></div>
+      <div class="card"><h4>detect-adaptive:看的是相对邻域的倍数</h4><p>把帧差除以前后几帧的滚动均值,<b>安静画面里的小变化会被放大,晃动画面里的大数值会被稀释</b>。所以它在默认 <code>-t 3</code> 就抓到了弱切,而闪光那一帧身处嘈杂的手持邻域,比值反被稀释到线下——同一份素材,五处硬切全中、零误切。运动多、灯光乱的实拍素材,默认选它。</p></div>
+      <div class="card"><h4>detect-threshold:只管黑场</h4><p>它比较的不是帧差,而是<b>整帧平均亮度是否穿过阈值</b>——专门切 fade to/from black。硬切在它眼里不存在。素材靠黑场分段(录播、老式转场)才用它,或与其他检测器叠加补片尾。</p></div>
+    </div>
+
+    <h3>五种检测器横评:效果、场景、优缺点</h3>
+    <p style="font-size:13.5px;color:var(--dim);margin:-6px 0 10px">上面调参台可切换的是前三个;<code>hash</code> / <code>hist</code> 原理更简单,列在这里做选型对照。五个都是"三(五)选一"的关系,一条命令只挂一个。</p>
+    <div class="tblwrap"><table class="tbl">
+      <tr><th>检测器</th><th>看什么信号</th><th>擅长(效果)</th><th>盲区与坑</th><th>什么场景用它</th></tr>
+      <tr><td><code>detect-content</code></td><td>相邻帧 HSV 内容差的<b>绝对值</b></td><td>干净硬切,又稳又快;配 <code>-s stats.csv</code> 曲线最好复盘,是教程与调参的基准</td><td>灵敏度和误切是同一个旋钮:降阈值抓弱切必然引进闪光/抖动;dissolve、黑场一律看不见</td><td>演播室、成片、切换干净的素材;想要"可解释的默认起点"</td></tr>
+      <tr><td><code>detect-adaptive</code></td><td>帧差 ÷ 前后邻域滚动均值的<b>比值</b></td><td>运动/手持画面里的硬切、安静段里的弱切都抓得住;闪光被嘈杂邻域稀释,<b>天然抗瞬变</b></td><td>dissolve 依旧看不见;画面持续高频晃动会抬高分母,极端情况下埋掉真切;阈值量纲是"倍数",与 content 不通用</td><td>vlog、纪实、运镜多的实拍——<b>大多数真实素材的首选</b></td></tr>
+      <tr><td><code>detect-threshold</code></td><td>整帧<b>平均亮度</b>是否穿越阈值</td><td>fade to/from black 一抓一个准,还能顺便给出黑场中点做精确分割点</td><td>除黑场外一切都不存在:硬切、渐变、白闪全部无视;素材整体偏暗时阈值要跟着降</td><td>录播/课程按黑场分章节、老式黑场转场、补片尾 fade</td></tr>
+      <tr><td><code>detect-hash</code></td><td>相邻帧<b>感知哈希</b>距离</td><td>计算量小,速度是帧差法的数倍,海量素材粗扫利器</td><td>精度换来的:弱切、构图相近的切换容易漏;不适合做最终精切</td><td>媒资库第一遍粗分、量大于质的批处理,之后对可疑段精扫</td></tr>
+      <tr><td><code>detect-hist</code></td><td>相邻帧 <b>YUV 直方图</b>差异</td><td>只看颜色分布、不看像素位置,<b>对镜头运动天然不敏感</b>,抗抖动误切</td><td>反过来:两个镜头颜色分布接近(同场景反打)就漏;对灯光渐变也会迟钝</td><td>手持/运动误切太多、而镜头之间颜色区分明显的素材</td></tr>
+    </table></div>
+    <div class="note"><b>选型口诀:</b>不知道选什么就 <code>adaptive</code> 起步;有黑场章节再跑一遍 <code>threshold</code> 补边界;素材以万计先用 <code>hash</code> 粗扫;要精调阈值就换回 <code>content</code> + <code>stats.csv</code> 看曲线。CLI 一条命令只能挂一个检测器,"两样都要"见 CH06 的候选切点流水线。</div>
+
+    <h3>自动调优为什么仍然不能完美</h3>
+    <div class="grid3">
+      <div class="card"><h4>它优化的是评分,不是语义</h4><p>调参台里的"全局最优"只是把几个检测器、阈值和 <code>-m</code> 组合扫一遍,按命中数、误切数和默认值距离排序。它不会知道 00:19.6 是闪光灯,也不会知道 36s 的 dissolve 是剪辑意图。</p></div>
+      <div class="card"><h4>弱切和闪光会抢同一个旋钮</h4><p>为了抓弱切或渐变,阈值通常要降低;阈值一低,闪光、频闪、甩镜和手持抖动也更容易过线。这不是某个参数没找到,而是<b>召回率和精确率共用一组视觉信号</b>。</p></div>
+      <div class="card"><h4>单检测器有物理天花板</h4><p><code>content</code> / <code>adaptive</code> 主要看帧差,天然偏硬切;<code>threshold</code> 只看黑场;<code>hash</code> / <code>hist</code> 又会用精度换速度或抗运动。业务要全都要,就要进入候选切点融合和审核流程。</p></div>
+    </div>
+
+    <h3>关键参数速览(不是手册,是会改变结果的那几个)</h3>
+    <div class="tblwrap"><table class="tbl">
+      <tr><th>参数</th><th>默认</th><th>改变什么</th><th>什么时候动它</th></tr>
+      <tr><td><code>detect-content / adaptive / threshold / hash</code></td><td><code>detect-content</code>(教程惯例)</td><td><b>"什么算一次切换"的定义本身</b></td><td>实拍/运镜多 → <code>adaptive</code>;只按黑场分段 → <code>threshold</code>;海量视频粗扫 → <code>hash</code>(感知哈希,快)</td></tr>
+      <tr><td><code>-t, --threshold</code></td><td>content: 27 / adaptive: 3.0</td><td>灵敏度:低了碎、高了漏</td><td>先跑一遍带 <code>-s stats.csv</code>,看曲线定值,别盲试</td></tr>
+      <tr><td><code>-m, --min-scene-len</code></td><td><code>0.6s</code></td><td>场景最短时长,合并碎片场景</td><td>快闪混剪降到 <code>0.3s</code>;访谈/课程升到 <code>2s</code> 抗噪</td></tr>
+      <tr><td><code>-d, --downscale</code> / <code>-fs, --frame-skip</code></td><td>自动缩放 / 0</td><td>速度 ⇄ 精度:检测在缩小画面/隔帧上进行</td><td>4K 长片粗扫加 <code>-fs 2</code>;注意 frame-skip 会让切点精度变粗、且不能配合 stats 复用</td></tr>
+      <tr><td><code>time -s / -e</code></td><td>全片</td><td>只处理一个时间区间</td><td>调参时抽两分钟试跑:<code>time -s 1m -e 3m</code>,快一个量级</td></tr>
+      <tr><td><code>split-video --copy</code></td><td>不加(重编码 libx264)</td><td>切片速度 ⇄ 切点精度:<code>--copy</code> 不重编码但切点吸附到关键帧</td><td>片段只为人工浏览用 <code>--copy</code>;进训练集/成片必须帧级精确就用默认</td></tr>
+      <tr><td><code>--luma-only</code>(detect-content)</td><td>关</td><td>忽略色彩,只比亮度</td><td>灯光变色、调色跳变频繁的素材,减少颜色引起的误切</td></tr>
+    </table></div>
+    <div class="note"><b>心智模型一句话:</b>检测器决定"用什么尺子量帧差",阈值决定"多大算一刀",min-scene-len 决定"多碎算噪声"。其余参数几乎都在换取速度或输出形式。</div>
+  </div>
+</section>
+
+<!-- ============ 04 验证 ============ -->
+<section class="sec" id="verify">
+  <div class="wrap">
+    <div class="ch-eyebrow">CH 04<span class="tc">// VERIFY · 结果怎么算对</span></div>
+    <h2>三层验证:数字合理 → 抽样看图 → 曲线复盘</h2>
+    <p class="sec-lede">"命令跑完没报错"离"切对了"还差三步。更重要的是,不同业务对"切对"的定义并不一样:剪辑拆素材、训练集入库和媒资粗索引用的质量门槛不该相同。</p>
+    <h3>先定义业务目标,再调检测器</h3>
+    <div class="tblwrap"><table class="tbl">
+      <tr><th>业务目标</th><th>更怕什么</th><th>推荐策略</th><th>质量门槛</th></tr>
+      <tr><td><b>剪辑拆素材</b></td><td>误切太碎,剪辑浏览成本上升</td><td><code>adaptive</code> 起步,适当提高 <code>-m</code>;用 <code>save-images export-html</code> 快速人工过一遍</td><td>相邻场景缩略图明显不同;允许少量漏切由剪辑手工补</td></tr>
+      <tr><td><b>ML 训练集</b></td><td>片段混入两个镜头,污染标签</td><td>高精度优先:阈值保守、短片段过滤、疑似边界进人工审核;切片用默认重编码保证帧级精度</td><td>抽样片段首/中/尾必须同一镜头;高风险类别提高复核比例</td></tr>
+      <tr><td><b>媒资粗索引</b></td><td>成本太高、吞吐不够</td><td><code>hash</code> 或低清代理粗扫,只对可疑长段/低置信段再用 <code>adaptive</code> 精扫</td><td>场景数和平均时长落在合理区间;允许后续检索时再精修</td></tr>
+      <tr><td><b>课程/录播</b></td><td>章节边界漏掉</td><td>若靠黑场/静帧分段,优先 <code>threshold</code>;硬切只是辅助信号</td><td>黑场前后时间码准确;不要为了抓非章节硬切制造碎片</td></tr>
+      <tr><td><b>综艺/预告/短视频</b></td><td>dissolve、花字、频闪转场漏检</td><td>PySceneDetect 做 baseline;召回是硬指标时升级到 TransNetV2 等深度模型</td><td>按人工真值算 precision / recall,不要只看场景数量</td></tr>
+    </table></div>
+    <div class="note"><b>决策顺序:</b>先定"宁可漏切还是宁可误切",再选检测器和阈值。没有这个业务目标,自动调优只能给出数学上最优的一组参数,无法保证业务上最可用。</div>
+
+    <h3>三层验证按成本从低到高</h3>
+    <div class="grid3">
+      <div class="card"><h4>① 数字合理性 · 5 秒</h4><p>看 stdout 摘要和 <code>demo-Scenes.csv</code>:58 秒的评测粗剪切出 4–8 个场景是正常的;切出 40 个说明阈值太低,切出 1 个说明太高或检测器选错。再扫一眼时长列:<b>不该有 &lt;0.5s 的碎片,所有场景时长之和应等于原片时长</b>。</p></div>
+      <div class="card"><h4>② 抽样看图 · 1 分钟</h4><p><code>save-images</code> 给每个场景存 3 张图(首/中/尾)。抽查标准很机械:<b>同一场景的 3 张图必须是同一个镜头;相邻场景的交界两张图必须明显不同</b>。前者不满足 = 漏切,后者不满足 = 误切。要看全量就 <code>export-html</code> 生成一张带缩略图的审核网页。</p></div>
+      <div class="card"><h4>③ 曲线复盘 · 出问题才做</h4><p>怀疑某处漏切时打开 <code>stats.csv</code>,找到那个时间点的 <code>content_val</code>:值确实低 → 是弱切/渐变,该换 <code>detect-adaptive</code> 或降阈值;值明明很高 → 检查是不是被 <code>min-scene-len</code> 合并了。CH03 的调参台就是这张曲线的交互版。</p></div>
+    </div>
+    <h3>把 ① 写成代码,流水线里自动跑</h3>
+    <pre class="code"><code><span class="c-kw">import</span> pandas <span class="c-kw">as</span> pd
+
+df = pd.read_csv(<span class="c-str">"demo-Scenes.csv"</span>, skiprows=<span class="c-num">1</span>)          <span class="c-cmt"># 第一行是 Timecode List 汇总</span>
+<span class="c-kw">assert</span> <span class="c-fn">len</span>(df) &gt;= <span class="c-num">2</span>,                          <span class="c-str">"只有 1 个场景:阈值过高或检测器不适配"</span>
+<span class="c-kw">assert</span> df[<span class="c-str">"Length (seconds)"</span>].min() &gt; <span class="c-num">0.5</span>,   <span class="c-str">"存在碎片场景:调高 -m / -t"</span>
+<span class="c-kw">assert</span> <span class="c-fn">abs</span>(df[<span class="c-str">"Length (seconds)"</span>].sum() - <span class="c-num">58.0</span>) &lt; <span class="c-num">0.1</span>, <span class="c-str">"场景没有铺满全片"</span></code></pre>
+    <p style="font-size:13.5px;color:var(--dim)">这三条断言便宜到可以挂在每一次批处理后面;真正的质量抽查(②)按比例采样人工看即可。</p>
+  </div>
+</section>
+
+<!-- ============ 05 自动化契约 ============ -->
+<section class="sec" id="automation">
+  <div class="wrap">
+    <div class="ch-eyebrow">CH 05<span class="tc">// AUTOMATION · 脚本与流水线契约</span></div>
+    <h2>exit code 只说"流程没崩",成功要数产物</h2>
+    <p class="sec-lede">把它放进 cron / CI / 任务队列之前,先弄清它对机器的承诺:</p>
+    <div class="tblwrap"><table class="tbl">
+      <tr><th>契约点</th><th>行为</th><th>对策</th></tr>
+      <tr><td><b>exit code</b></td><td><code>0</code> = 流程正常结束——<b>包括"检出 0 个场景"</b>;非 0 = 参数错误 / 文件打不开 / 解码失败</td><td>判成功用双保险:exit code 为 0 <b>且</b> 产物计数 &gt; 0</td></tr>
+      <tr><td><b>stdout / stderr</b></td><td>场景表走 stdout,日志与进度条走 stderr</td><td>机器解析别抓 stdout,读 <code>*-Scenes.csv</code> 或直接用 Python API 拿 <code>scene_list</code></td></tr>
+      <tr><td><b>覆盖行为</b></td><td>输出文件名由输入名派生(<code>demo-Scene-001.mp4</code>),重跑<b>直接覆盖</b>,不追加、不去重</td><td>天然幂等;但不同视频若重名会互相覆盖,用 <code>-o 目录</code> 按任务隔离</td></tr>
+      <tr><td><b>部分产物</b></td><td><code>split-video</code> 逐段写盘,中途被杀会留下残缺片段</td><td>写进临时目录,全部成功后原子 <code>mv</code> 到正式位置</td></tr>
+      <tr><td><b>可复用中间态</b></td><td><code>-s stats.csv</code> 存每帧指标,同一视频换阈值重跑可跳过大部分解码</td><td>批量调参时固定带上,省的是最贵的解码时间</td></tr>
+    </table></div>
+    <h3>一个能直接抄的批处理骨架</h3>
+    <pre class="code"><code><span class="c-cmt">#!/usr/bin/env bash
+# 用法: ./split_one.sh input.mp4 —— 成功后片段在 clips/&lt;视频名&gt;/ 下</span>
+<span class="c-kw">set</span> -euo pipefail
+in=<span class="c-str">"$1"</span>; name=<span class="c-str">"$(basename "${in%.*}")"</span>
+tmp=<span class="c-str">"$(mktemp -d)"</span>; <span class="c-kw">trap</span> <span class="c-str">'rm -rf "$tmp"'</span> EXIT
+
+scenedetect -i <span class="c-str">"$in"</span> -o <span class="c-str">"$tmp"</span> -s <span class="c-str">"$tmp/stats.csv"</span> \
+            detect-adaptive list-scenes split-video
+
+n=<span class="c-str">"$(ls "$tmp"/*-Scene-*.mp4 2&gt;/dev/null | wc -l)"</span>
+(( n &gt; <span class="c-num">0</span> )) || { <span class="c-fn">echo</span> <span class="c-str">"[FAIL] $in: 0 scenes produced"</span> &gt;&amp;2; <span class="c-kw">exit</span> <span class="c-num">1</span>; }
+
+mkdir -p <span class="c-str">"clips/$name"</span> &amp;&amp; mv <span class="c-str">"$tmp"</span>/* <span class="c-str">"clips/$name/"</span>
+<span class="c-fn">echo</span> <span class="c-str">"[OK] $in → $n clips"</span></code></pre>
+    <p style="font-size:13.5px;color:var(--dim)">要在 Python 服务里做同样的事,直接用 CH02 的 <code>detect()</code>:异常即失败,<code>len(scene_list)==0</code> 即空结果,不需要解析任何输出。</p>
+  </div>
+</section>
+
+<!-- ============ 06 工作流位置 ============ -->
+<section class="sec" id="workflow">
+  <div class="wrap">
+    <div class="ch-eyebrow">CH 06<span class="tc">// PIPELINE · 嵌进工作流</span></div>
+    <h2>它站在解码之后、一切理解之前</h2>
+    <p class="sec-lede">分镜几乎总是视频流水线的第一道结构化工序:上游只负责把素材喂成它能稳定解码的样子,下游拿着时间码各取所需。</p>
+    <div class="flow">
+      <div class="fnode"><h4><small>Upstream · 准备</small>采集 / 下载素材</h4><p>相机、手机、录屏、平台下载。手机与录屏常是变帧率(VFR),是后面最大的坑。</p></div>
+      <div class="farr">→</div>
+      <div class="fnode"><h4><small>Upstream · 预处理</small>ffmpeg 规整</h4><p>统一成恒定帧率、必要时出低清代理加速调参:<br><code>ffmpeg -i cam.mov -vsync cfr -r 25 demo.mp4</code></p></div>
+      <div class="farr">→</div>
+      <div class="fnode hot"><h4><small>本文主角</small>PySceneDetect</h4><p>检测切点,产出三类物:<b>时间码 CSV</b>(数据契约)、<b>片段 mp4</b>(直接可用)、<b>缩略图 / stats</b>(供审核复盘)。</p></div>
+      <div class="farr">→</div>
+      <div class="fnode"><h4><small>Downstream · 消费</small>三条去向</h4><p>① 片段 → 标注平台 / 训练集 / 剪辑工程<br>② CSV → pandas 统计、生成 EDL/OTIO 进 NLE<br>③ <code>export-html</code> 审核页 → 人工抽查后放行</p></div>
+    </div>
+    <div class="grid2" style="margin-top:20px">
+      <div class="card"><h4>链路示例 A:ML 训练集</h4><p><code>yt 下载 → ffmpeg 转 CFR → scenedetect 切片 + CSV → 断言校验(CH04) → 片段重命名入库 → 标注/训练</code>。切点帧级精确很重要,split-video 用默认重编码而不是 <code>--copy</code>。</p></div>
+      <div class="card"><h4>链路示例 B:剪辑拆素材</h4><p><code>素材 → scenedetect list-scenes save-images → export-html 快速过一遍 → 只把需要的场景 split 出来,或把 CSV 转成标记导进 Resolve/Premiere</code>。这里速度优先,<code>--copy</code> 足够。</p></div>
+    </div>
+    <h3>生产里不是"检测完就结束",而是处理候选切点</h3>
+    <div class="flow">
+      <div class="fnode"><h4><small>Candidate · 候选</small>多路生成切点</h4><p><code>adaptive</code> 抓硬切,<code>threshold</code> 补黑场;转场密集素材再加深度模型。多路结果先都当候选,不要急着切片。</p></div>
+      <div class="farr">→</div>
+      <div class="fnode"><h4><small>Filter · 过滤</small>吃掉明显噪声</h4><p>合并距离过近的切点,过滤短于业务下限的碎片,把 00:19.6 这类闪光误切标为低置信候选。</p></div>
+      <div class="farr">→</div>
+      <div class="fnode"><h4><small>Review · 审核</small>只看高风险段</h4><p>生成 <code>export-html</code> 或自建审核页,优先复核短片段、连续密集切点、dissolve 区和模型/规则分歧的位置。</p></div>
+      <div class="farr">→</div>
+      <div class="fnode"><h4><small>Commit · 落库</small>产出稳定契约</h4><p>人工或规则确认后再输出最终 CSV / EDL / OTIO / clips。下游只消费"已确认切点",不直接消费原始检测结果。</p></div>
+    </div>
+    <div class="note"><b>关键区别:</b>PySceneDetect 的输出是很好的候选时间码,但生产系统最好把"原始候选"和"确认后的最终切点"分开保存。这样误切/漏切可以回溯,调参或模型升级也不会污染历史结果。</div>
+  </div>
+</section>
+
+<!-- ============ 07 失败边界 ============ -->
+<section class="sec" id="limits">
+  <div class="wrap">
+    <div class="ch-eyebrow">CH 07<span class="tc">// FAILURE MODES · 常见失败边界</span></div>
+    <h2>它会在哪里骗你,以及怎么接住</h2>
+    <div class="grid2">
+      <div class="card lim"><span class="sym">漏切 · 渐变转场</span><h4>dissolve / 划像抓不到</h4><p>渐变把一次切换摊薄成几十帧,每帧差异都不过线(调参台里那段紫色斜纹就是)。这是帧差法的原理性盲区,不是 bug。</p><p class="fix"><b>对策:</b>fade to black 用 <code>detect-threshold</code> 叠加补;真正的 dissolve 多、且召回要求高时,换深度模型(TransNetV2)做检测、PySceneDetect 只做切片执行。</p></div>
+      <div class="card lim"><span class="sym">误切 · 瞬时闪变</span><h4>闪光灯 / 频闪 / 快速甩镜</h4><p>一帧的剧烈变化和真切点在帧差上长得一模一样(调参台 00:19.6 的 ⚡)。</p><p class="fix"><b>对策:</b>换 <code>detect-adaptive</code>——瞬变的帧差会被嘈杂邻域的均值稀释,多数闪光过不了比值线;残余碎片交给 <code>-m</code> 合并;拿到 CSV 后按最短时长再过滤一道也很便宜。</p></div>
+      <div class="card lim"><span class="sym">时间码漂移 · VFR</span><h4>手机/录屏素材切点对不上</h4><p>变帧率视频在 OpenCV 后端下时间换算会漂,表现为"CSV 里的时间码和播放器里看到的差半秒"。</p><p class="fix"><b>对策:</b>上游一律 <code>ffmpeg -vsync cfr</code> 转恒定帧率(CH06 预处理位);或改用 PyAV 后端(<code>pip install scenedetect[pyav]</code>)。</p></div>
+      <div class="card lim"><span class="sym">环境 · 依赖缺失</span><h4>split-video 报 ffmpeg not found</h4><p>检测本身只要 OpenCV,但切片是外包给 ffmpeg 的;Windows 上最常见的翻车点就是 ffmpeg 不在 PATH。</p><p class="fix"><b>对策:</b>装好后用 <code>ffmpeg -version</code> 自检;只有 mkvtoolnix 时可用 <code>split-video --mkvmerge</code>(仅流拷贝模式)。</p></div>
+      <div class="card lim"><span class="sym">性能 · 长片高清</span><h4>4K 两小时素材跑得久</h4><p>检测速度大致与"分辨率 × 帧数"成正比。默认会自动 downscale,但解码本身省不掉。</p><p class="fix"><b>对策:</b>调参阶段用 <code>time -s/-e</code> 抽片段 + 低清代理;定参后全片只跑一次并落 <code>stats.csv</code>;极端量级用 <code>-fs 1/2</code> 隔帧,接受切点变粗。</p></div>
+      <div class="card lim"><span class="sym">输入 · 路径与解码</span><h4>打不开文件 / 切出 0 场景</h4><p>路径带空格没加引号、容器损坏、罕见编码 OpenCV 解不动;或素材真的一镜到底。</p><p class="fix"><b>对策:</b>先 <code>ffprobe</code> 确认能解;0 场景时 exit code 仍是 0,所以流水线必须数产物(CH05);确认是长镜头素材就别硬调低阈值制造假切点。</p></div>
+    </div>
+    <h3>误切和漏切出现后怎么处理</h3>
+    <div class="tblwrap"><table class="tbl">
+      <tr><th>现象</th><th>先判断</th><th>处理方式</th><th>什么时候升级</th></tr>
+      <tr><td><b>闪光灯误切 @00:19.6</b></td><td>切出来的碎片是否短于业务最小时长;前后缩略图是否仍是同一镜头</td><td>提高 <code>-m</code> 或在 CSV 后处理里合并短片段;若闪光很多,给"单帧峰值但前后画面相似"的候选降置信</td><td>频闪舞台、演唱会、闪切广告里误切密集时,引入模型或人工审核队列</td></tr>
+      <tr><td><b>弱切漏检</b></td><td><code>stats.csv</code> 里该点是低峰还是被 <code>-m</code> 合并</td><td>优先试 <code>adaptive</code>;再降阈值;降阈值带来的误切用短片段过滤接住</td><td>同场景反打、构图接近的切换大量漏掉时,单纯帧差不够</td></tr>
+      <tr><td><b>dissolve 漏检</b></td><td>转场是否被摊成长缓坡,没有单帧越线</td><td>黑场 fade 用 <code>threshold</code> 补;非黑场 dissolve 标成高风险段进入审核</td><td>dissolve 是核心边界时,直接上深度模型,不要继续拧帧差阈值</td></tr>
+      <tr><td><b>切点时间对不上</b></td><td>素材是否 VFR;切片是否用了 <code>--copy</code></td><td>上游转 CFR;要求帧级精度时不用 <code>--copy</code></td><td>多来源手机/录屏批处理必须把 CFR 预处理固化进流水线</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ 08 对比与取舍 ============ -->
+<section class="sec" id="compare">
+  <div class="wrap">
+    <div class="ch-eyebrow">CH 08<span class="tc">// TRADE-OFFS · 对比与取舍</span></div>
+    <h2>什么时候用它,什么时候不用</h2>
+    <p class="sec-lede">"检测镜头边界"这件事至少有五种做法,差别在可脚本化程度、转场召回和成本:</p>
+    <div class="tblwrap"><table class="tbl">
+      <tr><th>方案</th><th>强项</th><th>短板</th><th>选它当</th></tr>
+      <tr><td><b>PySceneDetect</b></td><td>本地、免费、CLI+API 双入口,清单/切片/缩略图一条龙,参数可解释</td><td>渐变转场召回有限,纯 CPU 帧差法</td><td><b>默认之选</b>:批量、可复现、硬切为主的素材</td></tr>
+      <tr><td>ffmpeg <code>select='gt(scene,0.4)'</code></td><td>零新依赖,一行命令</td><td>单一指标、无 min-scene-len、输出要从日志里抠,没有清单产物</td><td>机器上只有 ffmpeg、临时看一眼切点</td></tr>
+      <tr><td>手写 OpenCV 帧差</td><td>指标完全自定义</td><td>阈值策略、时间码、切片、边界情况全部重造</td><td>研究自定义检测指标本身,而不是想拆视频</td></tr>
+      <tr><td>深度模型(TransNetV2 / AutoShot)</td><td>渐变、花式转场召回显著更高</td><td>要模型权重与 GPU,集成/维护成本高</td><td>成片、预告片、综艺这类转场密集素材,且召回是硬指标</td></tr>
+      <tr><td>云 API(视频智能类服务)</td><td>免环境、附带其他分析</td><td>按分钟计费、数据出域、离线不可用</td><td>量大且素材本就在云上、合规允许</td></tr>
+      <tr><td>NLE 内置场景检测(Resolve / Premiere)</td><td>图形界面,切完直接进时间线</td><td>无法脚本化、无法批量、结果导不成数据</td><td>剪辑师单次手工任务,后续就在 NLE 里干活</td></tr>
+    </table></div>
+    <div class="note"><b>取舍口诀:</b>要"能进流水线的时间码",用 PySceneDetect;要"渐变也不许漏",上深度模型;只是"顺手看看",ffmpeg 或 NLE 就够。三者并不互斥——不少流水线用深度模型出切点、仍用 PySceneDetect 的 <code>split_video_ffmpeg</code> 执行切片。</div>
+    <h3>后续升级路线:从工具使用到业务闭环</h3>
+    <div class="grid3">
+      <div class="card"><h4>阶段 1:可解释 baseline</h4><p>统一预处理为 CFR,默认 <code>adaptive</code>,固定输出 <code>Scenes.csv</code>、<code>stats.csv</code>、缩略图和审核页。目标是先让每次切分可复现、可检查。</p></div>
+      <div class="card"><h4>阶段 2:规则后处理</h4><p>保存原始候选与最终切点两份结果。加入最短时长、近邻合并、黑场补边界、异常场景数报警和按业务抽样审核。</p></div>
+      <div class="card"><h4>阶段 3:多路融合</h4><p><code>adaptive</code>、<code>threshold</code>、必要时 <code>hist/hash</code> 各自生成候选,按来源和局部证据打分。分歧点进审核,一致点自动放行。</p></div>
+      <div class="card"><h4>阶段 4:深度模型</h4><p>当业务明确要求 dissolve、花式转场或高召回,引入 TransNetV2 / AutoShot 等模型。PySceneDetect 仍可负责切片、时间码格式和下游契约。</p></div>
+      <div class="card"><h4>阶段 5:标注闭环</h4><p>把人工修正的误切/漏切沉淀成真值集,定期计算 precision / recall / F1。后续调参、换模型、改规则都用同一套素材回归。</p></div>
+      <div class="card"><h4>阶段 6:按业务分流</h4><p>剪辑、训练集、媒资索引用不同 profile,不要共用一套阈值。profile 里记录检测器、阈值、<code>-m</code>、预处理和审核比例。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 速查 ============ -->
+<footer id="cheatsheet">
+  <div class="wrap">
+    <div class="ch-eyebrow">CH 09<span class="tc">// CHEAT SHEET · 速查</span></div>
+    <h2>带走这七行</h2>
+    <pre class="code"><code><span class="c-cmt"># 安装(检测) + ffmpeg(切片)</span>
+pip install <span class="c-str">"scenedetect[opencv]"</span>
+
+<span class="c-cmt"># 最常用:检测 + 清单 + 缩略图 + 切片,一条龙</span>
+scenedetect -i in.mp4 -s stats.csv detect-adaptive list-scenes save-images split-video
+
+<span class="c-cmt"># 只要时间码清单(交给下游脚本)</span>
+scenedetect -i in.mp4 -o out/ detect-adaptive list-scenes
+
+<span class="c-cmt"># 抽 2 分钟调参,便宜地找阈值</span>
+scenedetect -i in.mp4 time -s 1m -e 3m detect-content -t 21 list-scenes -n
+
+<span class="c-cmt"># 快速粗切(不重编码,切点吸附关键帧,仅供浏览)</span>
+scenedetect -i in.mp4 detect-adaptive split-video --copy
+
+<span class="c-cmt"># 人工审核页:每个场景的缩略图排成网页</span>
+scenedetect -i in.mp4 detect-adaptive save-images export-html</code></pre>
+    <p style="margin-top:18px">参数三句话:<b style="color:var(--mut)">运动多用 detect-adaptive;阈值别猜,看 stats.csv;碎片交给 min-scene-len。</b>成功判定两件套:exit code 0 + 产物数 &gt; 0。官方文档与源码见 scenedetect.com 与 GitHub Breakthrough/PySceneDetect(本文基于 v0.6.x 行为,细节以你安装版本的 <code>scenedetect help</code> 为准)。</p>
+    <a class="up" href="#hero">↑ 回到 00:00 / 任务开头</a>
+  </div>
+</footer>
+<script>
+"use strict";
+/* ================= 模拟 demo.mp4 的逐帧指标 =================
+   58s 视频,每秒 10 个分析点。C = content_val(帧差),L = 平均亮度,R = adaptive 比值 */
+var SPS = 10, DUR = 58, N = DUR * SPS;
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+var rand = mulberry32(20260801);
+
+var SHOTS = [
+  { s: 0.0,  e: 7.4,  label: "口播 A",        c1: "#22415e", c2: "#2c5273" },
+  { s: 7.4,  e: 15.8, label: "产品特写",      c1: "#5a4426", c2: "#6d5530" },
+  { s: 15.8, e: 23.0, label: "街拍 B-roll·手持", c1: "#1f5148", c2: "#286457" },
+  { s: 23.0, e: 30.2, label: "口播 B",        c1: "#233d63", c2: "#2b4d7d" },
+  { s: 30.2, e: 36.8, label: "口播 B·近景",   c1: "#31456b", c2: "#3a5584" },
+  { s: 36.8, e: 49.0, label: "上手演示",      c1: "#5e3a2c", c2: "#714836" },
+  { s: 49.0, e: 56.0, label: "结尾卡",        c1: "#3c3550", c2: "#494064" },
+  { s: 56.0, e: 58.0, label: "黑场",          c1: "#0a0c10", c2: "#05070a" }
+];
+var TRUTH_HARD = [7.4, 15.8, 23.0, 30.2, 49.0];
+
+function segAt(t) {
+  for (var i = SHOTS.length - 1; i >= 0; i--) if (t >= SHOTS[i].s) return i;
+  return 0;
+}
+var baseC  = [4, 6, 9, 5, 5, 7, 2.5, 2];
+var noiseC = [1.6, 1.8, 3.6, 1.6, 1.6, 2.4, 0.8, 0.6];
+var baseL  = [112, 152, 172, 104, 112, 142, 88, 40];
+
+var C = new Array(N), L = new Array(N), R = new Array(N);
+(function build() {
+  var i, t, s, p, g;
+  for (i = 0; i < N; i++) {
+    t = i / SPS; s = segAt(t);
+    C[i] = Math.max(0.5, baseC[s] + (rand() * 2 - 1) * noiseC[s]);
+    L[i] = baseL[s] + (rand() * 2 - 1) * 6;
+  }
+  // dissolve 36.0–37.6:帧差呈缓坡,峰值 ~16.5(过不了默认阈值)
+  for (i = 0; i < N; i++) {
+    t = i / SPS;
+    if (t >= 35.4 && t <= 38.2) {
+      g = Math.exp(-Math.pow(t - 36.8, 2) / (2 * 0.45 * 0.45));
+      C[i] = Math.max(C[i], 16.5 * g);
+    }
+  }
+  // 片尾 fade to black 56→58:亮度线性掉到 3,帧差保持很低
+  for (i = 560; i < N; i++) {
+    t = i / SPS; p = (t - 56) / 2;
+    L[i] = Math.max(3, 88 * (1 - p) + 3 * p);
+    C[i] = Math.min(C[i], 4);
+  }
+  // 硬切尖峰 + 闪光灯(19.6/19.9 两个瞬时尖峰 → 0.3s 碎片场景)
+  var spikes = { 74: 58, 158: 44, 230: 62, 302: 24, 490: 51, 196: 30, 199: 24 };
+  Object.keys(spikes).forEach(function (k) { C[+k] = spikes[k]; });
+  L[196] = 232; L[197] = 205;
+  // adaptive 比值:C[i] / 邻域(±5,含闪光同伴)均值
+  for (i = 0; i < N; i++) {
+    var sum = 0, cnt = 0, j;
+    for (j = Math.max(0, i - 5); j <= Math.min(N - 1, i + 5); j++) {
+      if (j !== i) { sum += C[j]; cnt++; }
+    }
+    R[i] = C[i] / Math.max(1.5, sum / cnt);
+  }
+})();
+
+/* ================= 检测逻辑 ================= */
+function detectCuts(mode, T, msl) {
+  var raw = [], i;
+  if (mode === "content") {
+    for (i = 1; i < N - 1; i++)
+      if (C[i] >= T && C[i] >= C[i - 1] && C[i] > C[i + 1]) raw.push(i);
+  } else if (mode === "adaptive") {
+    for (i = 1; i < N - 1; i++)
+      if (R[i] >= T && C[i] >= 15 && R[i] >= R[i - 1] && R[i] > R[i + 1]) raw.push(i);
+  } else { // threshold:亮度穿越
+    for (i = 1; i < N; i++) {
+      if ((L[i - 1] >= T && L[i] < T) || (L[i - 1] < T && L[i] >= T)) raw.push(i);
+    }
+  }
+  var minSamples = Math.round(msl * SPS), kept = [], last = 0, merged = 0;
+  raw.forEach(function (c) {
+    if (c - last >= minSamples) { kept.push(c); last = c; } else { merged++; }
+  });
+  return { cuts: kept.map(function (c) { return c / SPS; }), merged: merged };
+}
+
+function fmtTC(t) {
+  var m = Math.floor(t / 60), s = t - m * 60;
+  return "00:" + String(m).padStart(2, "0") + ":" + (s < 10 ? "0" : "") + s.toFixed(1);
+}
+
+function analyze(cuts) {
+  var tol = 0.7;
+  var isNear = function (c, x) { return Math.abs(c - x) <= tol; };
+  var hits = TRUTH_HARD.filter(function (h) { return cuts.some(function (c) { return isNear(c, h); }); });
+  var miss = TRUTH_HARD.filter(function (h) { return hits.indexOf(h) < 0; });
+  var flash = cuts.filter(function (c) { return c >= 19.2 && c <= 20.4; });
+  var diss = cuts.filter(function (c) { return c >= 35.6 && c <= 38.0; });
+  var fade = cuts.filter(function (c) { return c >= 55.5; });
+  var other = cuts.filter(function (c) {
+    return !TRUTH_HARD.some(function (h) { return isNear(c, h); }) &&
+      !(c >= 19.2 && c <= 20.4) && !(c >= 35.6 && c <= 38.0) && !(c >= 55.5);
+  });
+  return { hits: hits, miss: miss, flash: flash, diss: diss, fade: fade, other: other };
+}
+
+/* ================= 调参台组件 ================= */
+var TRUTH_ALL = 7; // 5 硬切 + 1 dissolve + 1 fade
+function scoreOf(mode, T, msl) {
+  var res = detectCuts(mode, T, mode === "threshold" ? 0 : msl);
+  var a = analyze(res.cuts);
+  var hits = a.hits.length + (a.diss.length ? 1 : 0) + (a.fade.length ? 1 : 0);
+  var nc = res.cuts.length;
+  var P = nc ? hits / nc : 0, Rc = hits / TRUTH_ALL;
+  var f1 = (P + Rc) ? 2 * P * Rc / (P + Rc) : 0;
+  return { f1: f1, hits: hits, fp: a.flash.length + a.other.length, cuts: nc, a: a };
+}
+function autoTune(onlyMode) {
+  var best = null, bestClean = null, tried = 0;
+  var grids = {
+    content:  { ts: rangeArr(8, 60, 1),   msls: [0, 0.3, 0.6, 1.2] },
+    adaptive: { ts: rangeArr(1.5, 8, 0.1), msls: [0, 0.3, 0.6, 1.2] },
+    threshold:{ ts: rangeArr(2, 40, 2),   msls: [0] }  // 黑场亮度量级;更高属于误用
+  };
+  var modes = onlyMode ? [onlyMode] : Object.keys(grids);
+  modes.forEach(function (mode) {
+    grids[mode].ts.forEach(function (T) {
+      grids[mode].msls.forEach(function (msl) {
+        tried++;
+        var s = scoreOf(mode, T, msl);
+        var cand = { mode: mode, T: T, msl: msl, s: s };
+        if (!best || better(cand, best)) best = cand;
+        if (s.fp === 0 && (!bestClean || better(cand, bestClean))) bestClean = cand;
+      });
+    });
+  });
+  best.tried = tried;
+  best.clean = bestClean;
+  return best;
+  function better(x, y) {
+    if (x.s.f1 !== y.s.f1) return x.s.f1 > y.s.f1;
+    if (x.s.fp !== y.s.fp) return x.s.fp < y.s.fp;          // 同分优先零误切
+    if ((x.msl === 0.6) !== (y.msl === 0.6)) return x.msl === 0.6; // 优先默认 -m
+    var dx = Math.abs(x.T - MODES[x.mode].def), dy = Math.abs(y.T - MODES[y.mode].def);
+    return dx < dy;                                          // 优先贴近默认阈值
+  }
+}
+function rangeArr(a, b, st) {
+  var out = [];
+  for (var v = a; v <= b + 1e-9; v += st) out.push(Math.round(v * 10) / 10);
+  return out;
+}
+
+var MODES = {
+  content:   { name: "detect-content",   metric: "content_val(帧间内容差)", ymax: 66,  min: 8, max: 60, step: 1,   def: 27, unit: "",
+               legend: "规则:content_val ≥ 阈值 ⇒ 切一刀 · 默认 -t 27" },
+  adaptive:  { name: "detect-adaptive",  metric: "adaptive_ratio(帧差 ÷ 邻域均值)", ymax: 9, min: 1, max: 8, step: 0.1, def: 3, unit: "",
+               legend: "规则:帧差 ÷ 前后邻域均值 ≥ 阈值,且帧差本身 ≥ min-content-val(15) · 默认 -t 3.0" },
+  threshold: { name: "detect-threshold", metric: "平均亮度(0–255)", ymax: 255, min: 2, max: 120, step: 1, def: 12, unit: "",
+               legend: "规则:整帧平均亮度上/下穿越阈值 ⇒ 场景边界(只认 fade to/from black)· 默认 -t 12" }
+};
+
+function seriesFor(mode) { return mode === "content" ? C : mode === "adaptive" ? R : L; }
+
+function makePG(rootId, full) {
+  var root = document.getElementById(rootId);
+  if (!root) return;
+  var st = { mode: "content", T: 27, msl: 0.6 };
+
+  var html = '<div class="pg-head">';
+  html += '<span class="pg-title">' + (full ? "调参台 · 对着答案拧旋钮" : "检测原理 · 实时演示") + '</span>';
+  if (full) {
+    html += '<div class="seg" role="group" aria-label="检测器">' +
+      '<button data-m="content" class="on">detect-content</button>' +
+      '<button data-m="adaptive">detect-adaptive</button>' +
+      '<button data-m="threshold">detect-threshold</button></div>';
+  }
+  html += '<span class="pg-count" data-r="count">—</span></div>';
+  html += '<div class="pg-ctl">';
+  html += '<label>阈值 -t <input type="range" data-r="slider"> <span class="val" data-r="tval"></span></label>';
+  if (full) {
+    html += '<label>min-scene-len -m <select data-r="msl">' +
+      '<option value="0">0(关)</option><option value="0.3">0.3s</option>' +
+      '<option value="0.6" selected>0.6s(默认)</option><option value="1.2">1.2s</option>' +
+      '</select></label>';
+    html += '<span style="margin-left:auto;display:inline-flex;gap:8px">' +
+      '<button class="copybtn autobtn" data-r="autoCur" title="只在当前检测器内网格搜索阈值 × -m,检测器不变">⚙ 调优当前检测器</button>' +
+      '<button class="copybtn autobtn" data-r="autoAll" title="三个检测器各自搜遍全部阈值 × -m,再比出全局最优(仍是单选一个)">⚙ 全局最优(三选一)</button></span>';
+  }
+  html += '</div>';
+  if (full) {
+    html += '<div class="striplab" style="margin:2px 0 8px;line-height:1.6"><code>-m min-scene-len</code> 不产生切点,是切完之后的<b>最短场景地板</b>:短于它的场景会并入前一个,专门吃掉闪光/抖动造成的 0.x 秒碎片。调低它试试 <code>-t 12</code> 的碎片风暴,再调回来看合并效果。</div>';
+  }
+  html += '<div class="pg-legend" data-r="legend"></div>';
+  html += '<svg viewBox="0 0 1000 216" data-r="svg" aria-label="逐帧指标曲线与阈值线"></svg>';
+  html += '<div class="striplab">检测结果(切成的场景)</div><div class="strip" data-r="det"></div>';
+  html += '<div class="striplab" style="margin-top:10px">真实镜头(对答案用)</div><div class="strip" data-r="truth"></div>';
+  if (full) {
+    html += '<div class="striplab" style="margin-top:6px;line-height:1.6">真值共 <b>7 处边界</b> = 5 硬切 + 1 dissolve(36.0s)+ 1 fade(56s)。' +
+      '单个帧差检测器(content/adaptive)看不见 dissolve 和 fade,detect-threshold 又只看得见 fade——' +
+      '所以<b>任何参数都切不出全部 8 个镜头</b>,干净的天花板是 6 个场景。这是原理边界,不是你没调好;全都要的解法见 CH06 的候选切点流水线。</div>';
+  }
+  if (full) {
+    html += '<div class="pg-chips" data-r="chips"></div>';
+    html += '<div class="sc-tbl" data-r="tblwrap"><table><thead><tr><th>Scene</th><th>Start</th><th>End</th><th>Length</th></tr></thead><tbody data-r="tbody"></tbody></table></div>';
+  }
+  html += '<div class="pg-cmd"><code data-r="cmd"></code><button class="copybtn" data-r="copy">复制</button></div>';
+  if (!full) html += '<div class="pg-chips" data-r="chips"></div>';
+  root.innerHTML = html;
+
+  var $ = function (k) { return root.querySelector('[data-r="' + k + '"]'); };
+  var slider = $("slider");
+
+  function setSlider() {
+    var m = MODES[st.mode];
+    slider.min = m.min; slider.max = m.max; slider.step = m.step; slider.value = m.def;
+    st.T = m.def;
+  }
+  setSlider();
+
+  function xOf(t) { return 42 + (t / DUR) * 950; }
+
+  function drawSVG(cuts) {
+    var m = MODES[st.mode], S = seriesFor(st.mode);
+    var top = 12, bot = 184;
+    var yOf = function (v) { return bot - Math.min(v, m.ymax) / m.ymax * (bot - top); };
+    var pts = [], i;
+    for (i = 0; i < N; i++) pts.push(xOf(i / SPS).toFixed(1) + "," + yOf(S[i]).toFixed(1));
+    var s = "";
+    // 网格与时间轴
+    for (i = 0; i <= 50; i += 10) {
+      s += '<line x1="' + xOf(i) + '" y1="' + top + '" x2="' + xOf(i) + '" y2="' + bot + '" stroke="#1E2632" stroke-width="1"/>';
+      s += '<text x="' + xOf(i) + '" y="204" fill="#5F6D83" font-size="10" font-family="monospace" text-anchor="middle">' + fmtTC(i) + "</text>";
+    }
+    s += '<line x1="42" y1="' + bot + '" x2="992" y2="' + bot + '" stroke="#2A3342"/>';
+    // 曲线
+    s += '<polyline points="' + pts.join(" ") + '" fill="none" stroke="#5FC6FF" stroke-width="1.4" stroke-linejoin="round"/>';
+    // 切点
+    cuts.forEach(function (c) {
+      s += '<line x1="' + xOf(c) + '" y1="' + top + '" x2="' + xOf(c) + '" y2="' + bot + '" stroke="#FFB454" stroke-width="1.6" opacity="0.95"/>';
+    });
+    // 阈值线
+    var ty = yOf(st.T);
+    s += '<line x1="42" y1="' + ty + '" x2="992" y2="' + ty + '" stroke="#FFB454" stroke-width="1.4" stroke-dasharray="7 5"/>';
+    s += '<text x="988" y="' + (ty - 6) + '" fill="#FFB454" font-size="11" font-family="monospace" text-anchor="end">-t ' + st.T + "</text>";
+    s += '<text x="46" y="' + (top + 10) + '" fill="#5F6D83" font-size="10.5" font-family="monospace">' + m.metric + "</text>";
+    $("svg").innerHTML = s;
+  }
+
+  function drawStrip(el, cuts, isTruth) {
+    var html = "", i;
+    if (isTruth) {
+      SHOTS.forEach(function (sh) {
+        var l = sh.s / DUR * 100, w = (sh.e - sh.s) / DUR * 100;
+        html += '<div class="sg" style="left:' + l + "%;width:" + w + "%;background:linear-gradient(180deg," + sh.c1 + "," + sh.c2 + ')">' +
+                '<span class="lab">' + sh.label + "</span></div>";
+      });
+      // dissolve 区、fade 区、闪光标记
+      html += '<div class="zone" title="dissolve 渐变 36.0–37.6s" style="left:' + (36.0 / DUR * 100) + "%;width:" + (1.6 / DUR * 100) + '%"></div>';
+      html += '<div class="zone zfade" title="fade to black" style="left:' + (56 / DUR * 100) + "%;width:" + (2 / DUR * 100) + '%"></div>';
+      html += '<div class="flash" title="闪光灯 @19.6s" style="left:' + (19.6 / DUR * 100) + '%">⚡</div>';
+    } else {
+      var bounds = [0].concat(cuts).concat([DUR]);
+      for (i = 0; i < bounds.length - 1; i++) {
+        var l2 = bounds[i] / DUR * 100, w2 = (bounds[i + 1] - bounds[i]) / DUR * 100;
+        var col = i % 2 ? "rgba(95,198,255,.30)" : "rgba(95,198,255,.13)";
+        html += '<div class="sg" style="left:' + l2 + "%;width:" + w2 + "%;background:" + col + '"></div>';
+      }
+      cuts.forEach(function (c, k) {
+        html += '<div class="cut" style="left:calc(' + (c / DUR * 100) + "% - 1px);animation-delay:" + (k * 60) + 'ms"></div>';
+      });
+    }
+    el.innerHTML = html;
+  }
+
+  function chipsHTML(cuts, merged) {
+    var a = analyze(cuts), out = "";
+    var chip = function (cls, txt) { return '<span class="dchip ' + cls + '">' + txt + "</span>"; };
+    if (st.mode === "threshold") {
+      out += a.fade.length ? chip("ok", "✓ 检出片尾 fade @" + fmtTC(a.fade[0]))
+                           : chip("bad", "连 fade 都没检出 —— 阈值高于黑场亮度了?");
+      out += chip("dim", "硬切/渐变一律不看:它只判断整帧亮度穿越");
+      return out;
+    }
+    out += chip(a.hits.length === 5 ? "ok" : "info", "命中硬切 " + a.hits.length + "/5");
+    a.miss.forEach(function (h) {
+      out += chip("bad", "✗ 漏检 " + fmtTC(h) + (h === 30.2 ? " 弱切(推近景,帧差仅 24)" : " 硬切"));
+    });
+    if (a.flash.length) out += chip("bad", "⚡ 闪光灯误切 @" + fmtTC(a.flash[0]));
+    else out += chip("ok", "✓ 闪光灯 @00:00:19.6 被排除");
+    if (a.other.length) out += chip("bad", "噪声误切 ×" + a.other.length + "(手持段晃动越线)");
+    out += a.diss.length ? chip("info", "渐变在 " + fmtTC(a.diss[0]) + " 被切中(靠降阈值,注意代价)")
+                         : chip("dim", "dissolve 渐变未检出 —— 帧差从未越线,帧差法的原理性盲区");
+    if (merged > 0) out += chip("info", "-m " + st.msl + "s 合并了 " + merged + " 个碎片切点");
+    return out;
+  }
+
+  function render() {
+    var res = detectCuts(st.mode, st.T, st.mode === "threshold" ? 0 : st.msl);
+    var cuts = res.cuts;
+    drawSVG(cuts);
+    drawStrip($("det"), cuts, false);
+    $("count").textContent = "检测到 " + (cuts.length + 1) + " 个场景";
+    $("tval").textContent = st.T;
+    $("legend").textContent = (full ? "检测器三选一(一条命令只能挂一个 detect-*,三者信号与量纲各不相同)· " : "") + MODES[st.mode].legend;
+    var mslPart = st.mode === "threshold" ? "" : " -m " + st.msl + "s";
+    $("cmd").innerHTML = '<span class="c-kw">scenedetect</span> -i demo.mp4 ' +
+      MODES[st.mode].name + " -t " + st.T + mslPart + " list-scenes split-video";
+    var chips = $("chips");
+    if (chips) chips.innerHTML = (st.autoNote || "") + chipsHTML(cuts, res.merged);
+    var tbody = $("tbody");
+    if (tbody) {
+      var bounds = [0].concat(cuts).concat([DUR]), rows = "", i;
+      for (i = 0; i < bounds.length - 1; i++) {
+        rows += "<tr><td>" + String(i + 1).padStart(3, "0") + "</td><td>" + fmtTC(bounds[i]) +
+          "</td><td>" + fmtTC(bounds[i + 1]) + "</td><td>" + (bounds[i + 1] - bounds[i]).toFixed(1) + "s</td></tr>";
+      }
+      tbody.innerHTML = rows;
+    }
+  }
+
+  drawStrip($("truth"), [], true);
+  slider.addEventListener("input", function () { st.T = parseFloat(slider.value); st.autoNote = ""; render(); });
+  if (full) {
+    root.querySelectorAll(".seg button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        root.querySelectorAll(".seg button").forEach(function (x) { x.classList.remove("on"); });
+        b.classList.add("on");
+        st.mode = b.getAttribute("data-m");
+        st.autoNote = "";
+        setSlider(); render();
+      });
+    });
+    $("msl").addEventListener("change", function (e) { st.msl = parseFloat(e.target.value); st.autoNote = ""; render(); });
+    var applyAuto = function (scoped) {
+      var b = autoTune(scoped ? st.mode : null);
+      st.mode = b.mode; st.T = b.T; st.msl = b.mode === "threshold" ? st.msl : b.msl;
+      root.querySelectorAll(".seg button").forEach(function (x) {
+        x.classList.toggle("on", x.getAttribute("data-m") === b.mode);
+      });
+      var m = MODES[b.mode];
+      slider.min = m.min; slider.max = m.max; slider.step = m.step; slider.value = b.T;
+      if (b.mode !== "threshold") $("msl").value = String(b.msl);
+      var mslTxt = b.mode === "threshold" ? "" : " -m " + b.msl + "s";
+      var note = '<span class="dchip info" style="flex-basis:100%">';
+      if (scoped) {
+        note += "⚙ 在 " + m.name + " 内搜遍 " + b.tried + " 组(阈值 × -m,检测器不变),最优 = <b>-t " + b.T + mslTxt +
+          "</b>(命中 " + b.s.hits + "/7,误切 " + b.s.fp + ")。这就是该检测器在这份素材上的天花板;想再高,换检测器或点『全局最优』。";
+      } else {
+        note += "⚙ 三个检测器各自跑遍全部参数(共 " + b.tried + " 组,仍是单选一个,不做融合),F1 最优 = <b>" +
+          m.name + " -t " + b.T + mslTxt + "</b>(命中 " + b.s.hits + "/7,误切 " + b.s.fp + ")。";
+        if (b.s.fp > 0 && b.clean) {
+          var cm = MODES[b.clean.mode];
+          note += "它用 " + b.s.fp + " 次误切换回了 dissolve;要零误切,最稳是 <b>" + cm.name + " -t " + b.clean.T +
+            "</b>(命中 " + b.clean.s.hits + "/7)。";
+        }
+        note += "没有任何一组能拿满 7/7——dissolve/fade 是单检测器的原理边界,组合解法见 CH06。";
+      }
+      note += "</span>";
+      st.autoNote = note;
+      render();
+    };
+    $("autoCur").addEventListener("click", function () { applyAuto(true); });
+    $("autoAll").addEventListener("click", function () { applyAuto(false); });
+  }
+  $("copy").addEventListener("click", function () {
+    var txt = $("cmd").textContent;
+    var done = function () { $("copy").textContent = "已复制"; setTimeout(function () { $("copy").textContent = "复制"; }, 1200); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, done);
+    else done();
+  });
+  render();
+}
+
+/* ================= 命令解剖 ================= */
+var TOKENS = [
+  { t: "scenedetect", k: "程序", d: "主命令。全局选项(-i / -o / -s / -d …)必须写在 detect-* 与输出命令之前。",
+    v: "scenedetect help detect-adaptive 可查看任意子命令的完整帮助;scenedetect --config 查看配置文件位置" },
+  { t: "-i demo.mp4", k: "输入", d: "输入视频,只读不改。任何本机 FFmpeg / OpenCV 能解码的容器与编码都可以(mp4 / mkv / mov / avi …)。",
+    v: "路径带空格要加引号;不支持直接读 URL,流媒体先落成本地文件" },
+  { t: "-s stats.csv", k: "每帧指标", d: "把每帧的 content_val 等指标写入 CSV。之后换阈值重跑同一视频时自动复用,跳过大部分解码;也是复盘“为什么这里没切”的证据。",
+    v: "调参阶段强烈建议常开;配合 -fs frame-skip 时不可用" },
+  { t: "detect-adaptive", k: "检测器", d: "一条命令必须、且只能有一个 detect-*,它定义“什么算一次镜头切换”。detect-adaptive 用帧差相对邻域均值的比值判定,抗镜头运动与光线波动。",
+    v: "备选:detect-content(绝对帧差,默认教程用)/ detect-threshold(黑场 fade)/ detect-hash(感知哈希,粗扫快)" },
+  { t: "list-scenes", k: "输出 · 清单", d: "在 stdout 打印场景表,并写出 demo-Scenes.csv —— 机器可读的时间码清单,是交给下游脚本的核心契约。",
+    v: "-n 只打印不落盘;-o 指定输出目录;-q 抑制表格" },
+  { t: "save-images", k: "输出 · 抽帧", d: "每个场景保存 3 张 JPEG(首/中/尾附近),文件名 demo-Scene-001-01.jpg。人工抽查切分质量的最快手段。",
+    v: "-n 5 改每场景张数;--width 缩放;配合 export-html 生成审核网页" },
+  { t: "split-video", k: "输出 · 切片", d: "调用 ffmpeg 把每个场景切成独立 mp4,默认重编码(libx264 + aac),切点帧级精确;产物命名 demo-Scene-001.mp4。",
+    v: "--copy 不重编码、快一个量级,但切点吸附到关键帧;-hq 更高质量;需要 ffmpeg 在 PATH" }
+];
+
+function initTokens() {
+  var row = document.getElementById("tokrow"), det = document.getElementById("tokdetail");
+  if (!row) return;
+  TOKENS.forEach(function (tk, i) {
+    var b = document.createElement("button");
+    b.className = "tok" + (i === 3 ? " on" : "");
+    b.innerHTML = '<span class="k">' + tk.k + "</span>" + tk.t;
+    b.addEventListener("click", function () {
+      row.querySelectorAll(".tok").forEach(function (x) { x.classList.remove("on"); });
+      b.classList.add("on"); show(i);
+    });
+    row.appendChild(b);
+  });
+  function show(i) {
+    var tk = TOKENS[i];
+    det.innerHTML = "<h4>" + tk.t + " — " + tk.k + "</h4><p>" + tk.d + '</p><div class="var">▸ <b>变体:</b>' + tk.v + "</div>";
+  }
+  show(3);
+}
+
+/* ================= 标签页 & 滚动导航 ================= */
+function initTabs() {
+  document.querySelectorAll(".tabbtns").forEach(function (bar) {
+    var btns = bar.querySelectorAll(".tabbtn");
+    btns.forEach(function (b) {
+      b.addEventListener("click", function () {
+        btns.forEach(function (x) {
+          x.classList.remove("on");
+          var p = document.getElementById(x.getAttribute("data-pane"));
+          if (p) p.classList.remove("on");
+        });
+        b.classList.add("on");
+        var pane = document.getElementById(b.getAttribute("data-pane"));
+        if (pane) pane.classList.add("on");
+      });
+    });
+  });
+}
+
+function initNav() {
+  var ticks = Array.prototype.slice.call(document.querySelectorAll(".tick"));
+  var ids = ticks.map(function (a) { return a.getAttribute("href").slice(1); });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (!en.isIntersecting) return;
+      var idx = ids.indexOf(en.target.id);
+      if (idx < 0) return;
+      ticks.forEach(function (t) { t.classList.remove("on"); });
+      ticks[idx].classList.add("on");
+    });
+  }, { rootMargin: "-30% 0px -60% 0px" });
+  ids.forEach(function (id) { var el = document.getElementById(id); if (el) obs.observe(el); });
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  makePG("pgHero", false);
+  makePG("pgFull", true);
+  initTokens();
+  initTabs();
+  initNav();
+});
+</script>
+</body>
+</html>

@@ -555,6 +555,11 @@
       <b>一句话心智模型：</b>ffmpeg 不是「视频编辑器」，而是一条你用参数配置的<b>装配线</b>。
       输入进厂 → 五个工位 → 成品出厂。所有参数都只是在回答一个问题：<b>哪个工位、做什么</b>。
     </div>
+    <div class="callout warn">
+      <b>三个默认行为不要误会：</b>① 没写 <code>-map</code> 时，ffmpeg 会按默认规则挑流，不保证保留全部音轨、字幕和附件；
+      ② 只要进了滤镜（如 <code>-vf scale</code>），视频就必须重新编码，不能再 <code>-c:v copy</code>；
+      ③ 容器、编码、像素格式、时间戳是四层问题，文件扩展名只决定封装层，不能代表兼容性已经满足。
+    </div>
   </div>
 </section>
 
@@ -645,9 +650,9 @@ frame=10921 fps= 97 q=26.0 size= 172032KiB time=00:03:02.41 <span class="t-white
 <section id="params">
   <div class="wrap">
     <div class="tc"><span class="code">[00:04]</span><span class="rule"></span></div>
-    <h2>参数心智模型：真正改变结果的只有五组</h2>
+    <h2>参数心智模型：真正改变结果的只有八组</h2>
     <p>
-      ffmpeg 有上千个参数，但决定「质量、体积、速度、剪切精度、播放兼容性」的核心只有下面几组。
+      ffmpeg 有上千个参数，但决定「质量、体积、速度、剪切精度、播放兼容性、保留哪些流、时间轴是否稳定」的核心只有下面几组。
       规则也只有一条：<strong>写在 <code>-i</code> 之前的作用于输入，写在 <code>-i</code> 之后的作用于输出</strong>。
     </p>
 
@@ -780,6 +785,58 @@ frame=10921 fps= 97 q=26.0 size= 172032KiB time=00:03:02.41 <span class="t-white
         </div>
       </div>
 
+      <!-- map -->
+      <div class="param">
+        <div class="param-head"><code class="pn">-map / -sn / -map_metadata</code><span class="pt">明确保留哪些流，而不是相信默认选择</span></div>
+        <div class="param-body">
+          <p>
+            一个媒体文件里可能有多条视频、多个音轨、字幕、封面、章节和元数据。没写 <code>-map</code> 时，ffmpeg 会按默认规则选择「每类最合适的一条」，
+            这对普通转码够用，但对多语言、多字幕、带封面或监控多路流很危险：命令成功了，产物却少了一条音轨。
+          </p>
+          <div class="term"><div class="term-body wrapok"><span class="t-dim">$</span> ffmpeg -i in.mkv <span class="t-green">-map 0:v:0 -map 0:a?</span> \
+  -c:v libx264 -crf 23 -c:a aac out.mp4</div></div>
+          <p class="sub" style="margin-top:10px">
+            <code>-map 0:v:0</code> 只取第一个视频流；<code>-map 0:a?</code> 取所有音频，问号表示「没有音频也不报错」；
+            <code>-sn</code> 丢字幕，<code>-map_metadata 0</code> 明确保留输入元数据。做归档或多语言分发时，先用 <code>ffprobe</code> 看清流，再写 <code>-map</code>。
+          </p>
+        </div>
+      </div>
+
+      <!-- filter complex -->
+      <div class="param">
+        <div class="param-head"><code class="pn">-vf / -filter_complex</code><span class="pt">简单滤镜和复杂滤镜不是一回事</span></div>
+        <div class="param-body">
+          <p>
+            单输入、单输出的视频变换用 <code>-vf</code>：缩放、裁剪、旋转、抽帧都在这里。只要出现多输入、多输出、画中画、水印叠加、音视频分别处理，
+            就该换 <code>-filter_complex</code>，并给中间结果命名。
+          </p>
+          <div class="term"><div class="term-body wrapok"><span class="t-dim">$</span> ffmpeg -i main.mp4 -i logo.png \
+  <span class="t-green">-filter_complex "[0:v][1:v]overlay=W-w-24:24[v]"</span> \
+  -map "[v]" -map 0:a? -c:v libx264 -c:a copy out.mp4</div></div>
+          <p class="sub" style="margin-top:10px">
+            记住边界：滤镜处理的是解码后的原始帧，所以被滤镜碰过的那条流必须重新编码；没进滤镜的音频流可以继续 <code>-c:a copy</code>。
+          </p>
+        </div>
+      </div>
+
+      <!-- timestamps -->
+      <div class="param">
+        <div class="param-head"><code class="pn">-r / fps / -fps_mode</code><span class="pt">帧率和时间戳：别把 VFR 当 CFR</span></div>
+        <div class="param-body">
+          <p>
+            手机、录屏、直播切片常见变帧率（VFR）：平均看是 59.94fps，但每帧间隔不完全一致。分发通常没问题；
+            但要进剪辑工程、逐帧标注、抽帧训练或和外部时间码对齐，就要决定是否规整成恒定帧率（CFR）。
+          </p>
+          <div class="term"><div class="term-body wrapok"><span class="t-dim">$</span> ffmpeg -i phone.mov \
+  <span class="t-green">-vf "fps=30,scale=-2:1080"</span> \
+  <span class="t-green">-fps_mode cfr</span> -c:v libx264 -crf 23 -c:a aac out.mp4</div></div>
+          <p class="sub" style="margin-top:10px">
+            <code>-r 30</code> 写在输入前是「按 30fps 解释输入」，写在输出后是「输出 30fps」；多数转码不要随手写。
+            真正想抽帧或规整帧率时，用 <code>fps</code> 滤镜把意图写清楚，再用 <code>ffprobe</code> 验证 <code>avg_frame_rate</code>、<code>r_frame_rate</code> 和时长。
+          </p>
+        </div>
+      </div>
+
     </div>
   </div>
 </section>
@@ -809,9 +866,15 @@ frame=10921 fps= 97 q=26.0 size= 172032KiB time=00:03:02.41 <span class="t-white
       <li><b>exit code 为 0</b><p>第一道也是最硬的一道。非 0 时其它一切不必再看。</p></li>
       <li><b>时长与源一致</b><p>ffprobe 读出 <code>duration</code>，与输入相差应在 0.1 秒内；差很多 = 转码中途断了。</p></li>
       <li><b>编码 / 分辨率符合预期</b><p><code>codec_name</code> 是 h264、宽高是 1920×1080——确认参数真的生效了。</p></li>
+      <li><b>流没有丢错</b><p>检查视频、音频、字幕数量是否符合业务预期。多音轨和字幕文件尤其要看 <code>streams[].codec_type</code> 与 <code>tags.language</code>。</p></li>
+      <li><b>像素格式与播放端兼容</b><p>网页/手机分发优先确认视频是 <code>yuv420p</code>。如果源是 10-bit、HDR 或 4:4:4，转 H.264 时可能需要显式写 <code>-pix_fmt yuv420p</code>。</p></li>
       <li><b>抽一帧人眼看看</b><p><code>ffmpeg -ss 90 -i output.mp4 -frames:v 1 check.jpg</code>，从中段抽一帧确认画面正常、没有花屏。</p></li>
       <li><b>全量解码体检（重要产物才做）</b><p><code>ffmpeg -v error -i output.mp4 -f null -</code> 把整个文件解码一遍，stderr 无输出即无坏帧——最严格但最慢。</p></li>
     </ol>
+    <div class="callout warn">
+      <b>验证不是越多越好，而是按风险选：</b>个人压缩看时长、编码、抽帧即可；上线分发要加像素格式、faststart、全量解码；
+      归档和多语言内容要额外检查 <code>-map</code> 后的流数量、语言标签、章节和元数据。
+    </div>
   </div>
 </section>
 
@@ -829,11 +892,13 @@ frame=10921 fps= 97 q=26.0 size= 172032KiB time=00:03:02.41 <span class="t-white
       <tr><td>覆盖行为</td><td>输出文件已存在时<strong>交互式询问</strong>，会把无人值守脚本挂死</td><td>必写 <code>-y</code>（覆盖）或 <code>-n</code>（跳过），二选一</td></tr>
       <tr><td>部分输出</td><td>失败时可能残留半截文件，且它不幂等——重跑会直接覆盖</td><td>先写临时名，exit code 为 0 后再 <code>mv</code> 到最终名（mv 原子性 = 近似幂等）</td></tr>
       <tr><td>进度</td><td>进度行也在 stderr，格式不稳定</td><td>需要程序化进度就加 <code>-progress pipe:1</code>，会向 stdout 输出 key=value 行</td></tr>
+      <tr><td>资源占用</td><td>转码会吃满 CPU / GPU / 磁盘 IO；并发过高比单条命令慢，还可能拖垮机器</td><td>在队列层限制并发；固定 <code>-threads</code> 或 worker 数；给任务设置超时和最大输入时长</td></tr>
+      <tr><td>版本漂移</td><td>不同构建的编码器、硬件加速、默认行为可能不同</td><td>容器化固定版本；启动时记录 <code>ffmpeg -version</code>、<code>-encoders</code> 和关键参数 profile</td></tr>
     </table>
     </div>
     <h3>可直接抄的最小批处理脚本</h3>
     <div class="term">
-      <div class="term-head"><span class="dots"><i></i><i></i><i></i></span> transcode.sh — 包含全部五条契约</div>
+      <div class="term-head"><span class="dots"><i></i><i></i><i></i></span> transcode.sh — 覆盖关键自动化契约</div>
       <div class="term-body wrapok"><span class="t-dim">#!/usr/bin/env bash</span>
 <span class="t-white">set -euo pipefail</span>                                <span class="t-dim"># 任何一步失败立刻退出</span>
 
@@ -927,6 +992,17 @@ echo <span class="t-amber">"OK  $out  (${dur}s)"</span></div>
       不要让坏输入进转码队列；<strong>转码是 CPU 密集型任务</strong>——一个 4K 转 1080p 会吃满多核跑数分钟，
       放到异步队列/worker 里跑，用 <code>-threads</code> 或并发度控制资源，不要挡在请求路径上。
     </p>
+    <h3>不同业务不要共用同一条命令</h3>
+    <div class="table-scroll">
+    <table class="cmp">
+      <tr><th>场景</th><th>目标</th><th>推荐 profile</th><th>重点验证</th></tr>
+      <tr><td>网页/社交分发</td><td>兼容、体积小、秒开</td><td>H.264 + AAC + <code>yuv420p</code> + <code>+faststart</code>，CRF 21–24</td><td>编码、分辨率、像素格式、faststart、抽帧</td></tr>
+      <tr><td>剪辑中间文件</td><td>少损失、好拖动、便于二次编辑</td><td>不要过度压缩；必要时转 ProRes / DNxHR；保留音轨和时间码</td><td>时长、帧率、音轨、色彩空间、时间码</td></tr>
+      <tr><td>ML 抽帧/抽音频</td><td>时间对齐、可复现</td><td>先规整 CFR 或明确保留 VFR；抽帧用 <code>fps</code> 滤镜；输出命名固定</td><td>帧数、时间戳、抽样间隔、坏帧</td></tr>
+      <tr><td>归档/搬运</td><td>不丢信息</td><td>优先 <code>-map 0 -c copy</code>；容器不兼容时只重编码冲突流</td><td>所有流、字幕、章节、语言标签、元数据</td></tr>
+      <tr><td>批量用户上传</td><td>稳、可控、可回溯</td><td>先 ffprobe 拒收异常；异步队列；临时文件；统一输出 profile</td><td>exit code、产物完整性、资源耗时、失败原因</td></tr>
+    </table>
+    </div>
   </div>
 </section>
 
@@ -934,7 +1010,7 @@ echo <span class="t-amber">"OK  $out  (${dur}s)"</span></div>
 <section id="errors">
   <div class="wrap">
     <div class="tc"><span class="code">[00:08]</span><span class="rule"></span></div>
-    <h2>失败边界：五个最常撞上的错误</h2>
+    <h2>失败边界：八个最常撞上的错误</h2>
     <p class="sub">每一个都给出真实报错片段和修法。点开对照——大部分 ffmpeg 报错都比看起来友好，关键信息就在最后几行。</p>
     <div class="errs">
 
@@ -1002,6 +1078,45 @@ IMG_4032.MOV: Invalid data found when processing input</span></div></div>
         </div>
       </details>
 
+      <details class="err">
+        <summary><span class="em">流选择</span>命令成功但少了音轨 / 字幕 —— 默认 stream selection 不是保留全部<span class="chev">›</span></summary>
+        <div class="err-body">
+          <div class="term"><div class="term-body wrapok"><span class="t-dim">$ ffmpeg -i movie.mkv -c:v libx264 -c:a aac out.mp4</span>
+<span class="t-amber"># out.mp4 只有一条默认音轨，第二语言音轨和字幕没了</span></div></div>
+          <p>
+            ffmpeg 默认会为每种类型挑一条流，并不等于「输入有什么就都保留」。多语言、内嵌字幕、章节、封面图最容易在这里丢。
+          </p>
+          <p class="fix"><b>修法：</b>先 <code>ffprobe -show_streams -of json in.mkv</code> 看清流，再显式写 <code>-map</code>。
+          归档用 <code>-map 0 -c copy</code> 起步；分发用 <code>-map 0:v:0 -map 0:a?</code>，字幕按播放端能力决定保留、转码或丢弃。</p>
+        </div>
+      </details>
+
+      <details class="err">
+        <summary><span class="em">播放兼容</span>电脑能播，手机/浏览器黑屏 —— 像素格式或色彩规格不兼容<span class="chev">›</span></summary>
+        <div class="err-body">
+          <div class="term"><div class="term-body wrapok"><span class="t-red">Video: h264, yuv444p10le, 1920x1080</span>
+<span class="t-amber"># 某些移动端硬解不支持 10-bit 或 4:4:4 H.264</span></div></div>
+          <p>
+            编码是 H.264 不代表所有设备都能播。网页和手机最稳的是 8-bit <code>yuv420p</code>；HDR、10-bit、4:4:4 源在转分发版时要主动降到兼容档。
+          </p>
+          <p class="fix"><b>修法：</b>分发版加 <code>-pix_fmt yuv420p</code>，必要时把 HDR→SDR 色彩转换列为单独流程；不要把归档母版和网页分发版混成同一个 profile。</p>
+        </div>
+      </details>
+
+      <details class="err">
+        <summary><span class="em">时间戳</span>音画逐渐不同步 / 抽帧数量不稳定 —— VFR 输入没被当回事<span class="chev">›</span></summary>
+        <div class="err-body">
+          <div class="term"><div class="term-body wrapok"><span class="t-dim">$ ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate,avg_frame_rate in.mov</span>
+<span class="t-amber">r_frame_rate=60000/1001
+avg_frame_rate=143827/2399</span></div></div>
+          <p>
+            手机和录屏文件常是 VFR。普通播放能靠时间戳对齐；但抽帧、训练集、逐帧标注或和外部字幕对齐时，VFR 会让「第 N 帧」和「第 N 秒」的关系变复杂。
+          </p>
+          <p class="fix"><b>修法：</b>需要帧级稳定时，先决定输出 CFR：用 <code>-vf fps=30 -fps_mode cfr</code> 明确重采样；
+          如果业务必须保留原时间戳，就不要用帧号当真相源，后续一律按时间戳对齐。</p>
+        </div>
+      </details>
+
     </div>
   </div>
 </section>
@@ -1051,7 +1166,7 @@ IMG_4032.MOV: Invalid data found when processing input</span></div></div>
 <div class="cheat">
   <div class="wrap">
     <div class="tc"><span class="code">[EOF]</span><span class="rule"></span></div>
-    <h2>速查：五条覆盖日常 90% 的命令</h2>
+    <h2>速查：八条覆盖日常 90% 的命令</h2>
     <div class="cheat-grid">
       <div class="ch"><div class="cl">主线任务：压成网页可播的 1080p MP4</div>
         <code>ffmpeg -i in.mov -vf "scale=-2:1080" \
@@ -1070,6 +1185,13 @@ IMG_4032.MOV: Invalid data found when processing input</span></div></div>
       <div class="ch"><div class="cl">体检任意媒体文件（只读）</div>
         <code>ffprobe -v error -show_format \
   -show_streams <span class="t-green">-of json</span> in.mp4</code></div>
+      <div class="ch"><div class="cl">保留所有流无损归档（容器兼容时）</div>
+        <code>ffmpeg -i in.mkv <span class="t-green">-map 0 -c copy</span> archive.mkv</code></div>
+      <div class="ch"><div class="cl">网页最稳分发版：强制兼容像素格式</div>
+        <code>ffmpeg -i in.mov -vf "scale=-2:1080" \
+  -c:v libx264 -crf 23 -preset medium \
+  <span class="t-green">-pix_fmt yuv420p</span> -c:a aac -b:a 128k \
+  -movflags +faststart out.mp4</code></div>
     </div>
     <div class="foot">
       <span>一文读懂 · FFmpeg — 单文件离线版</span>

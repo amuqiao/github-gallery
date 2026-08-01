@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 LoRA：冻住大权重，训练小增量</title>
+<style>
+  :root{
+    --paper:#eef1f5;
+    --card:#ffffff;
+    --ink:#1b2430;
+    --ink-soft:#4a5568;
+    --line:#d5dbe4;
+    --frozen:#3b6fd4;        /* 冻结 = 冷蓝 */
+    --frozen-fill:#dce7f8;
+    --frozen-deep:#2a4f9e;
+    --train:#e8890c;         /* 可训练 = 暖橙 */
+    --train-fill:#fdebd2;
+    --train-deep:#b56606;
+    --merge:#2f9e6e;
+    --code-bg:#141a22;
+    --code-ink:#dbe4ef;
+    --mono:"JetBrains Mono", ui-monospace, "SF Mono", Consolas, "Courier New", monospace;
+    --serif:"Songti SC", "Noto Serif SC", "SimSun", Georgia, "Times New Roman", serif;
+    --sans:-apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{animation:none!important;transition:none!important}
+  }
+  body{
+    font-family:var(--sans);
+    background:var(--paper);
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:32px 32px;
+    color:var(--ink);
+    line-height:1.85;
+    font-size:16px;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:0 20px 96px}
+
+  /* ---------- hero ---------- */
+  header{padding:64px 0 8px}
+  .eyebrow{
+    font-family:var(--mono);font-size:12px;letter-spacing:.18em;
+    color:var(--ink-soft);text-transform:uppercase;margin-bottom:14px;
+  }
+  h1{
+    font-family:var(--serif);font-weight:900;
+    font-size:clamp(30px,5.5vw,46px);line-height:1.3;letter-spacing:.01em;
+  }
+  h1 .fz{color:var(--frozen-deep)}
+  h1 .tr{color:var(--train-deep)}
+  .subtitle{margin-top:14px;font-size:17px;color:var(--ink-soft);max-width:620px}
+  .legend{display:flex;gap:22px;margin-top:20px;font-size:13px;font-family:var(--mono)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .chip{width:14px;height:14px;border-radius:3px;display:inline-block}
+  .chip.f{background:var(--frozen-fill);border:2px solid var(--frozen)}
+  .chip.t{background:var(--train-fill);border:2px solid var(--train)}
+
+  /* ---------- 通用卡片与标题 ---------- */
+  section{margin-top:56px}
+  h2{
+    font-family:var(--serif);font-weight:900;font-size:26px;line-height:1.4;
+    margin-bottom:6px;
+  }
+  .kicker{
+    font-family:var(--mono);font-size:12px;color:var(--ink-soft);
+    letter-spacing:.14em;margin-bottom:6px;
+  }
+  h3{font-size:17.5px;font-weight:700;margin:26px 0 8px}
+  p{margin:12px 0;color:var(--ink)}
+  p.note{color:var(--ink-soft);font-size:14.5px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:22px 24px;margin-top:18px;
+    box-shadow:0 1px 3px rgba(27,36,48,.06);
+  }
+  strong{font-weight:700}
+  em{font-style:normal;background:linear-gradient(transparent 62%, var(--train-fill) 62%)}
+  code{
+    font-family:var(--mono);font-size:.9em;background:#e3e8f0;
+    padding:1px 6px;border-radius:4px;
+  }
+  .formula{
+    font-family:var(--mono);font-size:clamp(15px,3vw,19px);
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:16px 20px;margin:16px 0;text-align:center;overflow-x:auto;white-space:nowrap;
+  }
+  .formula .f{color:var(--frozen-deep);font-weight:700}
+  .formula .t{color:var(--train-deep);font-weight:700}
+
+  /* ---------- 交互：秩滑杆 ---------- */
+  .rank-lab{margin-top:22px}
+  .rank-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+  .rank-head .rval{font-family:var(--mono);font-size:15px}
+  .rank-head .rval b{font-size:26px;color:var(--train-deep)}
+  input[type=range]{
+    width:100%;margin:14px 0 6px;accent-color:var(--train);height:28px;cursor:pointer;
+  }
+  input[type=range]:focus-visible{outline:3px solid var(--train);outline-offset:4px;border-radius:6px}
+  .rank-svg{width:100%;height:auto;display:block;margin-top:6px}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+  .stat{
+    background:var(--paper);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;text-align:center;
+  }
+  .stat .num{font-family:var(--mono);font-size:clamp(16px,2.6vw,21px);font-weight:700}
+  .stat .lbl{font-size:12.5px;color:var(--ink-soft);margin-top:2px}
+  .stat.hl .num{color:var(--train-deep)}
+  .bar-compare{margin-top:16px}
+  .bar-row{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;font-family:var(--mono)}
+  .bar-row .name{width:110px;flex-shrink:0;text-align:right;color:var(--ink-soft)}
+  .bar-track{flex:1;background:var(--paper);border-radius:5px;height:20px;overflow:hidden;border:1px solid var(--line)}
+  .bar-fill{height:100%;border-radius:4px;min-width:2px;transition:width .25s ease}
+  .bar-fill.f{background:var(--frozen)}
+  .bar-fill.t{background:var(--train)}
+  .bar-row .val{width:96px;flex-shrink:0}
+
+  /* ---------- 生命周期步骤 ---------- */
+  .steps-nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+  .steps-nav button{
+    font-family:var(--sans);font-size:14px;font-weight:600;
+    border:1.5px solid var(--line);background:var(--card);color:var(--ink-soft);
+    border-radius:999px;padding:8px 16px;cursor:pointer;transition:all .15s;
+  }
+  .steps-nav button:hover{border-color:var(--train)}
+  .steps-nav button:focus-visible{outline:3px solid var(--train);outline-offset:2px}
+  .steps-nav button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .step-panel{display:none;margin-top:16px}
+  .step-panel.on{display:block;animation:fadein .25s ease}
+  @keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .step-svg{width:100%;height:auto;display:block;margin:6px auto 10px;max-width:640px}
+  .step-panel p{font-size:15px}
+
+  /* ---------- 表格 ---------- */
+  .tbl-scroll{overflow-x:auto;margin-top:16px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+  table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:13px;background:var(--paper);font-family:var(--mono);letter-spacing:.04em;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td:first-child{font-weight:600;white-space:nowrap}
+  .good{color:var(--merge);font-weight:600}
+  .bad{color:#c0392b;font-weight:600}
+  .mid{color:var(--train-deep);font-weight:600}
+
+  /* ---------- 折叠卡 ---------- */
+  details{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    margin-top:12px;overflow:hidden;
+  }
+  summary{
+    cursor:pointer;padding:15px 20px;font-weight:700;font-size:15.5px;
+    list-style:none;display:flex;gap:12px;align-items:baseline;user-select:none;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary:focus-visible{outline:3px solid var(--train);outline-offset:-3px}
+  summary .mark{
+    font-family:var(--mono);color:var(--train-deep);flex-shrink:0;
+    transition:transform .2s;display:inline-block;
+  }
+  details[open] summary .mark{transform:rotate(90deg)}
+  details .body{padding:0 20px 16px 20px;font-size:14.5px;color:var(--ink);border-top:1px dashed var(--line);padding-top:12px}
+  details .body p{margin:8px 0}
+
+  /* ---------- 代码块 ---------- */
+  pre{
+    background:var(--code-bg);color:var(--code-ink);border-radius:12px;
+    padding:18px 20px;overflow-x:auto;font-family:var(--mono);
+    font-size:13.5px;line-height:1.7;margin-top:14px;
+  }
+  pre .c{color:#7d8da1}
+  pre .k{color:#7fb5ff}
+  pre .s{color:#f0b465}
+  pre .o{color:#6fd39b}
+
+  /* ---------- 收尾 ---------- */
+  .takeaway{
+    border-left:4px solid var(--train);background:var(--card);
+    border-radius:0 12px 12px 0;padding:18px 22px;margin-top:18px;
+  }
+  .takeaway p{margin:6px 0;font-size:15px}
+  footer{margin-top:72px;font-size:13px;color:var(--ink-soft);font-family:var(--mono);text-align:center}
+
+  @media (max-width:560px){
+    .stats{grid-template-columns:1fr 1fr}
+    .bar-row .name{width:78px;font-size:11.5px}
+    .bar-row .val{width:78px;font-size:11.5px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ 首屏 ============ -->
+<header>
+  <div class="eyebrow">一文读懂 · Low-Rank Adaptation (LoRA)</div>
+  <h1><span class="fz">冻住</span>千亿大权重，只训练一对<span class="tr">小矩阵</span></h1>
+  <p class="subtitle">微调一个 7B 模型动辄要上百 GB 显存，还要为每个任务存一份完整副本。LoRA 用一个朴素得近乎大胆的假设，把可训练参数砍掉 99% 以上——而部署时不增加任何推理延迟。</p>
+  <div class="legend">
+    <span><span class="chip f"></span>冻结（不训练）</span>
+    <span><span class="chip t"></span>可训练</span>
+  </div>
+
+  <div class="card rank-lab">
+    <div class="rank-head">
+      <div style="font-weight:700">拖动秩 r，看看要训练的东西有多小</div>
+      <div class="rval">r = <b id="rv">8</b></div>
+    </div>
+    <input type="range" id="rslider" min="0" max="8" step="1" value="3"
+           aria-label="调整 LoRA 的秩 r">
+    <p class="note" style="margin-top:0">以一个 4096×4096 的权重矩阵为例（LLaMA-7B 注意力层的真实尺寸）。左边的大方块是被冻结的 W，右边两条橙色窄条是新增的可训练矩阵 B 和 A（为保证可见做了适度放大——按真实比例，r=8 时它们只有约半个像素宽）。</p>
+
+    <svg class="rank-svg" viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="W 矩阵与 B、A 低秩矩阵的尺寸对比图">
+      <!-- W -->
+      <rect x="40" y="30" width="240" height="240" rx="8" fill="var(--frozen-fill)" stroke="var(--frozen)" stroke-width="2.5"/>
+      <text x="160" y="145" text-anchor="middle" font-family="var(--serif)" font-size="40" font-weight="900" fill="var(--frozen-deep)">W</text>
+      <text x="160" y="178" text-anchor="middle" font-family="var(--mono)" font-size="14" fill="var(--frozen-deep)">4096 × 4096</text>
+      <text x="160" y="206" text-anchor="middle" font-size="15" fill="var(--frozen-deep)">❄ 冻结 16.8M 参数</text>
+      <!-- plus -->
+      <text x="322" y="160" text-anchor="middle" font-family="var(--mono)" font-size="34" fill="var(--ink-soft)">+</text>
+      <!-- B: d x r 高瘦 -->
+      <rect id="rectB" x="370" y="30" width="16" height="240" rx="4" fill="var(--train-fill)" stroke="var(--train)" stroke-width="2.5"/>
+      <text id="lblB" x="378" y="20" text-anchor="middle" font-family="var(--serif)" font-size="20" font-weight="900" fill="var(--train-deep)">B</text>
+      <text id="dimB" x="378" y="292" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--train-deep)">4096×r</text>
+      <!-- times -->
+      <text id="timesXY" x="430" y="160" text-anchor="middle" font-family="var(--mono)" font-size="22" fill="var(--ink-soft)">×</text>
+      <!-- A: r x d 扁宽 -->
+      <rect id="rectA" x="460" y="142" width="240" height="16" rx="4" fill="var(--train-fill)" stroke="var(--train)" stroke-width="2.5"/>
+      <text x="580" y="128" text-anchor="middle" font-family="var(--serif)" font-size="20" font-weight="900" fill="var(--train-deep)">A</text>
+      <text x="580" y="186" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--train-deep)">r×4096</text>
+      <text x="580" y="240" text-anchor="middle" font-size="14" fill="var(--train-deep)" font-weight="600" id="svgTrainTxt">🔥 训练 65,536 参数</text>
+    </svg>
+
+    <div class="stats">
+      <div class="stat"><div class="num">16.8M</div><div class="lbl">全量微调这一个矩阵</div></div>
+      <div class="stat hl"><div class="num" id="loraP">65.5K</div><div class="lbl">LoRA 可训练参数 (2dr)</div></div>
+      <div class="stat hl"><div class="num" id="ratio">×256</div><div class="lbl">参数量缩减倍数</div></div>
+    </div>
+
+    <div class="bar-compare" aria-hidden="true">
+      <div class="bar-row">
+        <span class="name">Full FT</span>
+        <div class="bar-track"><div class="bar-fill f" style="width:100%"></div></div>
+        <span class="val">100%</span>
+      </div>
+      <div class="bar-row">
+        <span class="name">LoRA</span>
+        <div class="bar-track"><div class="bar-fill t" id="barLora" style="width:0.4%"></div></div>
+        <span class="val" id="barLoraVal">0.39%</span>
+      </div>
+    </div>
+    <p class="note" id="wholeModel">推广到整个模型：给 7B 模型 32 层的 q、v 投影都挂上 r=8 的 LoRA，总共只需训练约 4.2M 参数——占整模型的 0.06%。</p>
+  </div>
+</header>
+
+<!-- ============ 1. 问题 ============ -->
+<section>
+  <div class="kicker">01 · 它为什么会出现</div>
+  <h2>问题：微调很贵，贵的不只是训练</h2>
+  <p>假设你想让 LLaMA-7B 学会写你们公司的客服话术。传统做法是<strong>全量微调（full fine-tuning）</strong>：解冻全部 70 亿参数，用你的数据继续训练。账单如下：</p>
+  <div class="card">
+    <p><strong>训练时的显存：</strong>fp16 权重约 14 GB，但这只是开始——每个参数还要配一份梯度、Adam 优化器还要再存两份状态（动量与方差，通常是 fp32）。加起来轻松突破 <strong>100 GB</strong>，一张消费级显卡根本装不下。</p>
+    <p><strong>存储与部署：</strong>每微调出一个任务版本，就要保存一份 <strong>完整的 14 GB 模型副本</strong>。10 个客户、10 种任务？140 GB 起步，切换任务还得整模型换入换出。</p>
+  </div>
+  <p>问题的本质是：<em>我们为了改动模型的一小部分行为，付出了改动全部参数的代价</em>。LoRA（Hu et al., 2021, 微软）针对的正是这一点。</p>
+</section>
+
+<!-- ============ 2. 核心洞察 ============ -->
+<section>
+  <div class="kicker">02 · 核心机制</div>
+  <h2>洞察：微调带来的改变，是"低秩"的</h2>
+  <p>把微调看成给每个权重矩阵加一个增量：<code>W' = W + ΔW</code>。全量微调直接学这个和 W 一样大的 ΔW。而 LoRA 的出发点是一个经验观察：</p>
+  <p style="text-align:center;font-family:var(--serif);font-size:19px;font-weight:900;margin:20px 0">
+    预训练模型适配新任务时，权重的<span style="color:var(--train-deep)">有效变化维度远低于</span>矩阵本身的维度。
+  </p>
+  <p>换句话说，ΔW 这个 4096×4096 的大矩阵，其"信息含量"可能只相当于一个秩为 8 的矩阵。既然如此，为什么不<strong>直接按低秩的形式去参数化它</strong>？任何秩 ≤ r 的矩阵都能分解为两个瘦长矩阵的乘积：</p>
+  <div class="formula">
+    h = <span class="f">W₀</span>x + ΔW·x = <span class="f">W₀</span>x + <span class="t">(α / r) · B A</span> x
+  </div>
+  <p>其中 <span style="color:var(--frozen-deep);font-weight:700">W₀ 完全冻结</span>，只训练 <span style="color:var(--train-deep);font-weight:700">B (d×r)</span> 和 <span style="color:var(--train-deep);font-weight:700">A (r×d)</span>。参数量从 d² 降到 2dr——当 r=8、d=4096 时，是 <strong>256 倍</strong>的缩减。α 是缩放系数（后面细说）。</p>
+
+  <h3>两个精巧的细节，决定了它"开箱即用"</h3>
+  <div class="card">
+    <p><strong>① B 初始化为全零，A 用高斯随机初始化。</strong>于是训练开始的第一步，BA = 0，模型输出与原始预训练模型<em>完全一致</em>。微调从一个"确定无害"的起点出发，逐步学出偏移——这就是为什么 LoRA 训练非常稳定。</p>
+    <p><strong>② 旁路是加法，不改动原计算图。</strong>x 同时流过冻结的 W₀ 和新增的 BA 两条路，结果相加。原模型一个字节都没动，所有"学到的东西"都装在 B、A 里——这为后面的合并与热切换埋下伏笔。</p>
+  </div>
+  <p class="note">直觉类比：与其重新装修整栋房子（全量微调），不如保持房子原样，只在需要的地方贴一层可揭下来的"改造贴膜"（BA）。贴膜很薄（低秩），但贴对了位置就能改变房间的功能。</p>
+</section>
+
+<!-- ============ 3. 生命周期 ============ -->
+<section>
+  <div class="kicker">03 · 运行过程</div>
+  <h2>从训练到部署：走一遍完整流程</h2>
+  <p>点击下面的步骤，看 LoRA 在每个阶段各发生了什么——尤其注意最后两步，那是它优于其他参数高效方法的关键。</p>
+
+  <div class="steps-nav" role="tablist" aria-label="LoRA 生命周期">
+    <button class="on" data-step="0" role="tab" aria-selected="true">① 初始化</button>
+    <button data-step="1" role="tab" aria-selected="false">② 训练</button>
+    <button data-step="2" role="tab" aria-selected="false">③ 合并部署</button>
+    <button data-step="3" role="tab" aria-selected="false">④ 多任务切换</button>
+  </div>
+
+  <div class="card">
+    <div class="step-panel on" data-panel="0">
+      <svg class="step-svg" viewBox="0 0 640 210" xmlns="http://www.w3.org/2000/svg">
+        <rect x="60" y="40" width="130" height="130" rx="10" fill="var(--frozen-fill)" stroke="var(--frozen)" stroke-width="2.5"/>
+        <text x="125" y="112" text-anchor="middle" font-size="30" font-weight="900" fill="var(--frozen-deep)" font-family="var(--serif)">W₀</text>
+        <text x="125" y="192" text-anchor="middle" font-size="13" fill="var(--frozen-deep)">❄ 冻结</text>
+        <text x="240" y="112" text-anchor="middle" font-size="26" fill="var(--ink-soft)" font-family="var(--mono)">+</text>
+        <rect x="290" y="40" width="26" height="130" rx="5" fill="#e9e9e9" stroke="#999" stroke-width="2" stroke-dasharray="5 4"/>
+        <text x="303" y="30" text-anchor="middle" font-size="15" font-weight="900" fill="#777" font-family="var(--serif)">B</text>
+        <text x="303" y="112" text-anchor="middle" font-size="14" fill="#777" font-family="var(--mono)" transform="rotate(-90 303 112)">全 0</text>
+        <text x="345" y="112" text-anchor="middle" font-size="18" fill="var(--ink-soft)" font-family="var(--mono)">×</text>
+        <rect x="375" y="92" width="130" height="26" rx="5" fill="var(--train-fill)" stroke="var(--train)" stroke-width="2"/>
+        <text x="440" y="80" text-anchor="middle" font-size="15" font-weight="900" fill="var(--train-deep)" font-family="var(--serif)">A</text>
+        <text x="440" y="110" text-anchor="middle" font-size="12" fill="var(--train-deep)" font-family="var(--mono)">随机高斯</text>
+        <text x="565" y="105" text-anchor="middle" font-size="14" fill="var(--ink)" font-weight="700">BA = 0</text>
+        <text x="565" y="126" text-anchor="middle" font-size="12" fill="var(--ink-soft)">输出 ≡ 原模型</text>
+      </svg>
+      <p><strong>起点零扰动。</strong>B 置零、A 随机，乘积为零矩阵。此刻模型的行为与预训练模型逐比特相同——不需要"预热"或担心随机初始化破坏已有能力。</p>
+    </div>
+
+    <div class="step-panel" data-panel="1">
+      <svg class="step-svg" viewBox="0 0 640 210" xmlns="http://www.w3.org/2000/svg">
+        <rect x="60" y="40" width="130" height="130" rx="10" fill="var(--frozen-fill)" stroke="var(--frozen)" stroke-width="2.5"/>
+        <text x="125" y="112" text-anchor="middle" font-size="30" font-weight="900" fill="var(--frozen-deep)" font-family="var(--serif)">W₀</text>
+        <text x="125" y="192" text-anchor="middle" font-size="13" fill="var(--frozen-deep)">❄ 无梯度 · 无优化器状态</text>
+        <text x="240" y="112" text-anchor="middle" font-size="26" fill="var(--ink-soft)" font-family="var(--mono)">+</text>
+        <rect x="290" y="40" width="26" height="130" rx="5" fill="var(--train-fill)" stroke="var(--train)" stroke-width="2.5"/>
+        <text x="303" y="30" text-anchor="middle" font-size="15" font-weight="900" fill="var(--train-deep)" font-family="var(--serif)">B</text>
+        <text x="345" y="112" text-anchor="middle" font-size="18" fill="var(--ink-soft)" font-family="var(--mono)">×</text>
+        <rect x="375" y="92" width="130" height="26" rx="5" fill="var(--train-fill)" stroke="var(--train)" stroke-width="2.5"/>
+        <text x="440" y="80" text-anchor="middle" font-size="15" font-weight="900" fill="var(--train-deep)" font-family="var(--serif)">A</text>
+        <text x="410" y="165" text-anchor="middle" font-size="14" fill="var(--train-deep)" font-weight="700">🔥 只有 B、A 收到梯度</text>
+        <text x="565" y="105" text-anchor="middle" font-size="13" fill="var(--ink)" font-weight="700">显存需求</text>
+        <text x="565" y="126" text-anchor="middle" font-size="12" fill="var(--ink-soft)">~100GB → ~16GB</text>
+      </svg>
+      <p><strong>省显存的真正来源。</strong>冻结参数不需要梯度、更不需要 Adam 的动量/方差状态——这三项才是显存大头。7B 模型全量微调需要 100 GB 级别；LoRA 只需装下冻结权重 + 激活值 + 一点点适配器状态，单张 24 GB 卡就能训（配合 4-bit 量化的 QLoRA 甚至更低）。学习率通常比全量微调调大一个量级（如 1e-4 ~ 3e-4）。</p>
+    </div>
+
+    <div class="step-panel" data-panel="2">
+      <svg class="step-svg" viewBox="0 0 640 210" xmlns="http://www.w3.org/2000/svg">
+        <rect x="60" y="40" width="130" height="130" rx="10" fill="var(--frozen-fill)" stroke="var(--frozen)" stroke-width="2.5"/>
+        <text x="125" y="105" text-anchor="middle" font-size="24" font-weight="900" fill="var(--frozen-deep)" font-family="var(--serif)">W₀</text>
+        <text x="125" y="132" text-anchor="middle" font-size="15" fill="var(--train-deep)" font-family="var(--mono)">+ BA</text>
+        <path d="M 210 105 L 300 105" stroke="var(--merge)" stroke-width="2.5" marker-end="url(#arrG)"/>
+        <defs><marker id="arrG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--merge)"/></marker></defs>
+        <text x="255" y="92" text-anchor="middle" font-size="12" fill="var(--merge)" font-family="var(--mono)">merge</text>
+        <rect x="310" y="40" width="130" height="130" rx="10" fill="#e2f3ea" stroke="var(--merge)" stroke-width="2.5"/>
+        <text x="375" y="112" text-anchor="middle" font-size="26" font-weight="900" fill="var(--merge)" font-family="var(--serif)">W′</text>
+        <text x="375" y="192" text-anchor="middle" font-size="13" fill="var(--merge)">单个普通矩阵</text>
+        <text x="545" y="90" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">推理延迟</text>
+        <text x="545" y="115" text-anchor="middle" font-size="15" fill="var(--merge)" font-weight="700">+0 ms</text>
+        <text x="545" y="140" text-anchor="middle" font-size="12" fill="var(--ink-soft)">与原模型架构相同</text>
+      </svg>
+      <p><strong>部署前把增量"焊"进权重：</strong><code>W′ = W₀ + (α/r)·BA</code>。这是一次离线矩阵加法，之后模型结构与原版完全相同——<em>没有旁路、没有额外算子、零额外推理延迟</em>。这是 LoRA 与 Adapter（串联小网络，推理必然变慢）的决定性区别。</p>
+    </div>
+
+    <div class="step-panel" data-panel="3">
+      <svg class="step-svg" viewBox="0 0 640 210" xmlns="http://www.w3.org/2000/svg">
+        <rect x="60" y="55" width="130" height="110" rx="10" fill="var(--frozen-fill)" stroke="var(--frozen)" stroke-width="2.5"/>
+        <text x="125" y="118" text-anchor="middle" font-size="24" font-weight="900" fill="var(--frozen-deep)" font-family="var(--serif)">W₀</text>
+        <text x="125" y="188" text-anchor="middle" font-size="13" fill="var(--frozen-deep)">基座只存一份 (14GB)</text>
+        <g font-family="var(--sans)">
+          <rect x="330" y="30" width="250" height="38" rx="8" fill="var(--train-fill)" stroke="var(--train)" stroke-width="2"/>
+          <text x="455" y="54" text-anchor="middle" font-size="13" fill="var(--train-deep)">客服话术 LoRA · ~20MB</text>
+          <rect x="330" y="86" width="250" height="38" rx="8" fill="var(--train-fill)" stroke="var(--train)" stroke-width="2"/>
+          <text x="455" y="110" text-anchor="middle" font-size="13" fill="var(--train-deep)">SQL 生成 LoRA · ~20MB</text>
+          <rect x="330" y="142" width="250" height="38" rx="8" fill="var(--train-fill)" stroke="var(--train)" stroke-width="2"/>
+          <text x="455" y="166" text-anchor="middle" font-size="13" fill="var(--train-deep)">法律摘要 LoRA · ~20MB</text>
+        </g>
+        <path d="M 210 110 L 315 49" stroke="var(--ink-soft)" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <path d="M 210 110 L 315 105" stroke="var(--ink-soft)" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <path d="M 210 110 L 315 161" stroke="var(--ink-soft)" stroke-width="1.5" stroke-dasharray="4 4"/>
+      </svg>
+      <p><strong>一个基座，N 张"贴膜"。</strong>换任务时减掉旧增量、加上新增量（或干脆推理时挂旁路不合并），每个任务只需存几十 MB 的 B、A。从"每任务一个 14 GB 模型"变成"14 GB + N × 20 MB"。这也是 Stable Diffusion 社区风格 LoRA 满天飞的原因——分享一个画风只需传一个小文件。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. 调参 ============ -->
+<section>
+  <div class="kicker">04 · 实践中怎么调</div>
+  <h2>三个真正需要决定的超参数</h2>
+  <div class="card">
+    <h3 style="margin-top:0">秩 r：增量的"表达容量"</h3>
+    <p>常用 4 ~ 64。原论文发现 r=1~4 在很多任务上已接近全量微调效果——这本身就是"低秩假设"成立的证据。经验法则：<em>任务越偏"改变风格/格式/遵循指令"，小 r 越够用；越偏"学新领域、新语言"，需要越大的 r</em>。r 加倍，参数加倍，但效果往往很快饱和，先从 8 或 16 试起。</p>
+    <h3>α（lora_alpha）：增量的"音量旋钮"</h3>
+    <p>实际生效的增量是 <code>(α/r)·BA</code>。固定 α/r 的比值，调 r 时就不必重调学习率。常见约定 α = 2r（如 r=16, α=32）。把 α/r 调大等价于放大 LoRA 的影响力。</p>
+    <h3>挂在哪些层（target_modules）</h3>
+    <p>原论文只挂注意力的 <code>q_proj</code>、<code>v_proj</code> 就取得了好结果；后续实践（如 QLoRA 论文）表明<strong>挂所有线性层</strong>（q/k/v/o + MLP 的 up/down/gate）通常更好，参数量依然很小。预算紧张时，优先保 q、v。</p>
+  </div>
+</section>
+
+<!-- ============ 5. 对比 ============ -->
+<section>
+  <div class="kicker">05 · 放进坐标系</div>
+  <h2>和邻居们比一比</h2>
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>方法</th><th>思路</th><th>可训练参数</th><th>额外推理延迟</th><th>典型短板</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Full Fine-tuning</td>
+          <td>解冻全部权重直接训</td>
+          <td class="bad">100%</td>
+          <td class="good">无</td>
+          <td>显存/存储爆炸；小数据易灾难性遗忘</td>
+        </tr>
+        <tr>
+          <td>LoRA</td>
+          <td>冻结 W，训练低秩增量 BA</td>
+          <td class="good">~0.1–1%</td>
+          <td class="good">无（可合并）</td>
+          <td>大规模注入新知识时容量受限</td>
+        </tr>
+        <tr>
+          <td>Adapter</td>
+          <td>层间<strong>串联</strong>小瓶颈网络</td>
+          <td class="good">~1–5%</td>
+          <td class="bad">有（串联无法合并）</td>
+          <td>推理变慢，batch 小的时候尤其明显</td>
+        </tr>
+        <tr>
+          <td>Prefix / Prompt Tuning</td>
+          <td>只学一段可训练的虚拟前缀向量</td>
+          <td class="good">&lt;0.1%</td>
+          <td class="mid">占用上下文窗口</td>
+          <td>优化不稳定；能力上限较低</td>
+        </tr>
+        <tr>
+          <td>QLoRA</td>
+          <td>基座量化到 4-bit + LoRA</td>
+          <td class="good">~0.1–1%</td>
+          <td class="good">无</td>
+          <td>量化引入微小精度损失</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">一句话定位：LoRA 占住了"参数少、部署零开销、训练稳定"这个甜蜜点，所以成了参数高效微调（PEFT）的事实默认选项。QLoRA 是它的显存极限版——48 GB 单卡微调 65B 模型即出自该论文。</p>
+</section>
+
+<!-- ============ 6. 误区与边界 ============ -->
+<section>
+  <div class="kicker">06 · 误区 · 反例 · 边界</div>
+  <h2>什么时候不该指望 LoRA</h2>
+  <p>点开每一条——理解边界比记住结论更重要。</p>
+
+  <details>
+    <summary><span class="mark">▶</span>误区一："LoRA 能让模型学会任何全量微调能学的东西"</summary>
+    <div class="body">
+      <p>不能。低秩是一个<strong>硬约束</strong>：增量 ΔW 的秩被限制在 r 以内。改变风格、语气、输出格式、指令遵循方式——这类"重定向已有能力"的任务是低秩的，LoRA 表现极好。但要让模型<strong>吸收大量全新知识</strong>（比如从头学一门语料里没见过的语言、灌入整个私有知识库），所需的权重变化可能不是低秩的，LoRA 会明显落后于全量微调。</p>
+      <p>反例式的判断法：如果你的需求更像"教模型<em>怎么说</em>"，用 LoRA；如果更像"教模型<em>知道什么</em>"，优先考虑 RAG 或全量/更大 r 的微调。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="mark">▶</span>误区二："r 越大效果越好，往大了调准没错"</summary>
+    <div class="body">
+      <p>实验反复表明效果随 r 很快饱和，r 从 8 加到 256 常常只带来噪声级差异，却让适配器大 32 倍。更大的 r 还意味着更强的拟合能力——在小数据集上更容易过拟合。<strong>先小后大、盯验证集</strong>，比一上来堆 r 明智得多。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="mark">▶</span>误区三："LoRA 是模型压缩/加速技术"</summary>
+    <div class="body">
+      <p>常见混淆。LoRA 压缩的是<strong>微调增量</strong>，不是模型本身：基座 14 GB 一个字节没少，推理速度也不变（合并后与原模型相同）。想让模型变小变快，那是量化、剪枝、蒸馏的领域。LoRA 省的是<strong>训练显存</strong>和<strong>每任务的存储</strong>。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="mark">▶</span>误区四："挂了 LoRA 推理会变慢"</summary>
+    <div class="body">
+      <p>取决于部署方式。<strong>合并后零开销</strong>——这是设计目标。不合并、以旁路形式推理会多一点计算（换来热切换多任务的灵活性，vLLM 等框架的 multi-LoRA serving 就是这么做的，可以在同一批次里同时服务不同任务的请求）。"是否合并"是一个延迟 vs 灵活性的显式取舍，而不是缺陷。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="mark">▶</span>误区五："训练稳定 = 不会灾难性遗忘"</summary>
+    <div class="body">
+      <p>LoRA 因为动的参数少，遗忘通常<strong>比全量微调轻</strong>，但不是免疫。α/r 调得激进、数据分布很窄时，合并后的模型照样可能在通用能力上退化。好在解药便宜：不满意就把增量减掉，基座毫发无损——这是全量微调给不了的"后悔药"。</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ 7. 最小可验证例子 ============ -->
+<section>
+  <div class="kicker">07 · 最小可验证例子</div>
+  <h2>十几行代码，亲眼看到 0.06%</h2>
+  <p>用 Hugging Face 的 <code>peft</code> 库，把上面的一切落到可运行的代码上。重点看最后一行的输出——它就是本文的全部主张：</p>
+  <pre><code><span class="c"># pip install transformers peft</span>
+<span class="k">from</span> transformers <span class="k">import</span> AutoModelForCausalLM
+<span class="k">from</span> peft <span class="k">import</span> LoraConfig, get_peft_model
+
+model = AutoModelForCausalLM.from_pretrained(<span class="s">"meta-llama/Llama-2-7b-hf"</span>)
+
+config = LoraConfig(
+    r=<span class="o">8</span>,                          <span class="c"># 秩：增量的容量</span>
+    lora_alpha=<span class="o">16</span>,                <span class="c"># 缩放：生效强度 = alpha/r</span>
+    target_modules=[<span class="s">"q_proj"</span>, <span class="s">"v_proj"</span>],  <span class="c"># 挂在哪些层</span>
+    lora_dropout=<span class="o">0.05</span>,
+    task_type=<span class="s">"CAUSAL_LM"</span>,
+)
+
+model = get_peft_model(model, config)   <span class="c"># 冻结基座，注入 B、A</span>
+model.print_trainable_parameters()
+<span class="c"># trainable params: 4,194,304 || all params: 6,742,609,920</span>
+<span class="c"># || trainable%: 0.0622   ← 只训练 0.06% 的参数</span></code></pre>
+  <p class="note">之后接任何普通的训练循环或 <code>Trainer</code> 即可。训练完 <code>model.save_pretrained()</code> 只会保存几十 MB 的适配器；部署时 <code>model.merge_and_unload()</code> 一行完成第 ③ 步的合并。</p>
+</section>
+
+<!-- ============ 8. 迁移 ============ -->
+<section>
+  <div class="kicker">08 · 带走的心智模型</div>
+  <h2>一句话，和它能去的地方</h2>
+  <div class="takeaway">
+    <p style="font-family:var(--serif);font-size:18px;font-weight:900">
+      <span style="color:var(--frozen-deep)">冻结昂贵的通用能力</span>，把任务专属的改变<span style="color:var(--train-deep)">参数化成一个便宜的低秩增量</span>，用完可合并、可卸载、可叠加。
+    </p>
+    <p>握住这个模型，很多现象会自动变得可解释：</p>
+    <p>· <strong>为什么 Stable Diffusion 的画风 LoRA 只有几十 MB</strong>——画风是"重定向已有能力"，天然低秩；LoRA 挂在 U-Net/DiT 的注意力层上，原理与 LLM 完全相同。<br>
+    · <strong>为什么可以把两个 LoRA 加权混合出新风格</strong>——增量是加法旁路，线性可组合。<br>
+    · <strong>为什么 QLoRA、DoRA、AdaLoRA 层出不穷</strong>——它们分别在"基座怎么存（量化）""增量怎么分解（方向×幅度）""r 怎么按层分配"这几个自由度上做文章，主线从未改变。</p>
+    <p>下次遇到"想定制一个大模型但资源有限"的场景，先问三个问题：<em>我要改的是能力还是知识？增量大概是不是低秩的？部署时需不需要热切换？</em>——答案会直接告诉你 LoRA 适不适合，以及 r 该从多大开始。</p>
+  </div>
+</section>
+
+<footer>LoRA: Low-Rank Adaptation of Large Language Models · Hu et al., 2021 · 本页离线可用，图示尺寸按真实比例绘制</footer>
+</div>
+
+<script>
+(function(){
+  // ---------- 秩滑杆 ----------
+  var ranks=[1,2,4,8,16,32,64,128,256];
+  var d=4096, full=d*d; // 16,777,216
+  var slider=document.getElementById('rslider');
+  var rv=document.getElementById('rv');
+  var loraP=document.getElementById('loraP');
+  var ratio=document.getElementById('ratio');
+  var barLora=document.getElementById('barLora');
+  var barLoraVal=document.getElementById('barLoraVal');
+  var rectB=document.getElementById('rectB');
+  var rectA=document.getElementById('rectA');
+  var dimB=document.getElementById('dimB');
+  var svgTrainTxt=document.getElementById('svgTrainTxt');
+  var lblB=document.getElementById('lblB');
+  var timesXY=document.getElementById('timesXY');
+
+  function fmt(n){
+    if(n>=1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'')+'M';
+    if(n>=1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'')+'K';
+    return String(n);
+  }
+  function update(){
+    var r=ranks[+slider.value];
+    var p=2*d*r;
+    var pct=p/full*100;
+    rv.textContent=r;
+    loraP.textContent=fmt(p);
+    ratio.textContent='×'+Math.round(full/p);
+    barLora.style.width=Math.max(pct,0.4)+'%';
+    barLoraVal.textContent=(pct<1?pct.toFixed(2):pct.toFixed(1))+'%';
+    // 视觉宽度：W 的边长 240px 对应 4096 维；r 按比例，设最小可见宽度
+    var w=Math.max(6, 240*r/d*8); // ×8 视觉放大，否则 r=1 不可见；备注见页面文字
+    if(w>120) w=120;
+    rectB.setAttribute('width', w);
+    var bx=370;
+    lblB.setAttribute('x', bx+w/2);
+    dimB.setAttribute('x', bx+w/2);
+    dimB.textContent='4096×'+r;
+    timesXY.setAttribute('x', bx+w+42);
+    var ax=bx+w+70;
+    rectA.setAttribute('x', ax);
+    rectA.setAttribute('height', Math.min(16+Math.log2(r)*3, 40));
+    svgTrainTxt.textContent='🔥 训练 '+p.toLocaleString('en-US')+' 参数';
+  }
+  slider.addEventListener('input', update);
+  update();
+
+  // ---------- 步骤切换 ----------
+  var btns=document.querySelectorAll('.steps-nav button');
+  var panels=document.querySelectorAll('.step-panel');
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){
+      btns.forEach(function(x){x.classList.remove('on');x.setAttribute('aria-selected','false');});
+      panels.forEach(function(x){x.classList.remove('on');});
+      b.classList.add('on');
+      b.setAttribute('aria-selected','true');
+      document.querySelector('.step-panel[data-panel="'+b.dataset.step+'"]').classList.add('on');
+    });
+  });
+})();
+</script>
+</body>
+</html>

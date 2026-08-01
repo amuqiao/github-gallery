@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Active Speaker Detection · 谁正在说话</title>
+<style>
+:root{
+  --bg:#F4F7F8;
+  --panel:#FFFFFF;
+  --ink:#162024;
+  --muted:#66757D;
+  --dim:#8A98A0;
+  --line:#DDE6EA;
+  --soft:#ECF2F4;
+  --audio:#0D9488;
+  --vision:#4F46E5;
+  --sync:#E07A1F;
+  --bad:#D44D4D;
+  --good:#248A55;
+  --dark:#111B20;
+  --shadow:0 1px 2px rgba(12,30,36,.06),0 14px 36px -22px rgba(12,30,36,.28);
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:58px}
+body{font:16px/1.82 var(--sans);color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
+::selection{background:rgba(13,148,136,.22)}
+a{color:var(--audio);text-decoration:none}
+a:hover{text-decoration:underline}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--vision);outline-offset:2px;border-radius:6px}
+code,kbd,pre{font-family:var(--mono)}
+code{font-size:.88em;background:#F1F5F7;border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+#progress{position:fixed;inset:0 auto auto 0;height:3px;width:0;background:linear-gradient(90deg,var(--audio),var(--vision),var(--sync));z-index:90}
+.layout{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1220px;margin:0 auto;padding:0 24px;gap:40px}
+main{min-width:0;max-width:900px;padding-bottom:96px}
+.toc{position:sticky;top:0;height:100vh;align-self:start;overflow:auto;padding:36px 0;font-size:13px}
+.toc .logo{font:700 11px/1.4 var(--mono);letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
+.toc a{display:block;padding:4px 10px;border-left:2px solid transparent;color:var(--muted);line-height:1.45}
+.toc a:hover{color:var(--ink);text-decoration:none}
+.toc a.on{color:var(--ink);border-left-color:var(--audio);background:linear-gradient(90deg,rgba(13,148,136,.09),transparent)}
+.toc .n{font:11px var(--mono);color:#7D8D95;margin-right:5px}
+.mtoc{display:none;margin:14px 0 0;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px}
+.mtoc summary{cursor:pointer;font-weight:700}
+.mtoc a{display:block;color:var(--muted);padding:3px 0}
+@media (max-width:980px){
+  .layout{grid-template-columns:1fr;padding:0 16px}
+  .toc{display:none}
+  .mtoc{display:block}
+}
+.hero{position:relative;margin:0 -24px;padding:58px 24px 44px;background:
+  radial-gradient(900px 460px at 10% -10%,rgba(79,70,229,.13),transparent 58%),
+  radial-gradient(820px 420px at 95% 15%,rgba(13,148,136,.14),transparent 58%),
+  linear-gradient(180deg,#FCFEFF,#F7FAFB);border-bottom:1px solid var(--line);overflow:hidden}
+.hero:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(22,32,36,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(22,32,36,.035) 1px,transparent 1px);background-size:28px 28px;mask-image:linear-gradient(180deg,#000,transparent 78%);pointer-events:none}
+.hero>*{position:relative}
+.kicker{font:700 12px/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--audio)}
+h1{font-size:clamp(32px,5vw,54px);line-height:1.12;letter-spacing:-.02em;margin:12px 0 12px;font-weight:850}
+.grad{background:linear-gradient(90deg,var(--audio),var(--vision));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{max-width:760px;color:var(--muted);font-size:17px}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;margin-top:28px;align-items:stretch}
+@media (max-width:860px){.hero-grid{grid-template-columns:1fr}.hero{margin:0 -16px;padding-left:16px;padding-right:16px}}
+.demo,.sidepanel,.card,.panel,.callout,.term{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.demo{padding:16px}
+.demo-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.demo-title{font:700 12px/1 var(--mono);letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--soft);border-radius:99px;padding:4px 10px;font:12px/1.5 var(--mono);color:var(--muted)}
+.pill.hot{color:#fff;background:var(--dark);border-color:var(--dark)}
+.stage{position:relative;background:#0B1116;border-radius:12px;min-height:292px;overflow:hidden;border:1px solid #223039}
+.stage:before{content:"";position:absolute;inset:0;background:
+  radial-gradient(360px 220px at 35% 12%,rgba(13,148,136,.20),transparent 65%),
+  radial-gradient(260px 180px at 80% 28%,rgba(79,70,229,.18),transparent 65%),
+  linear-gradient(180deg,#0F1820,#071015);opacity:.95}
+.wave{position:absolute;left:18px;right:18px;bottom:20px;height:62px;border:1px solid rgba(255,255,255,.10);border-radius:9px;background:rgba(255,255,255,.035);overflow:hidden}
+.wave svg{width:100%;height:100%;display:block}
+.face{position:absolute;width:116px;height:148px;border-radius:16px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.face.active{border-color:var(--audio);box-shadow:0 0 0 2px rgba(13,148,136,.35),0 0 28px rgba(13,148,136,.25);transform:translateY(-2px)}
+.face.warn{border-color:var(--sync);box-shadow:0 0 0 2px rgba(224,122,31,.26)}
+.avatar{width:58px;height:58px;border-radius:50%;background:linear-gradient(180deg,#D8E8EE,#8CA7B2);position:relative}
+.avatar:before,.avatar:after{content:"";position:absolute;top:23px;width:6px;height:6px;border-radius:50%;background:#132128}
+.avatar:before{left:18px}.avatar:after{right:18px}
+.mouth{position:absolute;left:50%;bottom:15px;width:22px;height:5px;transform:translateX(-50%);border-radius:99px;background:#17242B;transition:height .16s ease,background .16s ease}
+.face.active .mouth{height:13px;background:var(--audio)}
+.face.warn .mouth{height:12px;background:var(--sync)}
+.face .name{font:700 13px/1 var(--mono);color:#EAF4F5}
+.face .score{font:12px/1 var(--mono);color:#9CB0B7}
+.a{left:8%;top:24px}.b{left:40%;top:54px}.c{right:7%;top:28px}
+@media (max-width:640px){.stage{min-height:390px}.face{width:31%;height:126px}.a{left:3%;top:18px}.b{left:34.5%;top:72px}.c{right:3%;top:18px}.wave{bottom:18px}}
+.controls{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}
+.ctrlrow{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.ctrlrow label{font:12px var(--mono);color:var(--muted);display:flex;align-items:center;gap:8px}
+input[type=range]{accent-color:var(--audio);min-width:180px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#F8FAFB}
+.seg button{border:0;background:transparent;color:var(--muted);font:12px/1 var(--mono);padding:9px 11px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--dark);color:#fff}
+.sidepanel{padding:16px;display:flex;flex-direction:column;gap:12px}
+.readout{background:#0B1116;color:#EAF4F5;border-radius:12px;padding:14px;min-height:112px}
+.readout .rkey{font:700 11px var(--mono);letter-spacing:.12em;color:#7EA4AE;text-transform:uppercase}
+.readout .answer{font-size:24px;font-weight:850;margin:4px 0}
+.readout .why{font-size:13px;color:#B6C8CE;line-height:1.6}
+.mobile-readout{display:none;margin-top:12px;background:#0B1116;color:#EAF4F5;border-radius:10px;padding:12px;border:1px solid #223039}
+.mobile-readout b{display:block;font-size:18px;line-height:1.25}
+.mobile-readout span{display:block;margin-top:4px;color:#B6C8CE;font-size:12.5px;line-height:1.55}
+.meters{display:grid;gap:8px}
+.meter-caption{font-size:12px;color:var(--muted);line-height:1.55;margin-top:-2px}
+.meter{display:grid;grid-template-columns:74px 1fr 44px;gap:8px;align-items:center;font:12px var(--mono);color:var(--muted)}
+.bar{height:8px;border-radius:99px;background:#E7EEF1;overflow:hidden}
+.bar span{display:block;height:100%;border-radius:99px;background:var(--audio);width:0}
+.bar.v span{background:var(--vision)}.bar.s span{background:var(--sync)}
+.cases{display:grid;gap:8px}
+.casebtn{border:1px solid var(--line);background:#FBFDFD;border-radius:8px;padding:8px 10px;text-align:left;cursor:pointer;color:var(--ink);font:13px/1.4 var(--sans)}
+.casebtn.on{border-color:var(--audio);box-shadow:0 0 0 2px rgba(13,148,136,.12)}
+section.sec{padding-top:62px}
+.eyebrow{font:700 12px/1 var(--mono);letter-spacing:.15em;color:var(--audio);text-transform:uppercase}
+h2{font-size:clamp(23px,3vw,30px);line-height:1.25;margin:8px 0 14px;font-weight:820;letter-spacing:-.01em}
+h3{font-size:18px;margin:28px 0 10px}
+.sub{color:var(--muted);max-width:760px;margin-bottom:22px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:780px){.grid2,.grid3{grid-template-columns:1fr}}
+.card{padding:18px}
+.card h4{font-size:15px;margin-bottom:7px}
+.card p,.card li{font-size:14px;color:var(--muted)}
+.card ul{padding-left:18px;margin-top:7px}
+.ok{color:var(--good)}.no{color:var(--bad)}.warn{color:var(--sync)}
+.callout{padding:14px 16px;margin:16px 0;color:var(--muted);border-left:4px solid var(--audio)}
+.callout b{color:var(--ink)}
+.callout.warn{border-left-color:var(--sync);background:#FFF9F2}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:var(--shadow)}
+.tablewrap:before{content:"";display:none}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font:700 11px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#75858D;text-align:left;background:#F8FAFB}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+td{color:var(--muted)}td b{color:var(--ink)}
+tr:last-child td{border-bottom:0}
+.pipe{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:18px 0}
+.step{position:relative;border:1px solid var(--line);background:#fff;border-radius:12px;padding:13px 12px;min-height:118px}
+.step:after{content:"";position:absolute;right:-10px;top:50%;width:12px;height:2px;background:var(--line)}
+.step:last-child:after{display:none}
+.step .sn{font:800 18px/1 var(--mono);color:var(--audio);margin-bottom:8px}
+.step h4{font-size:14px;margin-bottom:4px}.step p{font-size:12.5px;color:var(--muted);line-height:1.55}
+@media (max-width:900px){.pipe{grid-template-columns:1fr 1fr}.step:after{display:none}}
+.model-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0}
+.model-tabs button{border:1px solid var(--line);border-radius:9px;background:#fff;padding:8px 12px;font:13px var(--mono);cursor:pointer;color:var(--muted)}
+.model-tabs button.on{background:var(--dark);color:#fff;border-color:var(--dark)}
+.modelbox{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}
+@media (max-width:820px){.modelbox{grid-template-columns:1fr}}
+.modelviz{min-height:300px;background:#0B1116;border-radius:14px;border:1px solid #203039;padding:16px;color:#DCEBED}
+.branch{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;margin:9px 0}
+.branch .bk{font:700 12px var(--mono);color:#8FAAB2}
+.branch .bv{display:flex;gap:7px;align-items:center}
+.node{border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.06);border-radius:9px;padding:8px 10px;font:12px var(--mono);color:#EAF4F5}
+.node.audio{border-color:rgba(13,148,136,.55)}.node.vision{border-color:rgba(79,70,229,.55)}.node.sync{border-color:rgba(224,122,31,.6)}
+.arrow{height:2px;flex:1;background:linear-gradient(90deg,var(--audio),var(--vision));min-width:24px}
+.timeline{position:relative;padding:18px 0 4px;margin-top:8px;overflow:auto}
+.timeline:before{content:"";position:absolute;left:0;right:0;top:34px;height:3px;border-radius:99px;background:linear-gradient(90deg,var(--dim),var(--audio),var(--vision),var(--sync))}
+.eras{display:grid;grid-template-columns:repeat(6,190px);gap:12px;min-width:1180px}
+.era{position:relative;padding-top:34px}
+.era:before{content:"";position:absolute;top:11px;left:14px;width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--dark);z-index:1}
+.era .year{font:800 13px var(--mono);margin-bottom:5px}
+.era .box{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;box-shadow:var(--shadow)}
+.era p{font-size:13px;color:var(--muted)}
+.postlab{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:760px){.postlab{grid-template-columns:1fr}}
+.mini{background:#F8FAFB;border:1px solid var(--line);border-radius:12px;padding:12px}
+.mini h4{font-size:14px;margin-bottom:6px}.mini p{font-size:13px;color:var(--muted)}
+.conf{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
+.conf div{background:#fff;border:1px solid var(--line);border-radius:9px;padding:12px;text-align:center}
+.conf b{display:block;font:800 24px/1 var(--mono)}
+.source-list{display:grid;gap:10px}
+.source{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff}
+.source h4{font-size:14px}.source p{font-size:13px;color:var(--muted);margin-top:3px}
+.cheat{margin-top:64px;padding:34px 0;border-top:1px solid var(--line)}
+.cheat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media (max-width:760px){.cheat-grid{grid-template-columns:1fr}}
+.ch{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
+.ch .cl{font:700 12px var(--mono);color:var(--audio);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.ch p{font-size:14px;color:var(--muted)}
+.foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:18px;color:var(--dim);font:12px var(--mono)}
+@media (max-width:640px){
+  .sidepanel .readout{display:none}
+  .mobile-readout{display:block}
+  .tablewrap{position:relative}
+  .tablewrap:before{display:block;content:"左右滑动查看更多";position:sticky;left:0;top:0;padding:7px 10px;background:#F8FAFB;border-bottom:1px solid var(--line);font:12px var(--mono);color:var(--muted);z-index:2}
+  table{min-width:720px}
+  .timeline{overflow:visible;padding-left:4px}
+  .timeline:before{left:12px;right:auto;top:20px;bottom:4px;width:3px;height:auto}
+  .eras{display:grid;grid-template-columns:1fr;min-width:0;gap:10px}
+  .era{padding:0 0 0 36px}
+  .era:before{left:7px;top:17px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="layout">
+  <nav class="toc" aria-label="章节导航">
+    <div class="logo">ASD · active speaker</div>
+    <a href="#hero"><span class="n">00</span>谁在说话</a>
+    <a href="#contract"><span class="n">01</span>能力契约</a>
+    <a href="#neighbors"><span class="n">02</span>邻近任务</a>
+    <a href="#pipeline"><span class="n">03</span>流水线</a>
+    <a href="#mechanism"><span class="n">04</span>模型机制</a>
+    <a href="#evolution"><span class="n">05</span>演进过程</a>
+    <a href="#solutions"><span class="n">06</span>成熟方案</a>
+    <a href="#post"><span class="n">07</span>后处理</a>
+    <a href="#eval"><span class="n">08</span>验证评估</a>
+    <a href="#limits"><span class="n">09</span>边界误区</a>
+    <a href="#deploy"><span class="n">10</span>业务落地</a>
+    <a href="#cheatsheet"><span class="n">11</span>速查</a>
+  </nav>
+  <main>
+    <header class="hero" id="hero">
+      <div class="kicker">Active Speaker Detection · Audio-Visual Understanding</div>
+      <h1>一文读懂 <span class="grad">ASD</span><br>多人视频里，谁正在说话</h1>
+      <p class="lede">活跃说话人检测不是转文字，也不是认出这个人是谁。它只回答一个窄而关键的问题：在这一帧、这张可见的人脸，是否正在发出当前听到的声音。</p>
+      <details class="mtoc">
+        <summary>章节导航</summary>
+        <a href="#contract">01 能力契约</a><a href="#neighbors">02 邻近任务</a><a href="#pipeline">03 流水线</a><a href="#mechanism">04 模型机制</a><a href="#evolution">05 演进过程</a><a href="#solutions">06 成熟方案</a><a href="#post">07 后处理</a><a href="#eval">08 验证评估</a><a href="#limits">09 边界误区</a><a href="#deploy">10 业务落地</a><a href="#cheatsheet">11 速查</a>
+      </details>
+      <div class="hero-grid">
+        <div class="demo" aria-label="ASD 交互演示">
+          <div class="demo-head">
+            <span class="demo-title">20 秒会议片段 · 拖动时间</span>
+            <span class="pill hot" id="scenarioName">正常轮流发言</span>
+            <span class="pill" id="timePill">frame 155 · t = 06.2s · window 1.2s</span>
+          </div>
+          <div class="stage">
+            <div class="face a" data-face="A"><div class="avatar"><span class="mouth"></span></div><div class="name">A · 主持人</div><div class="score">score 0.00</div></div>
+            <div class="face b" data-face="B"><div class="avatar"><span class="mouth"></span></div><div class="name">B · 嘉宾</div><div class="score">score 0.00</div></div>
+            <div class="face c" data-face="C"><div class="avatar"><span class="mouth"></span></div><div class="name">C · 观众</div><div class="score">score 0.00</div></div>
+            <div class="wave"><svg id="waveSvg" viewBox="0 0 680 72" preserveAspectRatio="none"></svg></div>
+          </div>
+          <div class="controls">
+            <div class="ctrlrow">
+              <label>time <input type="range" id="timeRange" min="0" max="20" step="0.1" value="6.2"></label>
+              <label>threshold <input type="range" id="thrRange" min="0.25" max="0.85" step="0.05" value="0.55"></label>
+              <span class="pill" id="thrPill">阈值 0.55</span>
+            </div>
+            <div class="ctrlrow">
+              <span class="pill">判断信号</span>
+              <span class="seg" role="group" aria-label="模态选择">
+                <button class="on" data-mode="av" aria-pressed="true">audio + visual</button>
+                <button data-mode="audio" aria-pressed="false">audio only</button>
+                <button data-mode="visual" aria-pressed="false">visual only</button>
+              </span>
+            </div>
+          </div>
+          <div class="mobile-readout" aria-live="polite"><b id="mobileAnswer">B 正在说话</b><span id="mobileWhy">B 的嘴部运动和音频能量同步。</span></div>
+        </div>
+        <aside class="sidepanel">
+          <div class="readout" aria-live="polite">
+            <div class="rkey">current decision</div>
+            <div class="answer" id="answer">B 正在说话</div>
+            <div class="why" id="why">B 的嘴部运动和音频能量同步，A/C 的视觉证据不足。</div>
+          </div>
+          <div class="meters">
+            <p class="meter-caption" id="meterCaption">显示当前活跃候选 B 的证据。</p>
+            <div class="meter"><span>audio</span><div class="bar"><span id="mAudio"></span></div><b id="vAudio">0.00</b></div>
+            <div class="meter"><span>visual</span><div class="bar v"><span id="mVisual"></span></div><b id="vVisual">0.00</b></div>
+            <div class="meter"><span>sync</span><div class="bar s"><span id="mSync"></span></div><b id="vSync">0.00</b></div>
+          </div>
+          <div class="cases">
+            <button class="casebtn on" data-case="normal" aria-pressed="true">正常轮流发言</button>
+            <button class="casebtn" data-case="overlap" aria-pressed="false">两人同时插话</button>
+            <button class="casebtn" data-case="voiceover" aria-pressed="false">画外音 / 旁白</button>
+            <button class="casebtn" data-case="mimic" aria-pressed="false">嘴在动但没说话</button>
+          </div>
+        </aside>
+      </div>
+    </header>
+
+    <section class="sec" id="contract">
+      <div class="eyebrow">01 · capability contract</div>
+      <h2>ASD 的契约：给每条人脸轨道打“正在说话”分数</h2>
+      <p class="sub">真实输入不是一张图，而是一段视频：同一时刻可能有多人露脸，声音可能来自其中一人、多人、画外人或背景。ASD 把视频变成一组带时间的判断。</p>
+      <div class="grid2">
+        <div class="card">
+          <h4><span class="ok">✓</span> 交给 ASD 的事</h4>
+          <ul>
+            <li><b>逐帧/逐片段判断</b>：某个可见 face track 当前是否 speaking。</li>
+            <li><b>绑定音频和人脸</b>：不是只听见声音，而是判断这张脸是否和声音同步。</li>
+            <li><b>产出时间段</b>：为剪辑、会议分析、speaker diarization、视频索引提供 active speaker segments。</li>
+            <li><b>处理多人同屏</b>：每个人脸都是一个候选，可能一人、多人或无人活跃。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4><span class="no">✗</span> 不该指望 ASD 的事</h4>
+          <ul>
+            <li><b>识别身份</b>：ASD 不回答“这是张三吗”，那是 speaker/face recognition。</li>
+            <li><b>转写内容</b>：它不输出文字，ASR 才负责 speech-to-text。</li>
+            <li><b>理解语义</b>：点头、表情、语气、话题理解是下游任务。</li>
+            <li><b>看不见也定位</b>：说话人不露脸时，ASD 应该输出“无可见活跃说话人”，不是强行分给某张脸。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout"><b>一句话心智模型：</b>VAD 问“有没有人声”，ASD 问“这张脸是不是当前声音的来源”。它是音频时间轴和视觉人脸轨道之间的绑定问题。工程上最好把 <b>active / inactive / uncertain</b> 都当成合法输出，低置信段不要硬判。</div>
+    </section>
+
+    <section class="sec" id="neighbors">
+      <div class="eyebrow">02 · neighboring tasks</div>
+      <h2>先和邻近任务切开：ASD 不是 VAD，也不是 diarization</h2>
+      <div class="tablewrap">
+        <table>
+          <tr><th>任务</th><th>核心问题</th><th>典型输入输出</th><th>和 ASD 的关系</th></tr>
+          <tr><td><b>VAD</b><br>Voice Activity Detection</td><td>这段音频里有没有人声</td><td>audio → speech / non-speech</td><td>ASD 常用它作为音频先验，但 VAD 不知道屏幕上是谁。</td></tr>
+          <tr><td><b>Speaker Diarization</b></td><td>谁在什么时候说话</td><td>audio → speaker A/B/C segments</td><td>diarization 不需要人脸；ASD 可为视频场景提供可见人脸约束。</td></tr>
+          <tr><td><b>Speaker Recognition</b></td><td>这是不是某个已知人</td><td>voice embedding → identity</td><td>ASD 判断是否活跃，不判断身份。两者可组合成“某人何时露脸发言”。</td></tr>
+          <tr><td><b>Lip Reading / AVSR</b></td><td>嘴在说什么内容</td><td>face crop + audio → text</td><td>ASD 只需二分类，通常不需要理解词语。</td></tr>
+          <tr><td><b>Face Tracking</b></td><td>同一个人脸如何跨帧连接</td><td>frames → face tracks</td><td>这是 ASD 的前置条件，track 断裂会直接造成说话段断裂。</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <section class="sec" id="pipeline">
+      <div class="eyebrow">03 · input to output</div>
+      <h2>流水线：不是“识别一个人”，而是给每条 face track 打分</h2>
+      <p class="sub">成熟 ASD 系统一般不是一个裸模型直接吃整段视频。工程上会先把视频拆成轨道和窗口，再让模型判断每个候选。</p>
+      <div class="pipe">
+        <div class="step"><div class="sn">01</div><h4>解码与采样</h4><p>统一 fps、音频采样率和时间戳，避免音画错位。</p></div>
+        <div class="step"><div class="sn">02</div><h4>人脸检测</h4><p>每帧找出可见人脸，得到候选框。</p></div>
+        <div class="step"><div class="sn">03</div><h4>Face tracking</h4><p>把同一人的脸跨帧连成 track。</p></div>
+        <div class="step"><div class="sn">04</div><h4>音频窗口</h4><p>截取和当前帧对齐的短音频片段，提取声学特征。</p></div>
+        <div class="step"><div class="sn">05</div><h4>AV 融合</h4><p>比较嘴部运动、脸部动态、音频能量和同步关系。</p></div>
+        <div class="step"><div class="sn">06</div><h4>平滑成段</h4><p>阈值、最短持续时间、重叠说话策略，输出 segments。</p></div>
+      </div>
+      <div class="callout warn"><b>最常见的工程错误：</b>把模型分数当最终结果。生产里要保留 raw score、track id、时间戳、阈值版本和后处理规则，否则误判无法复盘。</div>
+    </section>
+
+    <section class="sec" id="mechanism">
+      <div class="eyebrow">04 · mechanism</div>
+      <h2>模型怎么做判断：三类证据，缺一类都会出错</h2>
+      <p class="sub">ASD 不是简单“嘴动 = 说话”。成熟模型会把音频、视觉和时间上下文一起看。</p>
+      <div class="model-tabs">
+        <button class="on" data-model="fusion" aria-pressed="true">AV 融合</button>
+        <button data-model="context" aria-pressed="false">时间上下文</button>
+        <button data-model="graph" aria-pressed="false">多人关系</button>
+        <button data-model="robust" aria-pressed="false">鲁棒性增强</button>
+      </div>
+      <div class="modelbox">
+        <div class="modelviz" id="modelViz"></div>
+        <div class="card" id="modelText"></div>
+      </div>
+      <h3>四个反例把边界讲清楚</h3>
+      <div class="grid2">
+        <div class="card"><h4>画外音</h4><p>音频很强，但所有脸都不同步。正确输出应是“屏幕上无人活跃”，不是找一个最像的人。</p></div>
+        <div class="card"><h4>嘴在动但没出声</h4><p>人可能咀嚼、笑、低声旁聊或被静音。视觉证据强，音频/同步证据弱。</p></div>
+        <div class="card"><h4>多人同时说话</h4><p>不是单选题。会议抢话、合唱、争论时可能多个 face track 同时 active。</p></div>
+        <div class="card"><h4>音画不同步</h4><p>转码延迟、远程会议延迟、配音片会破坏同步线索，需要数据与后处理兜住。</p></div>
+      </div>
+    </section>
+
+    <section class="sec" id="evolution">
+      <div class="eyebrow">05 · evolution</div>
+      <h2>演进过程：从“嘴和声音同步吗”到“长上下文里的多人绑定”</h2>
+      <p class="sub">ASD 的发展主线不是单纯换网络，而是不断补齐真实视频里的缺失证据：数据集、长时序、多人关系、轻量部署和鲁棒性。</p>
+      <div class="timeline">
+        <div class="eras">
+          <div class="era"><div class="year">早期</div><div class="box"><p><b>音画同步</b><br>用嘴部运动和音频同步性判断“这张嘴是不是这段声音”。适合干净单人或少人场景。</p></div></div>
+          <div class="era"><div class="year">2019-2020</div><div class="box"><p><b>AVA-ActiveSpeaker</b><br>大规模带 face track 的帧级标注让 ASD 有了主流 benchmark。</p></div></div>
+          <div class="era"><div class="year">2021</div><div class="box"><p><b>TalkNet / ASW</b><br>长短期音视频证据与野外数据集推动模型离开“瞬时判断”。</p></div></div>
+          <div class="era"><div class="year">2022</div><div class="box"><p><b>ASDNet / SPELL</b><br>注意力、图结构和长时空关系开始显式建模多人场景。</p></div></div>
+          <div class="era"><div class="year">2023-2024</div><div class="box"><p><b>Light-ASD / LoCoNet / TalkNCE</b><br>轻量部署、长短上下文、对比学习成为成熟路线。</p></div></div>
+          <div class="era"><div class="year">2025+</div><div class="box"><p><b>鲁棒性与跨域</b><br>唇部 landmark、噪声场景、跨域视频和对抗鲁棒性成为新焦点。</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="solutions">
+      <div class="eyebrow">06 · mature solutions</div>
+      <h2>目前成熟方案：按业务约束选，不是只看榜单最高</h2>
+      <div class="tablewrap">
+        <table>
+          <tr><th>路线</th><th>代表</th><th>强项</th><th>适合场景</th><th>注意点</th></tr>
+          <tr><td><b>经典 AV 融合</b></td><td>AVA baseline、TalkNet</td><td>心智清楚，音频/视觉/时序证据完整</td><td>研究复现、离线分析、对准确率有要求的基线</td><td>依赖稳定 face track 和较干净的同步信号。</td></tr>
+          <tr><td><b>轻量部署</b></td><td>Light-ASD / LRASD</td><td>参数和 FLOPs 更低，适合边缘或批处理</td><td>大量会议视频、在线预处理、预算有限的服务</td><td>极端多人复杂关系可能不如上下文模型。</td></tr>
+          <tr><td><b>多人上下文</b></td><td>SPELL、LoCoNet</td><td>把同人长时序和同帧多人关系纳入判断</td><td>多人访谈、圆桌会议、综艺、镜头内多人互动</td><td>实现复杂度和数据预处理要求更高。</td></tr>
+          <tr><td><b>表征/鲁棒增强</b></td><td>TalkNCE、LASER</td><td>改善音画错配、噪声、低质视频下的泛化</td><td>野外视频、社媒视频、跨域部署</td><td>新方法要用自有数据验证，不能只看 AVA 分数。</td></tr>
+          <tr><td><b>系统组合</b></td><td>ASD + VAD + diarization + ASR</td><td>从“谁在说”扩展到“谁说了什么”</td><td>会议纪要、视频检索、自动剪辑</td><td>ASD 不是最终产品，后面还要接身份、转写、审核。</td></tr>
+        </table>
+      </div>
+      <div class="callout"><b>实用建议：</b>不知道从哪开始，就用 TalkNet/Light-ASD 级别的可复现基线跑通数据流；多人复杂场景再看 LoCoNet/SPELL；部署前一定用自己的业务视频做误判集。</div>
+    </section>
+
+    <section class="sec" id="post">
+      <div class="eyebrow">07 · post-processing</div>
+      <h2>后处理决定“能不能用”：阈值、平滑和业务规则</h2>
+      <div class="postlab">
+        <div class="mini"><h4>阈值不是固定真理</h4><p>高阈值减少误报，但会漏掉小脸、侧脸、低声发言；低阈值提高召回，但画外音和嘴动误报会增加。</p></div>
+        <div class="mini"><h4>短段要合并或过滤</h4><p>单帧分数会抖动。通常需要最短发言时长、最大间隙合并、track 断裂修复。</p></div>
+        <div class="mini"><h4>允许重叠说话</h4><p>会议抢话时不能强制 one-hot。业务若只需要主说话人，可以再用分数最高者做二次选择。</p></div>
+        <div class="mini"><h4>保留“不确定”</h4><p>低置信段不要硬判，进入人工复核或下游弱标签，质量比表面自动化更重要。</p></div>
+      </div>
+    </section>
+
+    <section class="sec" id="eval">
+      <div class="eyebrow">08 · evaluation</div>
+      <h2>验证方式：不要只看 demo，要按错误类型验收</h2>
+      <p class="sub">ASD 常用 frame-level mAP、precision、recall、F1 等指标。但上线更关心“哪些错误能接受”。</p>
+      <div class="grid2">
+        <div class="card">
+          <h4>离线评估</h4>
+          <ul>
+            <li>按 face track 的每帧标签算 mAP / AP。</li>
+            <li>按 segment 检查起止时间偏差。</li>
+            <li>分桶看小脸、侧脸、噪声、多人、画外音。</li>
+            <li>保留误判样本，作为下一版回归集。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>人工抽检</h4>
+          <ul>
+            <li>每个视频抽高置信、低置信、边界段。</li>
+            <li>优先看模型分歧、短段密集、多人重叠。</li>
+            <li>用可视化页同时展示脸框、波形、分数曲线。</li>
+            <li>标注“不确定/不可判”，不要逼标注员二选一。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="conf">
+        <div><b class="ok">TP</b><span>可见人脸确实在说话，模型判 active</span></div>
+        <div><b class="no">FP</b><span>画外音、嘴动或噪声导致误判 active</span></div>
+        <div><b class="no">FN</b><span>小脸、遮挡、低声、侧脸导致漏检</span></div>
+        <div><b>TN</b><span>无人说话或非说话脸被正确排除</span></div>
+      </div>
+    </section>
+
+    <section class="sec" id="limits">
+      <div class="eyebrow">09 · failure modes</div>
+      <h2>常见误区：把 ASD 当成万能“说话理解器”会出问题</h2>
+      <div class="grid2">
+        <div class="card"><h4>误区 1：有声音就一定有人 active</h4><p>旁白、背景电视、电话外放、配音片都可能只有 audio，没有可见 active face。</p></div>
+        <div class="card"><h4>误区 2：嘴动就是在说话</h4><p>吃东西、笑、跟读、无声练习会产生视觉运动，但不是当前音频来源。</p></div>
+        <div class="card"><h4>误区 3：ASD 可以替代身份识别</h4><p>ASD 输出 track id 上的 speaking score，不保证知道这个人是谁。</p></div>
+        <div class="card"><h4>误区 4：榜单分数等于业务可用</h4><p>会议、短视频、直播、影视剧的噪声和剪辑方式不同，必须用自有样本验证。</p></div>
+      </div>
+    </section>
+
+    <section class="sec" id="deploy">
+      <div class="eyebrow">10 · deployment</div>
+      <h2>落地路线：先定义“最终消费的时间段”，再选模型</h2>
+      <div class="tablewrap">
+        <table>
+          <tr><th>业务</th><th>ASD 输出怎么用</th><th>策略</th><th>质量门槛</th></tr>
+          <tr><td><b>会议视频</b></td><td>发言人时间轴、自动切镜、纪要对齐</td><td>ASD + diarization + ASR；允许重叠说话</td><td>不能把画外音错分给参会者；边界误差要可控。</td></tr>
+          <tr><td><b>访谈/综艺剪辑</b></td><td>自动找发言镜头和反应镜头</td><td>高召回优先，再人工审剪</td><td>宁可多给候选，不要漏掉关键发言。</td></tr>
+          <tr><td><b>数据清洗</b></td><td>筛出可见说话人片段训练 AV 模型</td><td>高精度优先，低置信丢弃</td><td>片段必须人脸清楚、音画同步、标签干净。</td></tr>
+          <tr><td><b>实时产品</b></td><td>当前说话人高亮、摄像头追踪</td><td>轻量模型 + 短窗口 + 平滑</td><td>延迟和稳定性优先，允许短暂滞后。</td></tr>
+        </table>
+      </div>
+      <h3>资料线索</h3>
+      <div class="source-list">
+        <div class="source"><h4>AVA-ActiveSpeaker / AVA Challenge</h4><p>标准化数据和评测任务，适合作为理解 ASD 标签定义与 benchmark 的入口。</p></div>
+        <div class="source"><h4>TalkNet、SPELL、LoCoNet</h4><p>分别代表长时序音视频融合、图结构多人上下文、长短上下文建模几条关键路线。</p></div>
+        <div class="source"><h4>Light-ASD、TalkNCE、LASER</h4><p>分别面向轻量部署、对比学习表征、唇部鲁棒性增强，适合从研究走向实际视频。</p></div>
+      </div>
+    </section>
+
+    <div class="cheat" id="cheatsheet">
+      <div class="eyebrow">EOF · cheat sheet</div>
+      <h2>带走这六句话</h2>
+      <div class="cheat-grid">
+        <div class="ch"><div class="cl">定义</div><p>ASD 判断每个可见 face track 在某个时间是否正在发出当前可听见的声音。</p></div>
+        <div class="ch"><div class="cl">主线</div><p>音频告诉你“有声”，视觉告诉你“哪张嘴在动”，同步和上下文告诉你“是不是同一个事件”。</p></div>
+        <div class="ch"><div class="cl">边界</div><p>它不识别身份、不转文字、不理解语义，也不能定位画外不可见说话人。</p></div>
+        <div class="ch"><div class="cl">成熟方案</div><p>TalkNet/Light-ASD 可做基线；多人复杂场景看 LoCoNet/SPELL；跨域噪声看鲁棒增强。</p></div>
+        <div class="ch"><div class="cl">验证</div><p>按误报、漏报、重叠说话、小脸侧脸、画外音分桶评估，不只看平均分。</p></div>
+        <div class="ch"><div class="cl">落地</div><p>保留 raw score 和最终 segment 两层结果，让阈值、平滑和人工复核都可回溯。</p></div>
+      </div>
+      <div class="foot"><span>一文读懂 · Active Speaker Detection</span><span>单文件离线版 · audio + face + time</span></div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  var $ = function(s){ return document.querySelector(s); };
+  var $$ = function(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  var state = {time:6.2, threshold:0.55, mode:"av", scenario:"normal"};
+  var people = ["A","B","C"];
+  var caseInfo = {
+    normal:{name:"正常轮流发言", desc:"B 的嘴部运动和音频能量同步，A/C 的视觉证据不足。"},
+    overlap:{name:"两人同时插话", desc:"A 与 B 都有音画同步证据，ASD 应允许多活跃说话人。"},
+    voiceover:{name:"画外音 / 旁白", desc:"有声音但没有可见人脸同步，正确输出是无人 active。"},
+    mimic:{name:"嘴在动但没说话", desc:"C 嘴动明显，但音频同步弱；visual-only 会误判。"}
+  };
+  function clamp(x){ return Math.max(0, Math.min(1, x)); }
+  function bump(t,c,w){ var d=(t-c)/w; return Math.exp(-d*d); }
+  function scores(t, person, sc){
+    var audio=0.08, visual=0.08, sync=0.05;
+    if(sc==="normal"){
+      var active = t<5 ? "A" : t<11 ? "B" : t<16 ? "C" : "A";
+      audio = 0.25 + 0.55*bump(t, active==="A"?2.5:active==="B"?8:13.5, 3.2);
+      visual = person===active ? 0.28 + 0.62*bump(t, active==="A"?2.5:active==="B"?8:13.5, 4.2) : 0.08 + 0.12*bump(t, 10, 7);
+      sync = person===active ? 0.30 + 0.62*bump(t, active==="A"?2.5:active==="B"?8:13.5, 3.5) : 0.08;
+    } else if(sc==="overlap"){
+      audio = 0.55 + 0.28*bump(t, 9, 5);
+      if(person==="A"){ visual = 0.70*bump(t,8,4)+0.15; sync = 0.68*bump(t,8,4)+0.12; }
+      else if(person==="B"){ visual = 0.75*bump(t,10,4)+0.12; sync = 0.72*bump(t,10,4)+0.12; }
+      else { visual = 0.10; sync = 0.08; }
+    } else if(sc==="voiceover"){
+      audio = 0.72 + 0.18*Math.sin(t*1.7);
+      visual = person==="B" ? 0.23 + 0.12*bump(t,8,5) : 0.12;
+      sync = 0.08 + (person==="B" ? 0.08*bump(t,8,4) : 0);
+    } else if(sc==="mimic"){
+      audio = 0.18 + 0.12*bump(t,6,3);
+      if(person==="C"){ visual = 0.78*bump(t,9,5)+0.16; sync = 0.20*bump(t,9,5)+0.08; }
+      else if(person==="A"){ visual = 0.18; sync = 0.11; }
+      else { visual = 0.14; sync = 0.10; }
+    }
+    audio = clamp(audio); visual = clamp(visual); sync = clamp(sync);
+    var score = state.mode==="audio" ? audio : state.mode==="visual" ? visual : 0.34*audio + 0.33*visual + 0.33*sync;
+    return {audio:audio, visual:visual, sync:sync, score:clamp(score)};
+  }
+  function drawWave(){
+    var svg = $("#waveSvg"), w = 680, h = 72, t = state.time;
+    var path = "M0 "+(h/2).toFixed(1);
+    for(var x=0;x<=w;x+=8){
+      var tt=x/w*20;
+      var e = scores(tt,"A",state.scenario).audio;
+      var y = h/2 + Math.sin(tt*5.4)*e*22 + Math.sin(tt*13.1)*e*7;
+      path += " L"+x+" "+y.toFixed(1);
+    }
+    var cx = t/20*w;
+    svg.innerHTML = '<path d="'+path+'" fill="none" stroke="#0D9488" stroke-width="2"/>'+
+      '<line x1="'+cx+'" y1="0" x2="'+cx+'" y2="72" stroke="#E07A1F" stroke-width="2"/>'+
+      '<rect x="0" y="0" width="680" height="72" fill="none" stroke="rgba(255,255,255,.08)"/>';
+  }
+  function render(){
+    var t = state.time, rows = {};
+    people.forEach(function(p){ rows[p]=scores(t,p,state.scenario); });
+    var active = people.filter(function(p){ return rows[p].score >= state.threshold; });
+    var ranked = people.slice().sort(function(a,b){return rows[b].score-rows[a].score;});
+    var uncertain = active.length === 0 && rows[ranked[0]].score >= state.threshold - 0.12;
+    $$(".face").forEach(function(el){
+      var p = el.dataset.face, s = rows[p];
+      el.classList.toggle("active", s.score >= state.threshold);
+      el.classList.toggle("warn", (uncertain && p === ranked[0]) || (s.visual > 0.55 && s.sync < 0.32));
+      el.querySelector(".score").textContent = "score "+s.score.toFixed(2);
+      el.querySelector(".mouth").style.height = (5 + s.visual*14).toFixed(1)+"px";
+    });
+    var best = active.length ? active : [ranked[0]];
+    var lead = rows[best[0]];
+    $("#timePill").textContent = "frame "+Math.round(t*25)+" · t = "+t.toFixed(1)+"s · window 1.2s";
+    $("#thrPill").textContent = "阈值 "+state.threshold.toFixed(2);
+    $("#scenarioName").textContent = caseInfo[state.scenario].name;
+    var ans = active.length ? active.join(" / ")+" 正在说话" : uncertain ? ranked[0]+" 不确定" : "屏幕上无人活跃";
+    var why = explain(active, uncertain, ranked[0]);
+    $("#answer").textContent = ans;
+    $("#why").textContent = why;
+    $("#mobileAnswer").textContent = ans;
+    $("#mobileWhy").textContent = why;
+    $("#meterCaption").textContent = active.length > 1 ? "显示活跃候选 "+best[0]+" 的证据；当前有多人过阈值。" : active.length === 1 ? "显示当前活跃候选 "+best[0]+" 的证据。" : "显示最高候选 "+best[0]+" 的证据；它未必是 active。";
+    $("#mAudio").style.width = (lead.audio*100)+"%"; $("#vAudio").textContent = lead.audio.toFixed(2);
+    $("#mVisual").style.width = (lead.visual*100)+"%"; $("#vVisual").textContent = lead.visual.toFixed(2);
+    $("#mSync").style.width = (lead.sync*100)+"%"; $("#vSync").textContent = lead.sync.toFixed(2);
+    drawWave();
+  }
+  function explain(active, uncertain, top){
+    if(state.mode === "audio"){
+      return active.length ? "audio only 只看公共音频，无法区分同屏人脸；多人同时过阈值是预期的反例。" : "audio only 检到声音强弱，但没有人脸归属证据。";
+    }
+    if(state.mode === "visual"){
+      return active.length ? "visual only 只看嘴部/脸部运动，容易把无声嘴动当成说话。" : "visual only 没有足够嘴部运动证据，但也无法确认是否有画外音。";
+    }
+    if(active.length) return caseInfo[state.scenario].desc;
+    if(uncertain) return "最高候选 "+top+" 接近阈值，但同步证据不足；生产系统应保留 uncertain 并进入平滑或复核。";
+    return "音频或视觉可能存在，但没有候选脸通过同步阈值。";
+  }
+  $("#timeRange").addEventListener("input",function(e){ state.time=parseFloat(e.target.value); render(); });
+  $("#thrRange").addEventListener("input",function(e){ state.threshold=parseFloat(e.target.value); render(); });
+  $$(".seg button").forEach(function(b){
+    b.addEventListener("click",function(){
+      $$(".seg button").forEach(function(x){x.classList.remove("on");});
+      $$(".seg button").forEach(function(x){x.setAttribute("aria-pressed","false");});
+      b.classList.add("on"); b.setAttribute("aria-pressed","true"); state.mode=b.dataset.mode; render();
+    });
+  });
+  $$(".casebtn").forEach(function(b){
+    b.addEventListener("click",function(){
+      $$(".casebtn").forEach(function(x){x.classList.remove("on");});
+      $$(".casebtn").forEach(function(x){x.setAttribute("aria-pressed","false");});
+      b.classList.add("on"); b.setAttribute("aria-pressed","true"); state.scenario=b.dataset.case; render();
+    });
+  });
+  var models = {
+    fusion:{
+      title:"AV 融合：把“有声”和“嘴动”绑定起来",
+      text:"音频分支看声学事件，视觉分支看脸和嘴部动态，融合层判断两者是否指向同一个候选人。它解决的是 VAD 无法回答的归属问题。",
+      nodes:[["audio","log-mel / wav2vec"],["vision","face crop / mouth ROI"],["sync","cross-attention"],["sync","speaking score"]]
+    },
+    context:{
+      title:"时间上下文：不要只看当前一帧",
+      text:"一句话通常持续数百毫秒到数秒。TalkNet 这类方法把短期音画互动和长期说话证据一起看，减少单帧抖动。",
+      nodes:[["vision","face track t-5..t+5"],["audio","audio window"],["sync","temporal encoder"],["sync","self-attention"]]
+    },
+    graph:{
+      title:"多人关系：每张脸是图上的一个节点",
+      text:"多人同屏时，模型需要理解同一人的跨帧连续性，以及同一帧里不同人的相互排斥或重叠关系。SPELL/LoCoNet 代表这条路线。",
+      nodes:[["vision","person nodes"],["vision","same-track edges"],["audio","scene audio"],["sync","node classification"]]
+    },
+    robust:{
+      title:"鲁棒性增强：让模型盯住真正相关的口部证据",
+      text:"真实视频有噪声、低分辨率、遮挡和音画错位。TalkNCE/LASER 等方向通过对比学习、唇部 landmark 或一致性约束提升跨域稳定性。",
+      nodes:[["vision","lip landmarks"],["audio","noisy speech"],["sync","contrastive / consistency"],["sync","robust score"]]
+    }
+  };
+  function renderModel(k){
+    var m=models[k], html="";
+    m.nodes.forEach(function(n,i){
+      html += '<div class="branch"><div class="bk">stage '+String(i+1).padStart(2,"0")+'</div><div class="bv"><span class="node '+n[0]+'">'+n[1]+'</span>'+(i<m.nodes.length-1?'<span class="arrow"></span>':'')+'</div></div>';
+    });
+    $("#modelViz").innerHTML = html;
+    $("#modelText").innerHTML = '<h4>'+m.title+'</h4><p>'+m.text+'</p><p>迁移使用时，先问自己：这个业务缺的是音频证据、视觉证据、同步证据，还是多人上下文？不要一上来只换更大的模型。</p>';
+  }
+  $$(".model-tabs button").forEach(function(b){
+    b.addEventListener("click",function(){
+      $$(".model-tabs button").forEach(function(x){x.classList.remove("on");});
+      $$(".model-tabs button").forEach(function(x){x.setAttribute("aria-pressed","false");});
+      b.classList.add("on"); b.setAttribute("aria-pressed","true"); renderModel(b.dataset.model);
+    });
+  });
+  var sections = $$("header[id], section[id], .cheat[id]");
+  var links = $$(".toc a");
+  function onScroll(){
+    var h = document.documentElement, p = h.scrollTop / (h.scrollHeight - h.clientHeight);
+    $("#progress").style.width = (p*100).toFixed(2)+"%";
+    var cur = sections[0].id;
+    sections.forEach(function(s){ if(s.getBoundingClientRect().top < 100) cur=s.id; });
+    links.forEach(function(a){ a.classList.toggle("on", a.getAttribute("href")==="#"+cur); });
+  }
+  window.addEventListener("scroll",onScroll,{passive:true});
+  render(); renderModel("fusion"); onScroll();
+})();
+</script>
+</body>
+</html>
