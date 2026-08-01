@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 WhisperX · 把多人访谈录音转成带说话人的精确字幕</title>
+<style>
+:root{
+  --bg:#0F1319; --bg2:#12171F; --panel:#161C26; --panel2:#1B2330;
+  --line:#232D3B; --line2:#2E3A4B;
+  --ink:#EAEEF3; --ink2:#B9C4D2; --mut:#7E8A9A; --mut2:#5C6675;
+  --teal:#37C7B8;   /* SPEAKER_00 / primary */
+  --amber:#F0A93C;  /* SPEAKER_01 */
+  --pink:#E5679B;   /* SPEAKER_02 */
+  --sky:#56A8F5;    /* word timing / links */
+  --ok:#5FCB7E; --warn:#F0A93C; --err:#EF5A5A;
+  --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+  background-image:radial-gradient(1200px 600px at 80% -10%,rgba(55,199,184,.08),transparent 60%),
+                   radial-gradient(900px 500px at 0% 5%,rgba(86,168,245,.06),transparent 55%);
+}
+.wrap{max-width:1060px;margin:0 auto;padding:0 22px}
+h1,h2,h3{line-height:1.25;margin:0}
+p{margin:.6em 0}
+code,.mono{font-family:var(--mono)}
+a{color:var(--sky);text-decoration:none}
+::selection{background:rgba(55,199,184,.28)}
+
+/* ---------- eyebrow / section frame ---------- */
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--teal);display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.eyebrow::before{content:"";width:26px;height:1px;background:linear-gradient(90deg,var(--teal),transparent)}
+section{padding:70px 0;border-top:1px solid var(--line)}
+.sec-title{font-size:clamp(24px,3.4vw,34px);font-weight:750;letter-spacing:-.02em}
+.sec-sub{color:var(--ink2);max-width:70ch;margin-top:12px;font-size:15.5px}
+
+/* ---------- HERO ---------- */
+.hero{padding:48px 0 60px;border-top:none;position:relative}
+.tagbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:26px}
+.tag{font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--ink2);border:1px solid var(--line2);border-radius:999px;padding:4px 11px;background:rgba(255,255,255,.015)}
+.tag b{color:var(--teal);font-weight:600}
+.hero h1{font-size:clamp(30px,5.4vw,52px);font-weight:800;letter-spacing:-.03em;line-height:1.08}
+.hero h1 .hl{color:var(--teal)}
+.hero h1 .hl2{color:var(--amber)}
+.hero-lede{color:var(--ink2);font-size:clamp(15px,1.8vw,18px);max-width:64ch;margin-top:18px}
+
+/* task strip: input -> pipeline -> output */
+.taskstrip{margin-top:38px;display:grid;grid-template-columns:1fr auto 1.15fr;gap:16px;align-items:stretch}
+.card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.card-h{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal)}
+.filepill{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 12px}
+.filepill .ic{color:var(--sky)}
+.meta-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--mut);margin-top:8px;padding:0 3px}
+/* waveform */
+.wave{display:flex;align-items:center;gap:2px;height:40px;margin-top:14px;padding:0 2px}
+.wave i{flex:1;background:linear-gradient(180deg,var(--teal),rgba(55,199,184,.35));border-radius:2px;opacity:.75;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(1)}}
+.arrow{align-self:center;color:var(--mut);font-family:var(--mono);font-size:24px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.arrow small{font-size:10px;letter-spacing:.1em;writing-mode:horizontal-tb}
+/* output srt */
+.srt{font-family:var(--mono);font-size:12.5px;line-height:1.55;color:var(--ink2)}
+.srt .idx{color:var(--mut2)}
+.srt .ts{color:var(--sky)}
+.srt .sp0{color:var(--teal);font-weight:600}
+.srt .sp1{color:var(--amber);font-weight:600}
+.srt-line{padding:3px 0}
+.output-tabs{display:flex;gap:4px;margin-top:2px;margin-bottom:12px;flex-wrap:wrap}
+.otab{font-family:var(--mono);font-size:11px;padding:4px 9px;border-radius:7px;border:1px solid var(--line2);color:var(--mut);cursor:pointer;background:transparent;transition:.15s}
+.otab.on{color:var(--bg);background:var(--teal);border-color:var(--teal);font-weight:600}
+.otab:hover:not(.on){color:var(--ink);border-color:var(--teal)}
+
+/* ---------- capability contract ---------- */
+.contract{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:34px}
+.cbox{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px}
+.cbox h3{font-size:14px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--teal);margin-bottom:12px}
+.cbox.no h3{color:var(--err)}
+.cbox ul{margin:0;padding-left:0;list-style:none}
+.cbox li{position:relative;padding-left:22px;margin:9px 0;color:var(--ink2);font-size:14.5px}
+.cbox li::before{content:"›";position:absolute;left:4px;color:var(--teal);font-weight:700}
+.cbox.no li::before{content:"×";color:var(--err);left:6px}
+.io-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}
+.iochip{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:13px 14px}
+.iochip .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-bottom:6px}
+.iochip .v{font-size:13.5px;color:var(--ink)}
+.iochip .v code{color:var(--sky);font-size:12.5px}
+
+/* ---------- pipeline stepper (signature-ish) ---------- */
+.pipe{display:flex;gap:0;margin-top:34px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel)}
+.pstep{flex:1;padding:16px 14px;cursor:pointer;border-right:1px solid var(--line);transition:.18s;position:relative;text-align:left}
+.pstep:last-child{border-right:none}
+.pstep:hover{background:var(--panel2)}
+.pstep.on{background:var(--panel2)}
+.pstep.on::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--stepc,var(--teal))}
+.pstep .num{font-family:var(--mono);font-size:11px;color:var(--mut2)}
+.pstep .nm{font-weight:700;font-size:14.5px;margin-top:4px;color:var(--ink)}
+.pstep .md{font-family:var(--mono);font-size:11px;color:var(--mut);margin-top:4px}
+.pdetail{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px}
+.pdetail h3{font-size:18px;margin-bottom:6px}
+.pdetail .lead{color:var(--ink2);font-size:14.5px}
+.pd-io{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;margin-top:16px;align-items:center}
+.pd-io .box{background:var(--bg2);border:1px solid var(--line2);border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.pd-io .box b{color:var(--teal);display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.pd-io .ar{color:var(--mut);font-size:20px;text-align:center}
+.pd-note{margin-top:14px;font-size:13px;color:var(--mut);border-left:2px solid var(--stepc,var(--teal));padding-left:12px}
+
+/* ---------- command breakdown ---------- */
+.term{background:#0B0F15;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;margin-top:26px;box-shadow:0 20px 50px -30px rgba(0,0,0,.8)}
+.term-bar{display:flex;align-items:center;gap:7px;padding:11px 15px;border-bottom:1px solid var(--line);background:var(--bg2)}
+.term-bar i{width:11px;height:11px;border-radius:50%}
+.tb-r{background:#FF5F56}.tb-y{background:#FFBD2E}.tb-g{background:#27C93F}
+.term-bar span{margin-left:8px;font-family:var(--mono);font-size:11px;color:var(--mut)}
+.term-body{padding:18px 18px 20px;font-family:var(--mono);font-size:13.5px;line-height:1.9;overflow-x:auto}
+.prompt{color:var(--teal)}
+.cmd-tok{cursor:pointer;border-radius:5px;padding:1px 3px;transition:.12s;white-space:nowrap;display:inline-block}
+.cmd-tok:hover{background:rgba(86,168,245,.14)}
+.cmd-tok.flag{color:var(--sky)}
+.cmd-tok.val{color:var(--amber)}
+.cmd-tok.bin{color:var(--teal);font-weight:600}
+.cmd-tok.file{color:var(--ink)}
+.cmd-tok.sel{background:rgba(86,168,245,.2);outline:1px solid var(--sky)}
+.cont{color:var(--mut2)}
+.tok-info{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--sky);border-radius:10px;padding:14px 16px;min-height:64px}
+.tok-info .t{font-family:var(--mono);color:var(--sky);font-size:13px;margin-bottom:5px}
+.tok-info .d{color:var(--ink2);font-size:14px}
+.tok-hint{color:var(--mut);font-size:12.5px}
+.termout{margin-top:14px;font-family:var(--mono);font-size:12.5px;line-height:1.75;color:var(--mut);background:#0B0F15;border:1px solid var(--line);border-radius:11px;padding:14px 16px;white-space:pre-wrap}
+.termout .g{color:var(--ok)}.termout .b{color:var(--sky)}.termout .w{color:var(--warn)}.termout .m{color:var(--pink)}
+
+/* ---------- signature: word timeline ---------- */
+.tl-wrap{margin-top:30px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px 22px 16px}
+.tl-legend{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;font-family:var(--mono);font-size:12px}
+.tl-legend span{display:flex;align-items:center;gap:7px;color:var(--ink2)}
+.tl-legend i{width:11px;height:11px;border-radius:3px}
+.lane{position:relative;height:52px;border-bottom:1px dashed var(--line);margin-bottom:6px}
+.lane-lbl{position:absolute;left:-2px;top:-2px;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--mut)}
+.word{position:absolute;top:20px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11.5px;color:#0b0f15;font-weight:600;cursor:pointer;overflow:hidden;white-space:nowrap;transition:transform .12s,box-shadow .12s;border:1px solid rgba(0,0,0,.2)}
+.word:hover{transform:translateY(-3px);box-shadow:0 8px 18px -8px rgba(0,0,0,.7);z-index:5}
+.word.s0{background:var(--teal)}.word.s1{background:var(--amber)}
+.ruler{position:relative;height:22px;margin-top:2px;border-top:1px solid var(--line2)}
+.tick{position:absolute;top:0;font-family:var(--mono);font-size:10px;color:var(--mut2);transform:translateX(-50%);padding-top:4px}
+.tick::before{content:"";position:absolute;top:0;left:50%;width:1px;height:5px;background:var(--line2)}
+.wordinfo{margin-top:16px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.wi{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+.wi .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.wi .v{font-family:var(--mono);font-size:16px;color:var(--ink);margin-top:3px}
+.wi .v.acc{color:var(--sky)}
+
+/* ---------- params ---------- */
+.params{margin-top:30px;display:grid;grid-template-columns:1.05fr .95fr;gap:18px;align-items:start}
+.pcontrol{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px}
+.pctl-row{margin:16px 0}
+.pctl-row:first-child{margin-top:4px}
+.pctl-row .lbl{font-family:var(--mono);font-size:12px;color:var(--ink);display:flex;justify-content:space-between;margin-bottom:9px}
+.pctl-row .lbl .cur{color:var(--amber)}
+.seg{display:flex;gap:5px;flex-wrap:wrap}
+.seg button{flex:1;min-width:56px;font-family:var(--mono);font-size:11.5px;padding:8px 6px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--mut);cursor:pointer;transition:.14s}
+.seg button.on{background:var(--sky);border-color:var(--sky);color:var(--bg);font-weight:600}
+.seg button:hover:not(.on){color:var(--ink);border-color:var(--sky)}
+.gauges{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px}
+.gauge{margin:16px 0}
+.gauge:first-child{margin-top:2px}
+.gauge .gh{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;color:var(--ink2);margin-bottom:7px}
+.gauge .gh b{color:var(--ink)}
+.bar{height:9px;border-radius:6px;background:var(--bg2);border:1px solid var(--line);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:6px;transition:width .4s cubic-bezier(.2,.7,.2,1)}
+.b-speed i{background:linear-gradient(90deg,var(--teal),var(--sky))}
+.b-vram i{background:linear-gradient(90deg,var(--amber),var(--err))}
+.b-qual i{background:linear-gradient(90deg,var(--sky),var(--teal))}
+.gverdict{margin-top:16px;font-size:13px;color:var(--ink2);border-top:1px solid var(--line);padding-top:14px;font-family:var(--mono);line-height:1.6}
+.gverdict b{color:var(--teal)}
+
+/* ---------- generic two-col & tables ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:26px}
+.mini{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px}
+.mini h3{font-size:16px;margin-bottom:8px;display:flex;align-items:center;gap:9px}
+.mini h3 .badge{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:6px;background:var(--panel2);border:1px solid var(--line2);color:var(--mut);letter-spacing:.06em}
+.mini p{color:var(--ink2);font-size:14px}
+.mini code{color:var(--sky);font-size:12.5px;background:var(--bg2);padding:1px 5px;border-radius:4px}
+
+.tbl{width:100%;border-collapse:collapse;margin-top:24px;font-size:13.5px}
+.tbl th,.tbl td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line)}
+.tbl th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);font-weight:500}
+.tbl td{color:var(--ink2)}
+.tbl td:first-child{color:var(--ink);font-weight:600}
+.tbl tr:hover td{background:rgba(255,255,255,.015)}
+.chk{color:var(--ok);font-weight:700}.crs{color:var(--err);font-weight:700}.mid{color:var(--warn)}
+
+/* verify checklist */
+.verify{margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.vitem{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.vitem .vh{font-family:var(--mono);font-size:12px;color:var(--teal);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.vitem .vh .n{width:20px;height:20px;border-radius:6px;background:var(--panel2);border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink)}
+.vitem p{font-size:13.5px;color:var(--ink2);margin:0}
+.vitem code{font-family:var(--mono);color:var(--sky);font-size:12px;background:var(--bg2);padding:1px 5px;border-radius:4px}
+
+/* failure accordions */
+.fail{margin-top:22px}
+.facc{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden;background:var(--panel)}
+.facc summary{list-style:none;cursor:pointer;padding:15px 18px;display:flex;align-items:center;gap:12px;font-weight:600;font-size:14.5px}
+.facc summary::-webkit-details-marker{display:none}
+.facc summary .sig{font-family:var(--mono);font-size:11px;color:var(--err);border:1px solid rgba(239,90,90,.3);background:rgba(239,90,90,.08);border-radius:6px;padding:3px 8px;white-space:nowrap}
+.facc summary .tw{color:var(--warn);border-color:rgba(240,169,60,.3);background:rgba(240,169,60,.08)}
+.facc summary .chev{margin-left:auto;color:var(--mut);transition:.2s}
+.facc[open] summary .chev{transform:rotate(90deg)}
+.facc .fbody{padding:0 18px 18px 18px;color:var(--ink2);font-size:14px;border-top:1px solid var(--line)}
+.facc .fbody{padding-top:14px}
+.facc .fbody code{font-family:var(--mono);color:var(--sky);background:var(--bg2);padding:1px 5px;border-radius:4px;font-size:12.5px}
+.facc .fix{margin-top:10px;color:var(--ink);font-size:13.5px}
+.facc .fix b{color:var(--ok);font-family:var(--mono);font-size:12px;letter-spacing:.05em}
+
+/* workflow diagram */
+.flow{margin-top:26px;display:flex;flex-direction:column;gap:0}
+.frow{display:grid;grid-template-columns:120px 1fr;gap:0;align-items:stretch}
+.fstage{font-family:var(--mono);font-size:12px;color:var(--mut);padding:16px 14px 16px 0;text-align:right;border-right:2px solid var(--line);position:relative}
+.fstage.hot{color:var(--teal)}
+.fstage.hot::after{content:"";position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--teal);box-shadow:0 0 12px var(--teal)}
+.fcontent{padding:16px 0 16px 22px}
+.fcontent .ft{font-weight:600;font-size:14.5px;color:var(--ink)}
+.fcontent .fd{font-size:13.5px;color:var(--ink2);margin-top:3px}
+.fcontent .fd code{font-family:var(--mono);color:var(--sky);font-size:12px}
+.frow.center .fcontent{background:linear-gradient(90deg,rgba(55,199,184,.07),transparent);border-radius:0 12px 12px 0}
+
+/* code block generic */
+.codeblk{background:#0B0F15;border:1px solid var(--line2);border-radius:12px;padding:16px 18px;font-family:var(--mono);font-size:12.5px;line-height:1.85;overflow-x:auto;margin-top:16px;color:var(--ink2)}
+.codeblk .kw{color:var(--pink)}.codeblk .fn{color:var(--teal)}.codeblk .st{color:var(--amber)}.codeblk .cm{color:var(--mut2)}.codeblk .nm{color:var(--sky)}
+
+footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--mut);font-size:13px}
+footer .fl{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;align-items:center}
+footer code{color:var(--teal);font-family:var(--mono)}
+
+/* responsive */
+@media(max-width:880px){
+  .taskstrip{grid-template-columns:1fr}
+  .arrow{transform:rotate(90deg);margin:2px auto}
+  .contract,.params,.grid2,.verify{grid-template-columns:1fr}
+  .io-grid{grid-template-columns:1fr 1fr}
+  .pipe{flex-wrap:wrap}
+  .pstep{flex:1 1 45%;border-bottom:1px solid var(--line)}
+  .pd-io{grid-template-columns:1fr}
+  .pd-io .ar{transform:rotate(90deg)}
+  .wordinfo{grid-template-columns:1fr 1fr}
+  .frow{grid-template-columns:80px 1fr}
+  .fstage{font-size:11px}
+}
+@media(max-width:520px){
+  .io-grid,.wordinfo{grid-template-columns:1fr}
+  section{padding:52px 0}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<header class="wrap hero">
+  <div class="tagbar">
+    <span class="tag"><b>ASR</b> 语音转写流水线</span>
+    <span class="tag">基于 <b>faster-whisper</b></span>
+    <span class="tag"><b>word-level</b> 时间戳</span>
+    <span class="tag"><b>speaker</b> diarization</span>
+    <span class="tag">离线 / 本地 GPU</span>
+  </div>
+  <h1>把一段多人访谈录音<br>转成<span class="hl">带说话人</span>的<span class="hl2">逐词精确</span>字幕</h1>
+  <p class="hero-lede">
+    WhisperX 不是又一个 Whisper 封装。它在 Whisper 转写之上，接了 <b>VAD 切分</b>、<b>wav2vec2 强制对齐</b>和 <b>pyannote 说话人分离</b>三级流水线——把只有句级时间戳的粗字幕，变成"哪个词、几点几秒、谁说的"都能定位的结构化产物。下面这条真实主线贯穿全文。
+  </p>
+
+  <div class="taskstrip">
+    <!-- INPUT -->
+    <div class="card">
+      <div class="card-h"><span class="dot"></span>输入 · INPUT</div>
+      <div class="filepill"><span class="ic">♪</span> interview.mp3</div>
+      <div class="meta-row"><span>2 speakers</span><span>44.1kHz · stereo</span></div>
+      <div class="meta-row"><span>时长 18:24</span><span>~17 MB</span></div>
+      <div class="wave" id="wave"></div>
+      <div class="meta-row" style="margin-top:10px"><span>句级时间戳</span><span style="color:var(--err)">✕ 无逐词 / 无说话人</span></div>
+    </div>
+
+    <div class="arrow">→<small>whisperx</small></div>
+
+    <!-- OUTPUT -->
+    <div class="card">
+      <div class="card-h"><span class="dot" style="background:var(--amber);box-shadow:0 0 10px var(--amber)"></span>产物 · OUTPUT</div>
+      <div class="output-tabs" id="otabs">
+        <button class="otab on" data-f="srt">interview.srt</button>
+        <button class="otab" data-f="json">.json</button>
+        <button class="otab" data-f="vtt">.vtt</button>
+        <button class="otab" data-f="txt">.txt</button>
+      </div>
+      <div class="srt" id="outview"></div>
+    </div>
+  </div>
+</header>
+
+<!-- ================= 能力契约 ================= -->
+<section class="wrap" id="contract">
+  <div class="eyebrow">Capability Contract · 能力契约</div>
+  <h2 class="sec-title">先划清边界：它负责什么，别指望它什么</h2>
+  <p class="sec-sub">调用工具前，先把"契约"看明白：给它什么、拿回什么、谁该用它。把不属于它的活儿丢给它，是绝大多数失败的根源。</p>
+
+  <div class="io-grid">
+    <div class="iochip"><div class="k">输入 input</div><div class="v">任意 <code>ffmpeg</code> 可解码的音/视频：<code>mp3 / wav / m4a / mp4</code></div></div>
+    <div class="iochip"><div class="k">输出 output</div><div class="v"><code>srt / vtt / json / txt / tsv</code>，含 word 时间戳与 speaker 标签</div></div>
+    <div class="iochip"><div class="k">典型使用者</div><div class="v">做字幕、语音数据集、会议/访谈转写的工程与媒体团队</div></div>
+    <div class="iochip"><div class="k">运行形态</div><div class="v">离线批处理，GPU 推荐；一次跑完一个文件</div></div>
+  </div>
+
+  <div class="contract">
+    <div class="cbox">
+      <h3>它负责 · does</h3>
+      <ul>
+        <li>用 faster-whisper 做高速转写（large-v2 在 GPU 上可达 ~70× 实时）</li>
+        <li>用 wav2vec2 <b>强制对齐</b>，把每个 word 精确到 <code>start/end/score</code></li>
+        <li>用 pyannote <b>diarization</b> 判定"谁在什么时候说话"，回填到每个 word</li>
+        <li>用 VAD 先切静音，既提速也压制长静音处的 hallucination</li>
+      </ul>
+    </div>
+    <div class="cbox no">
+      <h3>别交给它 · not for</h3>
+      <ul>
+        <li>实时 / 流式字幕——它是离线批处理，不做 streaming</li>
+        <li>转写之后的摘要、问答、纠错——那是下游 LLM 的活</li>
+        <li>说话人"身份识别"（是张三还是李四）——它只给 <code>SPEAKER_00</code> 匿名标签</li>
+        <li>非语音音频分析（音乐、事件声）——它只对 speech 建模</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 流水线 ================= -->
+<section class="wrap" id="pipeline">
+  <div class="eyebrow">Pipeline · 四级流水线</div>
+  <h2 class="sec-title">一次调用里，音频被处理了四遍</h2>
+  <p class="sec-sub">理解 WhisperX 最快的方式，是看清一次调用内部的四个阶段。点开每一段，看它吃进什么、吐出什么。这也解释了为什么它需要 <b>三套模型</b>。</p>
+
+  <div class="pipe" id="pipe">
+    <button class="pstep on" data-s="0" style="--stepc:var(--sky)"><div class="num">STAGE 01</div><div class="nm">VAD 切分</div><div class="md">silero / pyannote</div></button>
+    <button class="pstep" data-s="1" style="--stepc:var(--teal)"><div class="num">STAGE 02</div><div class="nm">Transcribe</div><div class="md">faster-whisper</div></button>
+    <button class="pstep" data-s="2" style="--stepc:var(--amber)"><div class="num">STAGE 03</div><div class="nm">Align 对齐</div><div class="md">wav2vec2</div></button>
+    <button class="pstep" data-s="3" style="--stepc:var(--pink)"><div class="num">STAGE 04</div><div class="nm">Diarize</div><div class="md">pyannote-audio</div></button>
+  </div>
+
+  <div class="pdetail" id="pdetail"><!-- filled by JS --></div>
+</section>
+
+<!-- ================= 最小可运行调用 ================= -->
+<section class="wrap" id="run">
+  <div class="eyebrow">Minimal Runnable Call · 最小可运行调用</div>
+  <h2 class="sec-title">一条命令，跑通全链路</h2>
+  <p class="sec-sub">这是把 <code>interview.mp3</code> 变成 diarized SRT 的完整命令。<b>点击任意 flag</b>，看它改变了什么行为。</p>
+
+  <div class="term">
+    <div class="term-bar"><i class="tb-r"></i><i class="tb-y"></i><i class="tb-g"></i><span>bash · ~/work</span></div>
+    <div class="term-body">
+      <span class="prompt">$</span>
+      <span class="cmd-tok bin" data-k="bin">whisperx</span>
+      <span class="cmd-tok file" data-k="file">interview.mp3</span> <span class="cont">\</span><br>
+      &nbsp;&nbsp;<span class="cmd-tok flag" data-k="model">--model</span> <span class="cmd-tok val" data-k="model">large-v2</span> <span class="cont">\</span><br>
+      &nbsp;&nbsp;<span class="cmd-tok flag" data-k="lang">--language</span> <span class="cmd-tok val" data-k="lang">en</span> <span class="cont">\</span><br>
+      &nbsp;&nbsp;<span class="cmd-tok flag" data-k="diar">--diarize</span>
+      <span class="cmd-tok flag" data-k="spk">--min_speakers</span> <span class="cmd-tok val" data-k="spk">2</span>
+      <span class="cmd-tok flag" data-k="spk">--max_speakers</span> <span class="cmd-tok val" data-k="spk">2</span> <span class="cont">\</span><br>
+      &nbsp;&nbsp;<span class="cmd-tok flag" data-k="hf">--hf_token</span> <span class="cmd-tok val" data-k="hf">hf_xxx</span> <span class="cont">\</span><br>
+      &nbsp;&nbsp;<span class="cmd-tok flag" data-k="ct">--compute_type</span> <span class="cmd-tok val" data-k="ct">float16</span>
+      <span class="cmd-tok flag" data-k="bs">--batch_size</span> <span class="cmd-tok val" data-k="bs">16</span> <span class="cont">\</span><br>
+      &nbsp;&nbsp;<span class="cmd-tok flag" data-k="of">--output_format</span> <span class="cmd-tok val" data-k="of">srt</span>
+      <span class="cmd-tok flag" data-k="od">--output_dir</span> <span class="cmd-tok val" data-k="od">./out</span>
+    </div>
+  </div>
+
+  <div class="tok-info" id="tokinfo">
+    <div class="t">点上面任意一段 ↑</div>
+    <div class="tok-hint">每个 flag 都会讲清它对速度、质量、输出格式或边界的影响。</div>
+  </div>
+
+  <div class="termout" id="termout"></div>
+</section>
+
+<!-- ================= 签名: word timeline ================= -->
+<section class="wrap" id="timeline">
+  <div class="eyebrow">The Payoff · 这就是它的价值</div>
+  <h2 class="sec-title">逐词时间戳 × 说话人分轨</h2>
+  <p class="sec-sub">这是 WhisperX 区别于普通 Whisper 的核心产物：每个 word 都落在时间轴的精确位置，并归属到某条 speaker 分轨。<b>把鼠标移到任意 word 上</b>，看它的 <code>start / end / score / speaker</code>——这正是输出 JSON 里 <code>words[]</code> 的内容。</p>
+
+  <div class="tl-wrap">
+    <div class="tl-legend">
+      <span><i style="background:var(--teal)"></i>SPEAKER_00 · 主持人</span>
+      <span><i style="background:var(--amber)"></i>SPEAKER_01 · 嘉宾</span>
+      <span><i style="background:var(--sky)"></i>word timing（悬停查看）</span>
+    </div>
+    <div class="lane"><span class="lane-lbl">SPEAKER_00</span><div id="lane0"></div></div>
+    <div class="lane"><span class="lane-lbl">SPEAKER_01</span><div id="lane1"></div></div>
+    <div class="ruler" id="ruler"></div>
+
+    <div class="wordinfo">
+      <div class="wi"><div class="k">word</div><div class="v" id="wi-word">—</div></div>
+      <div class="wi"><div class="k">start → end</div><div class="v acc" id="wi-ts">—</div></div>
+      <div class="wi"><div class="k">align score</div><div class="v" id="wi-score">—</div></div>
+      <div class="wi"><div class="k">speaker</div><div class="v" id="wi-spk">—</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 调用面 ================= -->
+<section class="wrap" id="surfaces">
+  <div class="eyebrow">Invocation Surfaces · 调用面</div>
+  <h2 class="sec-title">CLI 快跑，Python API 精调</h2>
+  <p class="sec-sub">同一套流水线有两个入口，各有分工。别把两者混着用——选错入口会让本该简单的事变复杂。</p>
+
+  <div class="grid2">
+    <div class="mini">
+      <h3>CLI <span class="badge">一次性 / 批处理</span></h3>
+      <p>装完即用，一条命令跑完四级流水线并落盘。适合 <b>脚本、cron、批量目录处理</b>。参数全靠 flag，输出格式与目录由 <code>--output_format</code> / <code>--output_dir</code> 决定。想改中间行为（比如换 align model）也能加 flag，但拿不到中间对象。</p>
+    </div>
+    <div class="mini">
+      <h3>Python API <span class="badge">流水线可拆</span></h3>
+      <p>把 transcribe / align / diarize 拆成三步，每步都能拿到 <b>内存里的结果对象</b>再决定下一步。适合 <b>集成进服务、复用已加载模型、只跑其中某几段</b>。下面就是官方推荐的三段式写法。</p>
+    </div>
+  </div>
+
+  <div class="codeblk">
+<span class="kw">import</span> whisperx
+
+device, batch_size, compute_type <span class="kw">=</span> <span class="st">"cuda"</span>, <span class="nm">16</span>, <span class="st">"float16"</span>
+
+<span class="cm"># 1) 转写：faster-whisper 后端，一次批量推理</span>
+model  <span class="kw">=</span> whisperx.<span class="fn">load_model</span>(<span class="st">"large-v2"</span>, device, compute_type<span class="kw">=</span>compute_type)
+audio  <span class="kw">=</span> whisperx.<span class="fn">load_audio</span>(<span class="st">"interview.mp3"</span>)
+result <span class="kw">=</span> model.<span class="fn">transcribe</span>(audio, batch_size<span class="kw">=</span>batch_size)   <span class="cm"># -> {segments, language}</span>
+
+<span class="cm"># 2) 对齐：按语言加载 wav2vec2，得到 word-level 时间戳</span>
+model_a, meta <span class="kw">=</span> whisperx.<span class="fn">load_align_model</span>(result[<span class="st">"language"</span>], device)
+result <span class="kw">=</span> whisperx.<span class="fn">align</span>(result[<span class="st">"segments"</span>], model_a, meta, audio, device)
+
+<span class="cm"># 3) 分离：pyannote 需要 HF token，回填 speaker 到每个 word</span>
+diarize <span class="kw">=</span> whisperx.<span class="fn">DiarizationPipeline</span>(use_auth_token<span class="kw">=</span>HF_TOKEN, device<span class="kw">=</span>device)
+result  <span class="kw">=</span> whisperx.<span class="fn">assign_word_speakers</span>(diarize(audio), result)
+  </div>
+</section>
+
+<!-- ================= 参数心智模型 ================= -->
+<section class="wrap" id="params">
+  <div class="eyebrow">Parameter Mental Model · 参数心智模型</div>
+  <h2 class="sec-title">四个参数决定成败，其余是细节</h2>
+  <p class="sec-sub">别背参数手册。真正会改变速度、显存、质量与稳定性的就下面这几个。<b>拨动它们</b>，右侧仪表会告诉你代价与收益。</p>
+
+  <div class="params">
+    <div class="pcontrol">
+      <div class="pctl-row">
+        <div class="lbl"><span>--model 模型规模</span><span class="cur" id="cur-model">large-v2</span></div>
+        <div class="seg" data-p="model">
+          <button data-v="tiny">tiny</button>
+          <button data-v="base">base</button>
+          <button data-v="small">small</button>
+          <button data-v="medium">medium</button>
+          <button class="on" data-v="large-v2">large-v2</button>
+        </div>
+      </div>
+      <div class="pctl-row">
+        <div class="lbl"><span>--compute_type 精度</span><span class="cur" id="cur-ct">float16</span></div>
+        <div class="seg" data-p="ct">
+          <button data-v="int8">int8</button>
+          <button class="on" data-v="float16">float16</button>
+          <button data-v="float32">float32</button>
+        </div>
+      </div>
+      <div class="pctl-row">
+        <div class="lbl"><span>--batch_size 批大小</span><span class="cur" id="cur-bs">16</span></div>
+        <div class="seg" data-p="bs">
+          <button data-v="4">4</button>
+          <button data-v="8">8</button>
+          <button class="on" data-v="16">16</button>
+          <button data-v="24">24</button>
+        </div>
+      </div>
+      <div class="pctl-row">
+        <div class="lbl"><span>--diarize / --no_align 阶段开关</span><span class="cur" id="cur-st">full</span></div>
+        <div class="seg" data-p="st">
+          <button data-v="asr">仅转写</button>
+          <button data-v="align">转写+对齐</button>
+          <button class="on" data-v="full">全流水线</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="gauges">
+      <div class="gauge"><div class="gh"><span>速度 speed</span><b id="g-speed-t">很快</b></div><div class="bar b-speed"><i id="g-speed"></i></div></div>
+      <div class="gauge"><div class="gh"><span>显存 VRAM</span><b id="g-vram-t">~10 GB</b></div><div class="bar b-vram"><i id="g-vram"></i></div></div>
+      <div class="gauge"><div class="gh"><span>转写质量 accuracy</span><b id="g-qual-t">高</b></div><div class="bar b-qual"><i id="g-qual"></i></div></div>
+      <div class="gverdict" id="verdict"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 结果验证 ================= -->
+<section class="wrap" id="verify">
+  <div class="eyebrow">Verification · 结果验证</div>
+  <h2 class="sec-title">怎么知道它真的做对了</h2>
+  <p class="sec-sub">转写"看起来对"不等于"真的对"。用这几个信号交叉验证，尤其是时间戳漂移和说话人错配——它们最隐蔽。</p>
+
+  <div class="verify">
+    <div class="vitem"><div class="vh"><span class="n">1</span>播放核对时间轴</div><p>把 <code>.srt</code> 挂到播放器（mpv / VLC）上跟音频对播。<b>字幕与声音的错位</b>是对齐失败最直接的证据，比看文本更可靠。</p></div>
+    <div class="vitem"><div class="vh"><span class="n">2</span>抽查 word score</div><p>JSON 里每个 word 有 <code>score</code>（对齐置信度）。批量统计 <b>score 偏低或缺失</b>的词段，往往对应数字、专名或 wav2vec2 词典外的词。</p></div>
+    <div class="vitem"><div class="vh"><span class="n">3</span>核对 speaker 数量</div><p>统计 JSON 里出现的 <code>SPEAKER_xx</code> 去重个数，与你已知的说话人数比对。数量对不上，说明 diarization 分裂或合并了说话人。</p></div>
+    <div class="vitem"><div class="vh"><span class="n">4</span>看 stdout 的语言检测</div><p>日志里会打印 <code>Detected language: en (p=0.99)</code>。<b>语言检错</b>会让后续对齐直接崩，是最先该排查的一行。</p></div>
+  </div>
+</section>
+
+<!-- ================= 自动化契约 ================= -->
+<section class="wrap" id="auto">
+  <div class="eyebrow">Automation Contract · 自动化调用契约</div>
+  <h2 class="sec-title">脚本如何判断它成功了</h2>
+  <p class="sec-sub">放进流水线时，别只看它有没有"打印东西"。判断成败要同时看 <b>exit code</b> 和 <b>预期产物是否落盘</b>——两者缺一不可。</p>
+
+  <table class="tbl">
+    <thead><tr><th>信号</th><th>成功时</th><th>需要警惕</th></tr></thead>
+    <tbody>
+      <tr><td>exit code</td><td><span class="chk">0</span></td><td>非 0 即失败（Python traceback → 1），这是脚本的第一判据</td></tr>
+      <tr><td>输出产物</td><td>生成 <code>./out/interview.srt</code></td><td>exit 0 但文件不存在 = 静默异常，必须显式 <code>test -f</code> 校验</td></tr>
+      <tr><td>覆盖行为</td><td>同名文件<b>直接覆盖</b></td><td>不是追加。重跑前若要留档，先自行备份</td></tr>
+      <tr><td>stdout / stderr</td><td>进度条与语言检测在 <b>stderr</b></td><td>别用 stdout 抓转写文本——正式结果只在输出文件里</td></tr>
+      <tr><td>幂等性</td><td>相同输入基本稳定<span class="mid">（temperature=0）</span></td><td>Whisper 仍有轻微非确定性；严格复现需固定 seed 与版本</td></tr>
+    </tbody>
+  </table>
+
+  <div class="codeblk" style="margin-top:20px">
+<span class="cm"># 一段可靠的 CI/批处理判断骨架</span>
+<span class="fn">whisperx</span> interview.mp3 <span class="kw">--model</span> large-v2 <span class="kw">--diarize</span> <span class="kw">--output_dir</span> ./out
+<span class="kw">status</span><span class="kw">=</span>$?
+<span class="kw">if</span> [ <span class="st">"$status"</span> <span class="kw">-ne</span> 0 ]; <span class="kw">then</span> echo <span class="st">"whisperx failed (exit $status)"</span>; exit 1; <span class="kw">fi</span>
+<span class="kw">if</span> [ ! <span class="kw">-s</span> ./out/interview.srt ]; <span class="kw">then</span> echo <span class="st">"no subtitle produced"</span>; exit 1; <span class="kw">fi</span>
+<span class="cm"># 两关都过，才交给下游</span>
+  </div>
+</section>
+
+<!-- ================= 嵌入工作流 ================= -->
+<section class="wrap" id="workflow">
+  <div class="eyebrow">Workflow Position · 嵌入工作流</div>
+  <h2 class="sec-title">它站在流水线的哪一环</h2>
+  <p class="sec-sub">WhisperX 是 <b>中段的转换器</b>：前面有人把媒体准备好，后面有 LLM 或人工接手它的结构化产物。它自己不采集、不理解、不发布。</p>
+
+  <div class="flow">
+    <div class="frow"><div class="fstage">上游</div><div class="fcontent"><div class="ft">媒体准备</div><div class="fd">录音 / 视频 → <code>ffmpeg</code> 抽轨、降噪、统一到 16kHz wav（可选）→ 落到待处理目录</div></div></div>
+    <div class="frow center"><div class="fstage hot">WhisperX</div><div class="fcontent"><div class="ft">转写 + 对齐 + 分离</div><div class="fd">吃进音频，吐出 <code>segments[].words[]</code>（含 <code>start/end/score/speaker</code>）与各格式字幕文件</div></div></div>
+    <div class="frow"><div class="fstage">下游 A</div><div class="fcontent"><div class="ft">机器消费</div><div class="fd">JSON → 喂给 LLM 做摘要 / 会议纪要 / 检索；或入库构建语音数据集</div></div></div>
+    <div class="frow"><div class="fstage">下游 B</div><div class="fcontent"><div class="ft">人工审核</div><div class="fd">SRT/VTT → 剪辑软件或字幕编辑器人工校对 → 发布或压制进视频</div></div></div>
+  </div>
+</section>
+
+<!-- ================= 常见失败边界 ================= -->
+<section class="wrap" id="fail">
+  <div class="eyebrow">Failure Boundaries · 常见失败边界</div>
+  <h2 class="sec-title">它会在这些地方翻车</h2>
+  <p class="sec-sub">按主题挑了最常见的几类。多数不是"用错工具"，而是环境、依赖与阈值没对齐。点开看征兆与修法。</p>
+
+  <div class="fail">
+    <details class="facc">
+      <summary><span class="sig">依赖</span>cuDNN / CUDA 版本不匹配，一启动就报错<span class="chev">›</span></summary>
+      <div class="fbody">CTranslate2（faster-whisper 后端）对 cuDNN 版本敏感，典型报错 <code>Could not load library libcudnn_ops_infer.so</code> 或 <code>Invalid handle</code>。
+        <div class="fix"><b>FIX</b> 用官方推荐的 CUDA/cuDNN 组合（或直接用 conda 装 <code>cudnn</code>），必要时降级 <code>ctranslate2</code>；CPU 环境改 <code>--device cpu --compute_type int8</code>。</div></div>
+    </details>
+    <details class="facc">
+      <summary><span class="sig">鉴权</span>--diarize 报 401 / 模型拉不下来<span class="chev">›</span></summary>
+      <div class="fbody">pyannote 是 gated model：不仅要 <code>--hf_token</code>，还要在 HuggingFace 上<b>手动接受</b> <code>pyannote/speaker-diarization-3.1</code> 与 <code>segmentation-3.0</code> 的许可。缺任一步，diarization 直接失败。
+        <div class="fix"><b>FIX</b> 登录 HF 逐个点 "Agree"，再传 token；先不加 <code>--diarize</code> 单独验证转写与对齐是否正常。</div></div>
+    </details>
+    <details class="facc">
+      <summary><span class="sig tw">显存</span>CUDA out of memory<span class="chev">›</span></summary>
+      <div class="fbody">large-v2 + 大 batch 很吃显存。<code>--batch_size</code> 越大越快也越吃显存，diarization 阶段还会再叠加占用。
+        <div class="fix"><b>FIX</b> 降 <code>--batch_size</code>（16→8→4）；换 <code>--compute_type int8</code>；或退到 <code>medium</code> 模型。</div></div>
+    </details>
+    <details class="facc">
+      <summary><span class="sig tw">精度</span>数字、专名的时间戳明显偏移<span class="chev">›</span></summary>
+      <div class="fbody">强制对齐依赖 wav2vec2 的音素词典。词典外的词（数字 "2024"、缩写、外来专名）无法精确对齐，<code>score</code> 会偏低甚至时间戳错位。
+        <div class="fix"><b>FIX</b> 这是方法本身的边界，不是 bug。对关键词段人工校对；数字密集内容评估是否值得对齐，必要时 <code>--no_align</code> 退回句级。</div></div>
+    </details>
+    <details class="facc">
+      <summary><span class="sig">格式</span>找不到音频 / 解码失败<span class="chev">›</span></summary>
+      <div class="fbody">WhisperX 通过 <code>ffmpeg</code> 读音频。系统没装 ffmpeg、路径含特殊字符/中文编码、或容器格式损坏，都会在 <code>load_audio</code> 阶段就崩。
+        <div class="fix"><b>FIX</b> 先 <code>ffmpeg -i file.mp4 -ac 1 -ar 16000 clean.wav</code> 转成干净单声道 wav 再喂；确认 ffmpeg 在 PATH 上。</div></div>
+    </details>
+    <details class="facc">
+      <summary><span class="sig tw">语言</span>小语种对齐质量差或直接跳过<span class="chev">›</span></summary>
+      <div class="fbody">对齐质量取决于该语言是否有可用的 wav2vec2 模型。冷门语言可能没有默认对齐模型，WhisperX 会退化或跳过对齐。
+        <div class="fix"><b>FIX</b> 显式指定 <code>--language</code> 避免检错；用 <code>--align_model</code> 指向该语言的合适模型；无合适模型时接受句级时间戳。</div></div>
+    </details>
+  </div>
+</section>
+
+<!-- ================= 对比取舍 ================= -->
+<section class="wrap" id="compare">
+  <div class="eyebrow">Trade-offs · 对比与取舍</div>
+  <h2 class="sec-title">什么时候用它，什么时候别用</h2>
+  <p class="sec-sub">WhisperX 的甜区非常清晰：<b>本地、批量、要逐词时间戳和说话人</b>。偏离这三点，往往有更省心的选择。</p>
+
+  <table class="tbl">
+    <thead><tr><th>方案</th><th>word 时间戳</th><th>diarization</th><th>部署 / 成本</th><th>何时选它</th></tr></thead>
+    <tbody>
+      <tr><td>WhisperX</td><td class="chk">✓ 精确</td><td class="chk">✓ 内置</td><td>本地 GPU，免费但要管依赖</td><td>要逐词字幕+说话人、数据不能出内网</td></tr>
+      <tr><td>OpenAI Whisper（原版）</td><td class="crs">✗ 仅句级</td><td class="crs">✗</td><td>本地，慢</td><td>只要粗字幕、不在意速度</td></tr>
+      <tr><td>faster-whisper（裸用）</td><td class="mid">△ 需自接</td><td class="crs">✗</td><td>本地，快</td><td>只追求转写速度，自己拼后处理</td></tr>
+      <tr><td>whisper.cpp</td><td class="mid">△ 有限</td><td class="crs">✗</td><td>CPU / 边缘友好</td><td>无 GPU、要跨平台/嵌入式</td></tr>
+      <tr><td>云服务（Deepgram / AssemblyAI 等）</td><td class="chk">✓</td><td class="chk">✓</td><td>按分钟付费，零运维</td><td>不想管 GPU、要 SLA、数据可出网</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid2" style="margin-top:22px">
+    <div class="mini"><h3>✓ 适合</h3><p>本地/私有环境批量转写；要给视频做逐词字幕；构建带时间戳与说话人标注的<b>语音数据集</b>；访谈、播客、会议录音的结构化转写。</p></div>
+    <div class="mini"><h3>✕ 不适合</h3><p>直播实时字幕；只要一句话的一次性转写（云更快）；没有 GPU 又追求 large 模型的速度；需要真实<b>说话人身份</b>而非匿名标签的场景。</p></div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <div class="fl">
+    <div>一文读懂 · <code>WhisperX</code> —— 从一段访谈录音，到带说话人的逐词字幕。</div>
+    <div>主线：<code>interview.mp3</code> → VAD → transcribe → align → diarize → <code>interview.srt</code></div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---- hero waveform ---- */
+  var wave=document.getElementById('wave');
+  for(var i=0;i<38;i++){var b=document.createElement('i');var h=20+Math.abs(Math.sin(i*0.7))*80;b.style.height=h+'%';b.style.animationDelay=(i*0.045)+'s';wave.appendChild(b);}
+
+  /* ---- output format switch ---- */
+  var outputs={
+    srt:'<div class="srt-line"><span class="idx">1</span><br><span class="ts">00:00:00,310 → 00:00:04,050</span><br><span class="sp0">[SPEAKER_00]</span>: Welcome back to the show.</div>'+
+        '<div class="srt-line"><span class="idx">2</span><br><span class="ts">00:00:04,210 → 00:00:07,880</span><br><span class="sp1">[SPEAKER_01]</span>: Thanks for having me on today.</div>',
+    json:'<span style="color:var(--mut2)">{</span><br>&nbsp;"segments":[{<br>&nbsp;&nbsp;"start":<span style="color:var(--sky)">0.31</span>, "end":<span style="color:var(--sky)">4.05</span>,<br>&nbsp;&nbsp;"speaker":"<span class="sp0">SPEAKER_00</span>",<br>&nbsp;&nbsp;"words":[{"word":"Welcome",<br>&nbsp;&nbsp;&nbsp;"start":<span style="color:var(--sky)">0.31</span>,"end":<span style="color:var(--sky)">0.68</span>,<br>&nbsp;&nbsp;&nbsp;"score":<span style="color:var(--amber)">0.87</span>}, ...]<br>&nbsp;}]<br><span style="color:var(--mut2)">}</span>',
+    vtt:'<div class="srt-line">WEBVTT<br><br><span class="ts">00:00.310 → 00:04.050</span><br><span class="sp0">&lt;v SPEAKER_00&gt;</span>Welcome back to the show.<br><br><span class="ts">00:04.210 → 00:07.880</span><br><span class="sp1">&lt;v SPEAKER_01&gt;</span>Thanks for having me on today.</div>',
+    txt:'<div class="srt-line">Welcome back to the show. Thanks for<br>having me on today. It\'s great to be<br>here talking about ...</div>'
+  };
+  var outview=document.getElementById('outview');
+  function setOut(f){outview.innerHTML=outputs[f];}
+  setOut('srt');
+  document.getElementById('otabs').addEventListener('click',function(e){
+    var b=e.target.closest('.otab'); if(!b)return;
+    [].forEach.call(this.children,function(c){c.classList.remove('on');});
+    b.classList.add('on'); setOut(b.dataset.f);
+  });
+
+  /* ---- pipeline stepper ---- */
+  var stages=[
+    {c:'var(--sky)',title:'VAD · 语音活动检测',lead:'先用 silero / pyannote VAD 找出"有人说话"的区间，把长音频切成短片段。',in:'raw waveform（18:24 连续音频）',out:'speech segments（一组带时间的语音块）',note:'两个好处：切掉长静音后可以批量并行推理→大幅提速；同时避免 Whisper 在静音处产生 hallucination 幻听文本。'},
+    {c:'var(--teal)',title:'Transcribe · 转写',lead:'对每个语音块用 faster-whisper（CTranslate2 后端）批量推理，得到文本与句级时间戳。',in:'speech segments',out:'segments[]：text + 粗时间戳 + language',note:'这一步是速度的来源：批量 + int8/float16 量化让 large-v2 在 GPU 上可达数十倍实时。此时时间戳还只是句级的、不够准。'},
+    {c:'var(--amber)',title:'Align · 强制对齐',lead:'按检测到的语言加载 wav2vec2 音素模型，把每个 word 对齐到音频波形的精确位置。',in:'segments[].text + audio',out:'每个 word 拿到 start / end / score',note:'这是逐词时间戳的来源，也是 WhisperX 最关键的一环。代价：词典外的词（数字、专名）可能对不准，score 会偏低。'},
+    {c:'var(--pink)',title:'Diarize · 说话人分离',lead:'用 pyannote-audio 判定"每段时间是谁在说"，再把 speaker 标签回填到每个 word。',in:'audio + 已对齐的 words',out:'每个 word / segment 带上 SPEAKER_xx',note:'需要 HF token 且接受模型许可。给出 --min/--max_speakers 提示能显著提升准确度；重叠说话仍是它的弱项。'}
+  ];
+  var pdetail=document.getElementById('pdetail'), pipe=document.getElementById('pipe');
+  function renderStage(i){
+    var s=stages[i];
+    pdetail.style.setProperty('--stepc',s.c);
+    pdetail.innerHTML='<h3 style="color:'+s.c+'">'+s.title+'</h3>'+
+      '<p class="lead">'+s.lead+'</p>'+
+      '<div class="pd-io"><div class="box"><b>吃进 IN</b>'+s.in+'</div><div class="ar">→</div><div class="box"><b>吐出 OUT</b>'+s.out+'</div></div>'+
+      '<div class="pd-note" style="border-color:'+s.c+'">'+s.note+'</div>';
+  }
+  renderStage(0);
+  pipe.addEventListener('click',function(e){
+    var b=e.target.closest('.pstep'); if(!b)return;
+    [].forEach.call(pipe.children,function(c){c.classList.remove('on');});
+    b.classList.add('on'); renderStage(+b.dataset.s);
+  });
+
+  /* ---- command token info ---- */
+  var toks={
+    bin:{t:'whisperx',d:'CLI 入口。装好后直接可用，一条命令跑完 VAD→转写→对齐→分离全流水线。',h:'底层依赖 ffmpeg 读音频、faster-whisper 转写。'},
+    file:{t:'interview.mp3',d:'位置参数：输入音/视频文件。任何 ffmpeg 能解码的格式都行，可一次传多个文件批处理。',h:'输出文件名默认沿用输入名（interview.srt）。'},
+    model:{t:'--model large-v2',d:'选 Whisper 模型规模。large-v2 质量最高最稳；显存/速度吃紧时可降到 medium/small。',h:'最影响【质量】与【显存】的参数。'},
+    lang:{t:'--language en',d:'指定语言，跳过自动检测。强烈建议显式指定——语言检错会让后续对齐直接失效。',h:'也决定加载哪个 wav2vec2 对齐模型。'},
+    diar:{t:'--diarize',d:'开启说话人分离。这是拿到 SPEAKER_xx 标签的开关，需配合 --hf_token。',h:'不加它 = 有逐词时间戳但无说话人。'},
+    spk:{t:'--min_speakers / --max_speakers',d:'给 diarization 一个说话人数量区间提示。已知人数时务必填，能显著提升分离准确度。',h:'影响 diarization 的【质量】。'},
+    hf:{t:'--hf_token hf_xxx',d:'HuggingFace token。pyannote 是 gated model，还需在 HF 网站手动接受其许可协议。',h:'缺它或没接受许可 → diarization 401 失败。'},
+    ct:{t:'--compute_type float16',d:'推理精度。float16 是 GPU 默认甜区；int8 更省显存（适合 CPU/小卡）；float32 最准但最慢最吃显存。',h:'最影响【速度↔显存】权衡。'},
+    bs:{t:'--batch_size 16',d:'VAD 切块后的批量大小。越大越快，也越吃显存；OOM 时第一个该降的就是它。',h:'最影响【速度↔显存】。'},
+    of:{t:'--output_format srt',d:'输出格式：srt/vtt/txt/tsv/json/aud。做字幕选 srt/vtt，喂机器选 json，人读选 txt。',h:'决定【产物形态】。可用 all 一次全出。'},
+    od:{t:'--output_dir ./out',d:'输出目录。同名文件会被直接覆盖（不是追加），脚本里重跑前注意备份。',h:'决定产物落盘位置。'}
+  };
+  var tokinfo=document.getElementById('tokinfo');
+  document.querySelector('.term-body').addEventListener('click',function(e){
+    var t=e.target.closest('.cmd-tok'); if(!t)return;
+    [].forEach.call(document.querySelectorAll('.cmd-tok'),function(x){x.classList.remove('sel');});
+    [].forEach.call(document.querySelectorAll('.cmd-tok[data-k="'+t.dataset.k+'"]'),function(x){x.classList.add('sel');});
+    var info=toks[t.dataset.k];
+    tokinfo.innerHTML='<div class="t">'+info.t+'</div><div class="d">'+info.d+'</div><div class="tok-hint" style="margin-top:6px">'+info.h+'</div>';
+  });
+  /* fake terminal output */
+  document.getElementById('termout').innerHTML=
+    '<span class="b">>></span> Detected language: <span class="g">en (p=0.99)</span>\n'+
+    'Performing VAD... <span class="g">done</span>  (312 speech segments)\n'+
+    'Transcribing (large-v2, fp16, bs=16)... <span class="g">done</span>  <span class="w">57.4x realtime</span>\n'+
+    'Performing alignment (wav2vec2 · en)... <span class="g">done</span>\n'+
+    'Performing diarization (pyannote)... <span class="g">done</span>  <span class="m">2 speakers</span>\n'+
+    '<span class="g">✓</span> ./out/interview.srt written   <span class="b">exit 0</span>';
+
+  /* ---- word timeline (signature) ---- */
+  var words=[
+    {w:'Welcome',s:0.31,e:0.68,sc:0.94,sp:0},{w:'back',s:0.68,e:0.95,sc:0.91,sp:0},
+    {w:'to',s:0.95,e:1.08,sc:0.88,sp:0},{w:'the',s:1.08,e:1.22,sc:0.86,sp:0},
+    {w:'show',s:1.22,e:1.70,sc:0.93,sp:0},
+    {w:'Thanks',s:2.10,e:2.55,sc:0.92,sp:1},{w:'for',s:2.55,e:2.74,sc:0.89,sp:1},
+    {w:'having',s:2.74,e:3.20,sc:0.90,sp:1},{w:'me',s:3.20,e:3.42,sc:0.87,sp:1},
+    {w:'on',s:3.42,e:3.66,sc:0.84,sp:1},
+    {w:'So',s:4.20,e:4.48,sc:0.83,sp:0},{w:'let\u2019s',s:4.48,e:4.80,sc:0.85,sp:0},
+    {w:'dive',s:4.80,e:5.18,sc:0.90,sp:0},{w:'in',s:5.18,e:5.40,sc:0.88,sp:0},
+    {w:'Absolutely',s:5.90,e:6.62,sc:0.91,sp:1}
+  ];
+  var T0=0, T1=7.0;
+  function pct(x){return ((x-T0)/(T1-T0))*100;}
+  var lane0=document.getElementById('lane0'), lane1=document.getElementById('lane1');
+  words.forEach(function(o){
+    var el=document.createElement('div');
+    el.className='word s'+o.sp;
+    el.style.left=pct(o.s)+'%';
+    el.style.width=Math.max(pct(o.e)-pct(o.s),2.5)+'%';
+    el.textContent=o.w;
+    el.addEventListener('mouseenter',function(){showWord(o);});
+    el.addEventListener('click',function(){showWord(o);});
+    (o.sp===0?lane0:lane1).appendChild(el);
+  });
+  var ruler=document.getElementById('ruler');
+  for(var t=0;t<=7;t++){var tk=document.createElement('div');tk.className='tick';tk.style.left=pct(t)+'%';tk.textContent=t+'s';ruler.appendChild(tk);}
+  function showWord(o){
+    document.getElementById('wi-word').textContent='"'+o.w+'"';
+    document.getElementById('wi-ts').textContent=o.s.toFixed(2)+' → '+o.e.toFixed(2)+'s';
+    var scEl=document.getElementById('wi-score');
+    scEl.textContent=o.sc.toFixed(2);
+    scEl.style.color = o.sc<0.85 ? 'var(--warn)':'var(--ink)';
+    var sp=document.getElementById('wi-spk');
+    sp.textContent='SPEAKER_0'+o.sp;
+    sp.style.color=o.sp===0?'var(--teal)':'var(--amber)';
+  }
+  showWord(words[0]);
+
+  /* ---- parameter gauges ---- */
+  var P={model:'large-v2',ct:'float16',bs:'16',st:'full'};
+  var modelW={tiny:1,base:2,small:3,medium:4,'large-v2':5};
+  var ctVram={int8:0.55,float16:1,float32:1.8};
+  function updateGauges(){
+    var mw=modelW[P.model];              // 1..5
+    // speed: smaller model faster, int8 faster, bigger batch faster
+    var speed = (6-mw)*14 + (P.ct==='int8'?18:P.ct==='float32'?-8:6) + (+P.bs)*1.1;
+    if(P.st==='full') speed-=14; else if(P.st==='align') speed-=6;
+    speed=Math.max(8,Math.min(100,speed+18));
+    // vram
+    var vgb = (2 + mw*1.9) * ctVram[P.ct] * (0.7 + (+P.bs)/40);
+    if(P.st==='full') vgb+=2.2;
+    var vram=Math.max(6,Math.min(100,vgb*7));
+    // quality
+    var qual = mw*15 + (P.ct==='float32'?6:P.ct==='int8'?-8:2) + 25;
+    if(P.st!=='asr') qual+=6;
+    qual=Math.max(15,Math.min(100,qual));
+
+    set('g-speed',speed); set('g-vram',vram); set('g-qual',qual);
+    document.getElementById('g-speed-t').textContent = speed>75?'极快':speed>50?'快':speed>30?'中等':'偏慢';
+    document.getElementById('g-vram-t').textContent = '~'+vgb.toFixed(1)+' GB';
+    document.getElementById('g-qual-t').textContent = qual>82?'很高':qual>62?'高':qual>42?'中等':'偏低';
+
+    var v='';
+    if(P.ct==='int8') v='<b>int8</b> 大幅省显存，适合 CPU 或小显存卡，代价是转写质量略降。';
+    else if(+P.bs>=24 && mw>=5) v='large-v2 + 大 batch <b>最吃显存</b>，注意 OOM；跑不动就降 batch 或换 int8。';
+    else if(mw<=2) v='小模型<b>飞快但易错</b>，适合快速预览或长音频初筛，不建议做终稿字幕。';
+    else if(P.st==='asr') v='只转写：拿到句级字幕但<b>没有逐词时间戳、没有说话人</b>——不是 WhisperX 的完整价值。';
+    else if(P.st==='align') v='转写+对齐：有<b>逐词时间戳</b>，但没有 speaker 标签，适合单人内容。';
+    else v='当前是<b>推荐的生产甜区</b>：large-v2 + float16 + 全流水线，质量与速度平衡。';
+    document.getElementById('verdict').innerHTML=v;
+  }
+  function set(id,v){document.getElementById(id).style.width=v+'%';}
+  document.querySelectorAll('.seg').forEach(function(seg){
+    seg.addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b)return;
+      [].forEach.call(seg.children,function(c){c.classList.remove('on');});
+      b.classList.add('on');
+      P[seg.dataset.p]=b.dataset.v;
+      var map={model:'cur-model',ct:'cur-ct',bs:'cur-bs',st:'cur-st'};
+      document.getElementById(map[seg.dataset.p]).textContent=b.dataset.v;
+      updateGauges();
+    });
+  });
+  updateGauges();
+})();
+</script>
+</body>
+</html>

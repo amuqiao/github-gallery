@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 · voxceleb_resnet34.onnx —— 声纹提取模型</title>
+<style>
+  :root{
+    --bg:#0a0f1a;
+    --bg2:#0d1420;
+    --panel:#111a2b;
+    --panel-2:#0d1522;
+    --line:rgba(231,234,242,0.09);
+    --line-strong:rgba(231,234,242,0.18);
+    --text:#e7eaf2;
+    --text-dim:#8b96ac;
+    --text-dim2:#5c667c;
+    --amber:#e8a23d;
+    --amber-dim:rgba(232,162,61,0.14);
+    --cyan:#49c6d6;
+    --cyan-dim:rgba(73,198,214,0.14);
+    --green:#57c08a;
+    --green-dim:rgba(87,192,138,0.14);
+    --red:#e2604f;
+    --red-dim:rgba(226,96,79,0.14);
+    --radius:12px;
+    --f-display: -apple-system, "Segoe UI", "PingFang SC", "Microsoft Yahei", system-ui, sans-serif;
+    --f-body: -apple-system, "Segoe UI", "PingFang SC", "Microsoft Yahei", system-ui, sans-serif;
+    --f-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Cascadia Mono", "Courier New", monospace;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px),
+      radial-gradient(1200px 600px at 15% -10%, rgba(73,198,214,0.08), transparent 60%),
+      radial-gradient(1000px 500px at 90% 0%, rgba(232,162,61,0.06), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--f-body);
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--amber-dim); color:var(--text);}
+  a{color:var(--cyan);}
+  :focus-visible{outline:2px solid var(--cyan); outline-offset:3px; border-radius:4px;}
+
+  .wrap{max-width:1080px; margin:0 auto; padding:0 24px;}
+
+  /* ---------- top nav ---------- */
+  .topnav{
+    position:sticky; top:0; z-index:50;
+    background:rgba(10,15,26,0.86);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .topnav .wrap{
+    display:flex; align-items:center; gap:18px;
+    height:52px; overflow-x:auto; scrollbar-width:none;
+  }
+  .topnav .wrap::-webkit-scrollbar{display:none;}
+  .topnav .brand{
+    font-family:var(--f-mono); font-size:12px; color:var(--amber);
+    letter-spacing:0.06em; white-space:nowrap; padding-right:8px;
+    border-right:1px solid var(--line); flex-shrink:0;
+  }
+  .topnav a{
+    font-family:var(--f-mono); font-size:12.5px; color:var(--text-dim);
+    text-decoration:none; white-space:nowrap; letter-spacing:0.02em;
+    padding:4px 0; border-bottom:2px solid transparent;
+    transition:color .15s, border-color .15s;
+  }
+  .topnav a:hover{color:var(--text); border-color:var(--line-strong);}
+
+  /* ---------- hero ---------- */
+  .hero{padding:56px 0 40px; border-bottom:1px solid var(--line);}
+  .eyebrow{
+    font-family:var(--f-mono); font-size:12px; letter-spacing:0.14em;
+    color:var(--cyan); text-transform:uppercase; margin:0 0 14px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow::before{content:""; width:7px; height:7px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); display:inline-block;}
+  h1.title{
+    font-family:var(--f-display); font-weight:800; font-size:clamp(28px,4.4vw,44px);
+    letter-spacing:-0.01em; margin:0 0 12px; color:#fff;
+  }
+  h1.title .mono-accent{font-family:var(--f-mono); font-weight:700; color:var(--amber); font-size:0.62em; display:block; margin-top:6px;}
+  .subtitle{font-size:16.5px; color:var(--text-dim); max-width:640px; margin:0 0 26px;}
+
+  .fact-strip{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:34px;}
+  .fact{
+    font-family:var(--f-mono); font-size:12.5px; color:var(--text);
+    background:var(--panel); border:1px solid var(--line-strong);
+    border-radius:20px; padding:6px 14px; display:flex; gap:8px; align-items:center;
+  }
+  .fact b{color:var(--amber); font-weight:600;}
+
+  .hero-grid{display:grid; grid-template-columns:1.05fr 1fr; gap:28px; align-items:stretch;}
+  @media (max-width:860px){.hero-grid{grid-template-columns:1fr;}}
+
+  .hero-copy p{color:var(--text-dim); font-size:15px; margin:0 0 14px;}
+  .hero-copy strong{color:var(--text);}
+
+  /* ---------- console / match widget (signature element) ---------- */
+  .console{
+    background:linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--line-strong); border-radius:var(--radius);
+    padding:20px 20px 18px; position:relative; overflow:hidden;
+  }
+  .console::before{
+    content:"声纹匹配台 · VOICEPRINT MATCH CONSOLE";
+    position:absolute; top:10px; right:16px; font-family:var(--f-mono);
+    font-size:9.5px; letter-spacing:0.08em; color:var(--text-dim2);
+  }
+  .console-title{font-family:var(--f-mono); font-size:12px; color:var(--text-dim); margin-bottom:14px; letter-spacing:0.03em;}
+  .waveforms{display:flex; gap:14px; margin-bottom:14px;}
+  .wf-card{flex:1; background:var(--bg2); border:1px solid var(--line); border-radius:8px; padding:10px 10px 8px;}
+  .wf-card .wf-label{font-family:var(--f-mono); font-size:11px; color:var(--text-dim); margin-bottom:6px;}
+  .wf-bars{display:flex; align-items:flex-end; gap:2px; height:38px;}
+  .wf-bars i{flex:1; background:var(--cyan); border-radius:1px; opacity:0.85;}
+  .wf-bars.wf-b i{background:var(--amber);}
+
+  .gauge-box{display:flex; flex-direction:column; align-items:center; margin:6px 0 6px;}
+  .gauge-svg{width:100%; max-width:260px; height:auto;}
+  .verdict{font-family:var(--f-mono); font-size:14px; text-align:center; margin-top:2px; min-height:22px;}
+  .verdict.same{color:var(--green);}
+  .verdict.diff{color:var(--red);}
+  .truth-note{font-family:var(--f-mono); font-size:10.5px; color:var(--text-dim2); text-align:center;}
+
+  .preset-row{display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 12px;}
+  .preset-btn{
+    font-family:var(--f-mono); font-size:11px; color:var(--text-dim);
+    background:var(--bg2); border:1px solid var(--line); border-radius:6px;
+    padding:6px 8px; cursor:pointer; transition:all .15s; text-align:left;
+  }
+  .preset-btn:hover{border-color:var(--cyan); color:var(--text);}
+  .preset-btn.active{border-color:var(--amber); color:var(--amber); background:var(--amber-dim);}
+
+  .threshold-row{display:flex; align-items:center; gap:10px; font-family:var(--f-mono); font-size:11.5px; color:var(--text-dim); margin-top:6px;}
+  .threshold-row input[type="range"]{flex:1; accent-color:var(--cyan);}
+  .threshold-val{color:var(--amber); min-width:38px; text-align:right;}
+
+  /* ---------- sections ---------- */
+  section{padding:52px 0; border-bottom:1px solid var(--line);}
+  .section-head{display:flex; align-items:baseline; gap:12px; margin-bottom:8px; flex-wrap:wrap;}
+  .sec-no{font-family:var(--f-mono); font-size:13px; color:var(--text-dim2);}
+  h2{font-family:var(--f-display); font-weight:800; font-size:clamp(21px,2.6vw,28px); margin:0; color:#fff; letter-spacing:-0.01em;}
+  .sec-sub{color:var(--text-dim); font-size:14.5px; margin:6px 0 26px; max-width:680px;}
+
+  .callout{
+    background:var(--cyan-dim); border:1px solid rgba(73,198,214,0.35);
+    border-radius:var(--radius); padding:16px 18px; font-size:14.5px; color:var(--text);
+    margin:18px 0;
+  }
+  .callout b{color:var(--cyan);}
+  .callout.warn{background:var(--amber-dim); border-color:rgba(232,162,61,0.35);}
+  .callout.warn b{color:var(--amber);}
+
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  .grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  @media (max-width:760px){.grid-2, .grid-3{grid-template-columns:1fr;}}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px;}
+  .card h3{margin:0 0 8px; font-size:15.5px; color:#fff; font-family:var(--f-display); font-weight:700;}
+  .card p{margin:0; font-size:13.8px; color:var(--text-dim);}
+  .tag{display:inline-block; font-family:var(--f-mono); font-size:10.5px; letter-spacing:0.04em; color:var(--cyan); background:var(--cyan-dim); border-radius:4px; padding:2px 7px; margin-bottom:8px;}
+  .tag.gold{color:var(--amber); background:var(--amber-dim);}
+  .tag.red{color:var(--red); background:var(--red-dim);}
+  .tag.green{color:var(--green); background:var(--green-dim);}
+
+  /* io table */
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top;}
+  th{font-family:var(--f-mono); font-size:11.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.04em; font-weight:600;}
+  td{color:var(--text-dim);}
+  td b, td strong{color:var(--text);}
+  td code, .mono{font-family:var(--f-mono); font-size:12.8px; color:var(--amber); background:rgba(232,162,61,0.08); padding:1px 5px; border-radius:4px;}
+  .table-scroll{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius);}
+  .table-scroll table{min-width:640px;}
+  .table-scroll th:first-child, .table-scroll td:first-child{padding-left:18px;}
+
+  /* pipeline stepper */
+  .pipeline-strip{
+    display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px; margin-bottom:18px;
+  }
+  @media (max-width:860px){.pipeline-strip{grid-template-columns:repeat(3, minmax(0, 1fr));}}
+  @media (max-width:560px){.pipeline-strip{grid-template-columns:repeat(2, minmax(0, 1fr));}}
+  .pnode{
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    width:100%; min-height:82px; cursor:pointer; padding:10px 6px; border-radius:8px; transition:background .15s;
+    position:relative;
+    background:transparent; border:none;
+  }
+  .pnode.has-next::after{
+    content:"→"; position:absolute; right:-10px; top:50%; transform:translate(50%,-50%);
+    color:var(--text-dim2); font-size:14px; font-family:var(--f-mono); pointer-events:none;
+  }
+  .pipeline-strip .pnode.has-next:nth-of-type(5n)::after{display:none;}
+  @media (max-width:860px){
+    .pipeline-strip .pnode.has-next:nth-of-type(5n)::after{display:block;}
+    .pipeline-strip .pnode.has-next:nth-of-type(3n)::after{display:none;}
+  }
+  @media (max-width:560px){
+    .pipeline-strip .pnode.has-next:nth-of-type(3n)::after{display:block;}
+    .pipeline-strip .pnode.has-next:nth-of-type(2n)::after{display:none;}
+  }
+  .pnode:hover{background:rgba(255,255,255,0.03);}
+  .pnode .pn-badge{
+    width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:var(--f-mono); font-size:13px; color:var(--text-dim); background:var(--panel);
+    border:1px solid var(--line-strong); margin-bottom:8px; transition:all .15s;
+  }
+  .pnode.outside .pn-badge{border-style:dashed; border-color:var(--text-dim2);}
+  .pnode .pn-label{font-size:12px; color:var(--text-dim); line-height:1.3;}
+  .pnode.active .pn-badge{background:var(--amber); border-color:var(--amber); color:#1a1200;}
+  .pnode.active .pn-label{color:#fff;}
+  .flow-sep{display:none;}
+
+  .pdetail{
+    background:var(--panel-2); border:1px solid var(--line-strong); border-radius:var(--radius);
+    padding:18px 20px;
+  }
+  .pdetail .pd-shape{font-family:var(--f-mono); color:var(--cyan); font-size:14px; margin-bottom:8px; display:block;}
+  .pdetail .pd-text{font-size:14px; color:var(--text-dim); margin:0;}
+  .pdetail .pd-title{font-family:var(--f-display); font-weight:700; color:#fff; font-size:15px; margin-bottom:6px;}
+  .pdetail .pd-boundary{display:inline-block; font-family:var(--f-mono); font-size:10.5px; color:var(--text-dim2); border:1px dashed var(--line-strong); border-radius:4px; padding:2px 6px; margin-bottom:8px;}
+
+  /* tabs */
+  .tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
+  .tab-btn{
+    font-family:var(--f-mono); font-size:12.5px; color:var(--text-dim); background:var(--panel);
+    border:1px solid var(--line-strong); border-radius:8px; padding:8px 16px; cursor:pointer; transition:all .15s;
+  }
+  .tab-btn:hover{color:var(--text);}
+  .tab-btn.active{background:var(--amber); color:#1a1200; border-color:var(--amber); font-weight:600;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  /* factor grid inside train/infer */
+  .factor-list{display:grid; grid-template-columns:1fr; gap:10px; margin-top:14px;}
+  .factor{display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--line);}
+  .factor:last-child{border-bottom:none;}
+  .factor .fname{font-family:var(--f-mono); font-size:12.5px; color:var(--amber); flex-shrink:0; width:150px;}
+  .factor .fdesc{font-size:13.8px; color:var(--text-dim);}
+
+  /* accordion */
+  .acc-item{border:1px solid var(--line); border-radius:8px; margin-bottom:10px; overflow:hidden; background:var(--panel);}
+  .acc-btn{
+    width:100%; text-align:left; background:none; border:none; color:var(--text);
+    padding:14px 18px; font-size:14.5px; font-weight:600; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    font-family:var(--f-body);
+  }
+  .acc-btn .acc-icon{font-family:var(--f-mono); color:var(--text-dim2); transition:transform .2s; flex-shrink:0;}
+  .acc-item.open .acc-icon{transform:rotate(45deg); color:var(--amber);}
+  .acc-body{max-height:0; overflow:hidden; transition:max-height .25s ease;}
+  .acc-body-inner{padding:0 18px 16px; font-size:13.8px; color:var(--text-dim);}
+  .acc-body-inner b{color:var(--text);}
+
+  /* code block */
+  pre{
+    background:#080c14; border:1px solid var(--line-strong); border-radius:var(--radius);
+    padding:16px 18px; overflow-x:auto; font-family:var(--f-mono); font-size:12.6px; line-height:1.6;
+    color:#c9d4e0;
+  }
+  pre .c-comment{color:var(--text-dim2);}
+  pre .c-str{color:var(--green);}
+  pre .c-kw{color:var(--cyan);}
+  pre .c-num{color:var(--amber);}
+  code.inline{font-family:var(--f-mono); font-size:13px; background:rgba(255,255,255,0.06); padding:1px 6px; border-radius:4px; color:var(--amber);}
+
+  .file-tree{font-family:var(--f-mono); font-size:13px; color:var(--text-dim); background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:16px 18px;}
+  .file-tree .fname-main{color:var(--amber);}
+  .file-tree .fcomment{color:var(--text-dim2); margin-left:14px;}
+
+  footer{padding:44px 0 60px;}
+  .recap{background:linear-gradient(180deg, var(--panel), var(--panel-2)); border:1px solid var(--line-strong); border-radius:var(--radius); padding:26px 28px;}
+  .recap h3{margin:0 0 14px; font-family:var(--f-display); font-size:17px; color:#fff;}
+  .recap ul{margin:0; padding-left:18px; color:var(--text-dim); font-size:14px;}
+  .recap li{margin-bottom:8px;}
+  .recap li b{color:var(--text);}
+  .fine-print{font-size:12px; color:var(--text-dim2); margin-top:24px; line-height:1.6;}
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important; animation:none !important; scroll-behavior:auto !important;}
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <span class="brand">VOXCELEB · RESNET34</span>
+    <a href="#task">任务</a>
+    <a href="#io">输入输出</a>
+    <a href="#pipeline">数据流</a>
+    <a href="#train-infer">训练/推理</a>
+    <a href="#compare">同类对比</a>
+    <a href="#alt-upgrade">平替/升级</a>
+    <a href="#deploy">部署</a>
+    <a href="#pitfalls">边界与误区</a>
+    <a href="#demo">跑通示例</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">一文读懂 · ONNX 模型说明</p>
+    <h1 class="title">给我一段话，我告诉你这是不是同一个人在说
+      <span class="mono-accent">voxceleb_resnet34.onnx —— 说话人声纹提取模型</span>
+    </h1>
+    <p class="subtitle">
+      它不听你说了什么，只听你的声音"长什么样"。输入一段语音，输出一个 256 维的向量（声纹 embedding），
+      两段语音的向量越接近，就越可能是同一个人。这是声纹识别（Speaker Verification）任务的核心组件，
+      而不是语音识别（ASR）。
+    </p>
+
+    <div class="fact-strip">
+      <span class="fact"><b>任务</b>说话人确认 / 声纹提取</span>
+      <span class="fact"><b>输入</b>16kHz 单声道语音 → 80维 Fbank</span>
+      <span class="fact"><b>输出</b>256维声纹向量</span>
+      <span class="fact"><b>骨干</b>ResNet34 + 统计池化</span>
+      <span class="fact"><b>体量</b>≈6.6M 参数 · FP32 约 25MB</span>
+      <span class="fact"><b>训练数据</b>VoxCeleb2（≈5994位讲者）</span>
+    </div>
+
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p><strong>它从哪来：</strong>由 <span class="mono">WeSpeaker</span> 开源框架训练得到的 PyTorch 权重导出为 ONNX，
+        常见于 <span class="mono">sherpa-onnx</span> 等推理套件的模型仓库中，用于跨语言（C++ / Python / Java / Swift / Kotlin）、
+        跨平台的离线说话人确认与说话人日志（diarization）能力。</p>
+        <p><strong>它解决什么：</strong>门禁 / App 的声纹解锁、电话银行的声纹核身、反诈黑名单声纹比对、
+        会议录音"这段是谁在说"的按人分轨——这些系统里"判断是不是同一个人"的那一步，通常就是它在做。</p>
+        <p><strong>它不解决什么：</strong>不转文字、不做活体检测（防录音重放攻击）、不单独完成说话人日志
+        （还需要配合 VAD 切分和聚类）。右侧这台"匹配台"演示的正是它输出之后、真正业务判断发生的地方——
+        拖动阈值试试看，同一个相似度分数，判定结果会怎么变。</p>
+      </div>
+
+      <div class="console">
+        <div class="console-title">▶ 拖动下方阈值滑块，或点选样例，观察"同一人 / 不同人"的判定如何变化</div>
+
+        <div class="waveforms">
+          <div class="wf-card">
+            <div class="wf-label">语音 A</div>
+            <div class="wf-bars" id="wfA"></div>
+          </div>
+          <div class="wf-card">
+            <div class="wf-label">语音 B</div>
+            <div class="wf-bars wf-b" id="wfB"></div>
+          </div>
+        </div>
+
+        <div class="gauge-box">
+          <svg class="gauge-svg" viewBox="0 0 200 118" aria-label="余弦相似度仪表">
+            <path d="M10,100 A90,90 0 0 1 190,100" fill="none" stroke="rgba(231,234,242,0.14)" stroke-width="10" stroke-linecap="round"/>
+            <path id="gaugeArc" d="M10,100 A90,90 0 0 1 190,100" fill="none" stroke="#49c6d6" stroke-width="10" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283"/>
+            <line id="thresholdTick" x1="100" y1="100" x2="100" y2="14" stroke="#e2604f" stroke-width="2" stroke-dasharray="3,3" transform="rotate(-90 100 100)"/>
+            <line id="needle" x1="100" y1="100" x2="100" y2="24" stroke="#e8a23d" stroke-width="4" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+            <circle cx="100" cy="100" r="6" fill="#e8a23d"/>
+            <text x="14" y="112" font-family="ui-monospace,monospace" font-size="9" fill="#5c667c">0.0</text>
+            <text x="178" y="112" font-family="ui-monospace,monospace" font-size="9" fill="#5c667c">1.0</text>
+          </svg>
+          <div class="verdict" id="verdictText">余弦相似度 = 0.00</div>
+          <div class="truth-note" id="truthNote">标注（仅用于演示）：—</div>
+        </div>
+
+        <div class="preset-row" id="presetRow"></div>
+
+        <div class="threshold-row">
+          <span>判定阈值</span>
+          <input type="range" id="thresholdSlider" min="0" max="100" value="45">
+          <span class="threshold-val" id="thresholdVal">0.45</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="task">
+  <div class="wrap">
+    <div class="section-head"><span class="sec-no">01</span><h2>这个模型到底在解决什么问题</h2></div>
+    <p class="sec-sub">先分清两件事：语音识别（ASR）关心"说了什么"，声纹识别（Speaker Verification）只关心"是谁在说"。voxceleb_resnet34.onnx 属于后者。</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <span class="tag">为什么需要它</span>
+        <h3>声音也是一种"指纹"</h3>
+        <p>
+          每个人的声道结构、发音习惯不同，语音里藏着能区分"我"和"别人"的稳定特征。
+          把一段语音压缩成一个向量（声纹 embedding），如果两段语音来自同一个人，
+          两个向量在空间里会离得很近；来自不同人，则会离得较远。这就把"认人"问题
+          变成了一个可以用余弦相似度衡量的几何问题。
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag gold">典型应用</span>
+        <h3>一句话触发的真实场景</h3>
+        <p>
+          手机/门禁的"声纹解锁"、电话银行"请说出您的声纹密码"、反诈中心比对通话声纹是否命中黑名单、
+          会议软件把转录文字按"发言人1 / 发言人2"分开——这些场景背后都需要先把语音变成可比较的向量，
+          这一步正是本模型承担的工作。
+        </p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>边界要划清：</b> 本模型只回答"这个声纹向量和那个声纹向量像不像"，不负责识别文字内容、
+      不负责判断语音真假（防止用录音冒充本人）、也不单独完成"一段录音里有几个人、分别在什么时间说话"
+      （说话人日志/diarization）。这些能力需要在它之外再搭配 ASR、活体检测、VAD + 聚类等模块。
+    </div>
+  </div>
+</section>
+
+<section id="io">
+  <div class="wrap">
+    <div class="section-head"><span class="sec-no">02</span><h2>输入输出规格：喂什么、吐什么</h2></div>
+    <p class="sec-sub">这是判断"能不能直接拿来用"最先要核对的东西——尤其是输入，很多人会误以为可以直接扔一段 wav 文件进去。</p>
+
+    <div class="table-scroll">
+      <table>
+        <tr><th>项目</th><th>说明</th></tr>
+        <tr>
+          <td><b>输入 tensor</b></td>
+          <td>常见命名为 <code>feats</code>（不同导出脚本可能叫 <code>input</code> / <code>feature</code>，建议用 <span class="mono">Netron</span> 打开该 onnx 文件核对真实名称）</td>
+        </tr>
+        <tr>
+          <td><b>输入 shape</b></td>
+          <td><code>(batch, num_frames, 80)</code>，float32；<b>num_frames 是变长的</b>——模型对语音时长自适应</td>
+        </tr>
+        <tr>
+          <td><b>输入内容</b></td>
+          <td>80维 <b>Fbank</b>（log Mel filterbank）特征，25ms 窗长 / 10ms 帧移，源音频要求 <b>16kHz 单声道</b>，且做过逐句均值归一化（CMN）</td>
+        </tr>
+        <tr>
+          <td><b>输出 tensor</b></td>
+          <td>常见命名为 <code>embs</code> / <code>output</code>（同样建议用 Netron 核实）</td>
+        </tr>
+        <tr>
+          <td><b>输出 shape</b></td>
+          <td><code>(batch, 256)</code>，float32 —— 固定 256 维声纹向量，与输入时长无关</td>
+        </tr>
+        <tr>
+          <td><b>输出内容</b></td>
+          <td>说话人 embedding，多数导出流程中已做 L2 归一化，可直接用<b>余弦相似度</b>比较两个向量</td>
+        </tr>
+        <tr>
+          <td><b>图里不包含</b></td>
+          <td>wav → Fbank 的特征提取代码、VAD 静音切除、比对阈值判定逻辑——这些都在 ONNX 计算图<b>之外</b>，需要自己实现</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <b>常见误区：</b> "这个 onnx 能不能直接吃一段 wav 文件？" —— 不能。它的输入已经是算好的 80 维 Fbank
+      特征张量，原始波形到特征这一步（含重采样、加窗、Mel 滤波、逐句均值归一化）需要你自己用
+      <code class="inline">torchaudio.compliance.kaldi.fbank</code> 或 <code class="inline">kaldi-native-fbank</code>
+      之类的工具完成，模型本身只是"特征 → 向量"这一段网络。
+    </div>
+  </div>
+</section>
+
+<section id="pipeline">
+  <div class="wrap">
+    <div class="section-head"><span class="sec-no">03</span><h2>核心数据流：一段声音是怎么变成一个向量的</h2></div>
+    <p class="sec-sub">这是真实的、有先后顺序的信号链路——点一下每个节点，看看张量形状和含义如何一步步变化。虚线节点代表它发生在 ONNX 计算图之外。</p>
+
+    <div class="pipeline-strip" id="pipelineStrip"></div>
+    <div class="pdetail" id="pipelineDetail"></div>
+
+    <div class="callout" style="margin-top:22px;">
+      <b>往后一步（图外）：</b> 拿到两个 <code class="inline">(256,)</code> 声纹向量后，计算余弦相似度
+      <code class="inline">cos_sim = (a·b) / (‖a‖·‖b‖)</code>，与业务预先标定好的阈值比较，
+      才最终得到"同一人 / 不同人"的判定——这一步在模型之外，在你自己的代码里完成，也是首屏那台"匹配台"演示的内容。
+    </div>
+  </div>
+</section>
+
+<section id="train-infer">
+  <div class="wrap">
+    <div class="section-head"><span class="sec-no">04</span><h2>训练时学什么，推理时算什么</h2></div>
+    <p class="sec-sub">理解这个区别，才能理解"为什么随便截一段网络中间层就能当声纹向量用"。</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="train" role="tab" aria-selected="true">训练阶段</button>
+      <button class="tab-btn" data-tab="infer" role="tab" aria-selected="false">推理阶段</button>
+    </div>
+
+    <div class="tab-panel active" data-panel="train">
+      <div class="card" style="margin-bottom:16px;">
+        <span class="tag gold">监督信号：说话人 ID，不是文本</span>
+        <p>
+          训练数据是 <b>VoxCeleb2</b>（约 5994 位讲者、上百万条从 YouTube 访谈视频截取的语音片段），
+          每条语音的标签是"这是第几号讲者"，而不是文字内容。于是"认人"被转化成一个超大规模的分类问题：
+          网络前半部分（ResNet34 卷积堆叠 + 统计池化 + embedding 层）负责把语音压成一个向量，
+          后面接一个分类头，用 <b>AAM-Softmax</b>（Additive Angular Margin Softmax，思路接近 ArcFace）
+          把同一说话人的向量在角度空间里越拉越近、不同说话人越推越远。
+        </p>
+      </div>
+      <div class="factor-list">
+        <div class="factor"><span class="fname">数据增强</span><span class="fdesc">叠加 MUSAN 噪声、模拟房间混响（RIR）、速度扰动（当作"新讲者"）、SpecAugment 随机遮挡时频块——逼模型学会抓稳定的音色特征，而不是背景噪声。</span></div>
+        <div class="factor"><span class="fname">分段策略</span><span class="fdesc">训练早期随机裁剪 2–3 秒短片段加快收敛；训练末期做 <b>Large Margin Fine-tuning</b>（更长片段、更大角度间隔精调）——这就是同系列模型里 <code class="inline">_LM</code> 后缀的由来。</span></div>
+        <div class="factor"><span class="fname">训练结束后</span><span class="fdesc">分类头（AAM-Softmax 的权重矩阵）被<b>丢弃</b>，只留下 embedding 层之前的网络作为"特征提取器"导出为 ONNX——这也是为什么推理时看不到任何"分类"相关的输出。</span></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="infer">
+      <div class="card" style="margin-bottom:16px;">
+        <span class="tag">无监督：只做一次前向</span>
+        <p>
+          推理时没有标签、没有分类头，输入一段任意长度的 Fbank 特征，模型做一次前向传播，
+          输出固定 256 维向量。两个向量之间算余弦相似度，与预先在验证集上标定好的阈值比较，
+          得到"接受 / 拒绝"的判定——阈值不是模型自带的，需要业务方自己标定。
+        </p>
+      </div>
+      <div class="factor-list">
+        <div class="factor"><span class="fname">音频时长</span><span class="fdesc">建议 3 秒以上、且有效语音占比高；短于 1–2 秒时统计池化（均值/标准差）估计不稳定，向量噪声明显偏大。</span></div>
+        <div class="factor"><span class="fname">采样率/声道</span><span class="fdesc">必须 16kHz 单声道；其他采样率需先重采样，否则 Fbank 特征分布整体偏移，效果显著下降。</span></div>
+        <div class="factor"><span class="fname">信道/设备差异</span><span class="fdesc">训练数据以英文 YouTube 访谈为主；若部署场景是 8kHz 电话窄带或强噪声环境，会有明显的 domain mismatch，工业场景通常需要 <b>Score Normalization（AS-Norm）</b>或用少量目标域数据微调再上线。</span></div>
+        <div class="factor"><span class="fname">静音/背景音</span><span class="fdesc">长静音段会稀释向量信息，建议先做 VAD 去除静音再送入模型。</span></div>
+        <div class="factor"><span class="fname">阈值选择</span><span class="fdesc">没有放之四海而皆准的固定阈值，需要在自己的场景数据上标定（可用公开验证集的 EER 阈值作为起点）。</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <div class="section-head"><span class="sec-no">05</span><h2>同类型模型对比：它在声纹家族里处于什么位置</h2></div>
+    <p class="sec-sub">声纹提取模型这些年沿着两条路线演化：CNN/TDNN 结构精细化，以及最近兴起的"自监督大模型 + 微调头"。下面的量级和精度印象来自公开论文与常见榜单，具体数值受训练细节、测试子集（O/E/H）、打分方式（cosine vs PLDA）影响较大，仅供定位参考，不作为严格基准。</p>
+
+    <div class="table-scroll">
+      <table>
+        <tr><th>模型</th><th>结构类型</th><th>相对定位</th><th>参数量级</th><th>VoxCeleb1-O EER 印象</th><th>备注</th></tr>
+        <tr>
+          <td><b>voxceleb_resnet34</b><br><span class="mono">（本模型）</span></td>
+          <td>ResNet(CNN) + 统计池化(TSTP)</td>
+          <td>基准</td>
+          <td>≈6.6M</td>
+          <td>≈1.0%–1.3%</td>
+          <td>WeSpeaker 生态常见基线</td>
+        </tr>
+        <tr>
+          <td>voxceleb_resnet34_LM</td>
+          <td>同架构 + 大间隔微调</td>
+          <td>同架构小升级</td>
+          <td>≈6.6M</td>
+          <td>略优于 base</td>
+          <td>推理代码完全通用，只换权重</td>
+        </tr>
+        <tr>
+          <td>ECAPA-TDNN</td>
+          <td>TDNN + SE-Res2Block + 注意力统计池化</td>
+          <td>平行同代竞品</td>
+          <td>≈14M–22M</td>
+          <td>≈0.8%–1.0%</td>
+          <td>SpeechBrain / pyannote 生态首选，工业界最常用之一</td>
+        </tr>
+        <tr>
+          <td>CAM++（campplus）</td>
+          <td>轻量 CNN + 上下文感知掩码</td>
+          <td>轻量平替</td>
+          <td>≈7M</td>
+          <td>接近或优于 ResNet34</td>
+          <td>3D-Speaker 出品，速度快，端侧友好</td>
+        </tr>
+        <tr>
+          <td>ResNet221 / ResNet293(_LM)</td>
+          <td>更深 ResNet</td>
+          <td>精度升级</td>
+          <td>≈23M–28M+</td>
+          <td>&lt;0.8%</td>
+          <td>计算量显著上升，更适合服务端</td>
+        </tr>
+        <tr>
+          <td>ERes2Net / ERes2NetV2</td>
+          <td>多尺度 Res2Net + 局部-全局特征融合</td>
+          <td>精度升级</td>
+          <td>依配置 6M–56M</td>
+          <td>当前较优水平</td>
+          <td>3D-Speaker / ModelScope 主推</td>
+        </tr>
+        <tr>
+          <td>X-vector（TDNN）</td>
+          <td>传统 TDNN</td>
+          <td>上一代基线</td>
+          <td>≈4M–5M</td>
+          <td>明显更差（&gt;2%）</td>
+          <td>历史对照，现在新项目很少采用</td>
+        </tr>
+        <tr>
+          <td>WavLM / wav2vec2 + 微调头</td>
+          <td>自监督大模型 + embedding 头</td>
+          <td>精度天花板 / 重型升级</td>
+          <td>≈94M–300M+</td>
+          <td>目前最优区间之一</td>
+          <td>需要 GPU，延迟与显存开销大，超出多数端侧场景</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="alt-upgrade">
+  <div class="wrap">
+    <div class="section-head"><span class="sec-no">06</span><h2>平替与升级：算力预算不同，怎么换</h2></div>
+    <p class="sec-sub">好消息是这几类模型的输入输出接口高度一致（都是"特征进、embedding 出、余弦相似度比对"），换模型往往不需要重新设计整条 pipeline。</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <span class="tag green">平替 · 算力更省</span>
+        <h3>目标：同等或更小算力，拿到可用精度</h3>
+        <p>
+          <b>首选：CAM++（campplus）</b>—— 参数更少、推理更快，在不少榜单上精度反超 ResNet34，
+          是当下端侧 / 嵌入式场景的热门替代。<br><br>
+          <b>次选：对本模型做 INT8 动态量化</b>（如 <code class="inline">onnxruntime.quantization.quantize_dynamic</code>）——
+          精度几乎不受影响，模型体积可降到约 1/4，CPU 推理明显提速。<br><br>
+          <b>再次：更小的 ResNet 变体</b>（如 ResNet18 声纹版）—— 体积更小但精度会有一定损失，
+          适合算力极受限的场景。
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag gold">升级 · 精度更高</span>
+        <h3>目标：不计较算力，要更高精度或更强鲁棒性</h3>
+        <p>
+          <b>零改造升级：</b>直接换成 <code class="inline">_LM</code>（大间隔微调）版本或更深的
+          ResNet221 / ResNet293_LM —— 推理代码完全一致，只需替换权重文件。<br><br>
+          <b>换架构升级：</b>切换到 ECAPA-TDNN 或 ERes2NetV2 —— 改造成本中等（需要更换网络结构，
+          但输出接口不变，仍是 "embedding + 余弦相似度"）。<br><br>
+          <b>天花板方案：</b>基于 WavLM / wav2vec2 等自监督大模型微调的说话人模型 —— 精度和跨域鲁棒性最强，
+          但需要 GPU 和更高的延迟预算，通常只适合服务端而非端侧。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="deploy">
+  <div class="wrap">
+    <div class="section-head"><span class="sec-no">07</span><h2>部署方案：放在设备里，还是放在云上</h2></div>
+    <p class="sec-sub">同一个 ONNX 文件，两种截然不同的用法：完全离线跑在设备本地，或是作为云端服务被批量调用。</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="offline" role="tab" aria-selected="true">线下 · 离线/端侧</button>
+      <button class="tab-btn" data-tab="online" role="tab" aria-selected="false">线上 · 云端/服务化</button>
+    </div>
+
+    <div class="tab-panel active" data-panel="offline">
+      <div class="grid-2">
+        <div class="card">
+          <span class="tag">典型形态</span>
+          <h3>本地直接加载 .onnx 推理</h3>
+          <p>
+            用 ONNX Runtime 的 C++ / Python / Java / Swift / Kotlin 绑定在本地加载模型，全程不联网。
+            典型例子是 <b>sherpa-onnx</b> 项目，把这类模型打包进"离线说话人日志（diarization）"
+            和"离线说话人确认"两条能力线，配合本地 VAD 和聚类算法，可以在手机、树莓派、车机上
+            跑完整的声纹流程，数据不出设备。
+          </p>
+        </div>
+        <div class="card">
+          <span class="tag">优化手段</span>
+          <h3>更小、更快、更省电</h3>
+          <p>
+            转换为 <b>NCNN / MNN / TNN</b> 等移动推理格式适配 Android / iOS；用 INT8 / FP16 量化
+            压缩体积、提升速度；算力紧张时直接换用更轻的 CAM++ 替代本模型（见上一节"平替"）。
+          </p>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:16px;">
+        <b>适合场景：</b> 门禁 / App 的本地声纹解锁、隐私敏感的离线会议按人分轨、
+        无网络环境下的车机 / IoT 声纹交互——核心诉求是"数据不出设备、无网络也能跑"。
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="online">
+      <div class="grid-2">
+        <div class="card">
+          <span class="tag gold">典型形态</span>
+          <h3>封装成服务，被远程调用</h3>
+          <p>
+            用 FastAPI / Flask / gRPC 把"提取 embedding"封装成一个接口，或直接部署到
+            <b>Triton Inference Server</b> 做 GPU 批量推理。典型场景：电话银行的 1:1 声纹核身
+            （实时提取通话 embedding，与预留声纹比对）；反诈中心的 1:N 黑名单声纹检索
+            （embedding 写入 <b>Milvus / FAISS</b> 向量库，毫秒级检索相似声纹）。
+          </p>
+        </div>
+        <div class="card">
+          <span class="tag gold">扩展方式</span>
+          <h3>支撑高并发与多系统联动</h3>
+          <p>
+            Kubernetes 多副本 + 负载均衡应对并发；Redis 缓存高频用户的 embedding 减少重复计算；
+            把打分阈值和 Score Normalization（AS-Norm）做成可配置的策略层，方便按业务场景灵活调参。
+          </p>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:16px;">
+        <b>适合场景：</b> 需要大规模、跨会话持久化比对，或要与风控 / CRM 等其他云服务联动的场景——
+        核心诉求是"规模化处理、集中管理策略"，代价是需要联网、需要维护服务。
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pitfalls">
+  <div class="wrap">
+    <div class="section-head"><span class="sec-no">08</span><h2>常见误区与适用边界</h2></div>
+    <p class="sec-sub">点开每一条——这些误区大多来自把"声纹提取模型"当成了它不是的东西。</p>
+
+    <div id="accordion">
+      <div class="acc-item">
+        <button class="acc-btn"><span>是不是语音识别模型？能不能转文字？</span><span class="acc-icon">+</span></button>
+        <div class="acc-body"><div class="acc-body-inner">
+          不是。它不产出文字，只产出"这段声音听起来像谁"的向量。ASR（如 Whisper）解决的是完全不同的任务，
+          两者可以在同一条 pipeline 里配合使用（比如先用 ASR 转录、再用声纹模型标注是谁在说），但互相不能替代。
+        </div></div>
+      </div>
+      <div class="acc-item">
+        <button class="acc-btn"><span>能不能直接把 wav 文件喂进 ONNX？</span><span class="acc-icon">+</span></button>
+        <div class="acc-body"><div class="acc-body-inner">
+          不能。这个 ONNX 图的输入是已经算好的 80 维 Fbank 特征，特征提取（以及大多数实现里的重采样、VAD）
+          发生在计算图之外，需要自己用 <code class="inline">kaldi-native-fbank</code>、
+          <code class="inline">torchaudio.compliance.kaldi.fbank</code> 等工具先处理好。
+        </div></div>
+      </div>
+      <div class="acc-item">
+        <button class="acc-btn"><span>两个向量相似度很高，是不是 100% 确定是同一个人？</span><span class="acc-icon">+</span></button>
+        <div class="acc-body"><div class="acc-body-inner">
+          不是。余弦相似度是一个连续分数，需要结合业务能接受的误报率（FAR）/ 漏报率（FRR）去标定一个阈值，
+          不存在放之四海而皆准的固定阈值。而且模型本身不做活体检测，无法防御用录音重放冒充本人的攻击。
+        </div></div>
+      </div>
+      <div class="acc-item">
+        <button class="acc-btn"><span>能不能拿来做说话人日志（谁在什么时候说话）？</span><span class="acc-icon">+</span></button>
+        <div class="acc-body"><div class="acc-body-inner">
+          不能单独做。它只负责"一段语音 → 一个向量"，要做说话人日志（diarization）还需要先用 VAD
+          把长录音切成小段，每段提向量，再做聚类（如谱聚类）——这是一整套 pipeline，本模型只是其中一环。
+        </div></div>
+      </div>
+      <div class="acc-item">
+        <button class="acc-btn"><span>短音频效果是不是一样好？</span><span class="acc-icon">+</span></button>
+        <div class="acc-body"><div class="acc-body-inner">
+          不是。少于 1–2 秒的片段，统计池化（均值/标准差）估计的统计量不稳定，向量噪声明显偏大，
+          建议尽量给 3 秒以上、有效语音占比高的片段。
+        </div></div>
+      </div>
+      <div class="acc-item">
+        <button class="acc-btn"><span>换个语言、换个信道（比如电话 8kHz）还能直接用吗？</span><span class="acc-icon">+</span></button>
+        <div class="acc-body"><div class="acc-body-inner">
+          能用但会掉点。训练数据以英文 YouTube 访谈为主，跨语言、窄带电话信道会带来明显的 domain mismatch，
+          工业场景通常需要额外的 Score Normalization（AS-Norm）或用少量目标域数据微调后再上线。
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="wrap">
+    <div class="section-head"><span class="sec-no">09</span><h2>最小可运行示例：跑通一次真实推理</h2></div>
+    <p class="sec-sub">下面这套流程适用于绝大多数 WeSpeaker / sherpa-onnx 风格的声纹 ONNX 模型，输入输出名称请以 Netron 实际打开该文件核实为准。</p>
+
+    <h3 style="font-family:var(--f-display); font-size:15px; color:#fff; margin-bottom:10px;">典型文件结构</h3>
+    <div class="file-tree" style="margin-bottom:26px;">
+      <div><span class="fname-main">voxceleb_resnet34.onnx</span><span class="fcomment"># 模型本体，约 25MB（FP32），单文件即可运行</span></div>
+      <div>config.yaml <span class="fcomment"># 可选：记录训练时的特征/网络配置，便于核对 Fbank 参数是否一致</span></div>
+      <div>README.md <span class="fcomment"># 可选：发布方给出的使用说明与精度报告</span></div>
+    </div>
+
+    <h3 style="font-family:var(--f-display); font-size:15px; color:#fff; margin-bottom:10px;">推理代码（Python + onnxruntime）</h3>
+    <pre><span class="c-kw">import</span> numpy <span class="c-kw">as</span> np
+<span class="c-kw">import</span> onnxruntime <span class="c-kw">as</span> ort
+<span class="c-kw">import</span> torchaudio
+
+<span class="c-kw">def</span> extract_fbank(wav_path):
+    wav, sr = torchaudio.load(wav_path)             <span class="c-comment"># (1, T)，要求单声道</span>
+    <span class="c-kw">assert</span> sr == <span class="c-num">16000</span>, <span class="c-str">"该模型要求 16kHz 采样率"</span>
+    feat = torchaudio.compliance.kaldi.fbank(
+        wav, num_mel_bins=<span class="c-num">80</span>, frame_length=<span class="c-num">25</span>,
+        frame_shift=<span class="c-num">10</span>, dither=<span class="c-num">0.0</span>, sample_frequency=<span class="c-num">16000</span>
+    )                                                 <span class="c-comment"># (num_frames, 80)</span>
+    feat = feat - feat.mean(dim=<span class="c-num">0</span>, keepdim=<span class="c-kw">True</span>)   <span class="c-comment"># 逐句 CMN</span>
+    <span class="c-kw">return</span> feat.unsqueeze(<span class="c-num">0</span>).numpy().astype(np.float32)  <span class="c-comment"># (1, T, 80)</span>
+
+session = ort.InferenceSession(
+    <span class="c-str">"voxceleb_resnet34.onnx"</span>, providers=[<span class="c-str">"CPUExecutionProvider"</span>]
+)
+input_name  = session.get_inputs()[<span class="c-num">0</span>].name   <span class="c-comment"># 常见为 "feats"，建议用 Netron 核对</span>
+output_name = session.get_outputs()[<span class="c-num">0</span>].name  <span class="c-comment"># 常见为 "embs"</span>
+
+feat_a = extract_fbank(<span class="c-str">"speaker_a_1.wav"</span>)
+feat_b = extract_fbank(<span class="c-str">"speaker_a_2.wav"</span>)
+
+emb_a = session.run([output_name], {input_name: feat_a})[<span class="c-num">0</span>][<span class="c-num">0</span>]
+emb_b = session.run([output_name], {input_name: feat_b})[<span class="c-num">0</span>][<span class="c-num">0</span>]
+
+cos_sim = np.dot(emb_a, emb_b) / (np.linalg.norm(emb_a) * np.linalg.norm(emb_b))
+<span class="c-kw">print</span>(<span class="c-str">f"cosine similarity = {cos_sim:.4f}"</span>)  <span class="c-comment"># 越接近1越可能是同一人，需结合阈值判断</span></pre>
+
+    <h3 style="font-family:var(--f-display); font-size:15px; color:#fff; margin:22px 0 10px;">典型运行输出</h3>
+    <pre>Inputs : [{'name': 'feats', 'shape': [1, 'T', 80], 'dtype': 'float32'}]
+Outputs: [{'name': 'embs',  'shape': [1, 256],  'dtype': 'float32'}]
+cosine similarity = 0.8631   <span class="c-comment"># 高于阈值(如0.45~0.6区间) → 判定为同一人</span></pre>
+
+    <div class="callout" style="margin-top:20px;">
+      <b>核对建议：</b> 拿到任何来源的 <code class="inline">voxceleb_resnet34.onnx</code>，先用
+      <a href="https://netron.app" target="_blank" rel="noopener">Netron</a> 打开看一眼真实的输入/输出
+      tensor 名称、shape 和 opset 版本，再对照 config.yaml（如果有）核对 Fbank 参数（维度、帧长帧移、
+      采样率）是否和你的推理代码一致——这是声纹模型部署中最容易踩坑、也最容易提前避免的一步。
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="recap">
+      <h3>30 秒回顾</h3>
+      <ul>
+        <li><b>任务</b>：把一段语音变成 256 维声纹向量，用于判断"是不是同一个人"，不涉及文字内容。</li>
+        <li><b>输入</b>：80维 Fbank 特征 <code class="inline">(B, T, 80)</code>，源自 16kHz 单声道语音——不是原始 wav。</li>
+        <li><b>输出</b>：固定 256 维向量 <code class="inline">(B, 256)</code>，用余弦相似度和阈值判定是否同一人。</li>
+        <li><b>结构</b>：ResNet34 卷积堆叠（32→64→128→256通道）+ 统计池化（TSTP）+ 全连接 embedding 层。</li>
+        <li><b>训练</b>：VoxCeleb2 说话人分类 + AAM-Softmax，训练完丢弃分类头，只留特征提取部分。</li>
+        <li><b>边界</b>：不做 ASR、不做活体检测、不单独做说话人日志，阈值需要自己标定。</li>
+        <li><b>怎么换</b>：算力紧张选 CAM++，要更高精度选 ECAPA-TDNN / ERes2NetV2 / _LM 系列或 WavLM 微调。</li>
+        <li><b>怎么部署</b>：设备本地用 ONNX Runtime / sherpa-onnx 全离线跑；规模化场景用 FastAPI + 向量库做云端服务。</li>
+      </ul>
+    </div>
+    <p class="fine-print">
+      本文基于 WeSpeaker / sherpa-onnx 等公开项目对 voxceleb_resnet34 这一类模型的通用实现整理而成，用于帮助读者快速建立整体认知；
+      具体某个 .onnx 文件的真实输入输出名称、网络细节参数、精度指标，请以 Netron 实际打开核对、以及发布方公开的说明与评测为准。
+    </p>
+  </div>
+</footer>
+
+<script>
+(function(){
+
+  /* ================= 声纹匹配台（hero 交互） ================= */
+  var wfHeightsA = [6,14,22,30,20,10,26,34,18,12,28,36,24,16,8,20,32,14,10,26,30,18,12,22];
+  var wfHeightsB = [10,24,18,32,14,8,20,36,12,28,16,22,10,30,24,14,18,8,26,32,20,12,16,28];
+
+  function renderBars(containerId, heights){
+    var el = document.getElementById(containerId);
+    if(!el) return;
+    heights.forEach(function(h){
+      var bar = document.createElement('i');
+      bar.style.height = h + 'px';
+      el.appendChild(bar);
+    });
+  }
+  renderBars('wfA', wfHeightsA);
+  renderBars('wfB', wfHeightsB);
+
+  var presets = [
+    {label:'同一人 · 安静环境', sim:0.86, truth:'same'},
+    {label:'同一人 · 嘈杂电话', sim:0.52, truth:'same'},
+    {label:'同一人 · 短音频3秒', sim:0.63, truth:'same'},
+    {label:'不同人 · 相似音色', sim:0.41, truth:'diff'},
+    {label:'不同人 · 差异音色', sim:0.08, truth:'diff'}
+  ];
+
+  var presetRow = document.getElementById('presetRow');
+  var needle = document.getElementById('needle');
+  var gaugeArc = document.getElementById('gaugeArc');
+  var thresholdTick = document.getElementById('thresholdTick');
+  var verdictText = document.getElementById('verdictText');
+  var truthNote = document.getElementById('truthNote');
+  var thresholdSlider = document.getElementById('thresholdSlider');
+  var thresholdVal = document.getElementById('thresholdVal');
+
+  var currentSim = presets[0].sim;
+  var currentTruth = presets[0].truth;
+  var threshold = 0.45;
+
+  presets.forEach(function(p, idx){
+    var btn = document.createElement('button');
+    btn.className = 'preset-btn' + (idx===0 ? ' active' : '');
+    btn.type = 'button';
+    btn.innerHTML = p.label + '<br><span style="color:var(--text-dim2)">sim=' + p.sim.toFixed(2) + '</span>';
+    btn.addEventListener('click', function(){
+      Array.prototype.forEach.call(presetRow.children, function(c){ c.classList.remove('active'); });
+      btn.classList.add('active');
+      currentSim = p.sim;
+      currentTruth = p.truth;
+      updateGauge();
+    });
+    presetRow.appendChild(btn);
+  });
+
+  function angleFor(v){ return -90 + v*180; }
+
+  function updateGauge(){
+    var angle = angleFor(currentSim);
+    needle.setAttribute('transform', 'rotate(' + angle + ' 100 100)');
+    var offset = 283 * (1 - currentSim);
+    gaugeArc.setAttribute('stroke-dashoffset', offset);
+
+    var tickAngle = angleFor(threshold);
+    thresholdTick.setAttribute('transform', 'rotate(' + tickAngle + ' 100 100)');
+
+    var isSame = currentSim >= threshold;
+    gaugeArc.style.stroke = isSame ? '#57c08a' : '#e2604f';
+    verdictText.textContent = '余弦相似度 = ' + currentSim.toFixed(2) + '  →  判定：' + (isSame ? '同一人' : '不同人');
+    verdictText.className = 'verdict ' + (isSame ? 'same' : 'diff');
+
+    var truthLabel = currentTruth === 'same' ? '同一人' : '不同人';
+    var hit = (isSame && currentTruth==='same') || (!isSame && currentTruth==='diff');
+    truthNote.textContent = '标注（仅用于演示）：' + truthLabel + (hit ? ' · 判定与标注一致' : ' · 判定与标注不一致（阈值可能需要调整）');
+  }
+
+  thresholdSlider.addEventListener('input', function(){
+    threshold = parseInt(thresholdSlider.value, 10) / 100;
+    thresholdVal.textContent = threshold.toFixed(2);
+    updateGauge();
+  });
+
+  thresholdVal.textContent = threshold.toFixed(2);
+  updateGauge();
+
+  /* ================= 核心数据流 stepper ================= */
+  var stages = [
+    {label:'原始语音', outside:true, shape:'waveform, 16kHz 单声道, 任意时长', title:'① 原始语音输入', text:'用户说的一段话，一段 16kHz 单声道 PCM 波形。这一步还没有进入模型，是所有后续处理的起点。'},
+    {label:'特征提取\nFbank', outside:true, shape:'(T, 80) float32', title:'② 特征提取：Fbank（图外）', text:'对波形做 25ms 加窗、10ms 帧移的短时傅里叶变换，再过 80 个 Mel 滤波器，取对数能量，得到 80 维 Fbank 特征；之后做逐句均值归一化（CMN）。这一步在 ONNX 计算图之外，需要自己实现或调用 kaldi-native-fbank / torchaudio 等库。'},
+    {label:'Stem 卷积', outside:false, shape:'(B, 32, T, 80)', title:'③ Stem 卷积：1→32 通道', text:'把单通道的时频图当作"图像"送入 3×3 卷积，升到 32 通道，为后续残差块做准备。'},
+    {label:'Stage1\n(32ch)', outside:false, shape:'(B, 32, T, 80)', title:'④ ResNet Stage1', text:'两个 BasicBlock，stride=1，通道数保持 32，时间和频率维度都不下采样，进一步提炼局部特征。'},
+    {label:'Stage2\n(64ch, ↓2)', outside:false, shape:'(B, 64, T/2, 40)', title:'⑤ ResNet Stage2', text:'通道数翻倍到 64，stride=2 同时对时间和频率两个维度做下采样，感受野扩大，开始捕捉更长时间跨度的模式。'},
+    {label:'Stage3\n(128ch, ↓2)', outside:false, shape:'(B, 128, T/4, 20)', title:'⑥ ResNet Stage3', text:'通道数再翻倍到 128，继续 stride=2 下采样，网络开始学习更抽象、更能代表"音色"而非"具体音素"的特征。'},
+    {label:'Stage4\n(256ch, ↓2)', outside:false, shape:'(B, 256, T/8, 10)', title:'⑦ ResNet Stage4', text:'通道数达到 256，这是卷积部分的最后一级，输出的每一帧都已经浓缩了较长时间窗口内的音色信息。'},
+    {label:'统计池化\nTSTP', outside:false, shape:'(B, 5120)', title:'⑧ 统计池化（Temporal Statistics Pooling）', text:'把 256 通道 × 10 个频率 bin 展平成 2560 维，再沿时间维求均值和标准差并拼接，得到 5120 维定长向量——不管输入多长，这一步都把时间维"压缩"掉，这也是模型能接受变长输入的关键。'},
+    {label:'Embedding\n全连接层', outside:false, shape:'(B, 256)', title:'⑨ 全连接 Embedding 层 + L2 归一化', text:'一个线性层把 5120 维压缩到最终的 256 维，多数实现会再做一次 L2 归一化，方便直接用余弦相似度比较。'},
+    {label:'声纹向量\n输出', outside:false, shape:'(B, 256) — 张量名常见为 embs', title:'⑩ 输出：声纹 embedding', text:'ONNX 计算图到此结束。这个 256 维向量就是模型的最终产物——它本身没有"含义"，只有和另一个向量比较时才有意义。'}
+  ];
+
+  var stripEl = document.getElementById('pipelineStrip');
+  var detailEl = document.getElementById('pipelineDetail');
+
+  function renderStage(idx){
+    var allNodes = stripEl.querySelectorAll('.pnode');
+    Array.prototype.forEach.call(allNodes, function(n){ n.classList.remove('active'); });
+    allNodes[idx].classList.add('active');
+    var s = stages[idx];
+    detailEl.innerHTML =
+      (s.outside ? '<span class="pd-boundary">位于 ONNX 计算图之外</span><br>' : '') +
+      '<div class="pd-title">' + s.title + '</div>' +
+      '<span class="pd-shape">shape ≈ ' + s.shape + '</span>' +
+      '<p class="pd-text">' + s.text + '</p>';
+  }
+
+  stages.forEach(function(s, idx){
+    var node = document.createElement('button');
+    node.type = 'button';
+    node.className = 'pnode' + (s.outside ? ' outside' : '') + (idx < stages.length - 1 ? ' has-next' : '') + (idx===0 ? ' active' : '');
+    node.innerHTML = '<span class="pn-badge">' + (idx+1) + '</span><span class="pn-label">' + s.label.replace(/\n/g,'<br>') + '</span>';
+    node.addEventListener('click', function(){ renderStage(idx); });
+    stripEl.appendChild(node);
+    if(idx < stages.length - 1){
+      var sep = document.createElement('span');
+      sep.className = 'flow-sep';
+      sep.textContent = '→';
+      stripEl.appendChild(sep);
+    }
+  });
+  renderStage(0);
+
+  /* ================= tabs（训练/推理、线下/线上） ================= */
+  document.querySelectorAll('.tabs').forEach(function(tabGroup){
+    var btns = tabGroup.querySelectorAll('.tab-btn');
+    var panelWrap = tabGroup.parentElement;
+    btns.forEach(function(btn){
+      btn.addEventListener('click', function(){
+        btns.forEach(function(b){ b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
+        btn.classList.add('active');
+        btn.setAttribute('aria-selected','true');
+        var target = btn.getAttribute('data-tab');
+        panelWrap.querySelectorAll('.tab-panel').forEach(function(p){
+          p.classList.toggle('active', p.getAttribute('data-panel') === target);
+        });
+      });
+    });
+  });
+
+  /* ================= accordion（常见误区） ================= */
+  document.querySelectorAll('.acc-item').forEach(function(item){
+    var btn = item.querySelector('.acc-btn');
+    var body = item.querySelector('.acc-body');
+    btn.addEventListener('click', function(){
+      var isOpen = item.classList.contains('open');
+      item.classList.toggle('open', !isOpen);
+      body.style.maxHeight = (!isOpen) ? (body.scrollHeight + 'px') : '0px';
+    });
+  });
+
+})();
+</script>
+
+</body>
+</html>

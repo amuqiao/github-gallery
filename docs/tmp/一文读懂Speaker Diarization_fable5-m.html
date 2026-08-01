@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 Speaker Diarization（说话人分割）</title>
+<style>
+:root{
+  --paper:#F2F4F6;
+  --panel:#FFFFFF;
+  --ink:#17232E;
+  --muted:#5C6D7C;
+  --line:#CBD6DE;
+  --grid:#E2E9EE;
+  --spkA:#2E63C9;       /* 说话人 A：蓝 */
+  --spkB:#C2408A;       /* 说话人 B：品红 */
+  --spkC:#0B8A5D;       /* 说话人 C：绿 */
+  --spkX:#8A97A3;       /* 多余聚类：灰 */
+  --miss:#C0362C;       /* 漏检 */
+  --fa:#C1740F;         /* 误报 */
+  --conf:#7A3E9D;       /* 混淆 */
+  --ok:#0B7A53;
+  --ok-bg:#E3F2EA;
+  --bad:#C0362C;
+  --bad-bg:#FAE7E4;
+  --warn:#8F6400;
+  --warn-bg:#FFF3D1;
+  --track:#131A22;      /* 音轨面板底色（DAW 风） */
+  --track-line:#28323D;
+  --track-txt:#8FA3B3;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"JetBrains Mono",Menlo,"Courier New",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --radius:10px;
+  --shadow:0 1px 2px rgba(23,35,46,.06),0 4px 14px rgba(23,35,46,.05);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+body{
+  margin:0;color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.85;
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:26px 26px;
+}
+::selection{background:#D8E4F7}
+a{color:var(--spkA);text-decoration:none;border-bottom:1px dashed rgba(46,99,201,.4)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+code{background:#EBF0F3;border:1px solid var(--grid);border-radius:4px;padding:.05em .35em;white-space:nowrap}
+pre code{background:none;border:none;padding:0;white-space:pre}
+h1,h2,h3,h4{line-height:1.35;font-weight:700}
+h2{font-size:1.5rem;margin:.2rem 0 .4rem}
+h3{font-size:1.12rem;margin:1.6rem 0 .5rem}
+p{margin:.7rem 0}
+ul,ol{padding-left:1.4em}
+li{margin:.3rem 0}
+
+/* ---------- 语义色 ---------- */
+.cA{color:var(--spkA);font-family:var(--mono);font-weight:700}
+.cB{color:var(--spkB);font-family:var(--mono);font-weight:700}
+.cC{color:var(--spkC);font-family:var(--mono);font-weight:700}
+.cmiss{color:var(--miss);font-family:var(--mono);font-weight:700}
+.cfa{color:var(--fa);font-family:var(--mono);font-weight:700}
+.cconf{color:var(--conf);font-family:var(--mono);font-weight:700}
+.cok{color:var(--ok);font-family:var(--mono);font-weight:700}
+
+/* ---------- 顶部导航 ---------- */
+.topnav{
+  position:sticky;top:0;z-index:50;background:rgba(242,244,246,.92);
+  backdrop-filter:blur(6px);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;padding:8px 16px;overflow-x:auto;white-space:nowrap;
+  scrollbar-width:thin;
+}
+.topnav .brand{font-family:var(--mono);font-weight:700;font-size:.85rem;color:var(--ink);flex:0 0 auto;border:none}
+.topnav a.chip{
+  flex:0 0 auto;font-family:var(--mono);font-size:.74rem;color:var(--muted);
+  border:1px solid var(--line);border-radius:99px;padding:.15em .7em;background:var(--panel)}
+.topnav a.chip:hover{color:var(--ink);border-color:var(--muted)}
+
+.wrap{max-width:1020px;margin:0 auto;padding:0 20px 80px}
+
+/* ---------- 首屏 ---------- */
+.hero{padding:44px 0 8px}
+.hero .kicker{font-family:var(--mono);font-size:.78rem;letter-spacing:.18em;color:var(--muted);margin:0 0 10px}
+.hero h1{font-size:clamp(1.6rem,4.2vw,2.5rem);margin:0 0 14px;letter-spacing:.01em}
+.hero .thesis{
+  font-size:1.06rem;border-left:4px solid var(--spkB);
+  background:linear-gradient(90deg,#F8E7F1,transparent 70%);
+  padding:10px 16px;border-radius:0 8px 8px 0;max-width:800px}
+.legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin:14px 0 6px;font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:16px;height:12px;display:inline-block;border-radius:3px}
+
+/* ---------- 面板与控件 ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:18px;margin:20px 0}
+.panel-title{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;color:var(--muted);
+  text-transform:uppercase;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.panel-title::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--spkB);display:inline-block}
+.panel-q{margin:0 0 12px;font-size:.95rem}
+.panel-q b{color:var(--spkA)}
+.controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end;margin:10px 0 6px}
+.ctrl{display:flex;flex-direction:column;gap:2px;min-width:170px;flex:1 1 170px;max-width:270px}
+.ctrl label{font-family:var(--mono);font-size:.76rem;color:var(--muted)}
+.ctrl label output{color:var(--ink);font-weight:700}
+input[type=range]{width:100%;accent-color:var(--spkA);cursor:pointer;height:22px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#F6F8FA;flex-wrap:wrap}
+.seg button{border:none;background:transparent;padding:.35em .8em;font-family:var(--mono);font-size:.78rem;
+  color:var(--muted);cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--ink);color:#fff}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font-family:var(--mono);
+  font-size:.8rem;border-radius:8px;padding:.42em 1em;cursor:pointer;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--spkA);border-color:var(--spkA);color:#fff}
+.btn.primary:hover{background:#1f4da6}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:center}
+.btnrow .rlbl{font-family:var(--mono);font-size:.74rem;color:var(--muted)}
+label.chk{font-family:var(--mono);font-size:.78rem;color:var(--muted);display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:var(--mono)}
+
+/* ---------- 音轨面板（全文签名元素）---------- */
+.track{background:var(--track);border:1px solid var(--track-line);border-radius:10px;padding:12px 12px 8px;margin:10px 0;overflow-x:auto}
+.track .tlbl{font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;color:var(--track-txt);margin:0 0 6px}
+.readout{
+  font-family:var(--mono);font-size:.84rem;background:#F7F9FA;border:1px solid var(--grid);
+  border-radius:8px;padding:10px 14px;margin-top:12px;overflow-x:auto;line-height:2}
+.readout .lbl{color:var(--muted)}
+.note{background:var(--warn-bg);border:1px solid #EAD9A0;border-radius:8px;padding:8px 14px;
+  font-size:.88rem;color:var(--warn);margin-top:10px}
+.hint{font-size:.9rem;color:var(--muted);margin-top:10px}
+.hide{display:none!important}
+.rttm{font-family:var(--mono);font-size:.76rem;line-height:1.75;background:#0D1319;color:#9FB4C4;
+  border-radius:8px;padding:10px 14px;margin-top:10px;overflow-x:auto;white-space:pre}
+
+/* ---------- 章节 ---------- */
+.sec{position:relative;padding:34px 0 10px;margin-top:14px}
+.sec-head{display:flex;gap:16px;align-items:flex-start}
+.sec-node{
+  flex:0 0 auto;min-width:46px;height:46px;border-radius:10px;background:var(--track);color:#B9CAD8;
+  font-family:var(--mono);font-weight:700;font-size:.8rem;display:flex;align-items:center;justify-content:center;
+  padding:0 9px;border:1px solid var(--track-line);box-shadow:0 0 0 3px var(--paper),0 0 0 4.5px var(--track-line);position:relative;z-index:2}
+.sec-eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;color:var(--muted);margin:2px 0 2px}
+.sec-body{margin-left:62px;max-width:880px}
+@media (max-width:640px){.sec-body{margin-left:0}}
+.rail{position:absolute;left:22px;top:-14px;bottom:-14px;width:2px;
+  background:repeating-linear-gradient(180deg,var(--line) 0 7px,transparent 7px 13px);z-index:1}
+@media (max-width:640px){.rail{display:none}.sec-node{min-width:40px;height:40px;font-size:.72rem}}
+
+/* ---------- 表格 ---------- */
+.tbl{width:100%;border-collapse:collapse;font-size:.88rem;background:var(--panel)}
+.tblwrap{overflow-x:auto;margin:14px 0;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.tblwrap .tbl{min-width:680px}
+.tbl th{background:#EDF1F4;font-family:var(--mono);font-size:.76rem;letter-spacing:.05em;
+  text-align:left;padding:9px 12px;border-bottom:2px solid var(--line)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--grid);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl td:first-child{font-weight:700;white-space:nowrap}
+
+/* ---------- 代码块 ---------- */
+.codeblock{background:#101820;color:#D7E2EA;border-radius:var(--radius);margin:16px 0;overflow:hidden;box-shadow:var(--shadow)}
+.codeblock .codehead{display:flex;justify-content:space-between;align-items:center;
+  padding:7px 14px;background:#1A242E;font-family:var(--mono);font-size:.74rem;color:#8FA3B3}
+.codeblock pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;line-height:1.7}
+.codeblock .c{color:#6D8496}
+.codeblock .k{color:#7FB4E8}
+.codeblock .s{color:#A8D49B}
+.codeblock .n{color:#E8C07F}
+
+/* ---------- 误区卡片 ---------- */
+details.myth{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  margin:10px 0;box-shadow:var(--shadow);overflow:hidden}
+details.myth summary{cursor:pointer;padding:12px 16px;font-weight:700;list-style:none;display:flex;gap:10px;align-items:baseline}
+details.myth summary::-webkit-details-marker{display:none}
+details.myth summary::before{content:"✕";color:var(--bad);font-family:var(--mono);font-weight:700;flex:0 0 auto}
+details.myth[open] summary{border-bottom:1px solid var(--grid)}
+details.myth .body{padding:10px 16px 14px;font-size:.93rem}
+details.myth .body p:first-child::before{content:"✓ ";color:var(--ok);font-family:var(--mono);font-weight:700}
+
+/* ---------- 自检卡片 ---------- */
+.quiz{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:16px;margin:14px 0}
+.quiz .scene{font-size:.92rem;background:#F7F9FA;border-left:3px solid var(--muted);
+  padding:8px 12px;border-radius:0 6px 6px 0;font-family:var(--mono);line-height:1.8;white-space:pre-wrap;overflow-x:auto}
+.quiz .opts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.quiz .opts button{border:1px solid var(--line);background:#F6F8FA;border-radius:8px;
+  padding:.4em .9em;font-size:.85rem;cursor:pointer;font-family:var(--sans)}
+.quiz .opts button:hover{border-color:var(--muted)}
+.quiz .opts button.right{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:700}
+.quiz .opts button.wrong{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+.quiz .explain{font-size:.9rem;border-top:1px dashed var(--grid);margin-top:10px;padding-top:10px}
+
+footer{margin-top:60px;border-top:1px solid var(--line);padding-top:18px;
+  font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<nav class="topnav" aria-label="目录">
+  <span class="brand">who@when</span>
+  <a class="chip" href="#hero">首屏·四步看穿一段录音</a>
+  <a class="chip" href="#s1">01 问题与边界</a>
+  <a class="chip" href="#s2">02 流水线</a>
+  <a class="chip" href="#s3">03 嵌入与聚类实验台</a>
+  <a class="chip" href="#s4">04 DER</a>
+  <a class="chip" href="#s5">05 重叠语音</a>
+  <a class="chip" href="#s6">06 常见误区</a>
+  <a class="chip" href="#s7">07 自检</a>
+  <a class="chip" href="#s8">08 最小代码</a>
+  <a class="chip" href="#s9">速查表</a>
+</nav>
+
+<div class="wrap">
+<!-- ================= 首屏 ================= -->
+<section class="hero" id="hero">
+  <p class="kicker">SPEAKER DIARIZATION · 交互式自学文档</p>
+  <h1>一文读懂 Speaker Diarization<br><span style="font-size:.72em;color:var(--muted)">说话人分割：谁在何时说话</span></h1>
+  <p class="thesis"><strong>Diarization 把"谁在何时说话"变成一个聚类问题：先把录音切成小片，把每片声音变成空间里的一个"声纹坐标"，再看哪些点挤在一起——挤在一起的，就是同一个人。</strong>它给的是匿名标签 spk0/spk1，不是名字。</p>
+  <p>下面是一段 60 秒的三人会议录音（模拟）。点"下一步"，看同一条音频被四副眼镜依次看穿：原始波形 → 哪里有人声（VAD）→ 切成小窗 → 聚类上色 → 合并成"谁在何时说话"的时间轴。中间 <b>24s 和 47s 附近有两处插话（重叠语音）</b>，留意它们的下场。</p>
+  <div class="legend">
+    <span><i style="background:var(--spkA)"></i>说话人 spk0</span>
+    <span><i style="background:var(--spkB)"></i>说话人 spk1</span>
+    <span><i style="background:var(--spkC)"></i>说话人 spk2</span>
+    <span><i style="background:#3A4754"></i>静音</span>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">流水线播放器：一段录音的四副眼镜</p>
+    <p class="panel-q">回答的问题：<b>从一条波形到"spk0: 0.0–7.5s"这样的结论，中间到底发生了哪几步？</b></p>
+    <div class="btnrow">
+      <button class="btn" id="hp-prev">← 上一步</button>
+      <button class="btn primary" id="hp-next">下一步 →</button>
+      <span class="rlbl" id="hp-stage">阶段 0 / 4</span>
+    </div>
+    <div class="track">
+      <p class="tlbl" id="hp-tlbl">TRACK · 原始波形（你能听出是几个人吗？机器也不能——还不能）</p>
+      <svg id="hp-svg" viewBox="0 0 920 150"></svg>
+    </div>
+    <div class="readout" id="hp-read" style="min-height:5.2em"></div>
+    <div class="rttm hide" id="hp-rttm"></div>
+  </div>
+
+  <p>四步走完，你已经见过了整条主线：<b>VAD 负责"何时有人说话"，嵌入 + 聚类负责"是同一个人还是换人了"，合并输出负责把逐窗判断写成时间轴。</b>正文逐一拆开：每一步为什么必须存在、参数怎么取舍、错误怎么度量、以及重叠语音这个天花板。</p>
+</section>
+
+<!-- ================= 01 问题与边界 ================= -->
+<section class="sec" id="s1">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">vs</span>
+    <div><p class="sec-eyebrow">PROBLEM / 问题与边界</p><h2>它解决什么、不解决什么：三兄弟分清楚</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>先看需求现场。一段两小时的项目会议录音，ASR（语音识别）能给你一整墙没有段落的文字——但会议纪要需要的是"<b>张三说要延期，李四反对</b>"；客服质检要区分坐席和客户各说了什么；多人播客要给字幕标上说话人。所有这些场景缺的是同一块拼图：<b>把连续音频按"说话人身份"切开，输出一张"谁在何时说话"的时间表。</b>这就是 speaker diarization（说话人分割/说话人日志，diarization 源自 diary——给录音记日志）。</p>
+    <p>边界必须先立牌子，因为它有两个长得很像的邻居，混用是这个领域最高频的沟通事故：</p>
+    <div class="tblwrap"><table class="tbl">
+      <thead><tr><th>任务</th><th>回答的问题</th><th>需要预先注册声纹吗</th><th>输出</th><th>典型场景</th></tr></thead>
+      <tbody>
+        <tr><td>Speaker Diarization</td><td><b>谁在何时说话</b>（who spoke when）</td><td>不需要——根本不知道说话人是谁</td><td>时间段 + <b>匿名</b>标签（spk0, spk1…）</td><td>会议纪要、播客字幕、多说话人 ASR 的前置</td></tr>
+        <tr><td>Speaker Verification</td><td>这段话<b>是不是</b>某个特定的人（1:1 比对）</td><td>需要（那个人的注册音）</td><td>是 / 否 + 置信分</td><td>声纹解锁、电话银行身份核验</td></tr>
+        <tr><td>Speaker Identification</td><td>这段话是库里的<b>哪一个</b>人（1:N 检索）</td><td>需要（N 个人的注册库）</td><td>某个具体身份（或"库外"）</td><td>"找出小王的所有发言"、司法比对</td></tr>
+        <tr><td>ASR（语音识别）</td><td>说了<b>什么</b></td><td>不需要</td><td>文字</td><td>转写、字幕</td></tr>
+      </tbody>
+    </table></div>
+    <p>三个立刻可用的推论：</p>
+    <ul>
+      <li><b>diarization 的输出没有名字。</b>spk0 只是"第 0 个聚出来的人"；想变成"张三"，要拿张三的注册声纹对每个匿名簇再做一次 identification（业内叫 speaker linking / 声纹映射），那是叠加在 diarization 之上的第二个任务。</li>
+      <li><b>它和 ASR 是正交的。</b>diarization 不听内容（text-independent），ASR 不看声纹；"带说话人的转写"= 两者输出在时间轴上做词级对齐，或者用近年的联合模型一次出。</li>
+      <li><b>说话人数通常未知。</b>verification/identification 的 N 是已知的；diarization 面对的录音里几个人，往往要它自己猜——这是它独有的、也是最难的约束，第 3 章会看到这件事如何主宰调参。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= 02 流水线 ================= -->
+<section class="sec" id="s2">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">pipe</span>
+    <div><p class="sec-eyebrow">PIPELINE / 核心机制</p><h2>流水线：每一步为什么必须存在</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>首屏那四副眼镜就是经典的<b>聚类式流水线</b>（cascaded / clustering-based），至今仍是生产系统的主力骨架。把因果链说透：</p>
+    <ol>
+      <li><b>VAD（Voice Activity Detection，语音活动检测）</b>——先把静音、音乐、键盘声扔掉。为什么必须第一个上？因为后面的一切都建立在"这一段是人声"之上：把静音送去提声纹，得到的是毫无意义的点，白白污染聚类；而漏掉的人声后面任何一步都救不回来。<b>VAD 的错误直接原样计入最终指标</b>（第 4 章的 miss 和 false alarm）。</li>
+      <li><b>切片（segmentation）</b>——把人声区域切成 0.5～3 秒的小窗（定长滑窗是主流；也可先用说话人变化点检测切不定长段）。为什么要切？因为"谁在说话"随时间变化，必须小到"一窗之内大概率只有一个人"，判断才有意义。</li>
+      <li><b>声纹嵌入（speaker embedding）</b>——核心一跳：用一个预训练神经网络（x-vector、ECAPA-TDNN、ResNet 系）把每个小窗映射成一个 192～512 维向量，训练目标是<b>同一人的向量彼此靠近、不同人的彼此远离</b>（大规模说话人分类 + margin 损失练出来的）。这一步把"听起来像不像同一个人"这个玄学问题，翻译成了"两点距离近不近"这个几何问题——与说话内容无关，只留声纹特征。</li>
+      <li><b>聚类（clustering）</b>——嵌入点摆进空间后，同一人的点天然抱团。常用凝聚层次聚类（AHC，按余弦距离逐步合并，<b>距离阈值决定停在几类</b>）或谱聚类。<b>类数 = 说话人数</b>——未知人数的难题，就这样被转嫁给了"阈值怎么定"。</li>
+      <li><b>重分割 / 后处理（resegmentation）</b>——聚类是逐窗投票，边界只有窗口那么粗；用 VB-HMM（VBx）之类的模型按帧重新平滑标签、修边界、吸收孤立的错窗，再合并相邻同类窗成段，输出 RTTM 格式的时间表。</li>
+    </ol>
+    <p>一句话总结机制：<b>嵌入负责"把相似变成距离"，聚类负责"把距离变成身份"</b>。整条流水线的成败，几乎都压在这两步的配合上——所以下一章把它们做成实验台，让你亲手把它调坏、再调好。</p>
+    <div class="note">边界补充：与聚类式并行的另一范式是<b>端到端 EEND</b>（把 diarization 当成"每帧 × 每人"的多标签分类，天然吃重叠），第 5 章作为重叠问题的解法一并介绍。现代生产系统常是两者的混血（如 EEND 出局部结果 + 聚类做全局归并）。</div>
+  </div>
+</section>
+<!-- ================= 03 嵌入与聚类实验台 ================= -->
+<section class="sec" id="s3">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">emb</span>
+    <div><p class="sec-eyebrow">EMBEDDING &amp; CLUSTERING / 交互核心</p><h2>实验台：亲手把聚类调坏，再调好</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>还是首屏那段 60 秒三人录音。左图是每个小窗的声纹嵌入投到二维后的散点（真实系统是几百维，几何直觉相同），右边是按聚类结果上色的时间轴。两个旋钮决定生死：</p>
+    <ul>
+      <li><b>窗长</b>：窗越长，一窗内语音越多，嵌入越稳（点越紧）；但时间分辨率越粗，而且更容易一窗跨两人。窗越短反过来——<b>点会明显发散</b>，因为半秒的语音撑不起一个可靠的声纹估计。</li>
+      <li><b>AHC 距离阈值</b>：两簇平均距离小于它就合并。<b>阈值太大 → 不同人被并成一类（混淆飙升）；太小 → 同一人被拆成好几类。</b>这是"说话人数未知"的难题最终落地的地方。</li>
+    </ul>
+
+    <div class="panel">
+      <p class="panel-title">嵌入空间 × 时间轴联动实验台（DER 实时打分）</p>
+      <p class="panel-q">回答的问题：<b>窗长和聚类阈值如何共同决定"聚成几个人"和最终错误率？</b></p>
+      <div class="controls">
+        <div class="ctrl"><label>窗长 L = <output id="lb-L-o">1.5</output> s</label><input type="range" id="lb-L" min="0.5" max="4" step="0.25" value="1.5"></div>
+        <div class="ctrl"><label>AHC 距离阈值 τ = <output id="lb-T-o">2.40</output></label><input type="range" id="lb-T" min="0.4" max="4" step="0.05" value="2.4"></div>
+      </div>
+      <div class="btnrow">
+        <span class="rlbl">一键复现三种典型故障：</span>
+        <button class="btn" data-lbp="0.5,2.4">短窗发散</button>
+        <button class="btn" data-lbp="1.5,3.7">阈值过松→并人</button>
+        <button class="btn" data-lbp="1.5,1.0">阈值过紧→拆人</button>
+        <button class="btn" data-lbp="1.5,2.4">回到健康区</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:14px">
+        <div class="track" style="flex:1 1 350px">
+          <p class="tlbl">嵌入空间（每点 = 一个小窗；点色 = 聚类结果，圈色 = 真实说话人）</p>
+          <svg id="lb-scat" viewBox="0 0 440 330"></svg>
+        </div>
+        <div style="flex:1 1 380px">
+          <div class="track">
+            <p class="tlbl">真实标注 REFERENCE（斜纹 = 重叠区）</p>
+            <svg id="lb-ref" viewBox="0 0 920 56"></svg>
+          </div>
+          <div class="track">
+            <p class="tlbl">系统输出 HYPOTHESIS（按聚类上色）</p>
+            <svg id="lb-hyp" viewBox="0 0 920 56"></svg>
+          </div>
+          <div class="readout" style="margin-top:8px">
+            <div><span class="lbl">聚成 </span><b id="lb-k">?</b><span class="lbl"> 类（真实 3 人）　窗数 = </span><span class="mono" id="lb-n">?</span></div>
+            <div><span class="lbl">DER = </span><b id="lb-der" style="font-size:1.05em">?</b><span class="lbl">　= 漏检 </span><span class="cmiss" id="lb-miss">?</span><span class="lbl"> + 误报 </span><span class="cfa" id="lb-fa">?</span><span class="lbl"> + 混淆 </span><span class="cconf" id="lb-conf">?</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="hint">照着故障按钮走一遍：① <b>短窗发散</b>——L=0.5s 时三团点糊成一片，就算把 τ 调到最优也留下两位数的混淆，这就是"短片段嵌入不稳"；② <b>阈值过松</b>——τ=3.7 时两团被并掉，只剩 2 类，被并的那个人整段变成混淆；③ <b>阈值过紧</b>——τ=1.0 拆出十来类，同一人的发言被标成好几个"不同的人"。还有一个值得留意的细节：把 L 拨到 2s，原来健康的 τ=2.4 又多聚出一类——<b>最优阈值随窗长、信道等条件漂移</b>，这正是它难伺候的地方。再注意一个救不掉的底：<b>重叠区（散点里游离在两团之间的那些点）无论怎么调都贡献错误</b>——一个窗里混着两个人的声音，嵌入落在两个质心之间，单标签聚类怎么标都至少亏一半。这就是第 5 章的主题。</p>
+    </div>
+
+    <p>把实验台的体感翻译成工程语言：<b>窗长是"时间分辨率 vs 嵌入稳定性"的拍卖</b>（生产常用 1.5–2s 窗、0.5–0.75s 步移的滑窗折中）；<b>阈值是"说话人数先验"的化身</b>——如果业务能拿到真实人数（如双人客服通话恒为 2），直接把聚类钉死在 k=2，DER 立刻显著下降。凡是能把未知变已知的先验，都值得喂给系统。</p>
+  </div>
+</section>
+
+<!-- ================= 04 DER ================= -->
+<section class="sec" id="s4">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">DER</span>
+    <div><p class="sec-eyebrow">METRIC / 度量</p><h2>DER：错误如何被记账</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>实验台右下角那个分数现在正式立户。<b>DER（Diarization Error Rate）</b>按时间记账，把错误分成三种，除以参考标注里的语音总时长：</p>
+    <p style="text-align:center"><code style="font-size:1rem">DER = ( 漏检 miss + 误报 false alarm + 说话人混淆 confusion ) / 参考语音总时长</code></p>
+    <ul>
+      <li><b>漏检 miss</b>：有人在说，系统说没人（或重叠时只标出了其中一人）——主要来自 VAD 漏检和重叠；</li>
+      <li><b>误报 false alarm</b>：没人在说，系统说有人——来自 VAD 误报；</li>
+      <li><b>混淆 confusion</b>：说对了"有人"，但标错了"是谁"——来自聚类/分割错误。</li>
+    </ul>
+    <p>还有一个容易忽略的前置步骤：系统的 spk0/spk1 和标注的 A/B/C 本来对不上号，评测先用<b>匈牙利算法找一个对系统最有利的标签映射</b>，再算错误——所以 DER 惩罚的是"分错人"，不是"编号不同"。</p>
+
+    <div class="panel">
+      <p class="panel-title">DER 记账演示：五种典型错误长什么样</p>
+      <p class="panel-q">回答的问题：<b>每种错误在时间轴上是什么形状？collar 又赦免了什么？</b></p>
+      <div class="btnrow" id="dr-btns">
+        <button class="btn on" data-dr="perfect">完美输出</button>
+        <button class="btn" data-dr="miss">VAD 漏检</button>
+        <button class="btn" data-dr="fa">VAD 误报</button>
+        <button class="btn" data-dr="conf">聚类混淆</button>
+        <button class="btn" data-dr="jitter">边界抖动</button>
+      </div>
+      <div class="track">
+        <p class="tlbl">REFERENCE（30 秒，三人各一段）</p>
+        <svg id="dr-ref" viewBox="0 0 920 50"></svg>
+      </div>
+      <div class="track">
+        <p class="tlbl">HYPOTHESIS（系统输出）</p>
+        <svg id="dr-hyp" viewBox="0 0 920 50"></svg>
+      </div>
+      <div class="track">
+        <p class="tlbl">逐帧记账（<span style="color:#E88;">红=miss</span> <span style="color:#E8B34D;">橙=FA</span> <span style="color:#C9A0E8;">紫=confusion</span> 暗绿=正确）</p>
+        <svg id="dr-err" viewBox="0 0 920 40"></svg>
+      </div>
+      <div class="btnrow"><label class="chk"><input type="checkbox" id="dr-collar"> 评测加 ±0.25s collar（参考段边界附近不记账）</label></div>
+      <div class="readout" id="dr-read"></div>
+      <p class="hint">重点看<b>边界抖动</b>这档：所有段都只差零点几秒，肉眼几乎看不出问题，DER 却被一圈圈细条错误抬起来；勾上 collar，这些边界细条被赦免，DER 掉回接近 0。<b>collar 的存在承认了一个事实：人工标注的边界本身就有 ±0.1~0.3s 的主观误差</b>，不该让系统为此买单。但反过来记住：报告 DER 不注明 collar 和是否计重叠区，数字之间没有可比性——同一系统，collar 0.25s + 跳过重叠 的 DER，可以比 collar 0 + 计重叠 低一半以上。</p>
+    </div>
+
+    <p>最后校准一下期望值：干净的双人电话（CallHome 类）DER 能到 5% 以下；嘈杂多人真实会议（AMI、DIHARD 类）10–25% 都属正常。<b>DER 也不是全部</b>——它按时长加权，说得少的人错光了也影响不大，所以补充指标 JER（按说话人平均）和"说话人计数是否正确"在应用里同样致命：纪要系统把 3 个人算成 5 个，用户不会去看 DER 有多好。</p>
+  </div>
+</section>
+
+<!-- ================= 05 重叠语音 ================= -->
+<section class="sec" id="s5">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">ovl</span>
+    <div><p class="sec-eyebrow">OVERLAP / 天花板</p><h2>重叠语音：单标签范式的地板，端到端的起点</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>真实对话不排队。插话、抢话、附和（"对对对"）让真实会议里 <b>10–20% 的语音时长是两人以上同时在说</b>。而聚类式流水线有个先天设定：<b>每个时刻只发一个标签</b>——一窗一个嵌入、一个嵌入一个簇。于是重叠区无论标谁，另一个人都自动计入 miss。这不是实现不好，是范式的地板。</p>
+
+    <div class="panel">
+      <p class="panel-title">重叠区的账：单标签 vs 重叠感知</p>
+      <p class="panel-q">回答的问题：<b>就算聚类全对，单标签系统的 DER 下界是多少？重叠感知系统赢在哪里？</b></p>
+      <div class="btnrow">
+        <div class="seg" id="ov-mode">
+          <button data-v="single" class="on">单标签系统（聚类式默认）</button>
+          <button data-v="aware">重叠感知系统（可多标签）</button>
+        </div>
+      </div>
+      <div class="track">
+        <p class="tlbl">REFERENCE：A 说 0–10s，B 从 6s 插话到 14s（6–10s 两人同时说）</p>
+        <svg id="ov-ref" viewBox="0 0 920 72"></svg>
+      </div>
+      <div class="track">
+        <p class="tlbl">HYPOTHESIS</p>
+        <svg id="ov-hyp" viewBox="0 0 920 72"></svg>
+      </div>
+      <div class="track">
+        <p class="tlbl">逐帧记账</p>
+        <svg id="ov-err" viewBox="0 0 920 40"></svg>
+      </div>
+      <div class="readout" id="ov-read"></div>
+      <p class="hint">单标签这边已经是"最优解"了——6–8s 判给 A、8–10s 判给 B，尽量雨露均沾——重叠的 4 秒里仍然每一帧都欠一个人：<b>miss = 4s，DER 下界 = 4 / 18 ≈ 22%，怎么调参都到不了 0</b>。切到重叠感知：同一时刻允许两个标签，账面清零。</p>
+    </div>
+
+    <h3>怎么破：从打补丁到换范式</h3>
+    <ul>
+      <li><b>聚类式打补丁</b>：先跑一个重叠检测器（OSD）找出多人区，再把这些区域的"第二说话人"指派给最近的簇。工程上有效，但精度受限于两阶段误差累积。</li>
+      <li><b>换范式——EEND（End-to-End Neural Diarization）</b>：把 diarization 改写成<b>逐帧 × 逐说话人的多标签二分类</b>：网络对每一帧输出"说话人 1 在说吗？说话人 2 在说吗？…"，重叠只是"两个输出同时为 1"，天然无地板。代价是新的难题：输出维度绑死了最大说话人数、训练要解决"网络的第 1 号输出对应谁"的排列问题（PIT，排列不变训练）、长录音与很多人时吃力。</li>
+      <li><b>混血（当前主流）</b>：EEND 在短滑窗内做局部的重叠感知分割，再用聚类把各窗的局部说话人全局归并（EEND-VC、pyannote 3.x 的思路）——局部要精细用神经网络，全局要开放人数用聚类，各取所长。</li>
+    </ul>
+    <p>取舍一句话：<b>录音重叠少、人数完全未知、时长很长 → 聚类式稳；重叠多、人数有上限（会议、访谈）→ 重叠感知/混血必上。</b>选型先问一句"我的数据里重叠占多少"，比看任何 benchmark 都有用。</p>
+  </div>
+</section>
+<!-- ================= 06 常见误区 ================= -->
+<section class="sec" id="s6">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">✕</span>
+    <div><p class="sec-eyebrow">MISCONCEPTIONS / 常见误区</p><h2>常见误区与反例</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>每张卡片的标题是一个流传很广的错误说法（✕），点开看正确版本（✓）和一个能当场戳破它的反例。</p>
+
+    <details class="myth"><summary>"diarization 能告诉我说话的是谁"</summary><div class="body">
+      <p>它只输出<b>匿名</b>聚类标签。spk0 的含义是"第 0 团点"，与任何真实身份无关。要名字，得叠加 speaker identification：拿目标人的注册声纹和每个簇的质心比对（speaker linking）。</p>
+      <p><b>反例</b>：同一个人出现在两个文件里，一个文件里叫 spk0，另一个里叫 spk2——标签在文件之间没有任何一致性，跨文件追踪同一人是另一个独立任务（speaker linking / global diarization）。</p></div></details>
+
+    <details class="myth"><summary>"先 ASR 转成文字，再分说话人更简单"</summary><div class="body">
+      <p>ASR 输出的文字里不携带声纹信息，"这句话听起来是谁的嗓音"在转写那一刻就丢失了。正确的架构是并行：diarization 给时间轴上的身份，ASR 给时间轴上的词，再做<b>词级时间对齐</b>把两者缝合（或用联合训练的多说话人 ASR 一步到位）。</p>
+      <p><b>反例</b>：两个人语言风格接近的访谈，纯文本连人类都分不出说话人切换点；而 diarization 靠声纹在文本完全相同的情况下照样能分——信息通道根本不同。</p></div></details>
+
+    <details class="myth"><summary>"DER 5% 就是好系统，20% 就是烂系统"</summary><div class="body">
+      <p>DER 只有在<b>同数据、同 collar、同重叠计分规则</b>下才可比。电话双人 5% 和嘈杂晚宴录音（DIHARD）20% 可能是同一水平的技术；collar 0.25s + 忽略重叠的 5%，换成严格计分可能翻倍。而且 DER 按时长加权，抓不住"人数数错"这种对产品致命的错误。</p>
+      <p><b>反例</b>：第 4 章"边界抖动"档——观感几乎完美的输出，collar=0 时 DER 两位数；勾上 collar 立刻接近 0。同一份输出，两个数字。</p></div></details>
+
+    <details class="myth"><summary>"说话人数让模型自己定就行，不用管"</summary><div class="body">
+      <p>未知人数是聚类式流水线最脆弱的一环——它被压缩成一个距离阈值，而阈值对录音条件（信道、噪声、时长）敏感。任何可用的人数先验都应该喂进去：已知恰好 k 人就钉死 k，已知上限就限制最大簇数。</p>
+      <p><b>反例</b>：第 3 章实验台，τ 从 2.4 拨到 3.7，三个人变两个人；而把窗长从 1.5s 换成 2s，原本健康的 τ 又开始拆人——最优阈值随录音条件漂移。而把 k 固定为 3 后，这个自由度直接消失。</p></div></details>
+
+    <details class="myth"><summary>"声纹嵌入只反映'这个人是谁'，很纯净"</summary><div class="body">
+      <p>理想上 text-independent、只编码嗓音；实际上短片段统计不足、情绪/语速、远场混响、信道（手机 vs 会议麦）都会让嵌入漂移。跨信道时，"同一人两种设备"的距离可能大于"同一设备两个人"。</p>
+      <p><b>反例</b>：第 3 章把窗长拨到 0.5s——同一个人的点云直接散成一片雾，和邻团粘连。这不是模型坏了，是半秒语音在信息量上撑不起可靠的声纹估计。</p></div></details>
+
+    <details class="myth"><summary>"重叠语音是少数情况，先忽略没关系"</summary><div class="body">
+      <p>真实多人对话里重叠占语音时长 10–20% 甚至更高（插话、附和、抢话）。对单标签系统这直接是 DER 的<b>不可修复地板</b>；对下游更糟——重叠区的 ASR 文本本来就容易错，再配上错误的说话人标签，纪要里会出现"张三说了李四的话"。</p>
+      <p><b>反例</b>：第 5 章的账——两人各说几秒、重叠 4 秒的小片段，单标签最优解 DER 也有 22%。把这个比例乘回两小时会议，就是几分钟被系统性记错账的内容。</p></div></details>
+
+    <details class="myth"><summary>"VAD 只是个预处理，随便用用"</summary><div class="body">
+      <p>VAD 的错误是唯一<b>没有任何后续步骤能修复</b>的错误：漏掉的语音不会再被嵌入和聚类看到（miss 直接落账），放进来的噪声会变成假的"说话人"污染聚类（false alarm + 可能多聚出一类）。很多系统 DER 的一半以上其实是 VAD 贡献的。</p>
+      <p><b>反例</b>：把一段有背景音乐的录音喂给宽松的 VAD——音乐被当成语音提了嵌入，聚类多出一个"幽灵说话人"，混淆和误报同时上涨；换一个好 VAD，什么都没调，DER 掉了三分之一。</p></div></details>
+  </div>
+</section>
+
+<!-- ================= 07 自检 ================= -->
+<section class="sec" id="s7">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">✓</span>
+    <div><p class="sec-eyebrow">SELF CHECK / 自检</p><h2>自检卡片：能接住真实场景了吗</h2></div>
+  </header>
+  <div class="sec-body">
+    <p>七道题，全部来自真实选型/排错场景。每题四选一，选后有讲解。</p>
+    <div class="panel">
+      <div id="q-list"></div>
+      <div class="readout"><span class="lbl">得分：</span><span class="mono" id="q-score">0 / 0</span>　<button class="btn" id="q-reset" style="margin-left:10px">重做全部</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 08 最小代码 ================= -->
+<section class="sec" id="s8">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">py</span>
+    <div><p class="sec-eyebrow">CODE / 最小代码</p><h2>最小代码：从一行调用到看懂内部</h2></div>
+  </header>
+  <div class="sec-body">
+    <h3>8.1 生产路线：pyannote.audio 一条龙</h3>
+    <div class="codeblock"><div class="codehead"><span>python · pyannote 预训练流水线（VAD+嵌入+聚类+重叠感知全包）</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code><span class="k">from</span> pyannote.audio <span class="k">import</span> Pipeline
+
+pipeline = Pipeline.from_pretrained(
+    <span class="s">"pyannote/speaker-diarization-3.1"</span>,
+    use_auth_token=<span class="s">"HF_TOKEN"</span>)          <span class="c"># 需在 HuggingFace 接受模型条款</span>
+
+<span class="c"># 人数未知就都不传；有先验一定要传——DER 会明显受益</span>
+diar = pipeline(<span class="s">"meeting.wav"</span>)                       <span class="c"># 自动估计人数</span>
+<span class="c"># diar = pipeline("call.wav", num_speakers=2)        # 已知恰好 2 人</span>
+<span class="c"># diar = pipeline("panel.wav", min_speakers=2, max_speakers=6)</span>
+
+<span class="k">for</span> turn, _, spk <span class="k">in</span> diar.itertracks(yield_label=<span class="k">True</span>):
+    print(<span class="s">f"{turn.start:6.1f}s – {turn.end:6.1f}s  {spk}"</span>)
+<span class="c">#    0.0s –    7.5s  SPEAKER_00     ← 匿名标签，不是名字</span>
+
+diar.write_rttm(open(<span class="s">"meeting.rttm"</span>, <span class="s">"w"</span>))          <span class="c"># 标准交换格式</span>
+</code></pre></div>
+
+    <h3>8.2 白盒路线：30 行看懂"嵌入 + 聚类"内核</h3>
+    <div class="codeblock"><div class="codehead"><span>python · 聚类式流水线骨架（与第 3 章实验台同构）</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.cluster <span class="k">import</span> AgglomerativeClustering
+
+<span class="c"># ① VAD 之后，对每个 1.5s 滑窗提声纹嵌入（此处用任意嵌入模型，如 ECAPA）</span>
+<span class="c">#    embs: (n_windows, 192)，starts/ends: 各窗的时间戳</span>
+embs = np.stack([embed(wav, s, e) <span class="k">for</span> s, e <span class="k">in</span> windows])
+embs /= np.linalg.norm(embs, axis=<span class="n">1</span>, keepdims=<span class="k">True</span>)   <span class="c"># 归一化 → 余弦几何</span>
+
+<span class="c"># ② AHC：distance_threshold 就是第 3 章那个生死旋钮</span>
+labels = AgglomerativeClustering(
+    n_clusters=<span class="k">None</span>, distance_threshold=<span class="n">0.7</span>,          <span class="c"># 人数未知：靠阈值停</span>
+    metric=<span class="s">"cosine"</span>, linkage=<span class="s">"average"</span>).fit_predict(embs)
+<span class="c"># 已知 k 人：n_clusters=k, distance_threshold=None —— 先验直接换 DER</span>
+
+<span class="c"># ③ 相邻同标签窗合并成段，即得 "who spoke when"</span>
+<span class="k">for</span> seg <span class="k">in</span> merge_adjacent(windows, labels):
+    print(<span class="s">f"{seg.start:.1f}–{seg.end:.1f}s  spk{seg.label}"</span>)
+</code></pre></div>
+
+    <h3>8.3 评测：DER 别自己手搓</h3>
+    <div class="codeblock"><div class="codehead"><span>python · pyannote.metrics 计算 DER（含 collar 与标签映射）</span><button class="btn" style="padding:.1em .7em" onclick="copyCode(this)">复制</button></div>
+<pre><code><span class="k">from</span> pyannote.metrics.diarization <span class="k">import</span> DiarizationErrorRate
+
+metric = DiarizationErrorRate(collar=<span class="n">0.5</span>, skip_overlap=<span class="k">False</span>)
+<span class="c"># collar=0.5 即边界两侧各 0.25s 不记账；skip_overlap 决定重叠区计不计分</span>
+<span class="c"># —— 报告 DER 必须同时注明这两个参数，否则数字不可比</span>
+
+der = metric(reference, hypothesis)      <span class="c"># 内部自动做最优标签映射（匈牙利）</span>
+print(metric[<span class="s">"missed detection"</span>], metric[<span class="s">"false alarm"</span>], metric[<span class="s">"confusion"</span>])
+</code></pre></div>
+    <p>RTTM 格式长这样（每行一段：文件名、起始秒、<b>时长</b>、说话人标签），是标注、系统输出、评测工具之间的通用货币：</p>
+    <div class="rttm">SPEAKER meeting 1   0.00  7.50 &lt;NA&gt; &lt;NA&gt; spk0 &lt;NA&gt; &lt;NA&gt;
+SPEAKER meeting 1   8.50  9.50 &lt;NA&gt; &lt;NA&gt; spk1 &lt;NA&gt; &lt;NA&gt;
+SPEAKER meeting 1  24.00  2.50 &lt;NA&gt; &lt;NA&gt; spk1 &lt;NA&gt; &lt;NA&gt;   ← 与上一行的 spk0 重叠</div>
+  </div>
+</section>
+
+<!-- ================= 09 速查表 ================= -->
+<section class="sec" id="s9">
+  <div class="rail"></div>
+  <header class="sec-head">
+    <span class="sec-node">Σ</span>
+    <div><p class="sec-eyebrow">CHEAT SHEET / 速查表</p><h2>Speaker Diarization 速查表</h2></div>
+  </header>
+  <div class="sec-body">
+    <div class="tblwrap"><table class="tbl">
+      <thead><tr><th>环节 / 概念</th><th>负责什么</th><th>关键选择</th><th>出错的样子</th><th>排查/缓解</th></tr></thead>
+      <tbody>
+        <tr><td>VAD</td><td>何时有人声</td><td>灵敏度阈值</td><td>miss / FA 直接进 DER；噪声聚出"幽灵说话人"</td><td>换强 VAD；错误无法被后级修复，优先投入</td></tr>
+        <tr><td>切片</td><td>把音频切成可判断的单元</td><td>窗长 1.5–2s、步移 0.5–0.75s 常见</td><td>窗太短嵌入发散；太长边界粗、跨说话人</td><td>滑窗折中；后接重分割修边界</td></tr>
+        <tr><td>嵌入</td><td>把"像不像同一人"变成距离</td><td>ECAPA / ResNet 系预训练模型</td><td>短窗、跨信道、远场时漂移</td><td>域内微调；PLDA/打分校准；保证窗内语音量</td></tr>
+        <tr><td>聚类</td><td>把距离变成身份；类数=人数</td><td>AHC 阈值 / 谱聚类 / VBx</td><td>τ 松→并人（confusion）；τ 紧→拆人</td><td>有人数先验就钉死 k；域内调 τ</td></tr>
+        <tr><td>重分割</td><td>帧级平滑、修边界</td><td>VB-HMM（VBx）等</td><td>逐窗投票的锯齿边界</td><td>几乎总是免费涨点，建议默认开</td></tr>
+        <tr><td>重叠 / EEND</td><td>同一时刻多标签</td><td>聚类式+OSD 补丁 / EEND / 混血</td><td>单标签范式 miss 地板 ≈ 重叠占比</td><td>先测数据重叠率再选范式</td></tr>
+        <tr><td>DER</td><td>按时长记账的错误率</td><td>collar、skip_overlap 必须注明</td><td>数字跨设置不可比；掩盖人数错误</td><td>配 JER、说话人计数一起看</td></tr>
+        <tr><td>输出 / RTTM</td><td>时间表交换格式</td><td>起始 + 时长 + 匿名标签</td><td>误把 spk0 当身份、跨文件当同一人</td><td>要名字叠 identification（linking）</td></tr>
+      </tbody>
+    </table></div>
+    <p>四条随身法则：</p>
+    <ol>
+      <li><b>Diarization = 匿名的"谁在何时说话"</b>——要名字叠识别，要文字叠 ASR，三者正交。</li>
+      <li><b>嵌入把相似变成距离，聚类把距离变成身份</b>——窗长管点的紧散，阈值管人的分合，人数先验是最便宜的涨点。</li>
+      <li><b>VAD 的错和重叠的账，后面谁也救不了</b>——一个要前置投入，一个要换范式（重叠感知/EEND）。</li>
+      <li><b>DER 不注明 collar 与重叠规则就没有意义</b>——对产品，人数数对往往比 DER 再降两个点更重要。</li>
+    </ol>
+    <footer>《一文读懂 Speaker Diarization》 · 单文件离线交互文档 · 蓝/品红/绿 = 匿名说话人 spk0/1/2 · 红=miss 橙=FA 紫=confusion</footer>
+  </div>
+</section>
+
+</div><!-- /wrap -->
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+function copyCode(btn){
+  const pre = btn.closest(".codeblock").querySelector("pre");
+  const txt = pre.innerText;
+  const done = ok => { btn.textContent = ok ? "已复制" : "复制失败"; setTimeout(()=>btn.textContent="复制", 1400); };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>done(true), ()=>fb());
+  } else fb();
+  function fb(){
+    const ta = document.createElement("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { done(document.execCommand("copy")); } catch(e){ done(false); }
+    document.body.removeChild(ta);
+  }
+}
+function segInit(segId, onChange){
+  const seg = $(segId);
+  seg.querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => {
+    seg.querySelectorAll("button").forEach(b => b.classList.remove("on"));
+    btn.classList.add("on"); onChange(btn.dataset.v);
+  }));
+}
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296; }; }
+const pct = x => (100*x).toFixed(1) + "%";
+const SPK = ["var(--spkA)","var(--spkB)","var(--spkC)"];
+const EXTRA = ["#8A97A3","#5F7386","#AA8F5C","#708C6B"];
+const clColor = (c, map) => map[c] !== undefined ? SPK[map[c]] : EXTRA[c % EXTRA.length];
+function el(tag, attrs, parent){
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+/* ---------- 60 秒三人会议 ground truth ---------- */
+const GT = [
+  {s:0.0,  e:7.5,  spk:0},
+  {s:8.5,  e:18.0, spk:1},
+  {s:19.0, e:27.0, spk:0},
+  {s:24.0, e:26.5, spk:1},   // 插话（重叠）
+  {s:28.0, e:33.5, spk:2},
+  {s:34.5, e:41.0, spk:1},
+  {s:42.0, e:50.0, spk:2},
+  {s:47.0, e:49.0, spk:0},   // 插话（重叠）
+  {s:51.0, e:60.0, spk:0}
+];
+const REGIONS = [[0,7.5],[8.5,18],[19,27],[28,33.5],[34.5,41],[42,50],[51,60]];
+const DUR = 60;
+const refAt = t => { const r=[]; GT.forEach(g => { if (t>=g.s && t<g.e) r.push(g.spk); }); return r; };
+const CENT = [[-2.1, 0.8],[2.2, 1.3],[0.2, -2.2]];
+
+/* ---------- 模拟：切窗 → 嵌入 → AHC 聚类 → DER ---------- */
+function makeWindows(L){
+  const ws = [];
+  REGIONS.forEach(([s,e]) => {
+    const k = Math.max(1, Math.round((e-s)/L)), w = (e-s)/k;
+    for (let i=0;i<k;i++) ws.push({s: s+i*w, e: s+(i+1)*w});
+  });
+  return ws;
+}
+function windowFracs(w){
+  const cnt = [0,0,0]; let n = 0;
+  for (let t=w.s+0.025; t<w.e; t+=0.05){ refAt(t).forEach(s => cnt[s]++); n++; }
+  const tot = cnt[0]+cnt[1]+cnt[2] || 1;
+  return cnt.map(c => c/tot);
+}
+function simulate(L, tau){
+  const ws = makeWindows(L);
+  const rng = mulberry32(1000 + Math.round(L*100));
+  const pts = ws.map(w => {
+    const fr = windowFracs(w);
+    let x=0, y=0;
+    fr.forEach((f,i) => { x += f*CENT[i][0]; y += f*CENT[i][1]; });
+    const sig = 0.85/Math.sqrt(w.e-w.s);
+    let u1 = rng(), u2 = rng();
+    let r = Math.min(2.2, Math.sqrt(-2*Math.log(u1+1e-12))) * sig, a = 2*Math.PI*u2;
+    w.fr = fr;
+    return [x + r*Math.cos(a), y + r*Math.sin(a)];
+  });
+  // AHC · average linkage · 欧氏距离 · 距离阈值 tau 停止
+  const n = pts.length;
+  const D = Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>{
+    const dx=pts[i][0]-pts[j][0], dy=pts[i][1]-pts[j][1]; return Math.hypot(dx,dy); }));
+  let clusters = pts.map((_,i)=>[i]);
+  const avgD = (A,B) => { let s=0; A.forEach(i=>B.forEach(j=>s+=D[i][j])); return s/(A.length*B.length); };
+  while (clusters.length > 1){
+    let bi=-1,bj=-1,bd=Infinity;
+    for (let i=0;i<clusters.length;i++) for (let j=i+1;j<clusters.length;j++){
+      const d = avgD(clusters[i],clusters[j]);
+      if (d<bd){ bd=d; bi=i; bj=j; }
+    }
+    if (bd > tau) break;
+    clusters[bi] = clusters[bi].concat(clusters[bj]); clusters.splice(bj,1);
+  }
+  const labels = new Array(n);
+  clusters.forEach((c,ci)=>c.forEach(i=>labels[i]=ci));
+  // 聚类标签 ↔ 真实说话人：贪心最大重叠映射（评测里是匈牙利，3 人时等价）
+  const K = clusters.length;
+  const M = Array.from({length:K},()=>[0,0,0]);
+  ws.forEach((w,i)=>{ const d=w.e-w.s; w.fr.forEach((f,s)=>M[labels[i]][s]+=f*d); });
+  const map = {}; const usedC = new Set(), usedS = new Set();
+  for (let step=0; step<Math.min(K,3); step++){
+    let bc=-1,bs=-1,bv=-1;
+    for (let c=0;c<K;c++){ if (usedC.has(c)) continue;
+      for (let s=0;s<3;s++){ if (usedS.has(s)) continue;
+        if (M[c][s]>bv){ bv=M[c][s]; bc=c; bs=s; } } }
+    if (bv<=0) break;
+    map[bc]=bs; usedC.add(bc); usedS.add(bs);
+  }
+  // 帧级 DER
+  let miss=0, fa=0, conf=0, total=0;
+  const hypAt = t => { for (let i=0;i<ws.length;i++) if (t>=ws[i].s && t<ws[i].e) return labels[i]; return -1; };
+  for (let t=0.025; t<DUR; t+=0.05){
+    const ref = refAt(t); const h = hypAt(t);
+    const Nr = ref.length, Nh = h>=0 ? 1 : 0;
+    total += Nr;
+    const correct = (Nh===1 && map[h]!==undefined && ref.includes(map[h])) ? 1 : 0;
+    miss += Math.max(0, Nr-Nh); fa += Math.max(0, Nh-Nr);
+    conf += Math.min(Nr,Nh) - correct;
+  }
+  const f = 0.05;
+  return { ws, pts, labels, K, map,
+    der:{ miss:miss*f, fa:fa*f, conf:conf*f, total:total*f, v:(miss+fa+conf)/total } };
+}
+function mergeSegs(ws, labels){
+  const segs = [];
+  ws.forEach((w,i)=>{
+    const last = segs[segs.length-1];
+    if (last && last.lab===labels[i] && Math.abs(last.e-w.s)<0.01) last.e = w.e;
+    else segs.push({s:w.s, e:w.e, lab:labels[i]});
+  });
+  return segs;
+}
+
+/* ---------- 时间轴渲染 ---------- */
+const TX = (t, x0=8, x1=912) => x0 + t/DUR*(x1-x0);
+function drawAxis(svg, y, dur=DUR, x0=8, x1=912){
+  for (let t=0; t<=dur; t+=dur/4){
+    const x = x0 + t/dur*(x1-x0);
+    el("line", {x1:x, y1:y-3, x2:x, y2:y+3, stroke:"#3A4754"}, svg);
+    el("text", {x:x, y:y+14, "text-anchor":"middle", "font-size":9, fill:"var(--track-txt)"}, svg).textContent = t+"s";
+  }
+}
+function drawRefRows(svg, segs, nspk, H, dur=DUR, names){
+  svg.innerHTML = "";
+  const rowH = (H-16)/nspk;
+  for (let s=0;s<nspk;s++){
+    el("text", {x:2, y:8+s*rowH+rowH/2+3, "font-size":9, fill:SPK[s]}, svg).textContent = names?names[s]:("spk"+s);
+    el("line", {x1:30, y1:8+s*rowH+rowH/2, x2:912, y2:8+s*rowH+rowH/2, stroke:"#232E39"}, svg);
+  }
+  segs.forEach(g => {
+    el("rect", {x:TX(g.s,30), y:9+g.spk*rowH, width:TX(g.e,30)-TX(g.s,30), height:rowH-2, rx:2, fill:SPK[g.spk]}, svg);
+  });
+  drawAxis(svg, H-8, dur, 30);
+}
+function drawHypBand(svg, segs, map, H){
+  svg.innerHTML = "";
+  segs.forEach(g => {
+    el("rect", {x:TX(g.s,30), y:8, width:TX(g.e,30)-TX(g.s,30), height:H-26, rx:2,
+      fill: clColor(g.lab, map), stroke:"#0D1319", "stroke-width":.6}, svg);
+  });
+  drawAxis(svg, H-8, DUR, 30);
+}
+
+/* ================= 首屏：流水线播放器 ================= */
+const HP = { stage:0, sim: null };
+function hpWave(svg, dim){
+  const rng = mulberry32(42);
+  for (let t=0.15; t<DUR; t+=0.3){
+    const ref = refAt(t);
+    const amp = ref.length ? (14 + 34*rng()) * (ref.length>1 ? 1.35 : 1) : 2 + 3*rng();
+    el("rect", {x:TX(t)-1.4, y:64-amp/2, width:2.8, height:Math.max(2,amp), rx:1,
+      fill: dim ? "#2C3944" : "#5E7484", opacity: dim? .8 : 1}, svg);
+  }
+}
+function hpRender(){
+  const svg = $("hp-svg"); svg.innerHTML = "";
+  const st = HP.stage;
+  const labels = ["原始波形（你能听出是几个人吗？机器也不能——还不能）",
+    "① VAD：先回答\u201C何时有人声\u201D", "② 切片：切成 1.5s 小窗，一窗之内大概率只有一个人",
+    "③ 嵌入 + 聚类：每窗一个声纹坐标，挤在一起的归同一人", "④ 合并输出：谁在何时说话（RTTM）"];
+  $("hp-tlbl").textContent = "TRACK · " + labels[st];
+  $("hp-stage").textContent = `阶段 ${st} / 4`;
+  hpWave(svg, st>0);
+  drawAxis(svg, 142);
+  if (st>=1){ // VAD 带
+    el("rect", {x:TX(0), y:96, width:TX(60)-TX(0), height:16, fill:"#242F3A", rx:3}, svg);
+    REGIONS.forEach(([s,e]) => el("rect", {x:TX(s), y:96, width:TX(e)-TX(s), height:16, rx:3,
+      fill: st===1 ? "#3E7A5E" : "#2E5A47"}, svg));
+    el("text", {x:TX(60)+0, y:92, "text-anchor":"end", "font-size":9, fill:"var(--track-txt)"}, svg).textContent="VAD：亮=语音 暗=静音";
+  }
+  if (!HP.sim) HP.sim = simulate(1.5, 2.4);
+  const sim = HP.sim;
+  if (st===2){
+    sim.ws.forEach(w => el("rect", {x:TX(w.s), y:118, width:TX(w.e)-TX(w.s), height:14, rx:2,
+      fill:"#1E2933", stroke:"#4A5B6B", "stroke-width":.8}, svg));
+  }
+  if (st>=3){
+    sim.ws.forEach((w,i) => el("rect", {x:TX(w.s), y:118, width:TX(w.e)-TX(w.s), height:14, rx:2,
+      fill: clColor(sim.labels[i], sim.map), stroke:"#0D1319", "stroke-width":.5}, svg));
+    el("text", {x:8, y:132, "font-size":9, fill:"var(--track-txt)"}, svg);
+  }
+  if (st===4){
+    const segs = mergeSegs(sim.ws, sim.labels);
+    segs.forEach(g => el("rect", {x:TX(g.s), y:24, width:TX(g.e)-TX(g.s), height:26, rx:3,
+      fill: clColor(g.lab, sim.map), opacity:.92}, svg));
+    el("text", {x:8, y:18, "font-size":9.5, fill:"var(--track-txt)"}, svg).textContent="最终时间轴（单标签：每一时刻只有一种颜色）";
+    const rt = $("hp-rttm"); rt.classList.remove("hide");
+    rt.textContent = segs.slice(0,7).map(g =>
+      `SPEAKER meeting 1  ${g.s.toFixed(2).padStart(5)}  ${(g.e-g.s).toFixed(2).padStart(5)} <NA> <NA> spk${sim.map[g.lab]!==undefined?sim.map[g.lab]:g.lab} <NA> <NA>`).join("\n") + "\n…";
+  } else $("hp-rttm").classList.add("hide");
+  const reads = [
+    "这是一段 60s 的录音（波形高度=音量）。肉眼只能看出\u201C哪里有声音\u201D，看不出\u201C是谁\u201D——声纹信息藏在频谱细节里，这正是后面要提取的东西。",
+    "<b>VAD</b> 把时间轴分成\u201C语音 / 非语音\u201D。它是整条流水线的地基：漏掉的语音（miss）后面永远找不回来，混进来的噪声（false alarm）会污染后面的每一步。",
+    "在语音区域上铺 <b>1.5s 的小窗</b>。窗是后续判断的最小单位——太长会一窗跨两人，太短声纹估计不稳（第 3 章有实验台专门玩这个旋钮）。",
+    "每个小窗过一遍<b>声纹嵌入网络</b>变成一个向量，再做<b>聚类</b>：距离近的窗归为同一人。注意 24s、47s 附近插话处的窗——两人声音混在一个窗里，嵌入落在两团中间（第 3 章散点图里能看到这些游离点），单标签聚类只能把它判给其中一人，另一人被整段吞掉。",
+    "相邻同色窗合并成段，写成 <b>RTTM</b>。注意两件事：标签是匿名的 spk0/1/2；重叠处每个时刻只保留了一种颜色——被盖掉的那个人成了漏检。这两个遗留问题分别是第 1 章和第 5 章的主角。"
+  ];
+  $("hp-read").innerHTML = `<div><span class="lbl">阶段 ${st}：</span>${reads[st]}</div>`;
+  $("hp-prev").disabled = st===0; $("hp-next").disabled = st===4;
+}
+$("hp-next").addEventListener("click", ()=>{ if(HP.stage<4){HP.stage++; hpRender();} });
+$("hp-prev").addEventListener("click", ()=>{ if(HP.stage>0){HP.stage--; hpRender();} });
+
+/* ================= 03 实验台 ================= */
+function lbRender(){
+  const L = +$("lb-L").value, tau = +$("lb-T").value;
+  const sim = simulate(L, tau);
+  // 散点
+  const sc = $("lb-scat"); sc.innerHTML = "";
+  const PX = x => 220 + x*46, PY = y => 158 - y*46;
+  el("line",{x1:10,y1:158,x2:430,y2:158,stroke:"#232E39"},sc);
+  el("line",{x1:220,y1:10,x2:220,y2:306,stroke:"#232E39"},sc);
+  CENT.forEach((c,i)=>{
+    el("text",{x:PX(c[0]),y:PY(c[1])-14,"text-anchor":"middle","font-size":10,fill:SPK[i]},sc).textContent="真实质心 spk"+i;
+    el("path",{d:`M${PX(c[0])-5} ${PY(c[1])} L${PX(c[0])+5} ${PY(c[1])} M${PX(c[0])} ${PY(c[1])-5} L${PX(c[0])} ${PY(c[1])+5}`,stroke:SPK[i],"stroke-width":1.6},sc);
+  });
+  sim.pts.forEach((p,i)=>{
+    const fr = sim.ws[i].fr;
+    const dom = fr.indexOf(Math.max(...fr));
+    const ovl = fr.filter(f=>f>0.25).length > 1;
+    el("circle",{cx:PX(p[0]),cy:PY(p[1]),r:5,fill:clColor(sim.labels[i],sim.map),
+      stroke:SPK[dom],"stroke-width":1.8,"stroke-dasharray": ovl?"2.5 2":"none",opacity:.95},sc);
+  });
+  el("text",{x:12,y:322,"font-size":9.5,fill:"var(--track-txt)"},sc).textContent="虚线圈 = 重叠窗（嵌入落在两团之间）";
+  // 时间轴
+  drawRefRows($("lb-ref"), GT, 3, 56);
+  drawHypBand($("lb-hyp"), mergeSegs(sim.ws, sim.labels), sim.map, 56);
+  // 读数
+  $("lb-k").textContent = sim.K;
+  $("lb-k").style.color = sim.K===3 ? "var(--ok)" : "var(--bad)";
+  $("lb-n").textContent = sim.ws.length;
+  $("lb-der").textContent = pct(sim.der.v);
+  $("lb-der").style.color = sim.der.v < 0.12 ? "var(--ok)" : (sim.der.v < 0.25 ? "var(--warn)" : "var(--bad)");
+  $("lb-miss").textContent = sim.der.miss.toFixed(1)+"s";
+  $("lb-fa").textContent = sim.der.fa.toFixed(1)+"s";
+  $("lb-conf").textContent = sim.der.conf.toFixed(1)+"s";
+}
+const lbOut = () => { $("lb-L-o").textContent = (+$("lb-L").value).toFixed(2).replace(/0+$/,"").replace(/\.$/,""); $("lb-T-o").textContent = (+$("lb-T").value).toFixed(2); };
+$("lb-L").addEventListener("input", ()=>{ lbOut(); lbRender(); });
+$("lb-T").addEventListener("input", ()=>{ lbOut(); lbRender(); });
+document.querySelectorAll("[data-lbp]").forEach(b => b.addEventListener("click", ()=>{
+  const [L,T] = b.dataset.lbp.split(",").map(Number);
+  $("lb-L").value = L; $("lb-T").value = T; lbOut(); lbRender();
+}));
+
+/* ================= 04 DER 记账 ================= */
+const REF2 = [{s:0,e:10,spk:0},{s:11,e:18,spk:1},{s:19,e:30,spk:2}];
+const DR = {
+  perfect:{h:[[0,0,10],[1,11,18],[2,19,30]], t:"输出与标注完全一致，DER = 0。这是理论上限——现实里光是边界的主观性就到不了这里。"},
+  miss:{h:[[0,0,5],[0,8,10],[1,11,18],[2,19,30]], t:"VAD 把 5–8s 判成了静音：3 秒 miss。注意后面的嵌入、聚类无论多完美都拿不回这 3 秒——漏检是唯一不可修复的错误。"},
+  fa:{h:[[0,0,10.8],[1,11,18.9],[2,19,30]], t:"VAD 把 10–10.8s 和 18–18.9s 的静音判成了语音：1.7 秒 false alarm。这些假语音还会被提嵌入、进聚类，运气差时多聚出一个\u201C幽灵说话人\u201D。"},
+  conf:{h:[[0,0,10],[1,11,18],[1,19,24],[2,24,30]], t:"19–24s 被聚到了 spk1 名下：5 秒 confusion。VAD 全对（说对了\u201C有人\u201D），错在\u201C是谁\u201D——这是聚类/嵌入的责任田。"},
+  jitter:{h:[[0,0.3,10.25],[1,10.7,17.75],[2,19.3,30]], t:"每条边界只差零点几秒，肉眼几乎完美，但每个边界都磨出一圈细小的 miss/FA。勾上 collar——评测承认人工标注边界本身就有误差，这些细条被赦免，DER 掉回去。"}
+};
+let drKey = "perfect";
+function drFramesEval(hyp, collar){
+  const bounds = []; REF2.forEach(g=>{ bounds.push(g.s, g.e); });
+  const inCollar = t => collar && bounds.some(b => Math.abs(t-b) <= 0.25);
+  let miss=0, fa=0, conf=0, total=0;
+  const frames = [];
+  for (let t=0.025; t<30; t+=0.05){
+    const ref = REF2.filter(g=>t>=g.s&&t<g.e).map(g=>g.spk);
+    const hs = hyp.filter(h=>t>=h[1]&&t<h[2]).map(h=>h[0]);
+    let typ = "ok";
+    if (!inCollar(t)){
+      const Nr=ref.length, Nh=hs.length; total += Nr;
+      const correct = hs.filter(x=>ref.includes(x)).length;
+      const m = Math.max(0,Nr-Nh), f = Math.max(0,Nh-Nr), c = Math.min(Nr,Nh)-correct;
+      miss+=m; fa+=f; conf+=c;
+      typ = m? "miss" : (f? "fa" : (c? "conf" : (Nr? "ok" : "sil")));
+    } else typ = "collar";
+    frames.push(typ);
+  }
+  return {miss:miss*0.05, fa:fa*0.05, conf:conf*0.05, total:total*0.05, frames};
+}
+function drRender(){
+  const conf = DR[drKey], collar = $("dr-collar").checked;
+  drawRefRows($("dr-ref"), REF2, 3, 50, 30, ["A","B","C"]);
+  const hsvg = $("dr-hyp"); hsvg.innerHTML = "";
+  conf.h.forEach(h => el("rect",{x:8+h[1]/30*904, y:8, width:(h[2]-h[1])/30*904, height:22, rx:2, fill:SPK[h[0]]}, hsvg));
+  drawAxis(hsvg, 42, 30, 8);
+  const ev = drFramesEval(conf.h, collar);
+  const esvg = $("dr-err"); esvg.innerHTML = "";
+  const cmap = {miss:"#D96A5E", fa:"#E8B34D", conf:"#B98BD9", ok:"#2E5A47", sil:"#1B252F", collar:"#3A4754"};
+  let run = {t:ev.frames[0], s:0};
+  const flush = (endIdx) => { el("rect",{x:8+run.s*0.05/30*904, y:8, width:(endIdx-run.s)*0.05/30*904, height:14, fill:cmap[run.t]}, esvg); };
+  ev.frames.forEach((f,i)=>{ if (f!==run.t){ flush(i); run={t:f,s:i}; } });
+  flush(ev.frames.length);
+  drawAxis(esvg, 32, 30, 8);
+  const d = (ev.miss+ev.fa+ev.conf)/ev.total;
+  $("dr-read").innerHTML =
+    `<div><span class="lbl">miss = </span><span class="cmiss">${ev.miss.toFixed(2)}s</span>`+
+    `<span class="lbl">　FA = </span><span class="cfa">${ev.fa.toFixed(2)}s</span>`+
+    `<span class="lbl">　confusion = </span><span class="cconf">${ev.conf.toFixed(2)}s</span>`+
+    `<span class="lbl">　参考语音 = </span><span class="mono">${ev.total.toFixed(1)}s</span>`+
+    `<span class="lbl">　→ DER = </span><b style="color:${d<0.01?"var(--ok)":"var(--bad)"}">${pct(d||0)}</b></div>`+
+    `<div><span class="lbl">${conf.t}</span></div>`;
+}
+document.querySelectorAll("#dr-btns button").forEach(b => b.addEventListener("click", ()=>{
+  document.querySelectorAll("#dr-btns button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); drKey = b.dataset.dr; drRender();
+}));
+$("dr-collar").addEventListener("change", drRender);
+
+/* ================= 05 重叠 ================= */
+const OVREF = [{s:0,e:10,spk:0},{s:6,e:14,spk:1}];
+let ovMode = "single";
+function ovRender(){
+  const rsvg = $("ov-ref");
+  drawRefRowsCustom(rsvg, OVREF, 14);
+  const hyp = ovMode==="single" ? [{s:0,e:8,spk:0},{s:8,e:14,spk:1}] : [{s:0,e:10,spk:0},{s:6,e:14,spk:1}];
+  drawRefRowsCustom($("ov-hyp"), hyp, 14);
+  // 帧级
+  let miss=0,total=0;
+  const esvg = $("ov-err"); esvg.innerHTML = "";
+  let run=null;
+  for (let t=0.025; t<14; t+=0.05){
+    const ref = OVREF.filter(g=>t>=g.s&&t<g.e).length;
+    const hs = hyp.filter(g=>t>=g.s&&t<g.e).length;
+    total += ref;
+    const m = Math.max(0, ref-hs); miss += m;
+    const typ = m? "miss" : (ref? "ok" : "sil");
+    if (!run || run.t!==typ){
+      if (run) el("rect",{x:8+run.s/14*904,y:8,width:(t-run.s)/14*904,height:14,
+        fill: run.t==="miss"?"#D96A5E":(run.t==="ok"?"#2E5A47":"#1B252F")}, esvg);
+      run = {t:typ, s:t};
+    }
+  }
+  el("rect",{x:8+run.s/14*904,y:8,width:(14-run.s)/14*904,height:14,
+    fill: run.t==="miss"?"#D96A5E":(run.t==="ok"?"#2E5A47":"#1B252F")}, esvg);
+  drawAxis(esvg, 32, 14, 8);
+  const d = miss*0.05/(total*0.05);
+  $("ov-read").innerHTML = ovMode==="single"
+    ? `<div><span class="lbl">单标签系统的\u201C最优解\u201D：6–8s 给 A、8–10s 给 B——重叠的 4 秒里每帧仍欠一人。</span></div>`+
+      `<div><span class="lbl">miss = </span><span class="cmiss">${(miss*0.05).toFixed(1)}s</span><span class="lbl">　参考语音 = ${(total*0.05).toFixed(0)}s（重叠计双份）　→ DER 下界 = </span><b class="cmiss">${pct(d)}</b><span class="lbl">，调任何参数都消不掉。</span></div>`
+    : `<div><span class="lbl">重叠感知：6–10s 同时输出 A 和 B 两个标签。</span></div>`+
+      `<div><span class="lbl">miss = </span><span class="cok">0.0s</span><span class="lbl">　→ DER = </span><b class="cok">0%</b><span class="lbl">。范式换了，地板才消失——这就是 EEND 类方法存在的理由。</span></div>`;
+}
+function drawRefRowsCustom(svg, segs, dur){
+  svg.innerHTML = "";
+  const names = ["A","B"];
+  for (let s=0;s<2;s++){
+    el("text",{x:2,y:8+s*26+16,"font-size":10,fill:SPK[s]},svg).textContent=names[s];
+    el("line",{x1:22,y1:8+s*26+13,x2:912,y2:8+s*26+13,stroke:"#232E39"},svg);
+  }
+  segs.forEach(g => el("rect",{x:22+g.s/dur*890, y:9+g.spk*26, width:(g.e-g.s)/dur*890, height:22, rx:2, fill:SPK[g.spk]}, svg));
+  for (let t=0;t<=dur;t+=dur/7){
+    el("text",{x:22+t/dur*890,y:70,"text-anchor":"middle","font-size":9,fill:"var(--track-txt)"},svg).textContent=t.toFixed(0)+"s";
+  }
+}
+segInit("ov-mode", v => { ovMode = v; ovRender(); });
+
+/* ================= 07 自检 ================= */
+const QUIZ = [
+  { scene:"你跑完 diarization，输出里有 SPEAKER_00 / SPEAKER_01。\n产品经理问：\u201C哪个是客户王总？\u201D正确的回答是：",
+    opts:["SPEAKER_00 通常是先说话的人，即主持人","标签是匿名的：要拿王总的注册声纹对每个簇再做一次识别","把音频重跑一遍就会带出名字","看 RTTM 第 8 列就有身份"], ans:1,
+    exp:"diarization 只做聚类，spk 标签与身份无关，且跨文件不一致。\u201C变成名字\u201D是叠加在其上的 speaker identification / linking，需要注册声纹。" },
+  { scene:"双人客服质检系统 DER 偏高。你发现流水线在自动估计说话人数，\n而业务里每通电话恒为坐席 + 客户两人。最划算的第一步是：",
+    opts:["换更大的嵌入模型","把聚类的说话人数钉死为 2","把窗长从 1.5s 加到 4s","降低 VAD 灵敏度"], ans:1,
+    exp:"未知人数被压缩成脆弱的距离阈值，是聚类式流水线最大的自由度；业务先验\u201C恒为 2 人\u201D直接消灭它（n_clusters=2），通常立竿见影且零成本。" },
+  { scene:"第 3 章实验台里，把 AHC 距离阈值 τ 调得很大（很松），\n最先飙升的错误类型是：",
+    opts:["miss（漏检）","false alarm（误报）","confusion（混淆）","以上均匀上升"], ans:2,
+    exp:"τ 过松 → 不同说话人的簇被合并 → 被并掉的人整段\u201C有人但标错人\u201D= confusion。miss/FA 主要由 VAD 和重叠决定，和 τ 关系不大。" },
+  { scene:"一场会议 20% 的语音时长是两人同时说话。\n一个每时刻只输出单一标签的系统，DER 的理论下界大约是：",
+    opts:["0%，只要聚类够准","约 10%","约 20% 的\u201C重叠占比\u201D折算成的 miss","无法估计"], ans:2,
+    exp:"重叠时长内每帧都至少漏掉一个说话人：单标签范式的 miss 地板 ≈ 重叠部分在\u201C按人头计的参考语音总时长\u201D里的占比。这正是重叠感知 / EEND 存在的理由。" },
+  { scene:"DER 公式的分母是：",
+    opts:["录音总时长","参考标注的语音总时长（重叠按人头计双份）","系统输出的语音总时长","语音段的数量"], ans:1,
+    exp:"分母是 reference 里的 total speech（scored speech），两人重叠的 1 秒计 2 秒。所以静音很多的录音 DER 会显得偏高——分母小了。" },
+  { scene:"把切片窗长从 2s 缩到 0.5s，预期变化是：",
+    opts:["嵌入更稳、边界更准，全面变好","嵌入更吵、但说话人切换的时间边界可以更精细","嵌入更稳、边界更粗","没有影响，嵌入与窗长无关"], ans:1,
+    exp:"窗长是\u201C时间分辨率 vs 声纹稳定性\u201D的拍卖：短窗切换点定位更细，但半秒语音撑不起可靠的声纹统计，点云发散、聚类变难（实验台\u201C短窗发散\u201D按钮就是它）。" },
+  { scene:"系统 DER 从 12% 优化到 9%，但用户投诉反而变多：\n\u201C明明 3 个人开会，纪要里出现了 5 个说话人\u201D。原因最可能是：",
+    opts:["DER 算错了","DER 按时长加权，几段很短的\u201C多余说话人\u201D几乎不影响 DER，却严重伤害产品体验","用户听错了","RTTM 格式不兼容"], ans:1,
+    exp:"两个只说了几秒的\u201C幽灵簇\u201D在 DER 里只占几个百分点的零头，但\u201C人数数错\u201D对纪要产品是硬伤。所以要配 JER、说话人计数准确率一起看——指标要对齐产品语义。" }
+];
+const qState = { right:0, done:0 };
+function qRender(){
+  const list = $("q-list"); list.innerHTML = "";
+  qState.right = 0; qState.done = 0;
+  QUIZ.forEach((q,qi) => {
+    const card = document.createElement("div"); card.className = "quiz";
+    const sc = document.createElement("div"); sc.className = "scene";
+    sc.textContent = "第 " + (qi+1) + " 题\n" + q.scene;
+    card.appendChild(sc);
+    const opts = document.createElement("div"); opts.className = "opts";
+    let answered = false;
+    q.opts.forEach((o,oi) => {
+      const b = document.createElement("button"); b.textContent = o;
+      b.addEventListener("click", () => {
+        if (answered) return; answered = true;
+        qState.done++;
+        if (oi === q.ans){ b.classList.add("right"); qState.right++; }
+        else { b.classList.add("wrong"); opts.children[q.ans].classList.add("right"); }
+        const ex = document.createElement("div"); ex.className = "explain";
+        ex.innerHTML = (oi===q.ans ? "<b style='color:var(--ok)'>答对了。</b>" : "<b style='color:var(--bad)'>再看一眼。</b>") + q.exp;
+        card.appendChild(ex);
+        $("q-score").textContent = qState.right + " / " + qState.done;
+      });
+      opts.appendChild(b);
+    });
+    card.appendChild(opts); list.appendChild(card);
+  });
+  $("q-score").textContent = "0 / 0";
+}
+$("q-reset").addEventListener("click", qRender);
+
+/* ---------- 初始渲染 ---------- */
+hpRender(); lbOut(); lbRender(); drRender(); ovRender(); qRender();
+</script>
+</body>
+</html>

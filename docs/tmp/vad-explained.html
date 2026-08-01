@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 VAD：机器如何听出"有人在说话"</title>
+<style>
+:root{
+  --paper:#EDF1F4;
+  --card:#FFFFFF;
+  --ink:#14263A;
+  --ink-soft:#4A5D72;
+  --speech:#0E7C66;
+  --speech-soft:#DCEFE9;
+  --silence:#8FA0B0;
+  --alert:#C4483C;
+  --alert-soft:#F6E3E0;
+  --accent:#1F5FA8;
+  --line:#D4DCE3;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+  line-height:1.75;
+  font-size:16px;
+}
+.wrap{max-width:920px;margin:0 auto;padding:0 20px}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.88em;background:#E3E9EE;padding:1px 6px;border-radius:4px}
+pre{background:#14263A;color:#DDE7F0;padding:18px 20px;border-radius:10px;overflow-x:auto;font-size:13.5px;line-height:1.6;margin:14px 0}
+pre code{background:none;padding:0;color:inherit}
+pre .c{color:#7E96AD}
+pre .k{color:#7FC8A9}
+pre .s{color:#E8B36A}
+
+/* ---------- hero ---------- */
+header{
+  padding:54px 0 30px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#F6F8FA 0%,var(--paper) 100%);
+}
+.eyebrow{
+  font-family:var(--mono);font-size:12px;letter-spacing:.18em;
+  color:var(--accent);text-transform:uppercase;margin-bottom:12px;
+}
+h1{font-size:clamp(26px,4.5vw,40px);line-height:1.3;font-weight:700;letter-spacing:.01em}
+h1 .en{display:block;font-family:var(--mono);font-size:.42em;font-weight:400;color:var(--ink-soft);letter-spacing:.08em;margin-top:8px}
+.lede{margin-top:16px;max-width:640px;color:var(--ink-soft);font-size:17px}
+
+/* ---------- sections ---------- */
+section{padding:44px 0 8px}
+h2{font-size:clamp(20px,3vw,26px);margin-bottom:6px;display:flex;align-items:baseline;gap:12px}
+h2 .tag{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.1em;white-space:nowrap}
+h3{font-size:17px;margin:26px 0 8px}
+p{margin:12px 0;max-width:72ch}
+ul,ol{margin:10px 0 14px 1.4em;max-width:70ch}
+li{margin:5px 0}
+strong{font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:18px 0}
+.note{border-left:4px solid var(--accent);background:#E9F0F8;border-radius:0 10px 10px 0;padding:12px 18px;margin:16px 0;font-size:15px}
+.warn{border-left:4px solid var(--alert);background:var(--alert-soft)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13.5px;color:var(--ink-soft);margin:8px 0}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+/* ---------- demo controls ---------- */
+.controls{display:flex;flex-wrap:wrap;gap:18px 28px;margin:14px 0 6px;align-items:center}
+.ctrl{display:flex;flex-direction:column;gap:4px;font-size:13.5px;color:var(--ink-soft);min-width:180px;flex:1}
+.ctrl label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12.5px}
+.ctrl label b{color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+input[type=range]:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.btn{
+  font:600 14px/1 inherit;padding:10px 18px;border-radius:8px;border:1px solid var(--line);
+  background:var(--card);color:var(--ink);cursor:pointer;
+}
+button.btn:hover{border-color:var(--accent);color:var(--accent)}
+button.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.btn.primary:hover{background:#174a85;color:#fff}
+canvas{width:100%;height:auto;display:block;border-radius:10px;background:#FBFCFD;border:1px solid var(--line)}
+.stats{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+.stat{flex:1;min-width:130px;background:#F4F7F9;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.stat .v{font-family:var(--mono);font-size:20px;font-weight:700}
+.stat .l{font-size:12.5px;color:var(--ink-soft)}
+.stat.bad .v{color:var(--alert)}
+.stat.good .v{color:var(--speech)}
+
+/* ---------- pipeline ---------- */
+.pipe{display:flex;flex-wrap:wrap;gap:0;margin:18px 0;align-items:stretch}
+.pipe .step{
+  flex:1;min-width:150px;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;padding:14px 16px;cursor:pointer;position:relative;margin:6px;
+  transition:border-color .15s, box-shadow .15s;
+}
+.pipe .step:hover{border-color:var(--accent)}
+.pipe .step.active{border-color:var(--accent);box-shadow:0 0 0 3px #1F5FA826}
+.pipe .step .n{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.12em}
+.pipe .step .t{font-weight:600;font-size:15px;margin-top:2px}
+.pipe .step .s{font-size:12.5px;color:var(--ink-soft)}
+.pipe-detail{background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:18px 22px;margin:4px 6px 14px;font-size:15px}
+.pipe-detail h4{font-size:15px;margin-bottom:6px;color:var(--accent)}
+
+/* ---------- hangover demo ---------- */
+.frames{display:flex;gap:3px;flex-wrap:wrap;margin:8px 0}
+.fr{width:16px;height:26px;border-radius:3px;background:var(--silence)}
+.fr.sp{background:var(--speech)}
+.fr.cut{background:var(--alert)}
+.rowlab{font-family:var(--mono);font-size:12px;color:var(--ink-soft);margin-top:14px}
+
+/* ---------- tables ---------- */
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14.5px;background:var(--card);border-radius:10px;overflow:hidden}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:#E7EDF2;font-weight:600}
+td .y{color:var(--speech);font-weight:600}
+td .n{color:var(--alert);font-weight:600}
+.tbl-scroll{overflow-x:auto}
+
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:10px 0}
+details summary{cursor:pointer;font-weight:600;font-size:15px}
+details[open]{border-color:var(--accent)}
+details p{font-size:15px}
+
+footer{border-top:1px solid var(--line);margin-top:56px;padding:26px 0 40px;color:var(--ink-soft);font-size:13.5px}
+@media (max-width:600px){
+  .pipe .step{min-width:44%}
+  body{font-size:15px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">一文读懂 · 语音信号处理</div>
+    <h1>机器怎么听出"现在有人在说话"？
+      <span class="en">VAD — Voice Activity Detection 语音活动检测</span>
+    </h1>
+    <p class="lede">你对智能音箱说完一句话，它怎么知道你说完了、该去执行了？通话静默时，系统怎么知道可以不传数据省带宽？这些问题的答案都是同一个东西：VAD。下面这条波形就是它每天面对的世界——试着自己当一回 VAD。</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ================= HERO DEMO ================= -->
+<section id="demo">
+  <h2><span class="tag">动手</span>你来当一回 VAD：拖动阈值，切出语音段</h2>
+  <p>下面是一段模拟录音的<strong>逐帧能量</strong>（每帧 20ms）。灰色竖条是能量，底部色带是判决结果。最朴素的 VAD 就是一条线：<strong>能量高于阈值 → 语音，低于 → 静音</strong>。拖动两个滑块，观察判决怎么变：</p>
+
+  <div class="card">
+    <div class="controls">
+      <div class="ctrl">
+        <label><span>判决阈值 threshold</span><b id="thVal">-30 dB</b></label>
+        <input type="range" id="thSlider" min="-55" max="-5" value="-30" step="1" aria-label="判决阈值">
+      </div>
+      <div class="ctrl">
+        <label><span>环境噪声 noise floor</span><b id="nzVal">安静房间</b></label>
+        <input type="range" id="nzSlider" min="0" max="100" value="10" step="1" aria-label="环境噪声大小">
+      </div>
+      <button class="btn" id="regen">换一段音频</button>
+    </div>
+    <canvas id="waveCanvas" width="880" height="300" role="img" aria-label="逐帧能量与VAD判决可视化"></canvas>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--speech)"></i>判为语音</span>
+      <span><i class="dot" style="background:var(--silence)"></i>判为静音</span>
+      <span><i class="dot" style="background:var(--alert)"></i>判错的帧（与真实标签不符）</span>
+      <span><i class="dot" style="background:#1F5FA8"></i>阈值线（可拖滑块）</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v" id="stAcc">–</div><div class="l">帧判决准确率</div></div>
+      <div class="stat bad"><div class="v" id="stMiss">–</div><div class="l">漏检 miss（把语音当静音）</div></div>
+      <div class="stat bad"><div class="v" id="stFa">–</div><div class="l">误报 false alarm（把噪声当语音）</div></div>
+    </div>
+    <p id="demoHint" style="font-size:14px;color:var(--ink-soft);margin-top:10px"></p>
+  </div>
+
+  <div class="note">你刚刚体验到的两个困境，就是 VAD 全部技术演进的起点：<strong>① 阈值往下调，误报变多；往上调，漏检变多——鱼与熊掌。② 噪声一大，能量这个特征本身就失效了</strong>——语音和噪声在能量上重叠，阈值放哪儿都不对。记住这两点，后面的一切都是在解决它们。</p>
+</section>
+
+<!-- ================= WHY ================= -->
+<section id="why">
+  <h2><span class="tag">缘起</span>它为什么出现，解决什么问题</h2>
+  <p>VAD 的任务定义非常克制：<strong>给每一小段音频打一个二分类标签——"有人声"或"没人声"</strong>。它不关心说的是什么（那是 ASR 的事），不关心是谁在说（那是说话人识别的事），只回答"有没有"。这个看似简单的问题之所以重要，是因为它站在几乎所有语音系统的<strong>大门口</strong>：</p>
+  <div class="card">
+    <ul>
+      <li><strong>省带宽 / 省算力</strong>：这是 VAD 的出身。电话通话中约一半时间是听对方说，自己这端是静音。GSM、VoIP 编码器（如 G.729 Annex B）用 VAD 触发 <strong>DTX</strong>（不连续传输），静音期只发极小的舒适噪声参数，带宽省一半。今天同样的逻辑用在 ASR 前端：语音识别模型很贵，静音段根本不该送进去。</li>
+      <li><strong>端点检测（endpointing）</strong>：语音助手判断"你说完了"，本质是 VAD 检测到语音结束后持续了几百毫秒静音。切早了截断你的话，切晚了响应迟钝——这个体验差异用户感知极强。</li>
+      <li><strong>唤醒与功耗</strong>：耳机、音箱上常驻一个微瓦级的小 VAD，检测到人声才唤醒后面的大模型，否则电池撑不住。</li>
+      <li><strong>数据流水线</strong>：训练语音模型前，用 VAD 把几万小时录音里的有效语音切出来，是最基础的预处理。</li>
+    </ul>
+  </div>
+  <p><strong>边界也要说清</strong>：VAD 只做"有/无"判断。它不负责把你的声音和电视里的人声区分开（两者都是人声，VAD 都会报"有"），也不负责判断这句话是不是对设备说的。这些是它常被误解能做、实际做不了的事，后面"常见误区"一节展开。</p>
+</section>
+
+<!-- ================= PIPELINE ================= -->
+<section id="how">
+  <h2><span class="tag">机制</span>一条主线：帧 → 特征 → 判决 → 平滑</h2>
+  <p>无论是 1990 年代的能量阈值法，还是今天的神经网络 VAD（如 Silero VAD），骨架都是同一条流水线。<strong>点击每一步</strong>看它在做什么、为什么必须存在：</p>
+
+  <div class="pipe" id="pipe" role="tablist" aria-label="VAD 处理流水线">
+    <div class="step active" data-k="0" role="tab" tabindex="0"><div class="n">STEP 1</div><div class="t">分帧</div><div class="s">10–30ms 一帧</div></div>
+    <div class="step" data-k="1" role="tab" tabindex="0"><div class="n">STEP 2</div><div class="t">提特征</div><div class="s">能量 → 频谱 → 学出来</div></div>
+    <div class="step" data-k="2" role="tab" tabindex="0"><div class="n">STEP 3</div><div class="t">逐帧判决</div><div class="s">阈值 / GMM / DNN</div></div>
+    <div class="step" data-k="3" role="tab" tabindex="0"><div class="n">STEP 4</div><div class="t">时序平滑</div><div class="s">hangover 状态机</div></div>
+  </div>
+  <div class="pipe-detail" id="pipeDetail" role="tabpanel"></div>
+
+  <h3>为什么特征一路从"能量"进化到"神经网络"</h3>
+  <p>回看首屏实验：噪声一大，能量就失效。VAD 五十年的历史就是不断寻找<strong>"人声有、噪声没有"的特征</strong>：</p>
+  <div class="tbl-scroll"><table>
+    <tr><th>时代</th><th>特征 / 方法</th><th>核心假设</th><th>被什么打败</th></tr>
+    <tr><td>朴素</td><td>短时能量 + 过零率（ZCR）</td><td>语音比背景响；清音过零率高</td><td>任何非平稳噪声：关门声、键盘声都比语音响</td></tr>
+    <tr><td>经典</td><td>频谱特征 + 统计模型（如 WebRTC VAD 的 GMM）</td><td>语音和噪声在各子带上的分布不同，可用高斯混合建模，并<strong>在线更新噪声估计</strong></td><td>babble noise（一群人说话的背景音）——噪声本身就是语音，分布假设崩溃</td></tr>
+    <tr><td>现代</td><td>神经网络直接学（Silero VAD、各家端到端模型）</td><td>不做人工假设，从海量"带噪语音 + 标签"里学出人声的判别性表示（谐波结构、共振峰轨迹、时序模式）</td><td>训练分布外的场景仍会退化；且模型更大、有延迟成本</td></tr>
+  </table></div>
+  <p>注意这不是"新的淘汰旧的"：<strong>手表里的常驻 VAD 至今仍是能量法</strong>（因为只有几微瓦的功耗预算），会议软件里则是神经网络 VAD。选哪个是工程取舍，不是先进程度排名。</p>
+</section>
+
+<!-- ================= HANGOVER ================= -->
+<section id="hangover">
+  <h2><span class="tag">动手</span>Hangover：为什么逐帧判决不能直接用</h2>
+  <p>就算逐帧判决准确率高达 95%，直接使用仍是灾难。语音里天然有<strong>停顿</strong>（"今天……呃……天气不错"）、<strong>弱音尾巴</strong>（句尾的轻声、摩擦音能量很低），逐帧看全是"静音"，一刀切下去，句子就被剁碎了。下面每个方块是一帧，点按钮看平滑前后的差别：</p>
+
+  <div class="card">
+    <div class="controls">
+      <button class="btn primary" data-ho="0">无平滑（raw）</button>
+      <button class="btn" data-ho="8">hangover = 160ms</button>
+      <button class="btn" data-ho="20">hangover = 400ms</button>
+    </div>
+    <div class="rowlab">真实情况（一句话，中间有个自然停顿，句尾是弱摩擦音）：</div>
+    <div class="frames" id="hoTruth" aria-label="真实语音标签"></div>
+    <div class="rowlab">VAD 输出（<span id="hoLabel">无平滑</span>）：</div>
+    <div class="frames" id="hoOut" aria-label="VAD输出"></div>
+    <p id="hoDesc" style="font-size:14.5px;margin-top:14px"></p>
+  </div>
+
+  <p>Hangover 的实现通常是一个小状态机：判到语音后进入"语音态"，之后即使连续若干帧判为静音，也<strong>再等 N 帧才真正切换到静音态</strong>；反向也常要求"连续 M 帧语音才进入语音态"（防止一声咳嗽触发）。两个参数直接决定体验：</p>
+  <ul>
+    <li>N 太小 → 句子被停顿切碎，ASR 收到残句，识别结果支离破碎；</li>
+    <li>N 太大 → 语音助手在你说完后傻等半天才响应，通话软件把你静音后的杂音继续外放。</li>
+  </ul>
+  <div class="note">这是 VAD 最反直觉的一课：<strong>产品体验的好坏往往不取决于逐帧准确率，而取决于这个不起眼的平滑逻辑</strong>。调 VAD 的大部分时间是在调 hangover 和 endpointing 超时，而不是换模型。</div>
+</section>
+
+<!-- ================= EXAMPLE ================= -->
+<section id="code">
+  <h2><span class="tag">最小例子</span>20 行代码跑通一个真 VAD</h2>
+  <p>用 Google 开源的 <code>webrtcvad</code>（GMM 方案，几乎零依赖、CPU 上快到可以忽略）切一个 WAV 文件。这是可以直接验证前文所有概念的最小实验：</p>
+<pre><code><span class="c"># pip install webrtcvad</span>
+<span class="k">import</span> webrtcvad, wave
+
+vad = webrtcvad.Vad(<span class="s">2</span>)   <span class="c"># aggressiveness 0~3：越大越激进，误报少但漏检多</span>
+                          <span class="c"># —— 这就是首屏那根"阈值线"的工程化版本</span>
+
+wf = wave.open(<span class="s">"speech.wav"</span>, <span class="s">"rb"</span>)   <span class="c"># 要求：16kHz、16bit、单声道</span>
+rate = wf.getframerate()
+frame_ms = <span class="s">20</span>                        <span class="c"># 每帧 20ms（仅支持 10/20/30ms）</span>
+frame_bytes = <span class="k">int</span>(rate * frame_ms / <span class="s">1000</span>) * <span class="s">2</span>
+
+t = <span class="s">0.0</span>
+<span class="k">while</span> <span class="k">True</span>:
+    frame = wf.readframes(frame_bytes // <span class="s">2</span>)
+    <span class="k">if</span> <span class="k">len</span>(frame) &lt; frame_bytes: <span class="k">break</span>
+    is_speech = vad.is_speech(frame, rate)      <span class="c"># 逐帧判决：True / False</span>
+    <span class="k">print</span>(<span class="s">f"{t:6.2f}s  {'SPEECH' if is_speech else '  --  '}"</span>)
+    t += frame_ms / <span class="s">1000</span>
+<span class="c"># 注意：输出会在词间隙"闪烁"——webrtcvad 不带 hangover，需要你自己加，</span>
+<span class="c"># 这正是上一节状态机存在的意义。</span></code></pre>
+  <p>三个可动手验证的实验：① 把 aggressiveness 从 0 调到 3，观察漏检/误报此消彼长；② 给音频叠加白噪声，看 GMM 什么时候撑不住；③ 换 <a href="https://github.com/snakers4/silero-vad">Silero VAD</a>（PyTorch，输出的是 0~1 概率而非硬判决）跑同一段带噪音频，直观感受神经网络方案的差距。</p>
+</section>
+
+<!-- ================= ENGINEERING ================= -->
+<section id="eng">
+  <h2><span class="tag">落地</span>工程实现：真实项目里它长什么样</h2>
+
+  <h3>先划清边界：输入、输出、前置条件</h3>
+  <div class="card">
+    <div class="tbl-scroll"><table>
+      <tr><th style="width:22%">维度</th><th>约定</th></tr>
+      <tr><td><strong>输入</strong></td><td>PCM 音频。绝大多数 VAD 实现（webrtcvad、Silero）要求 <strong>16kHz / 单声道 / 16-bit</strong>；离线文件是 MP3/双声道/44.1kHz 是常态，<strong>重采样和转声道是你的前置责任</strong>，不是 VAD 的。流式场景则是固定长度的帧（chunk）序列。</td></tr>
+      <tr><td><strong>输出</strong></td><td>两种形态：① 逐帧布尔值/概率（流式场景，供下游状态机消费）；② <strong>时间戳段列表</strong> <code>[{start, end}, ...]</code>（离线场景，最常用的交付物）。团队协作时，把输出定成"秒为单位的段列表 JSON"能省很多沟通成本。</td></tr>
+      <tr><td><strong>前置条件</strong></td><td>音量不能过低（数字增益过小的录音会让一切 VAD 漏检，先做归一化/AGC）；如果环境噪声极端，考虑在 VAD 前挂一级降噪——但注意降噪会改变波形，评测要在降噪后的信号上做。</td></tr>
+      <tr><td><strong>不该由它解决</strong></td><td>区分目标说话人和电视人声（personal VAD / 说话人验证的事）；判断"这句话是不是对我说的"（语义层）；音乐中的人声检测（歌声和语音分布差异大，需要专门模型）；把噪声去掉（那是降噪）。把这些需求塞给 VAD，方案一定失败。</td></tr>
+    </table></div>
+  </div>
+
+  <h3>最小实现路径：一条数据流走通</h3>
+  <p>离线批处理（最常见的落地形态）的主链路只有四步：<strong>输入规整 → 逐帧打分 → 段整形 → 输出时间戳</strong>。下面用 Silero VAD 走通全程——它输出概率而非硬判决，正好把"阈值"和"平滑"两个决策点显式地留在你手里：</p>
+
+<pre><code><span class="c"># pip install silero-vad soundfile   (Python 3.8+，CPU 即可)</span>
+<span class="k">from</span> silero_vad <span class="k">import</span> load_silero_vad, read_audio, get_speech_timestamps
+
+model = load_silero_vad()
+
+<span class="c"># ① 输入规整：read_audio 内部完成重采样到 16kHz + 转单声道</span>
+wav = read_audio(<span class="s">"meeting.mp3"</span>, sampling_rate=<span class="s">16000</span>)
+
+<span class="c"># ② 逐帧打分 + ③ 段整形：库把状态机封装成了四个关键参数</span>
+segments = get_speech_timestamps(
+    wav, model,
+    threshold=<span class="s">0.5</span>,                 <span class="c"># 语音概率阈值：首屏那根线</span>
+    min_speech_duration_ms=<span class="s">250</span>,    <span class="c"># 短于此的"语音"当误触发丢弃（防咳嗽）</span>
+    min_silence_duration_ms=<span class="s">300</span>,   <span class="c"># 静音超过此值才切段：即 hangover</span>
+    speech_pad_ms=<span class="s">30</span>,              <span class="c"># 段两端外扩，保住弱音头尾</span>
+    return_seconds=<span class="k">True</span>,
+)
+
+<span class="c"># ④ 输出交付：段列表就是下游（切音频/送 ASR/存库）的通用接口</span>
+<span class="k">for</span> seg <span class="k">in</span> segments:
+    <span class="k">print</span>(<span class="s">f"{seg['start']:8.2f}s → {seg['end']:8.2f}s"</span>)</code></pre>
+
+  <p>注意这段代码里<strong>没有 try/except、没有默认值兜底</strong>：输入文件坏了就该抛错让上游知道，静默降级只会把问题埋到下游 ASR 的离奇结果里。工程上真正值得写的健壮性是：入口处<strong>断言采样率和声道数</strong>，出口处对"零段输出"打日志报警（大概率是音量问题，不是真的全程静音）。</p>
+
+  <p>流式场景（实时通话、语音助手）的差别只在数据形态：输入变成 30ms 一帧的循环，你自己维护那个 hangover 状态机（上一节演示的逻辑，约 20 行代码），逐帧吐出 <code>speech_start / speech_end</code> 事件。主链路思想完全相同，不再重复。</p>
+
+  <h3>方案选型：四条路线的真实成本</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>方案</th><th>适用场景</th><th>主要成本</th><th>关键限制</th><th>不推荐用于</th></tr>
+    <tr>
+      <td><strong>能量阈值</strong><br><span style="font-size:12.5px;color:var(--ink-soft)">自己写 ~30 行</span></td>
+      <td>MCU/嵌入式常驻监听；已知安静、可控的采音环境</td>
+      <td>几乎为零（无依赖、微瓦级）</td>
+      <td>噪声一变就失效，必须配噪声底自适应</td>
+      <td class="n">任何服务器端 Python 项目——省下的算力毫无意义，精度损失却是真的</td>
+    </tr>
+    <tr>
+      <td><strong>webrtcvad</strong><br><span style="font-size:12.5px;color:var(--ink-soft)">GMM，pip 装完 &lt;1MB</span></td>
+      <td>CPU 极紧张的实时流式；每路只能给零点几毫秒预算的高并发网关</td>
+      <td>极低（单帧 &lt;0.1ms）；但 hangover 要自己写</td>
+      <td>只有 4 档硬判决、无概率输出；babble noise 下误报严重；仅支持 8/16/32/48kHz</td>
+      <td class="n">离线批处理（没理由不用更准的）、播客/会议这类多人背景音场景</td>
+    </tr>
+    <tr>
+      <td><strong>Silero VAD</strong><br><span style="font-size:12.5px;color:var(--ink-soft)">神经网络，~2MB，MIT</span></td>
+      <td><strong>Python 项目的默认答案</strong>：离线切分、ASR 前端、数据清洗；CPU 单帧 ~1ms，也能跑流式</td>
+      <td>依赖 PyTorch（或用其 ONNX 版免掉）；比 webrtcvad 慢一个量级但绝对值仍很小</td>
+      <td>训练分布外（如远场重混响、儿童语音）会退化；流式模式有 ~100ms 级感知延迟</td>
+      <td class="n">无法装 Python/ONNX 运行时的极端受限设备</td>
+    </tr>
+    <tr>
+      <td><strong>pyannote segmentation</strong><br><span style="font-size:12.5px;color:var(--ink-soft)">重型模型，需 GPU 才快</span></td>
+      <td>本来就要做说话人分离/重叠语音检测的项目，VAD 是其副产品</td>
+      <td>模型大、依赖重、离线许可需注意</td>
+      <td>为 diarization 设计，纯 VAD 用它是杀鸡用牛刀</td>
+      <td class="n">只需要"有没有人声"的一切场景</td>
+    </tr>
+  </table></div>
+  <div class="note">还有一条隐藏选项：<strong>如果下游 ASR 服务本身带 VAD/端点检测</strong>（云厂商流式 ASR 基本都带，faster-whisper 内置的就是 Silero），先确认它是否够用，别在管道里叠两层 VAD——两层平滑逻辑互相打架是常见的诡异 bug 来源。</div>
+
+  <h3>三个典型场景的推荐路径</h3>
+  <div class="card">
+    <p><strong>场景一：离线批处理</strong>（切播客、清洗训练数据、给录音打时间戳）<br>
+    → <strong>Silero VAD，别犹豫</strong>。离线意味着延迟和算力都不是约束，此时唯一重要的是噪声下的准确率，神经网络方案全面占优。调参重点：数据要送 ASR 就调大 <code>speech_pad_ms</code>（漏字比多切一点噪声更伤），做统计分析则收紧 <code>threshold</code> 减少误报。</p>
+    <p><strong>场景二：实时语音助手 / 通话端点检测</strong><br>
+    → <strong>Silero 流式模式为主，CPU 预算极紧才退回 webrtcvad</strong>。这个场景的胜负手不在模型而在状态机参数：endpointing 超时 500–800ms 起步，然后用真人试用来调，指标是"被截断次数"和"响应等待感"，不是帧准确率。若用云 ASR，优先用它内置的端点检测，本地 VAD 只做粗筛省流量。</p>
+    <p><strong>场景三：高并发服务端网关</strong>（几百路音频同时进来，先滤掉静音再分发）<br>
+    → <strong>级联：webrtcvad 粗筛 + Silero 精判</strong>。第一级用 aggressiveness=1（宁可误报不可漏检）把明显静音挡掉，通常能滤掉一半以上流量；第二级只对存活的段跑 Silero。这样单路成本接近 webrtcvad，精度接近 Silero——工业上省钱的标准做法。</p>
+  </div>
+  <p>选型的判断顺序可以压缩成一句话：<strong>先看延迟/算力预算划掉不可行的，再看噪声场景在剩下的里选最准的，最后把调参精力全部投给平滑与端点参数</strong>——这与前文的主线完全一致：模型决定下限，状态机决定体验。</p>
+</section>
+
+<!-- ================= MISCONCEPTIONS ================= -->
+<section id="vs">
+  <h2><span class="tag">辨析</span>相近概念与常见误区</h2>
+  <div class="tbl-scroll"><table>
+    <tr><th>概念</th><th>回答的问题</th><th>和 VAD 的关系</th></tr>
+    <tr><td><strong>VAD</strong></td><td>这一帧<strong>有没有</strong>人声？</td><td>—</td></tr>
+    <tr><td>端点检测 Endpointing</td><td>这句话<strong>什么时候开始、什么时候结束</strong>？</td><td>建立在 VAD 之上，加上"静音持续多久算说完"的策略层</td></tr>
+    <tr><td>唤醒词检测 KWS</td><td>刚才说的是不是<strong>"Hey Siri"</strong>？</td><td>关心内容，比 VAD 重得多；常由 VAD 先把关再触发</td></tr>
+    <tr><td>说话人分离 Diarization</td><td><strong>谁</strong>在什么时候说话？</td><td>第一步往往就是跑 VAD，再对语音段聚类分人</td></tr>
+    <tr><td>降噪 / 语音增强</td><td>怎么把噪声<strong>去掉</strong>？</td><td>互补：降噪改善音频本身，VAD 只打标签不改音频；实践中常降噪后再 VAD</td></tr>
+  </table></div>
+
+  <details>
+    <summary>误区一："VAD 能过滤掉电视里的说话声"</summary>
+    <p>不能。电视人声也是人声，VAD 的定义就是检测人声，它会如实报告"有语音"。区分"目标说话人 vs 其他人声"是 <strong>personal VAD / 目标说话人提取</strong>的课题，需要注册说话人特征，是另一套系统。</p>
+  </details>
+  <details>
+    <summary>误区二："准确率 98% 的 VAD 一定比 95% 的好用"</summary>
+    <p>不一定。第一，帧准确率会被"静音占大头"的数据灌水——一段 90% 是静音的录音，全判静音就有 90% 准确率。看 VAD 要看 <strong>miss rate 和 false alarm rate 两条曲线（或 ROC/DET 曲线）</strong>，并且在你的目标噪声场景下测。第二，如上一节所说，产品体验还取决于平滑策略和延迟，单看逐帧指标会选错模型。</p>
+  </details>
+  <details>
+    <summary>误区三："上神经网络 VAD 总是更好"</summary>
+    <p>要看约束。神经网络 VAD 在低信噪比、babble noise 下碾压传统方法，但它有模型体积、算力、以及<strong>前瞻上下文带来的固有延迟</strong>。在耳机常驻监听（功耗预算以微瓦计）或对延迟极敏感的场合，能量法/GMM 仍是正确答案。工程上常见做法是<strong>级联</strong>：小 VAD 常驻粗筛，大 VAD 精判。</p>
+  </details>
+  <details>
+    <summary>误区四："VAD 阈值调一次就完了"</summary>
+    <p>环境是会变的。安静办公室调好的阈值，到了地铁上就是灾难。稍好的系统都会做<strong>噪声底自适应</strong>（跟踪最近的最低能量作为噪声估计，阈值随之浮动），WebRTC VAD 的 GMM 也在线更新噪声模型。你在首屏实验里手动干的事（噪声变大→被迫抬高阈值），真实系统必须自动完成。</p>
+  </details>
+</section>
+
+<!-- ================= TRANSFER ================= -->
+<section id="use">
+  <h2><span class="tag">迁移</span>拿去就能用的决策清单</h2>
+  <div class="card">
+    <ol>
+      <li><strong>先问场景</strong>：功耗/延迟预算多少？噪声环境是什么（安静房间 / 车载 / 街头 / 多人环境）？误报和漏检哪个更致命？（通话省带宽宁可误报，ASR 端点宁可漏检慢一点。）</li>
+      <li><strong>选方案</strong>：极限功耗 → 能量法；CPU 实时、中等噪声 → <code>webrtcvad</code>；离线处理或高噪声 → Silero VAD 等神经网络方案；已在用 ASR 大模型 → 很多 ASR（如 Whisper 的第三方 pipeline）内置 VAD，别重复造。</li>
+      <li><strong>定帧长</strong>：10–30ms 是行业惯例；实时交互取短（延迟低），离线处理取长（更稳）。</li>
+      <li><strong>调平滑，而不是死磕模型</strong>：speech→silence 的 hangover 通常 200–500ms 起步；endpointing 超时按产品体验调（语音助手常见 500–800ms）。</li>
+      <li><strong>用真实噪声评测</strong>：拿目标场景的录音，画 miss / false-alarm 曲线，别只看总准确率。</li>
+    </ol>
+  </div>
+  <p>最后收束回那条主线：VAD 是一个被<strong>"特征在噪声下是否仍可分" + "误报漏检如何取舍" + "时序如何平滑"</strong>三个问题完全定义的小而美的领域。理解了首屏那条阈值线为什么不够用，你就理解了它的全部演进逻辑——之后无论遇到哪个具体实现，都只是在这三个问题上给出了不同答案而已。</p>
+</section>
+
+</div>
+
+<footer>
+  <div class="wrap">《一文读懂》· VAD 语音活动检测 · 单文件离线可用 · 交互演示为示意性合成数据，非真实音频</div>
+</footer>
+
+<script>
+/* ================= HERO DEMO ================= */
+(function(){
+  const cv = document.getElementById('waveCanvas');
+  const ctx = cv.getContext('2d');
+  const thS = document.getElementById('thSlider');
+  const nzS = document.getElementById('nzSlider');
+  const thVal = document.getElementById('thVal');
+  const nzVal = document.getElementById('nzVal');
+  const N = 220;               // 帧数
+  let truth = [], cleanE = [];  // 真实标签、纯净能量(dB)
+
+  function genAudio(){
+    truth = new Array(N).fill(0);
+    cleanE = new Array(N).fill(-60);
+    // 随机生成 3~4 个语音段
+    let pos = 8 + Math.floor(Math.random()*10);
+    const segs = 3 + Math.floor(Math.random()*2);
+    for(let s=0;s<segs && pos<N-30;s++){
+      const len = 25 + Math.floor(Math.random()*30);
+      for(let i=0;i<len && pos+i<N-5;i++){
+        truth[pos+i]=1;
+        // 语音包络：起振-主体波动-弱尾
+        const r = i/len;
+        let base = -18 + Math.sin(i*0.9)*4 + (Math.random()*6-3);
+        if(r<0.08) base -= (0.08-r)*180;        // 起振
+        if(r>0.75) base -= (r-0.75)*55;          // 弱音尾巴
+        // 段中自然微停顿
+        if(len>35 && r>0.45 && r<0.52) base -= 20;
+        cleanE[pos+i]=Math.max(-58, base);
+      }
+      pos += len + 12 + Math.floor(Math.random()*20);
+    }
+    // 偶发瞬态噪声（关门声）
+    const k = 4+Math.floor(Math.random()*(N-10));
+    if(truth[k]===0 && truth[k+1]===0){ cleanE[k]=-14; cleanE[k+1]=-20; }
+  }
+
+  function noiseFloorDb(){ return -55 + (nzS.value/100)*38; } // -55 ~ -17 dB
+
+  function frameEnergy(i){
+    const nf = noiseFloorDb() + (Math.random()*4-2)*0 ; // 噪声抖动在渲染时加
+    return 10*Math.log10(Math.pow(10,cleanE[i]/10) + Math.pow(10,(noiseFloorDb()+ (hash(i)*4-2))/10));
+  }
+  // 稳定伪随机，避免每次渲染闪烁
+  function hash(i){ const x=Math.sin(i*127.1+seed)*43758.5453; return x-Math.floor(x); }
+  let seed = 1;
+
+  function render(){
+    const th = +thS.value;
+    thVal.textContent = th + ' dB';
+    const nz = +nzS.value;
+    nzVal.textContent = nz<25?'安静房间':nz<55?'咖啡馆':nz<80?'街边':'地铁站台';
+
+    const W=cv.width,H=cv.height, plotH=H-46, dbMin=-60, dbMax=0;
+    const bw = W/N;
+    ctx.clearRect(0,0,W,H);
+    const y = db=> (1-(db-dbMin)/(dbMax-dbMin))*plotH;
+
+    let miss=0,fa=0,spTotal=0,silTotal=0,correct=0;
+    for(let i=0;i<N;i++){
+      const e = frameEnergy(i);
+      const decide = e>=th ? 1:0;
+      const t = truth[i];
+      if(t===1){spTotal++; if(decide===0)miss++;} else {silTotal++; if(decide===1)fa++;}
+      if(decide===t)correct++;
+      // 能量条
+      ctx.fillStyle = t===1 ? '#B9D8CE' : '#CBD5DE';
+      ctx.fillRect(i*bw+0.5, y(e), bw-1, plotH-y(e));
+      // 判决色带
+      let c = decide===1? '#0E7C66' : '#8FA0B0';
+      if(decide!==t) c='#C4483C';
+      ctx.fillStyle=c;
+      ctx.fillRect(i*bw+0.5, plotH+14, bw-1, 18);
+    }
+    // 阈值线
+    ctx.strokeStyle='#1F5FA8'; ctx.lineWidth=2; ctx.setLineDash([7,5]);
+    ctx.beginPath(); ctx.moveTo(0,y(th)); ctx.lineTo(W,y(th)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#1F5FA8'; ctx.font='600 13px ui-monospace,monospace';
+    ctx.fillText('threshold '+th+' dB', 8, y(th)-6);
+    ctx.fillStyle='#4A5D72'; ctx.font='12px ui-monospace,monospace';
+    ctx.fillText('逐帧判决 →', 8, plotH+11);
+
+    const acc=(correct/N*100), m=spTotal?miss/spTotal*100:0, f=silTotal?fa/silTotal*100:0;
+    document.getElementById('stAcc').textContent=acc.toFixed(0)+'%';
+    document.getElementById('stMiss').textContent=m.toFixed(0)+'%';
+    document.getElementById('stFa').textContent=f.toFixed(0)+'%';
+
+    const hint=document.getElementById('demoHint');
+    if(nz>=70) hint.textContent='💡 注意：噪声底已经接近语音能量，阈值放哪儿都会大量出错——"能量"这个特征在此失效，这正是需要更强特征（频谱、神经网络）的原因。';
+    else if(m>25) hint.textContent='💡 阈值偏高：句尾的弱音、轻声全被漏掉了（观察语音段尾部的红色）。漏检对 ASR 是致命的——话被切掉了。';
+    else if(f>25) hint.textContent='💡 阈值偏低：噪声抖动和瞬态声被当成了语音。误报浪费算力/带宽，还会让端点检测迟迟不肯"收工"。';
+    else hint.textContent='✅ 当前噪声下这个阈值还不错。现在把噪声滑块拉大试试——看看它多快崩掉。';
+  }
+
+  document.getElementById('regen').addEventListener('click',()=>{seed=Math.random()*1000;genAudio();render();});
+  thS.addEventListener('input',render);
+  nzS.addEventListener('input',render);
+  genAudio(); render();
+})();
+
+/* ================= PIPELINE ================= */
+(function(){
+  const detail=document.getElementById('pipeDetail');
+  const texts=[
+    '<h4>STEP 1 · 分帧：为什么是 10–30ms？</h4>语音是连续变化的信号，但在 10–30ms 的窗口内可以近似看作平稳（一个音素的姿态基本不变），这是所有后续分析成立的前提。帧太短，特征统计不稳；帧太长，一帧里混进多个音素、判决也来不及。工程上常取 20ms 帧长 + 10ms 帧移（相邻帧重叠，判决更平滑）。<code>webrtcvad</code> 只接受 10/20/30ms，就是这个惯例的体现。',
+    '<h4>STEP 2 · 提特征：把"人声的指纹"算出来</h4>目标是找到人声有、噪声没有的性质。能量最便宜；<strong>过零率</strong>帮助抓住能量低但过零频繁的清音（s、f 等）；再往上是子带频谱、谱熵（语音频谱有结构、白噪声谱熵高）、基频/谐波（浊音有明显的谐波梳齿，多数噪声没有）。神经网络方案则直接吃频谱图（如 log-mel），让网络自己学出这些"指纹"，因此能捕捉人工特征描述不了的细微模式。',
+    '<h4>STEP 3 · 逐帧判决：从一条线到一个概率</h4>朴素法是阈值比较；WebRTC VAD 对 6 个子带各建两个 GMM（语音模型 vs 噪声模型），比较似然比，并持续在线更新噪声模型以适应环境；神经网络输出 0~1 的<strong>语音概率</strong>，阈值留给使用者定——这很重要，因为不同应用要的工作点不同（回想首屏：省带宽场景和 ASR 场景对误报/漏检的容忍完全相反）。',
+    '<h4>STEP 4 · 时序平滑：从"帧"回到"话"</h4>逐帧结果充满毛刺：词间停顿、弱音尾巴、偶发误判。Hangover 状态机负责把帧级判决整形成人类意义上的"一段话"：进入语音态要连续 M 帧确认（防咳嗽误触发），退出语音态要额外等 N 帧（防停顿切碎句子）。下一节有交互演示——这一步对产品体验的影响常常大于模型本身。'
+  ];
+  const steps=[...document.querySelectorAll('.pipe .step')];
+  function show(k){
+    steps.forEach(s=>s.classList.toggle('active',+s.dataset.k===k));
+    detail.innerHTML=texts[k];
+  }
+  steps.forEach(s=>{
+    s.addEventListener('click',()=>show(+s.dataset.k));
+    s.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show(+s.dataset.k);}});
+  });
+  show(0);
+})();
+
+/* ================= HANGOVER DEMO ================= */
+(function(){
+  const M=60;
+  // 真实：一句话 5..50，中间 24..29 是自然停顿(仍属同一句)，46..50 弱音尾
+  const truth=new Array(M).fill(0);
+  for(let i=5;i<=50;i++)truth[i]=1;
+  // raw 判决：停顿处判静音，弱尾漏检，另有零星误判
+  const raw=truth.slice();
+  for(let i=24;i<=29;i++)raw[i]=0;
+  for(let i=46;i<=50;i++)raw[i]=0;
+  raw[12]=0; raw[36]=0; raw[55]=1;
+
+  const truthEl=document.getElementById('hoTruth');
+  const outEl=document.getElementById('hoOut');
+  truth.forEach(v=>{const d=document.createElement('div');d.className='fr'+(v?' sp':'');truthEl.appendChild(d);});
+
+  function smooth(ho){
+    if(ho===0)return raw.slice();
+    const out=[];let cnt=999;
+    for(let i=0;i<M;i++){
+      if(raw[i]===1){cnt=0;out.push(1);}
+      else{cnt++;out.push(cnt<=ho?1:0);}
+    }
+    return out;
+  }
+  const desc={
+    0:'⚠️ 无平滑：一句话被自然停顿切成了两段（红色 = 与真实不符的帧），句尾弱音整个丢失，中间还有零星闪烁。把这个直接喂给 ASR，得到的是三截残句。',
+    8:'✅ hangover 160ms（8 帧）：短停顿和零星误判被"续"上了，句子基本完整；但注意句尾——弱音尾巴仍有部分被切掉，且句末那次孤立误报也被延长了。',
+    20:'🤔 hangover 400ms（20 帧）：句子完全连上了，但代价是语音段结束后拖了一条长尾——端点检测会因此晚 0.4 秒才确认"说完了"，助手响应变慢。没有免费的午餐，只有面向场景的取舍。'
+  };
+  function render(ho){
+    const out=smooth(ho);
+    outEl.innerHTML='';
+    out.forEach((v,i)=>{
+      const d=document.createElement('div');
+      d.className='fr'+(v!==truth[i]?' cut':(v?' sp':''));
+      outEl.appendChild(d);
+    });
+    document.getElementById('hoDesc').textContent=desc[ho];
+    document.getElementById('hoLabel').textContent= ho===0?'无平滑':'hangover '+ho*20+'ms';
+    document.querySelectorAll('[data-ho]').forEach(b=>b.classList.toggle('primary',+b.dataset.ho===ho));
+  }
+  document.querySelectorAll('[data-ho]').forEach(b=>b.addEventListener('click',()=>render(+b.dataset.ho)));
+  render(0);
+})();
+</script>
+</body>
+</html>

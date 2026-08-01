@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 pyannote.audio · 说话人分割</title>
+<style>
+:root{
+  --bg:#0A0D18;
+  --bg2:#0E1220;
+  --panel:#141a2b;
+  --panel2:#1a2135;
+  --line:rgba(255,255,255,.09);
+  --line-strong:rgba(255,255,255,.16);
+  --ink:#E8EBF5;
+  --muted:#828da8;
+  --muted2:#5f6884;
+  /* speaker colormap (spectrogram-derived) */
+  --s0:#34E0D0;
+  --s1:#F4B740;
+  --s2:#FF6B81;
+  --s3:#9B8CFF;
+  --s4:#57C7FF;
+  --wave:#3a4562;
+  --accent:#F4B740;
+  --phosphor:#EAF6FF;
+  --ok:#4ADE80;
+  --bad:#FF6B81;
+  --mono:ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'PingFang SC','Microsoft YaHei',sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:var(--sans);line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  background-image:
+    radial-gradient(900px 500px at 82% -8%,rgba(52,224,208,.07),transparent 60%),
+    radial-gradient(700px 500px at 8% 4%,rgba(155,140,255,.06),transparent 55%);
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+::selection{background:rgba(244,183,64,.28)}
+
+/* ---------- type ---------- */
+h1,h2,h3{font-family:var(--mono);font-weight:600;letter-spacing:-.02em;line-height:1.15}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.34em;text-transform:uppercase;color:var(--accent)}
+.mono{font-family:var(--mono)}
+code,kbd{font-family:var(--mono);font-size:.9em}
+p{color:#c6cce0}
+a{color:var(--s0);text-decoration:none;border-bottom:1px solid rgba(52,224,208,.35)}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 30px;position:relative}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:18px 0;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.topbar .brand{color:var(--ink)}
+.topbar .brand b{color:var(--accent)}
+.hero h1{font-size:clamp(30px,5.4vw,54px);margin:16px 0 8px}
+.hero h1 .k{color:var(--s0)}
+.hero .lede{font-size:17px;max-width:640px;color:#b7bfd8}
+.hero .taskline{display:inline-flex;gap:10px;align-items:center;font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:22px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:999px;padding:4px 11px;background:rgba(255,255,255,.02)}
+.chip.in{color:var(--phosphor);border-color:var(--line-strong)}
+.chip.out{color:var(--accent);border-color:rgba(244,183,64,.4)}
+.arrow{color:var(--muted)}
+
+/* ---------- diarization console (signature) ---------- */
+.console{margin-top:34px;border:1px solid var(--line-strong);border-radius:14px;background:linear-gradient(180deg,#0f1424,#0c101c);
+  box-shadow:0 30px 80px -40px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden}
+.console .head{display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--muted)}
+.console .head .dot{width:8px;height:8px;border-radius:50%;background:var(--s2);display:inline-block;margin-right:6px;box-shadow:0 0 8px var(--s2)}
+.console .head .file{color:var(--phosphor)}
+.console .body{padding:16px 16px 18px}
+
+.timeline{position:relative;user-select:none}
+.ruler{position:relative;height:16px;font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px}
+.ruler span{position:absolute;transform:translateX(-50%);top:0}
+.ruler span::before{content:"";position:absolute;left:50%;top:13px;width:1px;height:5px;background:var(--line-strong)}
+
+.wavelane{height:54px;position:relative;border-radius:6px;background:rgba(255,255,255,.015);overflow:hidden;border:1px solid var(--line)}
+.wavelane svg{position:absolute;inset:0;width:100%;height:100%}
+
+.lanes{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.lane{position:relative;height:26px;border-radius:6px;background:rgba(255,255,255,.02);border:1px solid var(--line)}
+.lane .lbl{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:10.5px;color:var(--muted);z-index:2}
+.seg{position:absolute;top:3px;bottom:3px;border-radius:4px;opacity:.92;transition:transform .35s cubic-bezier(.2,.8,.2,1),left .35s cubic-bezier(.2,.8,.2,1),width .35s cubic-bezier(.2,.8,.2,1),opacity .2s;cursor:pointer}
+.seg:hover{transform:scaleY(1.14);opacity:1;filter:brightness(1.12)}
+.seg.dim{opacity:.28}
+.playhead{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--phosphor);box-shadow:0 0 10px rgba(234,246,255,.8);z-index:5;pointer-events:none}
+.playhead::before{content:"";position:absolute;top:-4px;left:-3px;width:8px;height:8px;border-radius:50%;background:var(--phosphor);box-shadow:0 0 10px rgba(234,246,255,.8)}
+
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.legend b{display:inline-flex;align-items:center;gap:7px;font-weight:400}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+/* ---------- sections ---------- */
+section{padding:56px 0;border-top:1px solid var(--line)}
+.sec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:8px;flex-wrap:wrap}
+.sec-n{font-family:var(--mono);font-size:12.5px;color:var(--accent);letter-spacing:.1em}
+h2{font-size:clamp(22px,3.2vw,30px);margin:2px 0 14px}
+.sec-lede{color:#b7bfd8;max-width:720px;margin-bottom:8px}
+
+/* cards */
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:16px 17px}
+.card h3{font-size:14px;margin:0 0 7px;color:var(--phosphor)}
+.card p{font-size:13.5px;margin:0;color:#aab2cc}
+.card.warn{border-color:rgba(255,107,129,.32);background:linear-gradient(180deg,rgba(255,107,129,.06),transparent)}
+.card.warn h3{color:var(--s2)}
+.tag{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+
+/* io contract */
+.contract{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.contract>div{padding:16px 17px;border-right:1px solid var(--line)}
+.contract>div:last-child{border-right:0}
+.contract h3{font-size:13px;margin:0 0 9px;font-family:var(--mono);letter-spacing:.08em}
+.contract ul{margin:0;padding-left:16px;font-size:13px;color:#aab2cc}
+.contract li{margin:5px 0}
+.contract .role-in h3{color:var(--s0)}
+.contract .role-out h3{color:var(--accent)}
+.contract .role-who h3{color:var(--s3)}
+
+/* code block */
+.code{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#0b0f1c}
+.code .cbar{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.code .cbar .fn{color:var(--phosphor)}
+.code pre{margin:0;padding:16px 16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.75}
+.code pre code{color:#c9d2ea;font-size:13px}
+.tok-c{color:#5c6a86;font-style:italic}      /* comment */
+.tok-k{color:#F4B740}                          /* keyword */
+.tok-s{color:#34E0D0}                          /* string */
+.tok-f{color:#9B8CFF}                          /* func/attr */
+.tok-n{color:#FF9E64}                          /* number */
+.cl{display:block;padding:0 6px;border-radius:4px;transition:background .2s}
+.cl.hi{background:rgba(244,183,64,.13);box-shadow:inset 2px 0 0 var(--accent)}
+
+/* stage stepper for minimal call */
+.stages{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.stage{flex:1;min-width:120px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:11px 12px;cursor:pointer;transition:all .18s;font-family:var(--mono);font-size:12px}
+.stage:hover{border-color:var(--line-strong)}
+.stage.active{border-color:var(--accent);background:rgba(244,183,64,.09);box-shadow:0 0 0 1px rgba(244,183,64,.25)}
+.stage .sn{color:var(--accent);font-size:10.5px;letter-spacing:.1em}
+.stage .st{color:var(--ink);margin-top:3px;font-family:var(--sans);font-size:13px}
+.stage-note{border-left:2px solid var(--accent);padding:8px 0 8px 14px;margin-top:10px;font-size:13.5px;color:#c6cce0;min-height:44px}
+
+/* param playground */
+.pg{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:18px}
+.pg .ctrls{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+.ctrl label{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.05em;margin-bottom:7px;text-transform:uppercase}
+.seg-btns{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg-btns button{background:transparent;border:0;border-right:1px solid var(--line);color:var(--muted);padding:8px 14px;font-family:var(--mono);font-size:12.5px;cursor:pointer;transition:all .15s}
+.seg-btns button:last-child{border-right:0}
+.seg-btns button.on{background:var(--accent);color:#1a1300;font-weight:600}
+.seg-btns button:not(.on):hover{color:var(--ink);background:rgba(255,255,255,.04)}
+.pg-readout{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:14px;padding-top:14px;border-top:1px solid var(--line);min-height:40px}
+.pg-readout b{color:var(--phosphor);font-weight:600}
+.kv-warn{color:var(--s2)}
+
+/* rttm viewer */
+.rttm{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;align-items:start}
+.rttm-file{border:1px solid var(--line);border-radius:12px;background:#0b0f1c;overflow:hidden}
+.rttm-file .cbar{display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.rttm-file pre{margin:0;padding:12px 8px;font-family:var(--mono);font-size:11.5px;line-height:1.9;overflow-x:auto}
+.rrow{display:block;padding:1px 8px;border-radius:4px;white-space:pre;cursor:pointer;transition:background .15s}
+.rrow:hover,.rrow.hi{background:rgba(244,183,64,.14)}
+.rttm-note .card{margin-bottom:12px}
+.der{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--panel)}
+.der .bar{height:26px;border-radius:6px;display:flex;overflow:hidden;margin:12px 0 8px;border:1px solid var(--line)}
+.der .bar>div{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10.5px;color:#0a0d18}
+.der-legend{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+th,td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:400}
+td.mono{font-family:var(--mono);font-size:12.5px}
+.yes{color:var(--ok)}.no{color:var(--bad)}
+tr:hover td{background:rgba(255,255,255,.015)}
+
+/* workflow diagram */
+.flow{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:6px 0}
+.fnode{flex:0 0 auto;min-width:130px;border:1px solid var(--line);border-radius:11px;padding:13px 14px;background:var(--panel);position:relative}
+.fnode.core{border-color:var(--accent);background:rgba(244,183,64,.08);box-shadow:0 0 0 1px rgba(244,183,64,.2)}
+.fnode .ft{font-family:var(--mono);font-size:12.5px;color:var(--phosphor)}
+.fnode.core .ft{color:var(--accent)}
+.fnode .fd{font-size:11.5px;color:var(--muted);margin-top:5px}
+.fsep{flex:0 0 auto;align-self:center;color:var(--muted);padding:0 10px;font-family:var(--mono);font-size:18px}
+
+/* accordion failures */
+.acc{border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:10px;background:var(--panel)}
+.acc summary{cursor:pointer;padding:14px 16px;font-family:var(--mono);font-size:13px;color:var(--phosphor);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.acc summary::-webkit-details-marker{display:none}
+.acc summary .plus{color:var(--accent);transition:transform .2s;flex:0 0 auto}
+.acc[open] summary .plus{transform:rotate(45deg)}
+.acc summary .sym{font-family:var(--mono);font-size:10.5px;color:var(--s2);border:1px solid rgba(255,107,129,.3);border-radius:5px;padding:2px 7px;margin-left:auto}
+.acc .accbody{padding:0 16px 16px;font-size:13.5px;color:#aab2cc}
+.acc .accbody code{background:rgba(255,255,255,.05);padding:1px 5px;border-radius:4px}
+.fixline{border-left:2px solid var(--ok);padding-left:12px;margin-top:10px;color:#cdd4e6}
+.fixline b{color:var(--ok);font-family:var(--mono);font-size:11.5px}
+
+/* recommend cards */
+.rec{border:1px solid var(--line);border-radius:12px;padding:17px;background:linear-gradient(180deg,var(--panel),transparent)}
+.rec .scene{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+.rec h3{font-size:15px;margin:8px 0 8px;color:var(--phosphor)}
+.rec .pick{font-family:var(--mono);font-size:12.5px;color:var(--s0);margin-bottom:8px}
+.rec p{font-size:13px;color:#aab2cc;margin:0}
+
+footer{padding:44px 0 60px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+footer .mono{color:var(--muted)}
+
+/* responsive */
+@media(max-width:820px){
+  .g3,.g4,.contract{grid-template-columns:1fr}
+  .g2{grid-template-columns:1fr}
+  .rttm{grid-template-columns:1fr}
+  .contract>div{border-right:0;border-bottom:1px solid var(--line)}
+  .contract>div:last-child{border-bottom:0}
+}
+@media(prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand"><b>◉</b> pyannote<span style="color:var(--muted)">.audio</span> <span style="color:var(--muted)">/ 一文读懂</span></div>
+    <div>speaker-diarization-3.1</div>
+  </div>
+</div>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Speaker Diarization · 说话人分割</div>
+    <h1>把一段多人录音,<br>切成<span class="k"> "谁在何时说话" </span>的时间轴</h1>
+    <p class="lede">pyannote.audio 是一个基于 PyTorch 的开源说话人分割库。给它一段混着几个人声音的音频,它输出每一句话的<b style="color:#dfe4f2">起止时间</b>和<b style="color:#dfe4f2">说话人标签</b>——不做转写,只回答 "who spoke when"。</p>
+
+    <div class="taskline">
+      <span class="chip in">conference.wav · 16kHz mono</span>
+      <span class="arrow">──▶</span>
+      <span class="chip">Pipeline("speaker-diarization-3.1")</span>
+      <span class="arrow">──▶</span>
+      <span class="chip out">conference.rttm · 谁在何时说话</span>
+    </div>
+
+    <!-- signature diarization console -->
+    <div class="console" id="hero-console">
+      <div class="head">
+        <div><span class="dot"></span> DIARIZATION OUTPUT · <span class="file">conference.wav</span></div>
+        <div id="hero-clock">00:00 / 00:24</div>
+      </div>
+      <div class="body">
+        <div class="timeline" id="hero-tl">
+          <div class="ruler" id="hero-ruler"></div>
+          <div class="wavelane"><svg id="hero-wave" viewBox="0 0 1000 54" preserveAspectRatio="none"></svg></div>
+          <div class="lanes" id="hero-lanes"></div>
+          <div class="playhead" id="hero-ph" style="left:0%"></div>
+        </div>
+        <div class="legend" id="hero-legend"></div>
+      </div>
+    </div>
+    <p style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:12px">▲ 这条时间轴就是本文的主线:一个 <code>Annotation</code> 对象——每个色块 = 一个 speaker turn(start / duration / label)。悬停任一色块看它的取值。</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 1. 能力契约 ================= -->
+<section id="contract">
+  <div class="sec-h"><span class="sec-n">01</span><h2>能力契约:它负责什么,不负责什么</h2></div>
+  <p class="sec-lede">先划清边界。pyannote 只解决 "分割 + 聚类 说话人" 这一件事。它<b style="color:#dfe4f2">不认识</b>说话人是谁(不做声纹身份识别),<b style="color:#dfe4f2">不转写</b>文字(那是 ASR 的活)。分不清 "SPEAKER_00 是张三" 是正常的——它只保证同一个色块内是同一个人。</p>
+
+  <div class="contract" style="margin-top:16px">
+    <div class="role-in">
+      <h3>▸ INPUT</h3>
+      <ul>
+        <li>一段音频文件(<code>.wav/.flac/.mp3</code>),内部统一重采样到 16kHz 单声道</li>
+        <li>可选:说话人数量约束 <code>num_speakers</code> 或 <code>min/max_speakers</code></li>
+        <li>一个 Hugging Face access token(模型是 gated 的)</li>
+      </ul>
+    </div>
+    <div class="role-out">
+      <h3>▸ OUTPUT</h3>
+      <ul>
+        <li>一个 <code>pyannote.core.Annotation</code>:有序的 (start, end, speaker) 三元组集合</li>
+        <li>可 <code>write_rttm()</code> 落成标准 RTTM 文件</li>
+        <li>标签是匿名的 <code>SPEAKER_00 / 01 …</code>,同一段音频内稳定</li>
+      </ul>
+    </div>
+    <div class="role-who">
+      <h3>▸ 谁在用它</h3>
+      <ul>
+        <li>做<b>会议 / 播客 / 客服录音转写</b>的工程师(diarization + ASR)</li>
+        <li>语音研究者:需要离线、可复现、可用 DER 评测的 baseline</li>
+        <li>需要<b>私有部署</b>、数据不能出内网的团队</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g4" style="margin-top:14px">
+    <div class="card warn"><div class="tag">不该交给它</div><h3>说话人身份识别</h3><p>它给不出"这是谁",只给匿名标签。要识别具体人需另配 speaker verification / enrollment。</p></div>
+    <div class="card warn"><div class="tag">不该交给它</div><h3>语音转文字</h3><p>输出里没有一个字。文字要接 Whisper 等 ASR,再与 RTTM 时间轴对齐。</p></div>
+    <div class="card warn"><div class="tag">不该交给它</div><h3>实时低延迟流式</h3><p>默认 pipeline 是离线整段处理。实时场景需另做流式方案,精度会打折。</p></div>
+    <div class="card warn"><div class="tag">不该交给它</div><h3>脏音频救场</h3><p>远场、强噪声、重叠严重时精度骤降。它不做降噪,前置清洗是你的活。</p></div>
+  </div>
+</section>
+
+<!-- ================= 2. 最小可运行调用 ================= -->
+<section id="minimal">
+  <div class="sec-h"><span class="sec-n">02</span><h2>最小可运行调用:从文件到 RTTM 的完整路径</h2></div>
+  <p class="sec-lede">pyannote 是<b style="color:#dfe4f2">库优先(library-first)</b>的工具——没有面向终端用户的 diarization CLI,你用几行 Python 把它跑起来。点下面的阶段看每一步在代码里对应哪里、做了什么。</p>
+
+  <div class="stages" id="stages">
+    <div class="stage active" data-lines="4,5,6,7" data-note="加载预训练 pipeline。这一步会从 Hugging Face 拉三个模型:segmentation-3.0、wespeaker embedding、以及聚类配置。加载很贵,务必只做一次并复用。">
+      <div class="sn">STAGE 1</div><div class="st">加载 pipeline</div>
+    </div>
+    <div class="stage" data-lines="9" data-note="把 pipeline 搬到 GPU。CPU 也能跑,但 24s 音频在 CPU 上可能几十秒,GPU 上通常 1~2 秒。长音频差距是数量级的。">
+      <div class="sn">STAGE 2</div><div class="st">选设备</div>
+    </div>
+    <div class="stage" data-lines="11,12,13,14" data-note="真正的推理。内部三段式:①滑窗做局部 segmentation → ②对每段抽 speaker embedding → ③层次聚类把同一个人的段归并。num_speakers 是最关键的约束。返回 Annotation。">
+      <div class="sn">STAGE 3</div><div class="st">推理</div>
+    </div>
+    <div class="stage" data-lines="16,17,18,19,20" data-note="消费结果。itertracks 遍历每个 turn 拿到 start/end/label;write_rttm 落标准文件,交给下游 ASR 对齐或人工审核。">
+      <div class="sn">STAGE 4</div><div class="st">产出</div>
+    </div>
+  </div>
+
+  <div class="code">
+    <div class="cbar"><span class="fn">diarize.py</span><span>python · pyannote.audio ≥ 3.1</span></div>
+    <pre><code id="code-block"></code></pre>
+  </div>
+  <div class="stage-note" id="stage-note">加载预训练 pipeline。这一步会从 Hugging Face 拉三个模型:segmentation-3.0、wespeaker embedding、以及聚类配置。加载很贵,务必只做一次并复用。</div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="tag">跑之前的一次性准备</div>
+    <p style="margin-top:6px"><code style="color:var(--s0)">pip install pyannote.audio</code> &nbsp;·&nbsp; 到 <span class="mono" style="color:var(--phosphor)">hf.co/pyannote/speaker-diarization-3.1</span> 和 <span class="mono" style="color:var(--phosphor)">segmentation-3.0</span> 点 <b>Accept</b> 接受用户协议 &nbsp;·&nbsp; 建一个 HF token 传给 <code>use_auth_token</code>。这三步任缺一步都会在加载时 401。</p>
+  </div>
+</section>
+
+<!-- ================= 3. 调用面 ================= -->
+<section id="surfaces">
+  <div class="sec-h"><span class="sec-n">03</span><h2>调用面:该从哪个入口用它</h2></div>
+  <p class="sec-lede">和 ffmpeg 那种命令行工具不同,pyannote 的主入口是 Python 对象。理解这一点决定了你怎么把它接进流水线。</p>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><div class="tag" style="color:var(--s0)">主入口 · 推荐</div><h3>Python SDK:<code>Pipeline</code></h3><p>唯一的一等公民。<code>Pipeline.from_pretrained(...)</code> 拿到对象后当函数调用。批处理、复用模型、精细控制参数都在这里。<b style="color:#dfe4f2">99% 的用法从这里开始。</b></p></div>
+    <div class="card"><div class="tag">你自己封的</div><h3>CLI:包一层脚本</h3><p>没有官方 diarization CLI。要命令行用法,自己写个 <code>diarize.py</code> 用 <code>argparse</code> 收 <code>--audio --num-speakers --out</code>,内部调 SDK,末尾 <code>write_rttm</code>。自动化契约由你定。</p></div>
+    <div class="card"><div class="tag">进阶</div><h3>低阶模型 + 自组 pipeline</h3><p>想只做 VAD、或换 embedding 模型、或改聚类——可以单独加载 <code>Model.from_pretrained("pyannote/segmentation-3.0")</code> 等积木自己拼。研究向,不做产品别碰。</p></div>
+    <div class="card"><div class="tag">配置 / 复现</div><h3>超参 instantiate</h3><p>聚类阈值、min_cluster_size 等通过 <code>pipeline.instantiate({...})</code> 或 YAML 注入。要在自己数据上调优、并锁定复现结果时用。</p></div>
+  </div>
+</section>
+
+<!-- ================= 4. 参数心智模型 ================= -->
+<section id="params">
+  <div class="sec-h"><span class="sec-n">04</span><h2>参数心智模型:少数几个真正改变结果的旋钮</h2></div>
+  <p class="sec-lede">pyannote 参数不多,但<b style="color:#dfe4f2">说话人数量</b>这一个旋钮几乎决定成败。下面直接调它,看同一段音频的分割结果如何被"重新聚类"。</p>
+
+  <div class="pg" style="margin-top:16px">
+    <div class="ctrls">
+      <div class="ctrl">
+        <label>说话人数量约束</label>
+        <div class="seg-btns" id="pg-nspk">
+          <button data-k="auto" class="on">auto(不给)</button>
+          <button data-k="2">num=2</button>
+          <button data-k="3">num=3</button>
+          <button data-k="4">num=4</button>
+        </div>
+      </div>
+      <div class="ctrl">
+        <label>聚类阈值 threshold</label>
+        <div class="seg-btns" id="pg-thr">
+          <button data-k="mid" class="on">默认</button>
+          <button data-k="low">调低(易分裂)</button>
+          <button data-k="high">调高(易合并)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline" id="pg-tl">
+      <div class="ruler" id="pg-ruler"></div>
+      <div class="lanes" id="pg-lanes"></div>
+    </div>
+    <div class="legend" id="pg-legend"></div>
+
+    <div class="pg-readout" id="pg-readout"></div>
+  </div>
+
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card"><div class="tag" style="color:var(--accent)">最该管的</div><h3><code>num_speakers</code></h3><p>确切人数。知道就传——把"猜几个人"这个最容易错的环节直接消掉,精度显著上升。</p></div>
+    <div class="card"><h3><code>min/max_speakers</code></h3><p>只知道范围时用。比如访谈 <code>min=2, max=2</code>、圆桌 <code>max=6</code>。给个上界能挡住过度分裂。</p></div>
+    <div class="card"><h3>clustering <code>threshold</code></h3><p>藏在超参里的合并/分裂尺度。同一人被拆成两个标签→调高;两人被并成一个→调低。需评测集配合调。</p></div>
+  </div>
+</section>
+
+<!-- ================= 5. 结果验证 ================= -->
+<section id="verify">
+  <div class="sec-h"><span class="sec-n">05</span><h2>怎么确认它真的做对了</h2></div>
+  <p class="sec-lede">别只看它没报错。真正的验收有两层:<b style="color:#dfe4f2">看 RTTM / 时间轴</b>做抽样目检,以及<b style="color:#dfe4f2">用 DER 指标</b>对着参考答案量化。悬停左边任意一行,看它落在时间轴哪里。</p>
+
+  <div class="rttm" style="margin-top:16px">
+    <div class="rttm-file">
+      <div class="cbar"><span class="fn">conference.rttm</span><span>write_rttm() 输出</span></div>
+      <pre id="rttm-pre"></pre>
+    </div>
+    <div class="rttm-note">
+      <div class="card">
+        <div class="tag">RTTM 一行怎么读</div>
+        <p style="margin-top:7px" class="mono" style="font-size:12px;color:#aab2cc"><span style="color:var(--muted)">SPEAKER file 1</span> <span style="color:var(--s0)">3.918</span> <span style="color:var(--accent)">1.680</span> <span style="color:var(--muted)">&lt;NA&gt; &lt;NA&gt;</span> <span style="color:var(--s2)">SPEAKER_01</span> <span style="color:var(--muted)">&lt;NA&gt; &lt;NA&gt;</span></p>
+        <p style="margin-top:9px">关键就三列:<b style="color:var(--s0)">起始 3.918s</b>、<b style="color:var(--accent)">时长 1.680s</b>、<b style="color:var(--s2)">说话人 SPEAKER_01</b>。其余 <code>&lt;NA&gt;</code> 是格式占位。</p>
+      </div>
+      <div class="der">
+        <div class="tag" style="color:var(--accent)">量化指标 · DER</div>
+        <p style="font-size:13px;margin:8px 0 4px;color:#aab2cc"><b style="color:var(--phosphor)">Diarization Error Rate</b> = (漏检 + 误检 + 混淆) ÷ 总语音时长。用 <code>pyannote.metrics</code> 拿 hypothesis 对 reference 算。</p>
+        <div class="bar">
+          <div style="width:42%;background:var(--s2)">Confusion</div>
+          <div style="width:31%;background:var(--s1)">Missed</div>
+          <div style="width:27%;background:var(--s3)">FalseAlarm</div>
+        </div>
+        <div class="der-legend">
+          <span>混淆:说话人认错</span><span>漏检:该有人时判成静音</span><span>误检:静音时判成有人</span>
+        </div>
+        <p style="font-size:12px;margin:10px 0 0;color:var(--muted)">经验:干净会议 DER 10~20% 属正常;远场/重叠会明显更高。没有参考答案时,就抽 3~5 段人工比对时间轴。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6. 自动化契约 ================= -->
+<section id="automation">
+  <div class="sec-h"><span class="sec-n">06</span><h2>自动化调用契约:流水线怎么判成败</h2></div>
+  <p class="sec-lede">因为它是库不是命令,成败信号要你在包装脚本里自己制造。核心一句话:<b style="color:#dfe4f2">推理失败会抛异常</b>,你把它翻译成 exit code 和产物存在性。</p>
+  <table>
+    <thead><tr><th style="width:22%">信号</th><th style="width:34%">约定</th><th>为什么关键</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">exit code</td><td>包装脚本捕获异常 → 非 0;正常写完 RTTM → 0</td><td>pipeline 本身不给退出码,是你的脚本给。别吞异常。</td></tr>
+      <tr><td class="mono">stdout</td><td>只打产物路径 / 关键统计(段数、speaker 数),便于上游解析</td><td>把日志噪声(下载进度、warning)留给 stderr。</td></tr>
+      <tr><td class="mono">stderr + 日志</td><td>ProgressHook 进度、模型下载、torch warning 都走这里</td><td>长音频看这里判断是卡住还是在跑。</td></tr>
+      <tr><td class="mono">输出产物</td><td>RTTM 是唯一真凭。<b class="no">脚本必须自己检查文件非空</b></td><td>推理"成功"但零段落也可能发生(全判静音)。段数=0 应视为可疑。</td></tr>
+      <tr><td class="mono">覆盖 / 幂等</td><td><code>write_rttm</code> 以 <code>"w"</code> 打开会覆盖同名文件</td><td>同输入同参数结果基本可复现;想严格幂等就先写临时文件再原子改名。</td></tr>
+      <tr><td class="mono">部分输出</td><td>中途崩溃可能留下半截 RTTM</td><td>因此推荐"先写 <code>.tmp</code> 成功后 rename",避免下游读到残缺文件。</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 7. 嵌入工作流 ================= -->
+<section id="workflow">
+  <div class="sec-h"><span class="sec-n">07</span><h2>它在流水线里的位置</h2></div>
+  <p class="sec-lede">最典型的落点是<b style="color:#dfe4f2">"带说话人的转写"</b>。pyannote 站在音频清洗之后、ASR 对齐之前——它先划好时间轴,ASR 再往里填字。</p>
+  <div class="flow" style="margin-top:16px">
+    <div class="fnode"><div class="ft">① 取音频</div><div class="fd">ffmpeg 转 16kHz 单声道 wav,去掉容器/编码差异</div></div>
+    <div class="fsep">▶</div>
+    <div class="fnode core"><div class="ft">② pyannote</div><div class="fd">diarization → RTTM<br>谁在何时说话</div></div>
+    <div class="fsep">▶</div>
+    <div class="fnode"><div class="ft">③ ASR</div><div class="fd">Whisper 等转写,得到带词级时间戳的文本</div></div>
+    <div class="fsep">▶</div>
+    <div class="fnode"><div class="ft">④ 对齐合并</div><div class="fd">按时间戳把每句文本挂到对应 speaker</div></div>
+    <div class="fsep">▶</div>
+    <div class="fnode"><div class="ft">⑤ 下游</div><div class="fd">分角色摘要 / 检索 / 人工校对</div></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><div class="tag" style="color:var(--s0)">前置准备</div><h3>把输入喂"干净"</h3><p>务必先 <code>ffmpeg -ac 1 -ar 16000</code> 统一成单声道 16kHz wav。能拿到人数就一并传 <code>num/min/max_speakers</code>。前置降噪对脏音频回报很高。</p></div>
+    <div class="card"><div class="tag" style="color:var(--accent)">产物交接</div><h3>RTTM 怎么往下传</h3><p>下游要么直接吃 RTTM,要么你把 <code>Annotation</code> 转成 JSON 段列表再与 ASR 词表按重叠时长匹配。合并逻辑是"每个词归给覆盖它最多的 speaker 段"。</p></div>
+  </div>
+</section>
+
+<!-- ================= 8. 失败边界 ================= -->
+<section id="failures">
+  <div class="sec-h"><span class="sec-n">08</span><h2>常见失败边界</h2></div>
+  <p class="sec-lede">按出现频率排。第一个几乎每个新手都撞——展开看症状与解法。</p>
+
+  <details class="acc" open>
+    <summary>token / gated 模型没接受协议<span class="sym">401 · 最常见</span><span class="plus">＋</span></summary>
+    <div class="accbody">
+      加载时报未授权或提示需接受 user conditions。原因:没建 HF token、或没在模型页点 Accept、或 token 没读写权限。
+      <div class="fixline"><b>FIX</b> 逐个打开 speaker-diarization-3.1 与它依赖的 segmentation-3.0 页面点 Accept,再传有效 token;CI 里用环境变量 <code>HF_TOKEN</code>。</div>
+    </div>
+  </details>
+  <details class="acc">
+    <summary>版本 / 依赖不匹配<span class="sym">ImportError · 加载报错</span><span class="plus">＋</span></summary>
+    <div class="accbody">
+      拿旧代码跑 3.x,或 torch/torchaudio 版本对不上,pipeline 加载即崩,或行为和文档不一致。2.x 与 3.x 的模型名、API 都变了。
+      <div class="fixline"><b>FIX</b> 锁版本:明确用 <code>pyannote.audio&gt;=3.1</code> 配套模型 <code>speaker-diarization-3.1</code>,别混用 2.x 教程。</div>
+    </div>
+  </details>
+  <details class="acc">
+    <summary>音频格式 / 后端读不了<span class="sym">mp3 · backend</span><span class="plus">＋</span></summary>
+    <div class="accbody">
+      直接喂 mp3 或异常采样率时,底层 torchaudio/soundfile 可能读不出或静默错采样。
+      <div class="fixline"><b>FIX</b> 上游一律 <code>ffmpeg -i in.mp3 -ac 1 -ar 16000 out.wav</code>,把格式问题挡在 pyannote 之外。</div>
+    </div>
+  </details>
+  <details class="acc">
+    <summary>人数没约束 → 过分裂 / 过合并<span class="sym">精度 · 隐性</span><span class="plus">＋</span></summary>
+    <div class="accbody">
+      不给 num/min/max 时,聚类靠阈值猜人数:两人被拆成三、或三人并成两,是最隐蔽的"没报错但结果错"。
+      <div class="fixline"><b>FIX</b> 尽量传确切或范围;拿不到就抽样目检段数与 speaker 数是否合理,必要时调 clustering threshold。</div>
+    </div>
+  </details>
+  <details class="acc">
+    <summary>长音频显存 / 耗时<span class="sym">OOM · 性能</span><span class="plus">＋</span></summary>
+    <div class="accbody">
+      几小时的录音一次性喂进去,CPU 上极慢,GPU 上可能显存吃紧。
+      <div class="fixline"><b>FIX</b> 上 GPU 并用 <code>ProgressHook</code> 看进度;超长文件按静音点切段处理再拼时间轴,或降低批大小。</div>
+    </div>
+  </details>
+  <details class="acc">
+    <summary>重叠语音 / 远场噪声<span class="sym">DER 飙高</span><span class="plus">＋</span></summary>
+    <div class="accbody">
+      多人抢话、混响、远场麦克风会让 confusion 和漏检大幅上升——这是模型能力边界,不是 bug。
+      <div class="fixline"><b>FIX</b> 前置降噪 / 回声消除;接受重叠段精度天花板;必要时换更贴合场景的 fine-tuned 模型。</div>
+    </div>
+  </details>
+</section>
+
+<!-- ================= 9. 对比取舍 ================= -->
+<section id="compare">
+  <div class="sec-h"><span class="sec-n">09</span><h2>和相近方案怎么选</h2></div>
+  <p class="sec-lede">pyannote 强在<b style="color:#dfe4f2">开源、离线、可评测、SOTA baseline</b>;弱在要你自己搭 GPU、管 HF token、写胶水。对照下表看它什么时候是对的选择。</p>
+  <table>
+    <thead><tr><th style="width:20%">方案</th><th>它是什么</th><th style="width:30%">什么时候选它</th><th style="width:24%">什么时候别选</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono" style="color:var(--accent)">pyannote.audio</td>
+        <td>纯 diarization 库,只做分割聚类</td>
+        <td>要离线/私有部署、可控可调、要 DER 评测 baseline</td>
+        <td>只想快速拿到"带说话人的转写"、不想写胶水</td>
+      </tr>
+      <tr>
+        <td class="mono" style="color:var(--s0)">WhisperX</td>
+        <td>Whisper ASR + pyannote(内部就用它)+ 词级对齐,打包好</td>
+        <td>目标是<b style="color:#dfe4f2">转写带说话人</b>,想开箱即用少写代码</td>
+        <td>只要 diarization、或要对分割环节做深度定制</td>
+      </tr>
+      <tr>
+        <td class="mono" style="color:var(--s3)">NVIDIA NeMo</td>
+        <td>大型语音工具箱,含 MSDD 等 diarizer</td>
+        <td>研究向、要流式/多模块、已在 NeMo 生态里</td>
+        <td>只需一个稳定 baseline,嫌它重、上手陡</td>
+      </tr>
+      <tr>
+        <td class="mono" style="color:var(--s2)">云 API</td>
+        <td>AWS Transcribe / Deepgram / AssemblyAI 内置 diarization</td>
+        <td>不想搭 GPU、量小、能接受按分钟付费与数据出网</td>
+        <td>数据敏感必须内网、量大成本敏感、要离线</td>
+      </tr>
+      <tr>
+        <td class="mono" style="color:var(--muted)">手写脚本</td>
+        <td>自己拼 VAD + 声纹 + 聚类</td>
+        <td>几乎没有——除非做研究复现</td>
+        <td>生产场景:精度和维护成本都打不过 pyannote</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 10. 工程实现与方案选型 ================= -->
+<section id="engineering">
+  <div class="sec-h"><span class="sec-n">10</span><h2>工程落地:最小实现路径与方案选型</h2></div>
+  <p class="sec-lede">理解了原理,再看在真实项目里怎么落地。先说边界,再给一条按数据流走的最小主链路,最后按场景给推荐。</p>
+
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card"><div class="tag" style="color:var(--s0)">接收什么</div><h3>输入前置条件</h3><p>16kHz 单声道 wav;一个可用 HF token;有 GPU 更好。尽量已知说话人数或范围。</p></div>
+    <div class="card"><div class="tag" style="color:var(--accent)">产出什么</div><h3>交付物</h3><p>RTTM + 结构化 JSON 段列表(start/end/speaker),供 ASR 对齐或前端渲染时间轴。</p></div>
+    <div class="card warn"><div class="tag">不由它解决</div><h3>边界外</h3><p>身份识别、转写、降噪、实时流式——都在 pyannote 之外,由前后置模块负责。</p></div>
+  </div>
+
+  <h3 style="font-size:16px;margin:28px 0 6px;color:var(--phosphor)">最小实现路径(主链路)</h3>
+  <p style="color:#aab2cc;font-size:13.5px;margin:0 0 12px">按数据流:准备 → 复用 pipeline → 逐文件推理 → 转 JSON 交付。刻意不写 silent fallback / 吞错默认值——失败就抛,由调用方决定。</p>
+  <div class="code">
+    <div class="cbar"><span class="fn">diarizer.py · 主链路</span><span>load once → reuse</span></div>
+    <pre><code><span class="tok-k">import</span> json, torch
+<span class="tok-k">from</span> pyannote.audio <span class="tok-k">import</span> Pipeline
+<span class="tok-k">from</span> pyannote.audio.pipelines.utils.hook <span class="tok-k">import</span> ProgressHook
+
+<span class="tok-c"># 1) 加载一次,进程内复用(加载昂贵)</span>
+pipeline = Pipeline.<span class="tok-f">from_pretrained</span>(
+    <span class="tok-s">"pyannote/speaker-diarization-3.1"</span>,
+    use_auth_token=os.environ[<span class="tok-s">"HF_TOKEN"</span>])
+pipeline.<span class="tok-f">to</span>(torch.<span class="tok-f">device</span>(<span class="tok-s">"cuda"</span>))
+
+<span class="tok-k">def</span> <span class="tok-f">diarize</span>(wav_path, out_json, num_speakers=<span class="tok-k">None</span>):
+    <span class="tok-c"># 2) 推理:已知人数就传,消掉最易错环节</span>
+    <span class="tok-k">with</span> <span class="tok-f">ProgressHook</span>() <span class="tok-k">as</span> hook:
+        ann = <span class="tok-f">pipeline</span>(wav_path, num_speakers=num_speakers, hook=hook)
+
+    <span class="tok-c"># 3) Annotation -> 结构化段列表(交付契约)</span>
+    segs = [{<span class="tok-s">"start"</span>: <span class="tok-f">round</span>(t.start, <span class="tok-n">3</span>),
+             <span class="tok-s">"end"</span>: <span class="tok-f">round</span>(t.end, <span class="tok-n">3</span>),
+             <span class="tok-s">"speaker"</span>: spk}
+            <span class="tok-k">for</span> t, _, spk <span class="tok-k">in</span> ann.<span class="tok-f">itertracks</span>(yield_label=<span class="tok-k">True</span>)]
+
+    <span class="tok-c"># 4) 先写临时文件再原子改名,保证下游不读残缺</span>
+    tmp = out_json + <span class="tok-s">".tmp"</span>
+    <span class="tok-k">with</span> <span class="tok-f">open</span>(tmp, <span class="tok-s">"w"</span>) <span class="tok-k">as</span> f:
+        json.<span class="tok-f">dump</span>({<span class="tok-s">"segments"</span>: segs}, f, ensure_ascii=<span class="tok-k">False</span>)
+    os.<span class="tok-f">replace</span>(tmp, out_json)
+    <span class="tok-k">return</span> <span class="tok-f">len</span>(segs)          <span class="tok-c"># 段数=0 由调用方判为可疑</span></code></pre>
+  </div>
+
+  <h3 style="font-size:16px;margin:30px 0 10px;color:var(--phosphor)">推荐路径(按场景)</h3>
+  <div class="grid g3">
+    <div class="rec">
+      <div class="scene">场景 A · 会议转写带说话人</div>
+      <h3>直接上 WhisperX</h3>
+      <div class="pick">→ WhisperX(内含 pyannote)</div>
+      <p>你的目标其实是"分角色的文字"。WhisperX 把 diarization + ASR + 对齐都打包了,底层还是 pyannote,少写大量胶水。除非要深度定制分割,不必自己拼。</p>
+    </div>
+    <div class="rec">
+      <div class="scene">场景 B · 私有部署 + 可控可评测</div>
+      <h3>直接用 pyannote</h3>
+      <div class="pick">→ pyannote.audio + 包装脚本</div>
+      <p>数据不能出网、要能用 DER 在自己数据上调优和验收。用上面的主链路封成脚本/服务,复用 pipeline,产 RTTM+JSON,配 <code>pyannote.metrics</code> 建评测集。</p>
+    </div>
+    <div class="rec">
+      <div class="scene">场景 C · 量小 · 不想搭 GPU</div>
+      <h3>走云 API</h3>
+      <div class="pick">→ Deepgram / AssemblyAI / AWS</div>
+      <p>偶尔处理几个文件、没有 GPU 也不想维护模型。云服务内置 diarization,按分钟付费即用即走。前提是能接受数据出网与单价。</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <p class="mono" style="margin:0 0 6px">pyannote.audio · speaker-diarization-3.1 · 一文读懂</p>
+  <p style="margin:0;max-width:640px">主线只有一条:<b style="color:var(--ink)">把音频变成一条"谁在何时说话"的时间轴</b>。它不认人、不写字,但在离线可控的 diarization 上是当前最实用的开源基线。版本与模型名以官方文档为准。</p>
+</footer>
+
+<script>
+/* ============ 数据:说话人色板 ============ */
+const SPK = {
+  'SPEAKER_00':'--s0','SPEAKER_01':'--s1','SPEAKER_02':'--s2','SPEAKER_03':'--s3','SPEAKER_04':'--s4'
+};
+function cvar(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+const TOTAL = 24; // seconds
+
+/* ============ HERO 时间轴数据(真实感的 turn 序列) ============ */
+const heroSegs = [
+  {s:0.4,e:3.2,spk:'SPEAKER_00'},
+  {s:3.4,e:6.0,spk:'SPEAKER_01'},
+  {s:5.7,e:7.1,spk:'SPEAKER_00'}, // 轻微重叠
+  {s:7.3,e:10.4,spk:'SPEAKER_02'},
+  {s:10.6,e:13.1,spk:'SPEAKER_01'},
+  {s:13.3,e:16.0,spk:'SPEAKER_00'},
+  {s:16.2,e:18.9,spk:'SPEAKER_02'},
+  {s:19.1,e:21.4,spk:'SPEAKER_01'},
+  {s:21.6,e:23.8,spk:'SPEAKER_00'},
+];
+
+function pct(t){return (t/TOTAL*100);}
+
+/* ---- 画标尺 ---- */
+function drawRuler(el){
+  el.innerHTML='';
+  for(let t=0;t<=TOTAL;t+=4){
+    const s=document.createElement('span');
+    s.style.left=pct(t)+'%';
+    s.textContent=t+'s';
+    el.appendChild(s);
+  }
+}
+
+/* ---- 画波形(伪随机但确定) ---- */
+function drawWave(svg){
+  let rng=42, path='M0,27 ';
+  const W=1000, N=200;
+  for(let i=0;i<=N;i++){
+    rng=(rng*9301+49297)%233280;
+    const r=rng/233280;
+    const x=i/N*W;
+    // 在有语音的段幅度更大
+    const t=i/N*TOTAL;
+    const voiced=heroSegs.some(g=>t>=g.s&&t<=g.e);
+    const amp=(voiced?1:0.18)*(0.35+0.65*r)*22;
+    const y=27+(i%2?amp:-amp);
+    path+=`L${x.toFixed(1)},${y.toFixed(1)} `;
+  }
+  svg.innerHTML=`<path d="${path}" fill="none" stroke="${cvar('--wave')}" stroke-width="1"/>`;
+}
+
+/* ---- 画说话人 lanes(每人一行) ---- */
+function drawLanes(container, segs, opts={}){
+  container.innerHTML='';
+  const speakers=[...new Set(segs.map(s=>s.spk))].sort();
+  const laneMap={};
+  speakers.forEach(spk=>{
+    const lane=document.createElement('div');
+    lane.className='lane';
+    const lbl=document.createElement('span');
+    lbl.className='lbl';
+    lbl.textContent=spk;
+    lbl.style.color=cvar(SPK[spk]);
+    lane.appendChild(lbl);
+    container.appendChild(lane);
+    laneMap[spk]=lane;
+  });
+  segs.forEach(g=>{
+    const seg=document.createElement('div');
+    seg.className='seg';
+    seg.style.left=pct(g.s)+'%';
+    seg.style.width=pct(g.e-g.s)+'%';
+    seg.style.background=cvar(SPK[g.spk]);
+    seg.dataset.spk=g.spk;
+    seg.dataset.s=g.s; seg.dataset.e=g.e;
+    seg.title=`${g.spk}  start=${g.s.toFixed(2)}s  dur=${(g.e-g.s).toFixed(2)}s`;
+    laneMap[g.spk].appendChild(seg);
+  });
+  return speakers;
+}
+
+/* ---- 图例 ---- */
+function drawLegend(el, speakers){
+  el.innerHTML='';
+  speakers.forEach(spk=>{
+    const b=document.createElement('b');
+    b.innerHTML=`<i style="background:${cvar(SPK[spk])}"></i>${spk}`;
+    el.appendChild(b);
+  });
+}
+
+/* ============ 初始化 HERO ============ */
+drawRuler(document.getElementById('hero-ruler'));
+drawWave(document.getElementById('hero-wave'));
+const heroSpeakers=drawLanes(document.getElementById('hero-lanes'), heroSegs);
+drawLegend(document.getElementById('hero-legend'), heroSpeakers);
+
+/* ---- HERO 播放头动画 ---- */
+(function(){
+  const ph=document.getElementById('hero-ph');
+  const clock=document.getElementById('hero-clock');
+  const lanes=document.getElementById('hero-lanes');
+  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce){ph.style.left='50%';return;}
+  let t=0, last=performance.now();
+  function fmt(x){const m=Math.floor(x/60),s=Math.floor(x%60);return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;}
+  function loop(now){
+    const dt=(now-last)/1000; last=now;
+    t+=dt*3; if(t>TOTAL)t=0;
+    ph.style.left=pct(t)+'%';
+    clock.textContent=`${fmt(t)} / 00:24`;
+    // 高亮当前活跃段
+    lanes.querySelectorAll('.seg').forEach(seg=>{
+      const active=(t>=+seg.dataset.s && t<=+seg.dataset.e);
+      seg.classList.toggle('dim', !active);
+    });
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+
+/* ============ 02 最小调用:代码 + 阶段高亮 ============ */
+const CODE_LINES = [
+`<span class="tok-c"># diarize.py — 最小可运行调用</span>`,
+`<span class="tok-k">import</span> torch`,
+`<span class="tok-k">from</span> pyannote.audio <span class="tok-k">import</span> Pipeline`,
+``,
+`<span class="tok-c"># STAGE 1 · 加载预训练 pipeline(昂贵,复用)</span>`,
+`pipeline = Pipeline.<span class="tok-f">from_pretrained</span>(`,
+`    <span class="tok-s">"pyannote/speaker-diarization-3.1"</span>,`,
+`    use_auth_token=<span class="tok-s">"hf_xxx"</span>)`,
+``,
+`pipeline.<span class="tok-f">to</span>(torch.<span class="tok-f">device</span>(<span class="tok-s">"cuda"</span>))   <span class="tok-c"># STAGE 2 · 上 GPU</span>`,
+``,
+`<span class="tok-c"># STAGE 3 · 推理:分割→抽embedding→聚类</span>`,
+`diarization = <span class="tok-f">pipeline</span>(`,
+`    <span class="tok-s">"conference.wav"</span>,`,
+`    num_speakers=<span class="tok-n">3</span>)`,
+``,
+`<span class="tok-c"># STAGE 4 · 产出</span>`,
+`<span class="tok-k">with</span> <span class="tok-f">open</span>(<span class="tok-s">"conference.rttm"</span>, <span class="tok-s">"w"</span>) <span class="tok-k">as</span> f:`,
+`    diarization.<span class="tok-f">write_rttm</span>(f)`,
+`<span class="tok-k">for</span> turn, _, spk <span class="tok-k">in</span> diarization.<span class="tok-f">itertracks</span>(yield_label=<span class="tok-k">True</span>):`,
+`    <span class="tok-f">print</span>(<span class="tok-s">f"{turn.start:.1f} {turn.end:.1f} {spk}"</span>)`,
+];
+(function(){
+  const cb=document.getElementById('code-block');
+  cb.innerHTML=CODE_LINES.map((l,i)=>`<span class="cl" data-ln="${i+1}">${l||' '}</span>`).join('');
+  const stages=document.querySelectorAll('#stages .stage');
+  const note=document.getElementById('stage-note');
+  function apply(stage){
+    stages.forEach(s=>s.classList.remove('active'));
+    stage.classList.add('active');
+    note.textContent=stage.dataset.note;
+    const set=new Set(stage.dataset.lines.split(',').map(Number));
+    cb.querySelectorAll('.cl').forEach(cl=>{
+      cl.classList.toggle('hi', set.has(+cl.dataset.ln));
+    });
+  }
+  stages.forEach(s=>s.addEventListener('click',()=>apply(s)));
+  apply(stages[0]);
+})();
+
+/* ============ 04 参数 playground ============ */
+/* 不同 num_speakers / threshold 下的"聚类结果"(预算好,展示行为差异) */
+const PG = {
+  base:[ // 底层分割出的段(说话人未定,先按真值标注方便展示)
+    {s:0.4,e:3.2},{s:3.4,e:6.0},{s:6.2,e:8.6},{s:8.8,e:11.0},
+    {s:11.2,e:13.6},{s:13.8,e:16.2},{s:16.4,e:18.8},{s:19.0,e:21.4},{s:21.6,e:23.8}
+  ],
+  // 每种设置给每段分配的 speaker 标签
+  assign:{
+    'auto|mid':  ['SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_01','SPEAKER_02'],
+    'auto|low':  ['SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_03','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_04','SPEAKER_02'],
+    'auto|high': ['SPEAKER_00','SPEAKER_01','SPEAKER_00','SPEAKER_00','SPEAKER_01','SPEAKER_00','SPEAKER_00','SPEAKER_01','SPEAKER_00'],
+    '2|mid':     ['SPEAKER_00','SPEAKER_01','SPEAKER_00','SPEAKER_00','SPEAKER_01','SPEAKER_00','SPEAKER_00','SPEAKER_01','SPEAKER_00'],
+    '2|low':     ['SPEAKER_00','SPEAKER_01','SPEAKER_00','SPEAKER_01','SPEAKER_01','SPEAKER_00','SPEAKER_00','SPEAKER_01','SPEAKER_00'],
+    '2|high':    ['SPEAKER_00','SPEAKER_01','SPEAKER_00','SPEAKER_00','SPEAKER_01','SPEAKER_00','SPEAKER_00','SPEAKER_01','SPEAKER_00'],
+    '3|mid':     ['SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_01','SPEAKER_02'],
+    '3|low':     ['SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_02','SPEAKER_01','SPEAKER_02'],
+    '3|high':    ['SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_01','SPEAKER_02'],
+    '4|mid':     ['SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_03','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_03','SPEAKER_02'],
+    '4|low':     ['SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_03','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_03','SPEAKER_02'],
+    '4|high':    ['SPEAKER_00','SPEAKER_01','SPEAKER_02','SPEAKER_03','SPEAKER_01','SPEAKER_02','SPEAKER_00','SPEAKER_03','SPEAKER_02'],
+  },
+  note:{
+    'auto|mid':  '<b>auto + 默认</b>:模型自行判定为 <b>3</b> 个说话人,三色交替,结构干净——这段音频的"正确答案"。',
+    'auto|low':  '<b>auto + 阈值调低</b>:太容易分裂,判出 <b class="kv-warn">5</b> 个说话人,同一个人被拆成多个标签(过分裂)。',
+    'auto|high': '<b>auto + 阈值调高</b>:太容易合并,只剩 <b class="kv-warn">2</b> 个,第三个人被并进了别人(过合并)。',
+    '2|mid':     '<b>num=2</b>:强行按 2 人聚类,第三个人的段被就近并入——人数给错,结果一定错。',
+    '2|low':     '<b>num=2 + 低阈值</b>:上限锁死 2 人,阈值也压不出更多,仍是错误的 2 人切分。',
+    '2|high':    '<b>num=2 + 高阈值</b>:和默认几乎一致,2 人。约束比阈值更"硬"。',
+    '3|mid':     '<b>num=3</b>:命中真实人数,与 auto 默认结果一致——<b>知道人数就直接传,最稳。</b>',
+    '3|low':     '<b>num=3 + 低阈值</b>:人数锁 3,低阈值只在边界段轻微改归属,整体仍对。',
+    '3|high':    '<b>num=3 + 高阈值</b>:人数锁 3,结果稳定。约束住了人数,阈值影响被削弱。',
+    '4|mid':     '<b>num=4</b>:多给一个名额,聚类被迫把某人的段拆出第 4 个标签(过分裂)。',
+    '4|low':     '<b>num=4 + 低阈值</b>:同样被凑成 4 个,低阈值加剧分裂倾向。',
+    '4|high':    '<b>num=4 + 高阈值</b>:即便阈值想合并,人数下限也逼出 4 个标签。',
+  }
+};
+(function(){
+  let nspk='auto', thr='mid';
+  const lanes=document.getElementById('pg-lanes');
+  const ruler=document.getElementById('pg-ruler');
+  const legend=document.getElementById('pg-legend');
+  const readout=document.getElementById('pg-readout');
+  drawRuler(ruler);
+  function render(){
+    const key=nspk+'|'+thr;
+    const labels=PG.assign[key];
+    const segs=PG.base.map((b,i)=>({s:b.s,e:b.e,spk:labels[i]}));
+    const speakers=drawLanes(lanes, segs);
+    drawLegend(legend, speakers);
+    const n=speakers.length;
+    readout.innerHTML=`判定说话人数 = <b>${n}</b> &nbsp;·&nbsp; ${PG.note[key]}`;
+  }
+  document.querySelectorAll('#pg-nspk button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll('#pg-nspk button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on'); nspk=b.dataset.k; render();
+    });
+  });
+  document.querySelectorAll('#pg-thr button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll('#pg-thr button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on'); thr=b.dataset.k; render();
+    });
+  });
+  render();
+})();
+
+/* ============ 05 RTTM viewer(与时间轴联动) ============ */
+(function(){
+  const pre=document.getElementById('rttm-pre');
+  const rows=heroSegs.map(g=>{
+    const dur=(g.e-g.s);
+    return {spk:g.spk,s:g.s,dur};
+  });
+  pre.innerHTML=rows.map((r,i)=>{
+    const line=`SPEAKER conference 1 ${r.s.toFixed(3)} ${r.dur.toFixed(3)} <NA> <NA> <span style="color:${cvar(SPK[r.spk])}">${r.spk}</span> <NA> <NA>`;
+    return `<span class="rrow" data-i="${i}">${line}</span>`;
+  }).join('');
+  // 与 hero 时间轴联动
+  const heroSegEls=[...document.querySelectorAll('#hero-lanes .seg')];
+  // 依 start 排序 heroSegEls 以对齐 heroSegs 顺序
+  const rrows=[...pre.querySelectorAll('.rrow')];
+  rrows.forEach((row,i)=>{
+    row.addEventListener('mouseenter',()=>{
+      row.classList.add('hi');
+      const target=heroSegEls.find(el=>Math.abs(+el.dataset.s-heroSegs[i].s)<0.01);
+      if(target){target.style.transform='scaleY(1.3)';target.style.filter='brightness(1.3)';}
+    });
+    row.addEventListener('mouseleave',()=>{
+      row.classList.remove('hi');
+      const target=heroSegEls.find(el=>Math.abs(+el.dataset.s-heroSegs[i].s)<0.01);
+      if(target){target.style.transform='';target.style.filter='';}
+    });
+  });
+})();
+</script>
+</body>
+</html>
