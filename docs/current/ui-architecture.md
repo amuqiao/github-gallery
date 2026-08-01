@@ -17,7 +17,7 @@ shadcn-style primitives
   提供 Button、Badge、Card、HoverCardLink 等稳定 UI 语义。
 
 Business components
-  组合 UI primitives，并消费已解析的 content/hall read model。
+  组合 UI primitives，并消费已解析的 content/hall read model 或 catalog projection。
 
 Pages
   做页面编排，并把 site read model 以 props 传给 layout。
@@ -54,6 +54,8 @@ astro.config.mjs
 html[data-layout="bento-editorial"][data-theme="editorial-paper"]
 ```
 
+内容卡片、item 详情 header 和搜索索引的业务展示字段由 `src/lib/catalog/projections.ts` 从 content read model 派生；UI 组件消费这些投影结果，不直接维护 kind/profile 到标签、统计和检索标签的映射。
+
 ## Presentation Registry
 
 | File | Owns | Does Not Own |
@@ -87,7 +89,7 @@ html[data-layout="bento-editorial"][data-theme="editorial-paper"]
 | Component | Uses | Owns |
 | --- | --- | --- |
 | `PageHeader` | `SectionHeader`、`Card` | 页面首屏标题、统计和行动区。 |
-| `ContentItemCard` | `HoverCardLink`、content item read model、taxonomy read model | canonical content item 卡片内容。 |
+| `ContentItemCard` | `HoverCardLink`、content item card projection | canonical content item 卡片内容。 |
 | `ContentCollectionCard` | `HoverCardLink`、content collection read model | canonical 馆内专题卡片内容。 |
 | `ContentNoteCard` | `HoverCardLink`、content note read model | canonical 附加笔记卡片内容。 |
 | `HallCard` | `HoverCardLink`、hall read model | 平台首页单个展馆入口和状态展示。 |
@@ -99,4 +101,4 @@ html[data-layout="bento-editorial"][data-theme="editorial-paper"]
 
 ## Verification
 
-`./scripts/verify.sh check` 会运行 content release gate、Astro 类型检查和 static build。
+`./scripts/verify.sh check` 会运行 fast catalog gate、Astro 类型检查和 static build。

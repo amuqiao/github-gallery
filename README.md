@@ -10,6 +10,7 @@ catalog/content/{drafts,published,archived}/ # content bundle 合同；published
 catalog/taxonomies.yaml             # 共享分类、标签和项目维护状态词表
 catalog/site.yaml                   # 站点标题、描述和导航
 src/lib/catalog/                    # schema、loader、adapter
+src/lib/catalog/projections.ts      # content read model 到页面、卡片、搜索视图的投影
 src/styles/global.css               # Tailwind 入口和 shadcn-style token
 src/components/ui/                  # 通用 UI primitives
 src/components/blocks/              # typed block renderers
@@ -48,6 +49,7 @@ npm install
 ./scripts/dev.sh start
 ./scripts/verify.sh check
 ./scripts/verify.sh release
+./scripts/verify.sh catalog
 ./scripts/content-workflow-test.sh
 ```
 

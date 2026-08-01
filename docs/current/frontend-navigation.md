@@ -70,4 +70,4 @@ catalog YAML
 
 ## Verification
 
-`./scripts/verify.sh check` 会运行 content release gate、Astro 类型检查和 static build。
+`./scripts/verify.sh check` 会运行 fast catalog gate、Astro 类型检查和 static build。

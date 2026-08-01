@@ -45,7 +45,7 @@ catalog/content/published/github/collections/voice-cloning/
 | --- | --- |
 | `id` | 必填，必须匹配目录名。 |
 | `hall` | 必填，必须匹配所在 hall 目录。 |
-| `kind` | 必填，当前支持 `github_project`、`ai_model`。 |
+| `kind` | 必填，当前支持 `github_project`、`ai_model`、`knowledge_article`。 |
 | `title` | 必填，展示标题。 |
 | `summary` | 必填，最多 180 字符。 |
 | `source.type` | 必填，来源类型字符串。 |
@@ -91,6 +91,14 @@ catalog/content/published/github/collections/voice-cloning/
 | `runtimes` | 必填，运行时。 |
 | `license` | 可选，展示事实。 |
 
+`knowledge_article.profile`：
+
+| Field | Rule |
+| --- | --- |
+| `domain` | 必填，知识文章所属领域。 |
+| `topics` | 必填，主题数组，1 到 8 项。 |
+| `audience` | 可选，适合读者数组，最多 6 项。 |
+
 ## Collection
 
 `collection.yaml` 当前使用 `schema_version: 2`，并且从属于某个 hall。
@@ -121,7 +129,7 @@ catalog/content/published/github/collections/voice-cloning/
 当前已实现的维护入口是 `./scripts/content.sh`：
 
 ```sh
-./scripts/content.sh item new <hall> <github_project|ai_model> <id> ...
+./scripts/content.sh item new <hall> <github_project|ai_model|knowledge_article> <id> ...
 ./scripts/content.sh item note add <hall> <id> <note-id> ...
 ./scripts/content.sh item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>]
 ./scripts/content.sh item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
@@ -152,7 +160,7 @@ Content import batch 合同见 [`content-import-batch.md`](./content-import-batc
 
 ## Verification
 
-`src/pages/index.astro` 会在构建期调用 `getContentCatalogSnapshot()`，因此 `./scripts/verify.sh check`、`catalog`、`content` 和 `release` 都会触发 content bundle 校验。`release` 还会先通过 `scripts/verify/release-gate.mjs` 调用 `src/lib/catalog/content-validator.js`，作为正式发布门禁。
+`./scripts/verify.sh catalog` 和 `./scripts/verify.sh content` 通过 `scripts/verify/catalog-gate.mjs` 调用 `src/lib/catalog/content-validator.js`，只执行 fast catalog gate。`./scripts/verify.sh check` 会先运行 fast catalog gate，再运行 Astro check 和 static build。`./scripts/verify.sh release` 会先通过 `scripts/verify/release-gate.mjs` 调用同一 validator，再运行 Astro check 和 static build，作为正式发布门禁。
 
 校验覆盖：
 
@@ -169,7 +177,7 @@ Content import batch 合同见 [`content-import-batch.md`](./content-import-batc
 - 同一 `(hall, id)` item 或 collection 不能跨 publication state 重复出现。
 - published collection 只能引用同一 hall 下的 published item。
 
-`release` 的特有行为是先运行上述 content bundle gate，再运行 Astro check 和 static build。
+`catalog` 和 `content` 不执行 Astro check 或 static build。`release` 的特有行为是先运行上述 content bundle gate，再运行 Astro check 和 static build。
 
 ## Public Routes
 

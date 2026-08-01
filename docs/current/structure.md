@@ -15,6 +15,7 @@
 - `src/lib/catalog/halls.ts` 构建展馆入口 read model，并校验 hall 目录名和 id 一致。
 - `src/lib/catalog/content-validator.js` 校验 content bundle publication state、hall、item、collection、body、notes、taxonomy 和跨状态引用规则。
 - `src/lib/catalog/content.ts` 构建 content bundle read model、公开内容过滤、相关 item 查询和 canonical route 派生。
+- `src/lib/catalog/projections.ts` 把 content read model 投影成 item 详情 header、内容卡片和搜索索引使用的稳定视图。
 - `src/lib/catalog/site.ts` 读取站点配置。
 - `src/lib/catalog/taxonomy.ts` 读取并本地化 taxonomy。
 - `src/lib/catalog/details.ts` 只加载 content bundle 的 Markdown/HTML body 和 item notes。
@@ -63,7 +64,8 @@ catalog/taxonomies.yaml
   -> src/lib/catalog/catalog-schema.js
   -> src/lib/catalog/taxonomy.ts
   -> src/lib/catalog/content-validator.js
-  -> ContentItemCard and canonical item pages
+  -> src/lib/catalog/projections.ts
+  -> ContentItemCard, canonical item pages, search index
 
 catalog/site.yaml
   -> src/lib/catalog/site.ts
@@ -84,6 +86,11 @@ scripts/verify.sh release
   -> src/lib/catalog/content-validator.js
   -> npm run build
   -> Astro check and static build
+
+scripts/verify.sh catalog|content
+  -> scripts/verify/catalog-gate.mjs
+  -> src/lib/catalog/content-validator.js
+  -> fast catalog-only validation
 ```
 
 ## Public Routes
@@ -122,7 +129,8 @@ Legacy root routes such as `/projects/*`, `/collections/*`, `/categories/*`, `/t
 ## Verification
 
 - `npm run build` runs `astro check` and `astro build`.
-- `./scripts/verify.sh check` runs the content release gate and static build.
+- `./scripts/verify.sh check` runs the fast catalog gate and static build.
 - `./scripts/verify.sh release` validates published content semantics and then builds.
+- `./scripts/verify.sh catalog` and `./scripts/verify.sh content` run the fast catalog-only gate and do not execute Astro build.
 - Content validation fails on invalid schema, unknown hall, planned hall content, missing body/note files, symlinks, path escape, duplicate bundle keys, unknown taxonomy ids, invalid related project ids, or published collections referencing non-published items.
 - `./scripts/content.sh list`、`show` 和 `status` 是只读 catalog 查询；它们不会加 catalog write lock，不会运行验证，也不会触发 build。

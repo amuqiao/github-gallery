@@ -114,7 +114,9 @@ cp .env.example .env
 
 `verify.sh` 不检查维护文档。文档只解释已实现规则，代码和 loader 才是真相源。
 
-`verify.sh check` 会先运行 content release gate，再运行 Astro check 和 static build。release gate 覆盖 publication state 目录、active hall 归属、item/collection schema、body/notes 文件引用、重复 bundle key、related project 引用，以及 published collection 只能引用同 hall published item。
+`verify.sh check` 会先运行 fast catalog gate，再运行 Astro check 和 static build。catalog gate 覆盖 publication state 目录、active hall 归属、item/collection schema、body/notes 文件引用、重复 bundle key、related project 引用，以及 published collection 只能引用同 hall published item。
+
+`verify.sh catalog` 和 `verify.sh content` 只运行 fast catalog gate，不执行 Astro check 或 static build。`verify.sh release` 是正式发布门禁，会先运行 release gate，再运行 Astro check 和 static build。
 
 `verify.sh build` 只运行 `npm run build`。
 

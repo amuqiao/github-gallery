@@ -4,7 +4,8 @@
 
 - `catalog/content/{drafts,published,archived}/<hall>/items|collections/` 是公开展馆内容的唯一内容源。
 - `scripts/content.sh` 是内容维护入口，当前支持 item 草稿创建、item note 添加、collection 草稿创建、content import batch、publish、archive、restore，以及只读 `list`、`show`、`status` 查询。
-- `scripts/verify.sh check` 和 `scripts/verify.sh release` 会运行 content release gate、Astro check 和 static build。
+- `scripts/verify.sh check` 会运行 fast catalog gate、Astro check 和 static build。
+- `scripts/verify.sh release` 会运行 content release gate、Astro check 和 static build。
 - `scripts/content.sh` 写操作会加 `.data/catalog-write.lock`，写入或移动失败时会尝试回滚。
 - `scripts/content-workflow-test.sh` 已作为独立测试入口存在。当前 Phase 5 覆盖仓库外隔离副本、主仓库前后状态检查、成功清理、失败留痕，GitHub item、模型 item、Markdown note、HTML note、同馆 collection 的创建、发布、归档、恢复、手工编辑、重新发布、只读 list/show/status、列表可见性和渲染内容断言，import batch 的 create、replace、delete、drafts-only 和最小回滚路径，以及确定性失败/幂等边界。
 - `scripts/content-workflow-test.sh` 当前不会写入真实 `catalog/content/`，也不会默认进入 `scripts/verify.sh check`；真实生命周期测试只在仓库外副本执行。
