@@ -1,6 +1,7 @@
 ---
 import type { ContentItem } from "@/lib/catalog/content";
 import { getCategory, getTag, getTaxonomyCatalog } from "@/lib/catalog/taxonomy";
+import HoverCardLink from "@/components/ui/HoverCardLink.astro";
 
 interface Props {
   item: ContentItem;
@@ -34,7 +35,7 @@ if (item.kind === "ai_model") {
 }
 ---
 
-<a class="project-card" href={item.route} aria-label={`查看 ${item.title} 详情`}>
+<HoverCardLink class="project-card" tone="item" href={item.route} aria-label={`查看 ${item.title} 详情`}>
   <div class="project-card__top">
     <div class="project-card__title-group">
       {order && <span class="project-card__order">{String(order).padStart(2, "0")}</span>}
@@ -60,4 +61,4 @@ if (item.kind === "ai_model") {
     <span class="project-card__language"><span aria-hidden="true"></span>{primaryFacts.filter(Boolean).join(" · ") || sourceLabel}</span>
     <span class="project-card__read">查看详情 →</span>
   </div>
-</a>
+</HoverCardLink>

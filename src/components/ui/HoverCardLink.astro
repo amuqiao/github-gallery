@@ -1,0 +1,16 @@
+---
+import type { HTMLAttributes } from "astro/types";
+
+interface Props extends HTMLAttributes<"a"> {
+  tone: "hall-entry" | "planned" | "item" | "collection" | "note";
+}
+
+const { tone, class: className, ...anchorProps } = Astro.props;
+---
+
+<a
+  {...anchorProps}
+  class:list={["gallery-card-link", `gallery-card-link--${tone}`, className]}
+>
+  <slot />
+</a>

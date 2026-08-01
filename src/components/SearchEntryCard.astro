@@ -1,4 +1,6 @@
 ---
+import HoverCardLink from "@/components/ui/HoverCardLink.astro";
+
 interface SearchEntry {
   id: string;
   type: "item" | "note";
@@ -15,9 +17,10 @@ interface SearchEntry {
 
 interface Props {
   entry: SearchEntry;
+  index?: number;
 }
 
-const { entry } = Astro.props;
+const { entry, index } = Astro.props;
 
 const formatAddedAt = (value: string) => {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -31,9 +34,16 @@ const formatAddedAt = (value: string) => {
 
 const typeLabel = entry.type === "note" ? "笔记" : "条目";
 const kindLabel = entry.kind.replaceAll("_", " ");
+const tone = entry.type === "note" ? "note" : "item";
 ---
 
-<a class="search-entry-card" href={entry.route} aria-label={`查看${typeLabel} ${entry.title}`}>
+<HoverCardLink
+  class="search-entry-card"
+  tone={tone}
+  href={entry.route}
+  aria-label={`查看${typeLabel} ${entry.title}`}
+  data-search-index={index}
+>
   <div class="search-entry-card__top">
     <span class="search-entry-card__type">{typeLabel}</span>
     <time class="search-entry-card__date" datetime={entry.added_at}>{formatAddedAt(entry.added_at)}</time>
@@ -55,4 +65,4 @@ const kindLabel = entry.kind.replaceAll("_", " ");
     <span class="search-entry-card__meta">{entry.hall} / {kindLabel}</span>
     <span class="search-entry-card__action">打开 →</span>
   </div>
-</a>
+</HoverCardLink>

@@ -53,7 +53,7 @@ const serializedEntries = JSON.stringify(entries).replaceAll("</", "<\\/");
   </form>
 
   <div class="search-entry-grid" id={listId}>
-    {entries.map((entry) => <SearchEntryCard entry={entry} />)}
+    {entries.map((entry, index) => <SearchEntryCard entry={entry} index={index} />)}
   </div>
   <p class="search-shell__empty" id={emptyId} hidden>没有匹配结果，试试标题、标签或关键词片段。</p>
 </section>
@@ -100,6 +100,15 @@ const serializedEntries = JSON.stringify(entries).replaceAll("</", "<\\/");
       }
     };
   });
+  const cardByIndex = new Map(
+    Array.from(list.querySelectorAll("[data-search-index]")).map((card) => {
+      if (!(card instanceof HTMLElement)) {
+        throw new Error("ContentSearch 搜索结果卡片不是 HTMLElement。");
+      }
+
+      return [Number(card.dataset.searchIndex), card];
+    })
+  );
 
   const query = new URL(window.location.href).searchParams.get("q")?.trim() ?? "";
 
@@ -219,95 +228,20 @@ const serializedEntries = JSON.stringify(entries).replaceAll("</", "<\\/");
           .map((result) => result.entry)
       : normalizedEntries;
 
-    list.replaceChildren(...results.map((entry) => renderEntry(entry)));
+    list.replaceChildren(...results.map((entry) => getEntryCard(entry)));
     count.textContent = normalizedQuery ? `匹配 ${results.length} 条结果` : `共 ${results.length} 条结果`;
     empty.hidden = results.length > 0;
     list.hidden = results.length === 0;
   }
 
-  function renderEntry(entry) {
-    const article = document.createElement("a");
-    article.className = "search-entry-card";
-    article.href = entry.route;
-    article.setAttribute("aria-label", `查看${entry.type === "note" ? "笔记" : "条目"} ${entry.title}`);
+  function getEntryCard(entry) {
+    const card = cardByIndex.get(entry._index);
 
-    const top = document.createElement("div");
-    top.className = "search-entry-card__top";
-
-    const type = document.createElement("span");
-    type.className = "search-entry-card__type";
-    type.textContent = entry.type === "note" ? "笔记" : "条目";
-
-    const date = document.createElement("time");
-    date.className = "search-entry-card__date";
-    date.dateTime = entry.added_at;
-    date.textContent = formatAddedAt(entry.added_at);
-
-    top.append(type, date);
-
-    const body = document.createElement("div");
-    body.className = "search-entry-card__body";
-
-    const title = document.createElement("h3");
-    title.className = "search-entry-card__title";
-    title.textContent = entry.title;
-
-    const id = document.createElement("p");
-    id.className = "search-entry-card__id";
-    id.textContent = entry.id;
-
-    body.append(title, id);
-
-    if (entry.parentTitle) {
-      const parent = document.createElement("p");
-      parent.className = "search-entry-card__parent";
-      parent.textContent = `关联条目 · ${entry.parentTitle}`;
-      body.append(parent);
+    if (!card) {
+      throw new Error(`ContentSearch 找不到索引为 ${entry._index} 的搜索结果卡片。`);
     }
 
-    const summary = document.createElement("p");
-    summary.className = "search-entry-card__summary";
-    summary.textContent = entry.summary;
-    body.append(summary);
-
-    const labels = document.createElement("ul");
-    labels.className = "search-entry-card__labels";
-    labels.setAttribute("aria-label", "搜索标签");
-
-    for (const labelText of entry.labels.slice(0, 5)) {
-      const item = document.createElement("li");
-      const label = document.createElement("span");
-      label.className = "search-entry-card__label";
-      label.textContent = labelText;
-      item.append(label);
-      labels.append(item);
-    }
-
-    const footer = document.createElement("div");
-    footer.className = "search-entry-card__footer";
-
-    const meta = document.createElement("span");
-    meta.className = "search-entry-card__meta";
-    meta.textContent = `${entry.hall} / ${entry.kind.replaceAll("_", " ")}`;
-
-    const action = document.createElement("span");
-    action.className = "search-entry-card__action";
-    action.textContent = "打开 →";
-
-    footer.append(meta, action);
-    article.append(top, body);
-
-    if (entry.labels.length > 0) {
-      article.append(labels);
-    }
-
-    article.append(footer);
-    return article;
-  }
-
-  function formatAddedAt(value) {
-    const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    return match ? `${match[1]}年${Number(match[2])}月${Number(match[3])}日` : value;
+    return card;
   }
 
   function syncUrl(queryValue) {

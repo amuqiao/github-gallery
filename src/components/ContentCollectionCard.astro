@@ -1,5 +1,6 @@
 ---
 import type { ContentCollection } from "@/lib/catalog/content";
+import HoverCardLink from "@/components/ui/HoverCardLink.astro";
 
 interface Props {
   collection: ContentCollection;
@@ -13,7 +14,12 @@ const preview = collection.items
   .join(" · ");
 ---
 
-<a class="collection-card collection-card--standard" href={collection.route} aria-label={`查看 ${collection.title} 专题`}>
+<HoverCardLink
+  class="collection-card collection-card--standard"
+  tone="collection"
+  href={collection.route}
+  aria-label={`查看 ${collection.title} 专题`}
+>
   <div class="collection-card__meta">
     <span class="collection-card__kind"><span aria-hidden="true">✦</span> 专题</span>
     <span class="collection-card__count">{collection.items.length} 个条目 · 已发布</span>
@@ -28,4 +34,4 @@ const preview = collection.items
   <p class="collection-card__summary">{collection.summary}</p>
   <p class="collection-card__members">{preview}</p>
   <span class="collection-card__link">查看专题 →</span>
-</a>
+</HoverCardLink>

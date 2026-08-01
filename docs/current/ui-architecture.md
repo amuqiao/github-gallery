@@ -14,7 +14,7 @@ Tailwind CSS
   提供 utility、响应式规则和主题 token。
 
 shadcn-style primitives
-  提供 Button、Badge、Card 等稳定 UI 语义。
+  提供 Button、Badge、Card、HoverCardLink 等稳定 UI 语义。
 
 Business components
   组合 UI primitives，并消费已解析的 content/hall read model。
@@ -73,20 +73,24 @@ html[data-layout="bento-editorial"][data-theme="editorial-paper"]
 | `Button` | 按钮/链接按钮 variants 和 focus 样式。 | 业务动作语义。 |
 | `Badge` | 分类、标签等小型标记样式。 | taxonomy 读取和校验。 |
 | `ChipLink` | 带可选计数的导航 chip 链接样式。 | taxonomy 读取和路由生成。 |
-| `Card` | 卡片外壳、边框、背景、阴影。 | 卡片内部业务结构。 |
+| `Card` | 非交互卡片外壳、边框、背景、阴影。 | 可点击卡片 hover 语义、卡片内部业务结构。 |
+| `HoverCardLink` | 可点击卡片的链接壳层、hover tone class、focus 样式入口。 | 具体卡片内容结构、catalog 读取。 |
 | `SectionHeader` | eyebrow、标题、说明文本层级。 | 页面数据加载。 |
 | `EmptyState` | 空集合提示。 | 空状态判断规则。 |
 | `ContentBlock` | typed block 标题和内容外壳。 | block schema 和 adapter。 |
 | `Prose` | Markdown/HTML fragment 详情正文容器。 | 内容加载和详情格式合同。 |
+
+可点击卡片的 hover 颜色只通过 `HoverCardLink` 的 `tone` 和 `src/styles/global.css` 里的 `--tone-*` token 派生。业务组件不得新增自己的 `:hover` 边框或阴影颜色规则。
 
 ## Business Component Boundary
 
 | Component | Uses | Owns |
 | --- | --- | --- |
 | `PageHeader` | `SectionHeader`、`Card` | 页面首屏标题、统计和行动区。 |
-| `ContentItemCard` | content item read model、taxonomy read model | canonical content item 卡片。 |
-| `ContentCollectionCard` | content collection read model | canonical 馆内专题卡片。 |
-| `HallCard` | hall read model | 平台首页单个展馆入口和状态展示。 |
+| `ContentItemCard` | `HoverCardLink`、content item read model、taxonomy read model | canonical content item 卡片内容。 |
+| `ContentCollectionCard` | `HoverCardLink`、content collection read model | canonical 馆内专题卡片内容。 |
+| `ContentNoteCard` | `HoverCardLink`、content note read model | canonical 附加笔记卡片内容。 |
+| `HallCard` | `HoverCardLink`、hall read model | 平台首页单个展馆入口和状态展示。 |
 | `PlannedHallPage` | `PageHeader`、`Button` | planned 展馆占位页。 |
 | `Breadcrumbs` | link props | 层级导航。 |
 | `BlockRenderer` | adapted typed blocks | block 渲染分发。 |

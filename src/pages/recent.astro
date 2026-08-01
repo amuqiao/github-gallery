@@ -4,6 +4,7 @@ import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import PageHeader from "@/components/PageHeader.astro";
 import Button from "@/components/ui/Button.astro";
 import EmptyState from "@/components/ui/EmptyState.astro";
+import HoverCardLink from "@/components/ui/HoverCardLink.astro";
 import { getRecentPublishedEntries } from "@/lib/catalog/search";
 import { getSiteConfig } from "@/lib/catalog/site";
 
@@ -87,8 +88,9 @@ const recentGroups = entries.reduce<Array<{ date: string; entries: typeof entrie
                 </div>
                 <div class="recent-timeline__items">
                   {group.entries.map((entry) => (
-                    <a
-                      class="recent-card"
+                    <HoverCardLink
+                      class={`recent-card recent-card--${entry.type}`}
+                      tone={entry.type === "note" ? "note" : "item"}
                       href={entry.route}
                       aria-label={`查看${typeLabel(entry.type)} ${entry.title}，${entry.hall} / ${kindLabel(entry.kind)}`}
                     >
@@ -98,7 +100,6 @@ const recentGroups = entries.reduce<Array<{ date: string; entries: typeof entrie
                           <span class="recent-card__meta">{entry.hall} / {kindLabel(entry.kind)}</span>
                         </div>
                         <h3 class="recent-card__title">{entry.title}</h3>
-                        {entry.parentTitle && <p class="recent-card__parent">关联 · {entry.parentTitle}</p>}
                         <p class="recent-card__summary">{entry.summary}</p>
                       </div>
                       {
@@ -108,7 +109,7 @@ const recentGroups = entries.reduce<Array<{ date: string; entries: typeof entrie
                           </ul>
                         )
                       }
-                    </a>
+                    </HoverCardLink>
                   ))}
                 </div>
               </section>

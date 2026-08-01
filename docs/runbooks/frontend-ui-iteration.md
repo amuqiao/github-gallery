@@ -30,7 +30,7 @@ src/pages/*
 1. 先判断变化属于 theme token、UI primitive、业务组件还是页面编排。
 2. 颜色、半径、基础语义 token 改 `src/styles/global.css`。
 3. 新增皮肤版本时，先在 `src/presentation/themes.ts` 和 `src/presentation/types.ts` 注册 theme。
-4. Button、Badge、Card、EmptyState 这类通用样式改 `src/components/ui/`。
+4. Button、Badge、Card、HoverCardLink、EmptyState 这类通用样式改 `src/components/ui/`。
 5. ContentItemCard、ContentCollectionCard、HallCard 这类业务展示改 `src/components/`。
 6. 页面只调整组件顺序和 props，不堆复杂 Tailwind class。
 7. 运行 `./scripts/verify.sh check`。
@@ -56,13 +56,14 @@ Button
 Badge
 ChipLink
 Card
+HoverCardLink
 SectionHeader
 EmptyState
 ContentBlock
 Prose
 ```
 
-不要在业务组件里复制一套按钮、徽标或卡片样式。
+不要在业务组件里复制一套按钮、徽标或卡片样式。可点击卡片必须使用 `HoverCardLink`，hover 色只通过 `tone` 和 `src/styles/global.css` 的 `--tone-*` token 控制。
 
 ## Drift Checklist
 
@@ -70,6 +71,7 @@ Prose
 [ ] `BaseLayout.astro` 没有新增业务组件样式。
 [ ] `BaseLayout.astro` 没有直接调用 catalog loader。
 [ ] 通用视觉变化进入 `src/components/ui/` 或 `src/styles/global.css`。
+[ ] 可点击卡片通过 `HoverCardLink` 声明 tone，没有业务组件私写卡片 hover 色。
 [ ] 新皮肤通过 `html[data-theme="<id>"]` token 生效。
 [ ] layoutId 和 themeId 仍在 `src/presentation/config.ts` 集中切换。
 [ ] 业务组件没有直接解析 YAML。

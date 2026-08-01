@@ -1,5 +1,6 @@
 ---
 import type { ContentNote } from "@/lib/catalog/content";
+import HoverCardLink from "@/components/ui/HoverCardLink.astro";
 
 interface Props {
   note: ContentNote;
@@ -9,8 +10,9 @@ const { note } = Astro.props;
 const opensStandaloneDocument = note.display === "standalone";
 ---
 
-<a
+<HoverCardLink
   class="model-note-card"
+  tone="note"
   href={note.route}
   target={opensStandaloneDocument ? "_blank" : undefined}
   rel={opensStandaloneDocument ? "noopener noreferrer" : undefined}
@@ -18,4 +20,4 @@ const opensStandaloneDocument = note.display === "standalone";
   <span>{note.type === "markdown" ? "Markdown" : "HTML"}</span>
   <strong>{note.title}</strong>
   <p>{note.summary}</p>
-</a>
+</HoverCardLink>
