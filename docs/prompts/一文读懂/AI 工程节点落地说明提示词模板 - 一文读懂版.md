@@ -9,11 +9,11 @@
 - 想探索一个 AI 工程想法怎么落地：复制 `主模板 1`
 - 想讲清一个已有工程怎么实现：复制 `主模板 2`
 
-下面的纠偏补丁只在模型跑偏时追加，不需要每次都复制。
+纠偏补丁只在模型输出跑偏时追加，不需要每次复制。本文中的 `md` 代码块都是可复制提示词。
 
 ## 主模板 1：探索想法如何落地
 
-~~~md
+```md
 请按“AI 工程节点落地说明”的方式生成《一文读懂》交互式 HTML 内容。
 
 当前主题：[填写你要探索的 AI 工程想法，例如：以图搜图、RAG、多模态检索、语音识别质检]
@@ -94,11 +94,11 @@
 - 只画架构图，不说明每个节点输入输出。
 - 直接生成完整项目代码或复杂服务架构。
 - 把 POC、小团队、中团队、企业级方案混在一起。
-~~~
+```
 
 ## 主模板 2：讲清已有工程如何实现
 
-~~~md
+```md
 请按“AI 工程节点落地说明”的方式讲清这个已有 AI 工程、开源项目或系统实现。
 
 当前对象：[填写项目名、仓库、论文工程、系统名或已有方案]
@@ -161,15 +161,15 @@
 - 把已有工程讲成通用科普。
 - 只列技术栈，不讲每个技术栈承担的节点职责。
 - 只说“用了向量库 / 用了 embedding / 用了 BM25”，但不解释输入输出和落地方式。
-~~~
+```
 
-## 纠偏补丁
+## 可选纠偏补丁
 
 这些片段只在模型输出跑偏时追加。
 
 ### 补丁 1：节点讲得太虚
 
-~~~md
+```md
 你刚才的输出仍然偏概念化。请重写关键节点说明。
 
 每个节点必须补齐：
@@ -184,11 +184,11 @@
 不要只写“使用 BM25”“使用 embedding”“使用向量数据库”。
 例如 BM25 要说明可用 `rank-bm25`、`bm25s`、SQLite FTS、Elasticsearch 或 OpenSearch。
 Embedding 要说明可用 `sentence-transformers`、CLIP / OpenCLIP、本地 embedding 模型或云 API。
-~~~
+```
 
 ### 补丁 2：没讲清存储选型
 
-~~~md
+```md
 请补充存储选型说明。
 
 必须明确区分：
@@ -200,11 +200,11 @@ Embedding 要说明可用 `sentence-transformers`、CLIP / OpenCLIP、本地 emb
 
 请分别说明 POC、小团队、中团队、企业级别的选择。
 不要默认所有方案都需要向量数据库、关系数据库或图数据库。
-~~~
+```
 
 ### 补丁 3：没讲评估指标
 
-~~~md
+```md
 请补充评估指标。
 
 不要只说“效果更好”或“准确率更高”。
@@ -214,11 +214,11 @@ Embedding 要说明可用 `sentence-transformers`、CLIP / OpenCLIP、本地 emb
 - POC 阶段如何构造小样例验证。
 - 上线后如何持续监控。
 - 模型指标和工程指标分别是什么。
-~~~
+```
 
 ### 补丁 4：内容发散，需要收口
 
-~~~md
+```md
 请收口到工程落地链路。
 
 最终内容必须让读者回答：
@@ -230,138 +230,19 @@ Embedding 要说明可用 `sentence-transformers`、CLIP / OpenCLIP、本地 emb
 - 哪些组件现在不用上，什么时候再升级。
 
 不要继续扩展泛泛的背景、趋势、优缺点或完整工程架构。
-~~~
+```
 
-## 示例标尺
+## 粒度标尺
 
-下面示例用于校准生成粒度。重点不是代码完整，而是让读者知道“这个节点实际怎么做”。
+本节只用于维护者校准讲解深度，不是可复制提示词。
 
-### BM25 关键词召回
-
-~~~text
-节点：BM25 关键词召回
-
-解决什么：
-用关键词匹配补足 embedding 语义检索漏掉的精确词、编号、专有名词。
-
-默认落地方式：
-Python POC 用 `rank-bm25` 或 `bm25s`。
-不建议手写 BM25，除非只是教学演示。
-
-输入：
-documents: list[str] 或 list[list[str]]
-query: str
-
-处理逻辑：
-对 documents 和 query 做同样的分词 / 归一化。
-建立 BM25 索引。
-对 query 打分，取 Top-K。
-
-输出：
-[(doc_id, score), ...]
-或带原文 chunk 的 Top-K 候选列表。
-
-伪代码：
-tokenized_docs = tokenize(documents)
-bm25 = BM25Okapi(tokenized_docs)
-scores = bm25.get_scores(tokenize(query))
-top_k = argsort(scores)[-k:]
-
-平替方案：
-POC：rank-bm25 / bm25s
-小规模：SQLite FTS / Whoosh
-中大型：Tantivy / Elasticsearch / OpenSearch
-
-常见坑：
-中文没有分词。
-文档和 query 分词规则不一致。
-只用 BM25 会漏掉语义相似但字面不同的内容。
-~~~
-
-### Embedding 语义向量
-
-~~~text
-节点：Embedding 语义向量
-
-解决什么：
-把文本、图片、音频等对象变成可比较的向量，用于语义相似度、召回、聚类或去重。
-
-默认落地方式：
-文本 POC 用 `sentence-transformers` 或云 embedding API。
-图像 POC 用 CLIP / OpenCLIP。
-不建议自己训练 embedding 模型，除非已经有明确数据和评测闭环。
-
-输入：
-chunks: list[str]
-或 image_paths: list[str]
-
-处理逻辑：
-加载模型。
-批量编码输入。
-可选：L2 normalize。
-保存向量和原始对象 ID 的映射。
-
-输出：
-embeddings: ndarray[item_count, dim]
-ids: list[str]
-metadata: list[dict]
-
-伪代码：
-model = load_embedding_model()
-embeddings = model.encode(inputs, normalize_embeddings=True)
-save({"ids": ids, "embeddings": embeddings, "metadata": metadata})
-
-平替方案：
-文本 POC：sentence-transformers / bge / e5 / GTE
-图像 POC：CLIP / OpenCLIP
-API：OpenAI / Voyage / Jina 等 embedding API
-大规模：批处理 + FAISS / Qdrant / Milvus / pgvector
-
-常见坑：
-chunk 切得太碎或太长。
-没有归一化却直接按余弦相似度理解。
-向量和原始对象 ID 的映射丢失，导致检索结果无法回到原文。
-~~~
-
-### 以图搜图最小链路
-
-~~~text
-原始输入：
-query_image_path: str
-gallery_image_paths: list[str]
-
-节点 1：图片向量化
-推荐实现：OpenCLIP / CLIP
-输入：image_paths
-输出：image_embeddings: ndarray[n, dim]
-
-节点 2：向量索引
-推荐实现：POC 用 FAISS 本地索引；在线服务可用 Qdrant / Milvus / pgvector。
-输入：image_ids + image_embeddings
-输出：vector_index + id 映射表
-
-节点 3：相似图片召回
-推荐实现：对 query 图片算 embedding，再在索引里 Top-K 搜索。
-输入：query_embedding
-输出：[(image_id, score), ...]
-
-节点 4：元数据回查
-推荐实现：POC 用 JSON / SQLite；生产用 PostgreSQL。
-输入：image_id
-输出：图片路径、标题、标签、业务字段、可访问 URL。
-
-最终输出：
-Top-K 相似图片列表，每项包含 image_id、score、thumbnail_url、metadata。
-
-选型判断：
-POC 不一定需要向量数据库，FAISS 本地索引即可。
-需要业务字段、状态、权限时才引入关系数据库。
-只有要表达复杂实体关系、路径推理、知识图谱时才考虑图数据库。
-~~~
+- BM25 关键词召回应讲到：用 `rank-bm25`、`bm25s`、SQLite FTS、Elasticsearch 或 OpenSearch，而不是只写“使用 BM25”；输入是文档和 query，输出是带分数的 Top-K 候选。
+- Embedding 语义向量应讲到：文本可用 `sentence-transformers` 或云 embedding API，图像可用 CLIP / OpenCLIP；输出要包含向量、原始对象 ID 和 metadata 映射。
+- 以图搜图最小链路应讲到：图片向量化、向量索引、相似图片召回、元数据回查；POC 可以先用 FAISS 和 JSON / SQLite，不要默认上向量数据库和关系数据库。
 
 ## 维护规则
 
 - 本文只维护“AI 工程节点如何落地”的提示词，不维护具体领域完整方案。
 - 主模板必须能单独复制使用，不依赖下面的补丁。
 - 纠偏补丁只解决模型跑偏问题，不重复主模板。
-- 新增示例时必须包含输入、输出、依赖、伪代码、平替和升级。
+- 示例、历史讨论和粒度标尺不要放进可复制提示词代码块。
