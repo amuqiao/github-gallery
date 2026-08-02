@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>以图搜图 · 一文读懂</title>
+<style>
+  :root{
+    --bg:#f7f6f1;
+    --bg-alt:#efece3;
+    --bg-alt-2:#e7e3d6;
+    --card:#ffffff;
+    --line:#ddd7c6;
+    --line-strong:#c7bfa8;
+    --ink:#211f1a;
+    --ink-soft:#5c5748;
+    --fog:#7a7566;
+    --fog-2:#948d7a;
+
+    --red:#a8432d;
+    --red-bg:#f6e9e4;
+    --red-line:#d9a893;
+
+    --teal:#1f7a71;
+    --teal-bg:#e3efec;
+    --teal-line:#a9cfc8;
+
+    --amber:#9c6a1f;
+    --amber-bg:#f4ecdd;
+
+    --code-bg:#f1efe6;
+    --code-line:#ddd6c2;
+    --code-ink:#2a2820;
+
+    --font-display:'Songti SC','Noto Serif SC','STSong','Georgia','Times New Roman',serif;
+    --font-body:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;
+    --font-mono:'SF Mono','JetBrains Mono',Consolas,'Liberation Mono',Menlo,monospace;
+
+    --content-max: 900px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.75;
+    font-size:16px;
+    -webkit-font-smoothing:antialiased;
+    position:relative;
+  }
+
+  main{
+    max-width:var(--content-max);
+    margin:0 auto;
+    padding: 56px 28px 120px;
+  }
+
+  /* ===== typography ===== */
+  h1,h2,h3,h4{
+    font-family:var(--font-display);
+    font-weight:700;
+    letter-spacing:0.01em;
+    color:var(--ink);
+    margin:0 0 0.5em;
+  }
+  p{ margin:0 0 1.1em; color:var(--ink); }
+  .prose p{ color:var(--ink-soft); }
+  a{ color:var(--teal); }
+  strong{ color:var(--red); font-weight:700; }
+  .mono{ font-family:var(--font-mono); }
+
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--red);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:22px; height:1px;
+    background:var(--red);
+    display:inline-block;
+  }
+  .eyebrow .frame-num{
+    color:var(--fog);
+    border:1px solid var(--line-strong);
+    border-radius:3px;
+    padding:1px 6px;
+    font-size:11px;
+    background:var(--card);
+  }
+
+  section{
+    padding: 68px 0;
+    border-bottom:1px dashed var(--line);
+    scroll-margin-top: 40px;
+  }
+  section:last-of-type{ border-bottom:none; }
+
+  h2.section-title{
+    font-size: 29px;
+    margin-bottom: 0.3em;
+  }
+  h2.section-title .zh-sub{
+    display:block;
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--fog);
+    font-weight:400;
+    margin-top:6px;
+    letter-spacing:0.02em;
+  }
+  .section-lede{
+    font-size:16.5px;
+    color:var(--ink-soft);
+    max-width:640px;
+    margin: 18px 0 36px;
+  }
+
+  h3.sub-title{
+    font-size:19px;
+    color:var(--ink);
+    margin-top:2.2em;
+    margin-bottom:0.7em;
+    padding-left:12px;
+    border-left:3px solid var(--teal);
+  }
+
+  ul.plain, ol.plain{ padding-left:1.3em; margin:0 0 1.1em;}
+  ul.plain li, ol.plain li{ margin-bottom:0.5em; color:var(--ink-soft);}
+
+  /* ===== cards ===== */
+  .card{
+    background:var(--card);
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:24px 26px;
+    box-shadow: 0 1px 2px rgba(30,25,10,0.03), 0 6px 16px -12px rgba(30,25,10,0.10);
+    position:relative;
+    margin: 24px 0;
+  }
+  .card p{ color:var(--ink-soft); }
+  .card p:last-child{ margin-bottom:0; }
+  .card strong{ color:var(--red); }
+  .card-label{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--fog);
+    margin-bottom:10px;
+    display:block;
+  }
+
+  /* ===== code block (light) ===== */
+  .code-block{
+    background:var(--code-bg);
+    border:1px solid var(--code-line);
+    border-radius:4px;
+    margin:22px 0;
+    overflow:hidden;
+  }
+  .code-block .code-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:8px 14px;
+    background:var(--bg-alt-2);
+    border-bottom:1px solid var(--code-line);
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    color:var(--fog);
+    letter-spacing:0.05em;
+  }
+  .code-block .code-head .frame-tag{
+    color:var(--red);
+    font-weight:700;
+  }
+  .code-block pre{
+    margin:0;
+    padding:18px 20px;
+    overflow-x:auto;
+    font-family:var(--font-mono);
+    font-size:13px;
+    line-height:1.65;
+    color:var(--code-ink);
+  }
+  .code-block .c-comment{ color:#7a8770; }
+  .code-block .c-str{ color:#9c6a1f; }
+  .code-block .c-kw{ color:#2a6f8f; }
+
+  /* ===== tables ===== */
+  .table-wrap{
+    overflow-x:auto;
+    margin:24px 0;
+  }
+  table.matrix{
+    border-collapse:collapse;
+    width:100%;
+    background:var(--card);
+    font-size:13.5px;
+    min-width:640px;
+    border:1px solid var(--line);
+  }
+  table.matrix th, table.matrix td{
+    border:1px solid var(--line);
+    padding:10px 12px;
+    text-align:left;
+    color:var(--ink-soft);
+    vertical-align:top;
+  }
+  table.matrix thead th{
+    background:var(--bg-alt);
+    color:var(--ink);
+    font-family:var(--font-mono);
+    font-size:12px;
+    letter-spacing:0.03em;
+    font-weight:700;
+  }
+  table.matrix tbody th{
+    font-family:var(--font-mono);
+    font-size:12px;
+    background:var(--bg-alt);
+    color:var(--ink);
+    white-space:nowrap;
+    font-weight:700;
+  }
+  table.matrix td.hl{
+    background:var(--teal-bg);
+    box-shadow: inset 0 0 0 2px var(--teal);
+    color:var(--ink);
+  }
+
+  /* ===== buttons / controls ===== */
+  .btn{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    letter-spacing:0.03em;
+    background:var(--card);
+    border:1px solid var(--line-strong);
+    color:var(--ink);
+    padding:8px 14px;
+    border-radius:3px;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .btn:hover{ border-color:var(--teal); color:var(--teal); }
+  .btn.active{
+    background:var(--teal);
+    border-color:var(--teal);
+    color:#fff;
+  }
+  .btn-row{ display:flex; gap:10px; flex-wrap:wrap; margin:18px 0; }
+
+  /* ===== nav dots ===== */
+  #sidenav{
+    position:fixed;
+    right: 18px;
+    top:50%;
+    transform:translateY(-50%);
+    z-index:10;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  #sidenav a{
+    width:9px; height:9px;
+    border-radius:50%;
+    background:var(--line-strong);
+    display:block;
+    position:relative;
+    text-decoration:none;
+  }
+  #sidenav a.active{ background:var(--red); box-shadow:0 0 0 3px var(--red-bg); }
+  #sidenav a .tip{
+    position:absolute;
+    right:20px; top:50%;
+    transform:translateY(-50%);
+    white-space:nowrap;
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--ink);
+    opacity:0;
+    transition:opacity .15s ease;
+    pointer-events:none;
+    background:var(--card);
+    padding:3px 8px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    box-shadow:0 2px 8px rgba(30,25,10,0.08);
+  }
+  #sidenav a:hover .tip{ opacity:1; }
+  @media (max-width:920px){ #sidenav{ display:none; } }
+
+  /* ===== hero ===== */
+  .hero{
+    padding: 70px 0 36px;
+  }
+  .hero .kicker{
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--teal);
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    margin-bottom:18px;
+  }
+  .hero h1{
+    font-size:50px;
+    line-height:1.15;
+    max-width:780px;
+  }
+  .hero h1 .en{
+    display:block;
+    font-family:var(--font-mono);
+    font-size:15px;
+    color:var(--fog);
+    font-weight:400;
+    letter-spacing:0.06em;
+    margin-top:14px;
+  }
+  .hero .lede{
+    max-width:620px;
+    font-size:17px;
+    color:var(--ink-soft);
+    margin-top:24px;
+  }
+  .hero .spec-line{
+    margin-top:28px;
+    font-family:var(--font-mono);
+    font-size:13.5px;
+    color:var(--ink);
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .hero .spec-line .tag{
+    border:1px solid var(--line-strong);
+    background:var(--card);
+    padding:3px 10px;
+    border-radius:3px;
+    color:var(--ink-soft);
+  }
+  .hero .spec-line .arrow{ color:var(--red); }
+
+  @media (max-width:640px){
+    .hero h1{ font-size:32px; }
+  }
+
+  /* ===== contact sheet (signature visual) ===== */
+  .contact-sheet-wrap{
+    margin: 40px 0 10px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:20px;
+    box-shadow: 0 1px 2px rgba(30,25,10,0.03), 0 10px 24px -18px rgba(30,25,10,0.14);
+  }
+  .contact-sheet-wrap .cs-caption{
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    color:var(--fog);
+    margin-top:14px;
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .contact-sheet-wrap .cs-caption span.dot{ color:var(--teal); }
+  .contact-sheet-wrap .cs-caption span.dotr{ color:var(--red); }
+
+  /* ===== small pipeline diagram shared ===== */
+  .pipeline-wrap{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:22px 20px 18px;
+    margin:24px 0;
+    box-shadow: 0 1px 2px rgba(30,25,10,0.03);
+  }
+  .pipeline-legend{
+    display:flex; gap:18px; flex-wrap:wrap;
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:14px;
+  }
+  .pipeline-legend .sw{
+    display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:middle;
+  }
+
+  /* ===== accordion ===== */
+  .acc-item{
+    border:1px solid var(--line);
+    border-radius:4px;
+    margin-bottom:10px;
+    background:var(--card);
+    overflow:hidden;
+  }
+  .acc-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 18px;
+    cursor:pointer;
+    font-size:14.5px;
+    color:var(--ink);
+  }
+  .acc-head .num{
+    font-family:var(--font-mono);
+    color:var(--red);
+    margin-right:10px;
+    font-size:12.5px;
+  }
+  .acc-head .plus{
+    font-family:var(--font-mono);
+    color:var(--fog);
+    transition:transform .18s ease;
+  }
+  .acc-item.open{ border-color:var(--line-strong); }
+  .acc-item.open .plus{ transform:rotate(45deg); color:var(--red); }
+  .acc-body{
+    max-height:0;
+    overflow:hidden;
+    transition:max-height .22s ease;
+    padding:0 18px;
+  }
+  .acc-item.open .acc-body{
+    padding:0 18px 18px;
+  }
+  .acc-body p{ color:var(--ink-soft); font-size:14px; }
+
+  /* ===== decision tree ===== */
+  .qbox{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:24px;
+    margin:22px 0;
+    box-shadow: 0 1px 2px rgba(30,25,10,0.03);
+  }
+  .qbox .q-label{ font-family:var(--font-mono); font-size:11.5px; color:var(--fog); margin-bottom:10px;}
+  .qbox .q-text{ font-size:16px; color:var(--ink); margin-bottom:18px; }
+  .qbox .q-progress{
+    display:flex; gap:6px; margin-top:18px;
+  }
+  .qbox .q-progress .seg{
+    height:3px; flex:1; background:var(--line); border-radius:2px;
+  }
+  .qbox .q-progress .seg.done{ background:var(--teal); }
+  .result-tags{ display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+  .result-tags .rt{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    border:1px solid var(--teal);
+    background:var(--teal-bg);
+    color:var(--teal);
+    padding:5px 12px;
+    border-radius:3px;
+  }
+  .result-tags .rt.no{ border-color:var(--line-strong); color:var(--fog); background:var(--bg-alt); }
+
+  /* ===== stage stepper ===== */
+  .stepper{
+    display:flex;
+    gap:4px;
+    margin: 30px 0 0;
+    flex-wrap:wrap;
+  }
+  .step-btn{
+    flex:1 1 140px;
+    background:var(--bg-alt);
+    border:1px solid var(--line);
+    border-bottom:3px solid var(--line-strong);
+    color:var(--ink-soft);
+    padding:14px 12px;
+    cursor:pointer;
+    text-align:left;
+    font-family:var(--font-body);
+    transition:all .15s ease;
+  }
+  .step-btn .s-tag{
+    display:block;
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--fog);
+    margin-bottom:4px;
+  }
+  .step-btn .s-name{ font-size:14.5px; color:var(--ink); font-weight:600; }
+  .step-btn.active{
+    border-bottom-color:var(--red);
+    background:var(--card);
+  }
+  .step-btn.active .s-tag{ color:var(--red); }
+  .stage-cost-ladder{
+    display:flex; align-items:flex-end; gap:4px; height:34px; margin-top:8px;
+  }
+  .stage-cost-ladder .bar{
+    flex:1; background:var(--line-strong); border-radius:2px 2px 0 0;
+  }
+  .step-btn.active .stage-cost-ladder .bar.on{ background:var(--red); }
+  .step-btn .stage-cost-ladder .bar.on{ background:var(--fog); }
+
+  .stage-panel{
+    background:var(--card);
+    color:var(--ink);
+    padding:30px 30px;
+    border:1px solid var(--line);
+    border-top:none;
+    border-radius:0 0 5px 5px;
+    position:relative;
+  }
+  .stage-panel h4{
+    font-family:var(--font-mono);
+    font-size:12px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--red);
+    margin:22px 0 8px;
+  }
+  .stage-panel h4:first-child{ margin-top:0; }
+  .stage-panel p, .stage-panel li{ color:var(--ink-soft); font-size:14.5px; }
+  .stage-panel ul{ padding-left:1.2em; margin:0; }
+  .stage-panel li{ margin-bottom:6px; }
+
+  /* ===== toggle switch (offline/online) ===== */
+  .switch-row{
+    display:flex; align-items:center; gap:16px; margin: 24px 0 6px;
+    font-family:var(--font-mono); font-size:13px;
+  }
+  .switch-row .lbl{ color:var(--fog); }
+  .switch-row .lbl.on{ color:var(--ink); font-weight:700; }
+  .switch{
+    width:56px; height:28px;
+    background:var(--bg-alt-2);
+    border:1px solid var(--line-strong);
+    border-radius:16px;
+    position:relative;
+    cursor:pointer;
+  }
+  .switch .knob{
+    width:20px; height:20px;
+    border-radius:50%;
+    background:var(--red);
+    position:absolute;
+    top:3px; left:3px;
+    transition:left .18s ease, background .18s ease;
+  }
+  .switch.is-online .knob{
+    left:33px;
+    background:var(--teal);
+  }
+
+  /* ===== priority selector ===== */
+  .priority-row{ display:flex; gap:8px; flex-wrap:wrap; margin:18px 0 4px; }
+  .priority-row .p-btn{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    border:1px solid var(--line-strong);
+    background:var(--card);
+    color:var(--ink-soft);
+    padding:7px 13px;
+    border-radius:20px;
+    cursor:pointer;
+  }
+  .priority-row .p-btn.active{
+    border-color:var(--amber);
+    color:var(--amber);
+    background:var(--amber-bg);
+  }
+
+  /* ===== callouts ===== */
+  .callout{
+    border-left:3px solid var(--red);
+    background:var(--red-bg);
+    padding:14px 18px;
+    margin:22px 0;
+    font-size:14.5px;
+    color:var(--ink-soft);
+    border-radius:0 4px 4px 0;
+  }
+  .callout.teal{
+    border-left-color:var(--teal);
+    background:var(--teal-bg);
+  }
+  .callout strong{ color:var(--ink); }
+
+  .two-col{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+  }
+  @media (max-width:680px){ .two-col{ grid-template-columns:1fr; } }
+
+  .tag-list{ display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+  .tag-list .t{
+    font-family:var(--font-mono);
+    font-size:12px;
+    background:var(--bg-alt);
+    border:1px solid var(--line-strong);
+    color:var(--ink-soft);
+    padding:4px 10px;
+    border-radius:3px;
+  }
+
+  footer{
+    padding: 50px 0 40px;
+    text-align:center;
+    color:var(--fog);
+    font-family:var(--font-mono);
+    font-size:12px;
+    border-top:1px dashed var(--line);
+  }
+
+  ::selection{ background:var(--teal-bg); color:var(--ink); }
+</style>
+</head>
+<body>
+<nav id="sidenav"></nav>
+<main>
+<section class="hero">
+  <div class="kicker">一文读懂 · Image-to-Image Search</div>
+  <h1>以图搜图
+    <span class="en">给一张图，找出"看起来像"的其他图 —— 从可行性验证到企业级检索系统</span>
+  </h1>
+  <p class="lede">这篇文章不讲某个框架怎么分层，也不堆一串工具名。它想解决一个更具体的问题：你已经决定要做"以图搜图"这件事，但不知道从哪儿下手 —— 该先跑一个脚本，还是先选模型，还是先想清楚"相似"到底是什么。读完之后，你应该能判断：demo 怎么在一天内跑通、POC 要验证什么、小团队怎么上线、中团队怎么扩展、企业级要治理什么。</p>
+
+  <div class="contact-sheet-wrap">
+    <svg viewBox="0 0 632 344" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">
+      <rect x="22" y="22" width="88" height="66" rx="2" fill="#c3ccd1" stroke="#b9b09a" stroke-width="1"/><line x1="32" y1="70" x2="100" y2="70" stroke="#00000022" stroke-width="6"/>
+      <rect x="122" y="22" width="88" height="66" rx="2" fill="#d8c7b9" stroke="#b9b09a" stroke-width="1"/><line x1="132" y1="70" x2="200" y2="70" stroke="#00000022" stroke-width="6"/>
+      <rect x="222" y="22" width="88" height="66" rx="2" fill="#c2d0c5" stroke="#1f7a71" stroke-width="2"/><line x1="232" y1="70" x2="300" y2="70" stroke="#00000022" stroke-width="6"/><text x="228" y="80" font-family="monospace" font-size="9" fill="#1f7a71" font-weight="bold">0.63</text>
+      <rect x="322" y="22" width="88" height="66" rx="2" fill="#d3c2c2" stroke="#b9b09a" stroke-width="1"/><line x1="332" y1="70" x2="400" y2="70" stroke="#00000022" stroke-width="6"/>
+      <rect x="422" y="22" width="88" height="66" rx="2" fill="#c7cad6" stroke="#b9b09a" stroke-width="1"/><line x1="432" y1="70" x2="500" y2="70" stroke="#00000022" stroke-width="6"/>
+      <rect x="522" y="22" width="88" height="66" rx="2" fill="#cdd3c0" stroke="#b9b09a" stroke-width="1"/><line x1="532" y1="70" x2="600" y2="70" stroke="#00000022" stroke-width="6"/>
+      <rect x="22" y="100" width="88" height="66" rx="2" fill="#c9c4d6" stroke="#b9b09a" stroke-width="1"/><line x1="32" y1="148" x2="100" y2="148" stroke="#00000022" stroke-width="6"/>
+      <rect x="122" y="100" width="88" height="66" rx="2" fill="#d0c9bd" stroke="#b9b09a" stroke-width="1"/><line x1="132" y1="148" x2="200" y2="148" stroke="#00000022" stroke-width="6"/>
+      <rect x="222" y="100" width="88" height="66" rx="2" fill="#c3ccd1" stroke="#b9b09a" stroke-width="1"/><line x1="232" y1="148" x2="300" y2="148" stroke="#00000022" stroke-width="6"/>
+      <rect x="322" y="100" width="88" height="66" rx="2" fill="#d8c7b9" stroke="#1f7a71" stroke-width="2"/><line x1="332" y1="148" x2="400" y2="148" stroke="#00000022" stroke-width="6"/><text x="328" y="158" font-family="monospace" font-size="9" fill="#1f7a71" font-weight="bold">0.91</text>
+      <rect x="422" y="100" width="88" height="66" rx="2" fill="#c2d0c5" stroke="#b9b09a" stroke-width="1"/><line x1="432" y1="148" x2="500" y2="148" stroke="#00000022" stroke-width="6"/>
+      <rect x="522" y="100" width="88" height="66" rx="2" fill="#d3c2c2" stroke="#b9b09a" stroke-width="1"/><line x1="532" y1="148" x2="600" y2="148" stroke="#00000022" stroke-width="6"/>
+      <rect x="22" y="178" width="88" height="66" rx="2" fill="#c7cad6" stroke="#b9b09a" stroke-width="1"/><line x1="32" y1="226" x2="100" y2="226" stroke="#00000022" stroke-width="6"/>
+      <rect x="122" y="178" width="88" height="66" rx="2" fill="#cdd3c0" stroke="#b9b09a" stroke-width="1"/><line x1="132" y1="226" x2="200" y2="226" stroke="#00000022" stroke-width="6"/>
+      <rect x="222" y="178" width="88" height="66" rx="2" fill="#c9c4d6" stroke="#a8432d" stroke-width="2.5"/><line x1="232" y1="226" x2="300" y2="226" stroke="#00000022" stroke-width="6"/><text x="228" y="236" font-family="monospace" font-size="9" fill="#a8432d" font-weight="bold">QUERY</text>
+      <rect x="322" y="178" width="88" height="66" rx="2" fill="#d0c9bd" stroke="#b9b09a" stroke-width="1"/><line x1="332" y1="226" x2="400" y2="226" stroke="#00000022" stroke-width="6"/>
+      <rect x="422" y="178" width="88" height="66" rx="2" fill="#c3ccd1" stroke="#b9b09a" stroke-width="1"/><line x1="432" y1="226" x2="500" y2="226" stroke="#00000022" stroke-width="6"/>
+      <rect x="522" y="178" width="88" height="66" rx="2" fill="#d8c7b9" stroke="#b9b09a" stroke-width="1"/><line x1="532" y1="226" x2="600" y2="226" stroke="#00000022" stroke-width="6"/>
+      <rect x="22" y="256" width="88" height="66" rx="2" fill="#c2d0c5" stroke="#b9b09a" stroke-width="1"/><line x1="32" y1="304" x2="100" y2="304" stroke="#00000022" stroke-width="6"/>
+      <rect x="122" y="256" width="88" height="66" rx="2" fill="#d3c2c2" stroke="#1f7a71" stroke-width="2"/><line x1="132" y1="304" x2="200" y2="304" stroke="#00000022" stroke-width="6"/><text x="128" y="314" font-family="monospace" font-size="9" fill="#1f7a71" font-weight="bold">0.87</text>
+      <rect x="222" y="256" width="88" height="66" rx="2" fill="#c7cad6" stroke="#b9b09a" stroke-width="1"/><line x1="232" y1="304" x2="300" y2="304" stroke="#00000022" stroke-width="6"/>
+      <rect x="322" y="256" width="88" height="66" rx="2" fill="#cdd3c0" stroke="#1f7a71" stroke-width="2"/><line x1="332" y1="304" x2="400" y2="304" stroke="#00000022" stroke-width="6"/><text x="328" y="314" font-family="monospace" font-size="9" fill="#1f7a71" font-weight="bold">0.79</text>
+      <rect x="422" y="256" width="88" height="66" rx="2" fill="#c9c4d6" stroke="#b9b09a" stroke-width="1"/><line x1="432" y1="304" x2="500" y2="304" stroke="#00000022" stroke-width="6"/>
+      <rect x="522" y="256" width="88" height="66" rx="2" fill="#d0c9bd" stroke="#b9b09a" stroke-width="1"/><line x1="532" y1="304" x2="600" y2="304" stroke="#00000022" stroke-width="6"/>
+      <line x1="266.0" y1="211.0" x2="266.0" y2="55.0" stroke="#1f7a71" stroke-width="1.2" stroke-dasharray="3 4" opacity="0.8"/>
+      <line x1="266.0" y1="211.0" x2="366.0" y2="133.0" stroke="#1f7a71" stroke-width="1.2" stroke-dasharray="3 4" opacity="0.8"/>
+      <line x1="266.0" y1="211.0" x2="166.0" y2="289.0" stroke="#1f7a71" stroke-width="1.2" stroke-dasharray="3 4" opacity="0.8"/>
+      <line x1="266.0" y1="211.0" x2="366.0" y2="289.0" stroke="#1f7a71" stroke-width="1.2" stroke-dasharray="3 4" opacity="0.8"/>
+    </svg>
+    <div class="cs-caption">
+      <span><span class="dotr">●</span> 红框是查询图；<span class="dot">虚线</span> 指向系统认为相似的图，数字是相似度分数</span>
+      <span>proof sheet · roll 01 · 24 frames</span>
+    </div>
+  </div>
+
+  <div class="spec-line">
+    <span class="tag">输入：一张查询图片</span>
+    <span class="arrow">→</span>
+    <span class="tag">输出：按相似度排序的 Top-K 图片列表 + 分数</span>
+  </div>
+</section>
+
+<section id="s01">
+  <div class="eyebrow"><span class="frame-num">F.01</span> 概念对齐</div>
+  <h2 class="section-title">这个能力到底是什么<span class="zh-sub">Input / Output / 成功标准 / 不解决什么</span></h2>
+  <p class="section-lede">在选模型、选架构之前，先把这几件事说清楚 —— 否则 demo 做出来了，也不知道算不算"成"。</p>
+
+  <div class="two-col">
+    <div class="card">
+      <span class="card-label">输入 / 输出</span>
+      <p><strong>输入</strong>是一张图片：用户上传的照片、系统内部产生的一帧截图、一张商品图。<strong>输出</strong>是一个有序列表：<span class="mono">[(图片ID, 相似度分数), ...]</span>，通常还带缩略图和跳转链接，按分数从高到低排列，取 Top-K。</p>
+      <p>它不是一个"是/否"的判断，而是一个排序问题 —— 这一点决定了后面所有的技术选型。</p>
+    </div>
+    <div class="card">
+      <span class="card-label">用户怎么用</span>
+      <p>典型场景：上传一张图找同款商品、找同一个人/同一个场景的其他照片、给素材库查重、在历史截图里找相似的记录、给一段视频找相似的参考画面。</p>
+      <p>共同点：用户心里已经有一个"像"的标准，系统要做的是逼近这个标准，而不是发明一个标准。</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>"相似"是业务定义的，不是模型给的。</strong>模型只会告诉你两张图的向量距离有多近；多近算"相似"、按什么维度相似（外观？语义？构图？同一实体？），这是业务问题，需要在做 demo 之前就有一个粗略答案，否则连验收标准都定不下来。
+  </div>
+
+  <h3 class="sub-title">成功标准怎么定</h3>
+  <p>不要用"分数越高越好"这种模糊说法。可落地的成功标准通常是：挑一批有已知答案的查询图，看 Top-K 里有没有业务认为"对"的结果 —— 用 <span class="mono">Recall@K</span>（该出现的有没有出现）、<span class="mono">Precision@K</span>（出现的里有多少是真的对）配合人工抽检满意度来衡量。这几个概念在下文"验证与风险"一节会展开。</p>
+
+  <h3 class="sub-title">哪些事情不由它解决</h3>
+  <ul class="plain">
+    <li>它不做 <strong>OCR</strong>（读图里的文字）、不做<strong>目标检测出框</strong>（框出图里有几个物体）——如果业务需要这些，是额外的模块，不要指望"以图搜图"顺带解决。</li>
+    <li>它不保证<strong>语义理解</strong>：模型给出的是视觉特征上的接近，不是"看懂了图里在讲什么故事"。</li>
+    <li>它不做<strong>版权 / 真伪鉴定</strong>：找到视觉相似不等于法律意义上的侵权判定。</li>
+    <li>它不解决<strong>"相似"定义本身的业务分歧</strong>：多相似算相似，需要业务提前定阈值和验收标准，模型和索引解决不了这个分歧。</li>
+  </ul>
+</section>
+
+<section id="s02">
+  <div class="eyebrow"><span class="frame-num">F.02</span> 最小链路</div>
+  <h2 class="section-title">30 分钟内跑通的最小链路<span class="zh-sub">先验证"方向对不对"，不追求效果和工程完整度</span></h2>
+  <p class="section-lede">这一步的目标只有一个：验证"拿一批图，能不能把相似的图挑出来"这件事本身是不是可行的。不建索引服务，不加权限，不做任何"以后可能需要"的设计。</p>
+
+  <ol class="plain">
+    <li><strong>准备样例数据</strong>：一个文件夹 <span class="mono">data/images/</span>，放 100～300 张图，尽量覆盖典型场景（同款不同角度、不同光照、局部遮挡），不需要很多。</li>
+    <li><strong>选一个模型</strong>：直接用开源 <span class="mono">CLIP</span>（如 <span class="mono">ViT-B-32</span>），本地 CPU 就能跑，慢一点但能跑通，不需要一开始就上 GPU 或云 API。</li>
+    <li><strong>写脚本提取 embedding</strong>：把每张图变成一个向量，存成一个 numpy 数组 + 一份路径列表。</li>
+    <li><strong>建索引</strong>：先不用向量数据库，直接用 numpy 做暴力余弦相似度，几百张图完全够用。</li>
+    <li><strong>发起一次查询</strong>：取一张图算 embedding，和索引里所有向量算相似度，排序取 Top-K。</li>
+    <li><strong>人工验证</strong>：把 Top-K 图打印/展示出来，肉眼看是不是真的像。</li>
+  </ol>
+
+  <div class="code-block">
+    <div class="code-head"><span><span class="frame-tag">01A</span> 离线：批量提取 embedding，建一个"内存索引"</span><span>build_index.py</span></div>
+    <pre><span class="c-comment"># 离线执行一次；数据/模型变了就重跑</span>
+<span class="c-kw">import</span> open_clip, torch
+<span class="c-kw">from</span> PIL <span class="c-kw">import</span> Image
+<span class="c-kw">import</span> numpy <span class="c-kw">as</span> np, os, pickle
+
+model, _, preprocess = open_clip.create_model_and_transforms(
+    <span class="c-str">"ViT-B-32"</span>, pretrained=<span class="c-str">"openai"</span>
+)
+model.eval()
+
+image_dir = <span class="c-str">"data/images"</span>
+paths = [os.path.join(image_dir, f) <span class="c-kw">for</span> f <span class="c-kw">in</span> os.listdir(image_dir)]
+
+embeddings = []
+<span class="c-kw">for</span> p <span class="c-kw">in</span> paths:
+    <span class="c-comment"># 图片损坏就应该直接报错退出，不要 try/except 悄悄跳过</span>
+    img = preprocess(Image.open(p).convert(<span class="c-str">"RGB"</span>)).unsqueeze(0)
+    <span class="c-kw">with</span> torch.no_grad():
+        feat = model.encode_image(img)
+        feat = feat / feat.norm(dim=-1, keepdim=<span class="c-kw">True</span>)  <span class="c-comment"># 归一化，内积即余弦相似度</span>
+    embeddings.append(feat.numpy()[0])
+
+embeddings = np.stack(embeddings)  <span class="c-comment"># shape: (N, 512)</span>
+<span class="c-kw">with</span> open(<span class="c-str">"index.pkl"</span>, <span class="c-str">"wb"</span>) <span class="c-kw">as</span> f:
+    pickle.dump({<span class="c-str">"paths"</span>: paths, <span class="c-str">"embeddings"</span>: embeddings}, f)</pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-head"><span><span class="frame-tag">01B</span> 线上：一次查询</span><span>search.py</span></div>
+    <pre><span class="c-kw">def</span> search(query_path, top_k=5):
+    <span class="c-kw">with</span> open(<span class="c-str">"index.pkl"</span>, <span class="c-str">"rb"</span>) <span class="c-kw">as</span> f:
+        store = pickle.load(f)
+
+    img = preprocess(Image.open(query_path).convert(<span class="c-str">"RGB"</span>)).unsqueeze(0)
+    <span class="c-kw">with</span> torch.no_grad():
+        q = model.encode_image(img)
+        q = q / q.norm(dim=-1, keepdim=<span class="c-kw">True</span>)
+    q = q.numpy()[0]
+
+    scores = store[<span class="c-str">"embeddings"</span>] @ q  <span class="c-comment"># 都归一化过，内积=余弦相似度</span>
+    top_idx = np.argsort(-scores)[:top_k]
+
+    <span class="c-kw">return</span> [(store[<span class="c-str">"paths"</span>][i], float(scores[i])) <span class="c-kw">for</span> i <span class="c-kw">in</span> top_idx]
+
+<span class="c-kw">for</span> path, score <span class="c-kw">in</span> search(<span class="c-str">"data/query.jpg"</span>):
+    print(f<span class="c-str">"{score:.3f}  {path}"</span>)</pre>
+  </div>
+
+  <div class="callout teal">
+    这两个脚本就是完整的"demo"。它没有服务、没有数据库、没有权限，但它已经能回答最关键的问题：<strong>这条技术路线，在你的数据上，能不能把相似的图挑出来。</strong>如果这一步都验证不了，后面的架构讨论都没有意义。
+  </div>
+</section>
+
+<section id="s03">
+  <div class="eyebrow"><span class="frame-num">F.03</span> 线下 / 线上</div>
+  <h2 class="section-title">完整链路拆解<span class="zh-sub">哪些步骤离线做，哪些步骤线上做</span></h2>
+  <p class="section-lede">demo 只有两个脚本，但真正上线的系统里，同样的逻辑要分成"离线维护索引"和"线上响应查询"两条线 —— 混在一起是很多项目变慢、变不可控的起点。</p>
+
+  <div class="switch-row">
+    <span class="lbl" id="lbl-off">离线链路</span>
+    <div class="switch" id="pipe-switch" role="button" aria-label="切换离线/线上"><div class="knob"></div></div>
+    <span class="lbl" id="lbl-on">线上链路</span>
+  </div>
+
+  <div class="pipeline-wrap">
+    <svg viewBox="0 0 830 214" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">
+      <defs>
+        <marker id="arrow-off-step" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#a8432d"/></marker>
+        <marker id="arrow-on-step" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1f7a71"/></marker>
+      </defs>
+      <text x="20" y="18" font-family="monospace" font-size="11" fill="#a8432d">OFFLINE · 离线维护索引</text>
+      <rect class="off-step" x="20" y="34" width="122" height="52" rx="3" fill="#fdfcf9" stroke="#a8432d" stroke-width="1.3"/>
+      <text class="off-step" x="81.0" y="64.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">导入</text>
+      <rect class="off-step" x="156" y="34" width="122" height="52" rx="3" fill="#fdfcf9" stroke="#a8432d" stroke-width="1.3"/>
+      <text class="off-step" x="217.0" y="64.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">清洗</text>
+      <rect class="off-step" x="292" y="34" width="122" height="52" rx="3" fill="#fdfcf9" stroke="#a8432d" stroke-width="1.3"/>
+      <text class="off-step" x="353.0" y="64.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">切分</text>
+      <rect class="off-step" x="428" y="34" width="122" height="52" rx="3" fill="#fdfcf9" stroke="#a8432d" stroke-width="1.3"/>
+      <text class="off-step" x="489.0" y="64.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">Embedding</text>
+      <rect class="off-step" x="564" y="34" width="122" height="52" rx="3" fill="#fdfcf9" stroke="#a8432d" stroke-width="1.3"/>
+      <text class="off-step" x="625.0" y="64.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">索引构建</text>
+      <rect class="off-step" x="700" y="34" width="122" height="52" rx="3" fill="#fdfcf9" stroke="#a8432d" stroke-width="1.3"/>
+      <text class="off-step" x="761.0" y="64.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">批处理评测</text>
+      <line class="off-step" x1="144" y1="60" x2="153" y2="60" stroke="#a8432d" stroke-width="1.3" marker-end="url(#arrow-off-step)"/>
+      <line class="off-step" x1="280" y1="60" x2="289" y2="60" stroke="#a8432d" stroke-width="1.3" marker-end="url(#arrow-off-step)"/>
+      <line class="off-step" x1="416" y1="60" x2="425" y2="60" stroke="#a8432d" stroke-width="1.3" marker-end="url(#arrow-off-step)"/>
+      <line class="off-step" x1="552" y1="60" x2="561" y2="60" stroke="#a8432d" stroke-width="1.3" marker-end="url(#arrow-off-step)"/>
+      <line class="off-step" x1="688" y1="60" x2="697" y2="60" stroke="#a8432d" stroke-width="1.3" marker-end="url(#arrow-off-step)"/>
+
+      <text x="20" y="134" font-family="monospace" font-size="11" fill="#1f7a71">ONLINE · 线上响应查询</text>
+      <rect class="on-step" x="20" y="150" width="148" height="52" rx="3" fill="#fdfcf9" stroke="#1f7a71" stroke-width="1.3"/>
+      <text class="on-step" x="94.0" y="180.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">接收查询</text>
+      <rect class="on-step" x="186" y="150" width="148" height="52" rx="3" fill="#fdfcf9" stroke="#1f7a71" stroke-width="1.3"/>
+      <text class="on-step" x="260.0" y="180.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">召回</text>
+      <rect class="on-step" x="352" y="150" width="148" height="52" rx="3" fill="#fdfcf9" stroke="#1f7a71" stroke-width="1.3"/>
+      <text class="on-step" x="426.0" y="180.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">重排</text>
+      <rect class="on-step" x="518" y="150" width="148" height="52" rx="3" fill="#fdfcf9" stroke="#1f7a71" stroke-width="1.3"/>
+      <text class="on-step" x="592.0" y="180.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">过滤</text>
+      <rect class="on-step" x="684" y="150" width="148" height="52" rx="3" fill="#fdfcf9" stroke="#1f7a71" stroke-width="1.3"/>
+      <text class="on-step" x="758.0" y="180.0" text-anchor="middle" font-family="monospace" font-size="12" fill="#211f1a">返回结果</text>
+      <line class="on-step" x1="170" y1="176" x2="183" y2="176" stroke="#1f7a71" stroke-width="1.3" marker-end="url(#arrow-on-step)"/>
+      <line class="on-step" x1="336" y1="176" x2="349" y2="176" stroke="#1f7a71" stroke-width="1.3" marker-end="url(#arrow-on-step)"/>
+      <line class="on-step" x1="502" y1="176" x2="515" y2="176" stroke="#1f7a71" stroke-width="1.3" marker-end="url(#arrow-on-step)"/>
+      <line class="on-step" x1="668" y1="176" x2="681" y2="176" stroke="#1f7a71" stroke-width="1.3" marker-end="url(#arrow-on-step)"/>
+    </svg>
+    <div class="pipeline-legend">
+      <span><span class="sw" style="background:var(--red)"></span>离线：不在用户等待的请求路径里，可以慢，可以批处理</span>
+      <span><span class="sw" style="background:var(--teal)"></span>线上：用户在等，越简单越好，能不加的组件先不加</span>
+    </div>
+  </div>
+
+  <div id="off-detail">
+    <h3 class="sub-title">离线链路：为什么需要 · 什么时候可以先不做</h3>
+    <div class="table-wrap">
+      <table class="matrix">
+        <thead><tr><th style="width:14%">步骤</th><th>为什么需要</th><th>什么时候可以先不做</th></tr></thead>
+        <tbody>
+          <tr><th>导入</th><td>数据总要有个来源：本地目录、对象存储、业务系统同步、爬虫抓取。</td><td>demo 阶段直接放一个本地文件夹即可，不需要写"导入系统"。</td></tr>
+          <tr><th>清洗</th><td>脏数据会直接污染向量空间：损坏图、重复图会让"相似"结果失真。</td><td>demo 阶段可以先不做；进入 POC 起至少要做"去损坏、去重"这两件事。</td></tr>
+          <tr><th>切分</th><td>一张图里有多个目标时，不切分会让 embedding 变成"整体氛围相似"而非"目标相似"。</td><td>单目标场景（比如整图就是一件商品）可以先跳过，不需要先接检测模型。</td></tr>
+          <tr><th>Embedding</th><td>核心中的核心，没有它就没有可比较的向量表示。</td><td>——（这一步不能跳过）</td></tr>
+          <tr><th>索引构建</th><td>数据量大之后，暴力比对的延迟会明显上升，需要 ANN 索引加速。</td><td>几千张以内，直接 numpy 矩阵乘法或 <span class="mono">faiss.IndexFlatIP</span> 就够，不需要专门的索引服务。</td></tr>
+          <tr><th>批处理评测</th><td>没有它就没法判断"这批数据 / 这个模型到底行不行"，全凭肉眼感觉是危险的。</td><td>demo 阶段可以先靠人工看几个 case；进入 POC 必须要有。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="on-detail" style="display:none;">
+    <h3 class="sub-title">线上链路：为什么需要 · 什么时候可以先不做</h3>
+    <div class="table-wrap">
+      <table class="matrix">
+        <thead><tr><th style="width:14%">步骤</th><th>为什么需要</th><th>什么时候可以先不做</th></tr></thead>
+        <tbody>
+          <tr><th>接收查询</th><td>用户上传图片或传图片 URL，是整条链路的入口。</td><td>——（这一步不能跳过）</td></tr>
+          <tr><th>召回</th><td>用 embedding + ANN 检索拿到候选集（比如 Top 100），是"相似"这件事真正发生的地方。</td><td>——（这一步不能跳过）</td></tr>
+          <tr><th>重排</th><td>召回结果"看起来差不多但排序不够准"时，用更贵但更准的模型/特征重新排序。</td><td>大多数场景可以先不做；只有排序质量明显不够、且召回已经排除主要问题时才加，因为它会增加延迟和成本。</td></tr>
+          <tr><th>过滤</th><td>业务规则：权限、库存状态、审核状态、黑名单——只要涉及真实业务就必须做，且要显式失败（比如权限查询失败不能默认放行）。</td><td>纯个人验证 / 无业务约束的 demo 可以先不做。</td></tr>
+          <tr><th>返回结果</th><td>把排序后的 Top-K、分数、元数据整理成结构化响应。</td><td>——（这一步不能跳过）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>混合检索、聚类、分类这些模块放在哪一段？</strong>混合检索（向量分数 + 关键词分数融合）发生在"召回"之后、"重排"之前；聚类通常是离线做的，用于去重和构建"同款分组"；分类可能出现在召回前（限定检索范围）也可能出现在过滤阶段（排除误检类别）；人工审核通常不在实时链路里，而是离线抽检 + 针对高风险结果的复核队列。这些细节会在下一节"技术路线怎么选"里展开。
+  </div>
+</section>
+
+<section id="s04">
+  <div class="eyebrow"><span class="frame-num">F.04</span> 技术路线</div>
+  <h2 class="section-title">技术路线怎么选<span class="zh-sub">六条常见路线，没有绝对的"最优解"</span></h2>
+  <p class="section-lede">下面这张表不是用来找"哪个最好"，而是用来对照你的约束条件——数据规模、隐私要求、团队能力——排除掉明显不合适的路线。选一个你最看重的因素，看看表格会亮哪几列。</p>
+
+  <div class="priority-row" id="priority-row">
+    <button class="p-btn" data-hl="local,trad">成本敏感</button>
+    <button class="p-btn" data-hl="local,selfbuild,trad">隐私敏感</button>
+    <button class="p-btn" data-hl="cloud,vendor">上线要快</button>
+    <button class="p-btn" data-hl="local,vendor,oss">语义质量要求高</button>
+    <button class="p-btn" data-hl="cloud,vendor">团队没有算法背景</button>
+  </div>
+
+  <div class="table-wrap">
+    <table class="matrix" id="route-matrix">
+      <thead>
+        <tr>
+          <th style="width:13%">维度</th>
+          <th class="col-local">本地开源模型</th>
+          <th class="col-cloud">云 API</th>
+          <th class="col-vendor">厂商一体化方案</th>
+          <th class="col-oss">开源项目二次开发</th>
+          <th class="col-selfbuild">自研 pipeline</th>
+          <th class="col-trad">传统算法增强<br><span style="font-weight:400;">(pHash / 局部特征)</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><th>适合的数据规模</th><td class="col-local">中小到大，取决于自建索引能力</td><td class="col-cloud">小到中，受调用量成本约束</td><td class="col-vendor">中到大，厂商托管，扩展性好</td><td class="col-oss">中等</td><td class="col-selfbuild">不限，看投入</td><td class="col-trad">小到中，更适合去重/找同款</td></tr>
+        <tr><th>质量要求</th><td class="col-local">中高，可调优</td><td class="col-cloud">中，依赖厂商模型效果</td><td class="col-vendor">中高</td><td class="col-oss">中高，依赖二次开发深度</td><td class="col-selfbuild">最高，可定制</td><td class="col-trad">低到中，只抓视觉结构，语义弱</td></tr>
+        <tr><th>成本结构</th><td class="col-local">一次性硬件/GPU + 运维，长期边际成本低</td><td class="col-cloud">按调用量付费，量大后可能反超自建</td><td class="col-vendor">订阅/托管费用，通常比自建贵但省人力</td><td class="col-oss">中，省模型训练但仍需工程投入</td><td class="col-selfbuild">最高，人力成本主导</td><td class="col-trad">极低，CPU 就能跑</td></tr>
+        <tr><th>延迟</th><td class="col-local">可控，本地推理，批量友好</td><td class="col-cloud">受网络和服务商限流影响</td><td class="col-vendor">通常有 SLA 保证</td><td class="col-oss">取决于实现</td><td class="col-selfbuild">可优化到最优</td><td class="col-trad">极低，哈希比较很快</td></tr>
+        <tr><th>隐私 / 数据出境</th><td class="col-local">图片不出本地/内网，最可控</td><td class="col-cloud">图片需发给第三方，需评估合规</td><td class="col-vendor">同上，需评估合规</td><td class="col-oss">取决于部署方式</td><td class="col-selfbuild">最可控</td><td class="col-trad">本地计算，可控</td></tr>
+        <tr><th>团队能力要求</th><td class="col-local">需要会调 PyTorch / 推理框架</td><td class="col-cloud">几乎零门槛，调 API 即可</td><td class="col-vendor">中，需理解平台概念</td><td class="col-oss">需要读懂并改造别人的代码</td><td class="col-selfbuild">需要完整算法 + 工程团队</td><td class="col-trad">门槛最低</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout teal">
+    <strong>一个常见的实际路径</strong>：demo/POC 阶段用本地开源模型或云 API 快速验证方向；确认方向可行、数据量和调用量涨起来之后，再根据"云 API 成本是否反超自建"“数据是否有出境限制”这两个信号，决定要不要转向自建或私有化部署。不必一开始就纠结"终极方案"。
+  </div>
+
+  <h3 class="sub-title">模型怎么选</h3>
+  <ul class="plain">
+    <li><strong>通用模型</strong>（CLIP / OpenCLIP）：广泛物体、场景相似度检索的默认起点，先用它验证方向。</li>
+    <li><strong>领域模型</strong>：细分场景效果远好于通用模型——比如同款商品检索、人脸检索，都需要专门训练/微调的 embedding 模型，直接拿通用 CLIP 当人脸特征用，效果通常会明显打折。</li>
+    <li><strong>多模态模型</strong>：需要"文搜图"或"图搜图 + 文本联合过滤"时用，CLIP 本身就是图文双塔结构，可以直接复用它的文本侧。</li>
+    <li><strong>Embedding 模型 vs Reranker</strong>：embedding 模型负责快速召回（双塔结构，向量可预先算好存起来），reranker 负责精排（通常是更贵的交叉编码结构，只对候选集现算，不能预计算）——两者不是二选一，是分工。</li>
+    <li><strong>分类模型 / 检测模型</strong>：用于前置过滤（先判断类目再限定检索范围）或后置过滤（排除误检类别），不是核心检索逻辑的一部分，是辅助模块。</li>
+  </ul>
+
+  <h3 class="sub-title">算法和工程模块，分别放在链路的哪一段</h3>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr><th style="width:22%">模块</th><th style="width:20%">放在哪一段</th><th>作用</th></tr></thead>
+      <tbody>
+        <tr><th>相似度检索（向量召回）</th><td>召回</td><td>核心动作，把候选集从全量数据里捞出来。</td></tr>
+        <tr><th>关键词检索</th><td>召回（并行）</td><td>如果图片有标题/标签等文本元数据，可以和向量召回并行做文本检索。</td></tr>
+        <tr><th>混合检索</th><td>召回之后、重排之前</td><td>把向量分数和关键词分数融合（加权或 RRF 之类的排序融合方法）。</td></tr>
+        <tr><th>重排</th><td>重排</td><td>用更贵但更准的模型对候选集做精排。</td></tr>
+        <tr><th>聚类</th><td>离线</td><td>去重、发现同款簇，构建"同款分组"索引。</td></tr>
+        <tr><th>分类</th><td>召回前或过滤阶段</td><td>前置限定检索范围，或后置过滤误检类别。</td></tr>
+        <tr><th>规则过滤 / 阈值判定</th><td>过滤</td><td>业务规则 + 分数阈值，决定哪些候选真正返回给用户。</td></tr>
+        <tr><th>后处理（去重/打散）</th><td>过滤之后、返回结果之前</td><td>避免 Top-K 全是同一张图的近似重复，保证结果多样性。</td></tr>
+        <tr><th>人工审核</th><td>离线 / 旁路队列</td><td>不在实时链路里，是定期抽检 + 高风险结果复核队列。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub-title">依赖和成熟模块：按职责选，而不是按名气选</h3>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr><th style="width:22%">职责</th><th style="width:30%">解决什么问题</th><th>常见选择</th></tr></thead>
+      <tbody>
+        <tr><th>模型推理运行时</th><td>让模型跑起来，并尽量快</td><td class="mono">PyTorch, ONNX Runtime, TensorRT</td></tr>
+        <tr><th>模型/权重来源</th><td>提供预训练好的模型，不用自己从零训练</td><td class="mono">open_clip, transformers, timm</td></tr>
+        <tr><th>向量索引库（进程内）</th><td>单机内做高效相似度检索，不需要独立服务</td><td class="mono">FAISS, hnswlib, Annoy, ScaNN</td></tr>
+        <tr><th>向量数据库（独立服务）</th><td>支持增删改查、持久化、分布式扩展的向量存储</td><td class="mono">Milvus, Qdrant, Weaviate, pgvector</td></tr>
+        <tr><th>关系数据库</th><td>业务实体、元数据、权限、任务状态、审计</td><td class="mono">PostgreSQL, MySQL, SQLite</td></tr>
+        <tr><th>对象存储</th><td>原始文件和派生产物的存取</td><td class="mono">MinIO（自建）, S3 / OSS / COS（云厂商）</td></tr>
+        <tr><th>任务队列</th><td>把耗时任务从请求路径里挪出去异步处理</td><td class="mono">Celery, RQ, arq, Dramatiq</td></tr>
+        <tr><th>数据处理</th><td>图片读取、预处理、数值计算</td><td class="mono">Pillow, numpy, pandas</td></tr>
+        <tr><th>评测工具</th><td>算 recall/precision，判断方案是否可用</td><td>通常自己写脚本，没有太多现成框架</td></tr>
+        <tr><th>部署组件</th><td>把服务跑起来并管理生命周期</td><td class="mono">Docker, uvicorn/gunicorn, nginx, docker-compose, k8s（企业级）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub-title">开源方案怎么借鉴：不是"用不用"，是"借哪一层"</h3>
+  <p>把开源项目当成一个整体"要不要用"，是一种懒惰的二分法。更常见也更实用的做法是拆开看，只借你真正缺的那一层：</p>
+  <div class="two-col">
+    <div class="card">
+      <span class="card-label">① 直接使用整个项目</span>
+      <p>适合"业务不追求差异化，只要能跑起来"的场景。代价是被项目的设计假设绑定，改起来别扭。</p>
+    </div>
+    <div class="card">
+      <span class="card-label">② 只借模型权重</span>
+      <p>比如只用 CLIP / OpenCLIP 的预训练权重，自己写检索逻辑。最常见的方式——模型是最难自己训练的部分，复用价值最高。</p>
+    </div>
+    <div class="card">
+      <span class="card-label">③ 只借索引/检索模块</span>
+      <p>比如只用 FAISS 这个库本身，不用某个项目整套检索服务代码。适合已经有自己的数据管道，只缺高效向量检索能力。</p>
+    </div>
+    <div class="card">
+      <span class="card-label">④ 只借 UI / 管理后台</span>
+      <p>用某个开源项目的标注/检索管理界面，后端换成自己的。适合需要快速出一个可用的管理界面，又不想从零写前端。</p>
+    </div>
+  </div>
+  <div class="card">
+    <span class="card-label">⑤ 只借评测方法</span>
+    <p>参考别人怎么构造评测集、怎么算指标，不用其代码。适合已经有自己的实现，但不知道怎么系统评估效果。</p>
+  </div>
+
+  <h3 class="sub-title">厂商方案怎么判断：减少了什么负担，又带来什么代价</h3>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr><th style="width:16%">方案</th><th>减少了什么工程负担</th><th>带来什么成本 / 锁定 / 隐私问题</th></tr></thead>
+      <tbody>
+        <tr><th>云模型 API</th><td>不用训练/维护模型</td><td>按量计费，量大后可能比自建贵；效果和 pipeline 强绑定，换厂商要重新调阈值、重新评测；图片要出网络发给第三方。</td></tr>
+        <tr><th>托管向量库</th><td>不用运维分布式向量检索服务</td><td>订阅费通常比自建集群贵但省运维人力；数据迁移和 API 差异带来锁定；部署在自己云账号内通常隐私可控，但仍是第三方服务。</td></tr>
+        <tr><th>对象存储</th><td>不用自己搭文件服务器、备份、CDN</td><td>成本可控且成熟，S3 协议相对通用、锁定较低；隐私取决于是否满足数据留存地合规要求。</td></tr>
+        <tr><th>Serverless</th><td>不用运维服务器、处理扩缩容</td><td>对突发流量友好，但长期高负载可能比常驻实例贵；各厂商运行时/触发器不通用，锁定较强；对 GPU 推理支持有限，不一定适合 embedding 这类重计算任务。</td></tr>
+        <tr><th>AI 平台 / 企业知识库 / 搜索平台</th><td>整条链路（embedding + 索引 + 管理后台）都内置好了</td><td>成本通常最高，锁定最强——数据结构和检索逻辑都在平台内部；适合"不追求技术自主可控，只要业务结果"的团队。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub-title">本地方案怎么判断</h3>
+  <div class="two-col">
+    <div class="card">
+      <span class="card-label">适合</span>
+      <ul class="plain" style="margin-bottom:0;">
+        <li>离线验证阶段——不想为了验证可行性就先签厂商合同</li>
+        <li>隐私敏感数据——人脸、医疗影像、内部资料</li>
+        <li>成本可控——调用量大到云 API 成本不划算</li>
+        <li>内网部署要求——企业数据不能出内网</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="card-label">限制</span>
+      <ul class="plain" style="margin-bottom:0;">
+        <li>需要 GPU 才能跑得快，CPU 能跑但通常只适合小规模验证</li>
+        <li>索引文件需要自己管理版本和备份</li>
+        <li>数据更新需要自己写增量流程，不像托管服务开箱即有</li>
+        <li>部署运维需要自己承担——模型服务挂了、索引损坏了都要自己排查</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="s05">
+  <div class="eyebrow"><span class="frame-num">F.05</span> 数据与存储</div>
+  <h2 class="section-title">要不要向量数据库？要不要关系数据库？<span class="zh-sub">给判断路径，而不是固定答案</span></h2>
+  <p class="section-lede">"要不要上某个存储组件"不该靠感觉，而是看具体信号。点一遍下面几个问题，看看你的场景实际需要哪些存储。</p>
+
+  <div class="qbox" id="decision-tree">
+    <div class="q-label">STORAGE DECISION · <span id="q-step-label">1 / 4</span></div>
+    <div class="q-text" id="q-text">你的图片元数据（权限、类目、上传时间等）需要被结构化查询、筛选、和其他业务表关联吗？</div>
+    <div class="btn-row">
+      <button class="btn" id="q-yes">是</button>
+      <button class="btn" id="q-no">否</button>
+    </div>
+    <div class="q-progress">
+      <div class="seg" data-i="0"></div><div class="seg" data-i="1"></div><div class="seg" data-i="2"></div><div class="seg" data-i="3"></div>
+    </div>
+    <div class="result-tags" id="q-result" style="display:none;"></div>
+  </div>
+
+  <h3 class="sub-title">存储职责对照表</h3>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr><th style="width:14%">存储类型</th><th>负责什么</th><th style="width:20%">demo 阶段替代</th><th style="width:24%">什么时候升级</th></tr></thead>
+      <tbody>
+        <tr><th>关系数据库</th><td>业务实体、元数据、任务状态、权限、配额、审计、评测结果</td><td>SQLite 单文件</td><td>并发写入变多、需要多进程/多机共享状态时</td></tr>
+        <tr><th>对象存储</th><td>原始文件、缩略图、派生产物（裁剪图/中间特征文件）</td><td>本地目录</td><td>需要多机共享访问、CDN 分发、生命周期管理（自动清理/归档）时</td></tr>
+        <tr><th>向量索引 / 向量数据库</th><td>相似度检索</td><td>FAISS / Chroma 本地文件索引</td><td>数据量大到内存放不下、需要高频增删改、需要多机分布式检索时</td></tr>
+        <tr><th>图数据库</th><td>多跳关系、实体网络、关系推理</td><td>通常 demo 阶段就不需要</td><td>核心能力本身变成"关系推理"而不是"相似度检索"时——这种情况已经不是纯粹的以图搜图了</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <strong>demo 阶段的轻量替代能撑多久？</strong>本地目录 + JSON/SQLite + FAISS/Chroma，几百到几千张样例文件完全没问题。瓶颈信号：查询延迟明显变高、内存放不下全部向量、多进程同时读写索引文件发生冲突、需要支持增量更新但现有方案只能整体重建——出现任意一个，就该考虑升级对应的存储组件了。
+  </div>
+
+  <h3 class="sub-title">POC / 生产阶段：数据怎么进、怎么更新、怎么回滚</h3>
+  <ul class="plain">
+    <li><strong>导入</strong>：写增量导入脚本，而不是每次全量重跑——全量重跑在数据量变大后会拖垮上线节奏。</li>
+    <li><strong>增量更新</strong>：新图片进来时只算新图片的 embedding、只更新索引里新增的部分，而不是重建整个索引。</li>
+    <li><strong>索引重建</strong>：定期（比如每周/每天）全量重建，修复增量更新积累的漂移或碎片化；重建期间要考虑"旧索引是否还能服务"——双索引切换，而不是重建时直接下线。</li>
+    <li><strong>版本管理</strong>：索引文件需要版本号，方便回滚——新模型上线后效果变差，能快速切回旧索引/旧模型。</li>
+    <li><strong>离线评测集</strong>：一批"查询图 - 预期相似图"的标注对，每次模型/索引变更前跑一遍，防止"改了却不知道变好还是变差"。</li>
+    <li><strong>回滚</strong>：保留上一版本索引和模型的能力，出问题能迅速切回，而不是只能往前修。</li>
+  </ul>
+
+  <h3 class="sub-title">线上请求链路要保持简单</h3>
+  <p>用户输入 → FastAPI/脚本入口 → 调用模型/索引/业务规则 → 返回结构化结果。只有任务耗时、文件大、并发高，或者需要批处理（比如夜间批量导入）时，才引入队列、worker 和任务状态——不要一开始就假设需要一整套异步架构。</p>
+</section>
+
+<section id="s06">
+  <div class="eyebrow"><span class="frame-num">F.06</span> 分阶段路线</div>
+  <h2 class="section-title">demo → poc → 小团队 → 中团队 → 企业级<span class="zh-sub">每个阶段：新增了什么、解决什么问题、带来什么成本、什么时候不值得上</span></h2>
+  <p class="section-lede">这是整篇文章的核心主线。点开每一格，看这一阶段具体要做什么——也看清楚"什么时候不该急着进入下一阶段"。</p>
+
+  <div class="stepper" id="stage-stepper">
+    <button class="step-btn active" data-stage="0"><span class="s-tag">STAGE 0</span><span class="s-name">Demo</span>
+      <div class="stage-cost-ladder"><div class="bar on" style="height:20%"></div><div class="bar" style="height:35%"></div><div class="bar" style="height:50%"></div><div class="bar" style="height:70%"></div><div class="bar" style="height:100%"></div></div>
+    </button>
+    <button class="step-btn" data-stage="1"><span class="s-tag">STAGE 1</span><span class="s-name">POC</span>
+      <div class="stage-cost-ladder"><div class="bar on" style="height:20%"></div><div class="bar on" style="height:35%"></div><div class="bar" style="height:50%"></div><div class="bar" style="height:70%"></div><div class="bar" style="height:100%"></div></div>
+    </button>
+    <button class="step-btn" data-stage="2"><span class="s-tag">STAGE 2</span><span class="s-name">小团队上线</span>
+      <div class="stage-cost-ladder"><div class="bar on" style="height:20%"></div><div class="bar on" style="height:35%"></div><div class="bar on" style="height:50%"></div><div class="bar" style="height:70%"></div><div class="bar" style="height:100%"></div></div>
+    </button>
+    <button class="step-btn" data-stage="3"><span class="s-tag">STAGE 3</span><span class="s-name">中团队扩展</span>
+      <div class="stage-cost-ladder"><div class="bar on" style="height:20%"></div><div class="bar on" style="height:35%"></div><div class="bar on" style="height:50%"></div><div class="bar on" style="height:70%"></div><div class="bar" style="height:100%"></div></div>
+    </button>
+    <button class="step-btn" data-stage="4"><span class="s-tag">STAGE 4</span><span class="s-name">企业级治理</span>
+      <div class="stage-cost-ladder"><div class="bar on" style="height:20%"></div><div class="bar on" style="height:35%"></div><div class="bar on" style="height:50%"></div><div class="bar on" style="height:70%"></div><div class="bar on" style="height:100%"></div></div>
+    </button>
+  </div>
+
+  <div class="stage-panel">
+    <div class="stage-content" data-stage="0">
+      <h4>目标</h4>
+      <p>用最少组件验证"这个能力是否可行"——不是验证效果多好，是验证方向对不对。</p>
+      <h4>新增组件</h4>
+      <ul><li>Python 脚本 / Notebook</li><li>一个开源模型（本地）或云 API（二选一即可）</li><li>numpy / FAISS 内存索引</li><li>几百张样例图</li></ul>
+      <h4>解决的问题</h4>
+      <p>回答"这条技术路线能不能把相似的图挑出来"这个最基本的问题。</p>
+      <h4>带来的成本</h4>
+      <p>几乎为零，一到两天工作量。</p>
+      <h4>什么时候不值得上</h4>
+      <p>如果业务上连"什么算相似"都还没想清楚，做 demo 也验证不了什么——应该先把业务定义谈清楚，再动手写代码。</p>
+    </div>
+
+    <div class="stage-content" data-stage="1" style="display:none;">
+      <h4>目标</h4>
+      <p>验证真实数据下的效果、延迟、成本，以及失败样本长什么样。</p>
+      <h4>新增组件</h4>
+      <ul><li>真实业务数据（不是精选样例）</li><li>简单的 FastAPI 封装</li><li>基础存储（SQLite + 本地目录，或云对象存储）</li><li>小规模离线评测集（几十到上百个标注 query）</li></ul>
+      <h4>解决的问题</h4>
+      <p>回答"这个方案在真实数据上，指标能不能达到业务能接受的下限"。</p>
+      <h4>带来的成本</h4>
+      <p>需要拉通真实数据授权、花时间标注评测集，也可能发现模型不适配，需要换模型。</p>
+      <h4>什么时候不值得上</h4>
+      <p>如果 demo 阶段就已经发现方向明显不对（比如模型对这类图片完全不敏感），不要急着上 POC 去"碰运气"，先换路线。</p>
+    </div>
+
+    <div class="stage-content" data-stage="2" style="display:none;">
+      <h4>目标</h4>
+      <p>让真实用户能用起来，同时保持架构简单。</p>
+      <h4>新增组件</h4>
+      <ul><li>持久化（向量索引落盘 + 定期备份）</li><li>任务状态记录</li><li>基础权限校验（至少区分"谁能查询"“谁能看到哪些结果"）</li><li>日志、区分环境的配置文件</li><li>部署脚本（哪怕只是一个 Dockerfile + docker-compose）</li><li>人工抽检机制（定期抽查结果质量）</li></ul>
+      <h4>解决的问题</h4>
+      <p>从"能在我电脑上跑"到"能稳定给别人用"。</p>
+      <h4>带来的成本</h4>
+      <p>需要有人负责基础运维——重启服务、看日志、处理坏 case。</p>
+      <h4>什么时候不值得上</h4>
+      <p>用户量本身就很小、很低频（比如内部工具偶尔用一下），这时候过度补齐权限/监控反而是浪费——够用就好，不用往企业级看齐。</p>
+    </div>
+
+    <div class="stage-content" data-stage="3" style="display:none;">
+      <h4>目标</h4>
+      <p>支撑增长的数据量和访问量，同时保证效果不随规模变大而变差。</p>
+      <h4>新增组件</h4>
+      <ul><li>更稳定的数据管线（增量导入 + 索引重建 + 版本管理）</li><li>任务队列/worker（处理批量导入、大文件、高峰期请求）</li><li>独立对象存储</li><li>专门的向量库/支持向量检索的搜索引擎（替换内存索引）</li><li>监控（延迟/成功率/成本）</li><li>评测回归（每次上线前自动跑评测集）</li><li>灰度发布（新模型/新索引先给一小部分流量）</li><li>成本观测（尤其用云 API 时，量大后成本可能失控）</li></ul>
+      <h4>解决的问题</h4>
+      <p>从"能用"到"规模变大也不会垮、也不会不知不觉变差"。</p>
+      <h4>带来的成本</h4>
+      <p>需要专门的工程投入维护这些组件，团队分工开始出现——有人管数据管线，有人管服务。</p>
+      <h4>什么时候不值得上</h4>
+      <p>数据量和访问量还没真的涨到内存索引/单机撑不住的地步，提前上这些组件只是增加维护负担而没有实际收益。</p>
+    </div>
+
+    <div class="stage-content" data-stage="4" style="display:none;">
+      <h4>目标</h4>
+      <p>在合规、安全、可持续运营的前提下，支撑多业务方/多租户使用。</p>
+      <h4>新增组件</h4>
+      <ul><li>多租户隔离（不同业务线的数据和检索不能互相看到）</li><li>细粒度权限体系</li><li>审计（谁在什么时候查了什么、结果是什么）</li><li>合规（数据出境、留存期限、内容审核）</li><li>私有化部署能力</li><li>容量规划（提前预估未来半年到一年的增长）</li><li>分片重建等索引重建策略</li><li>灾备（索引/模型/数据的多副本和恢复演练）</li><li>严格的模型版本管理和上线前评测/回滚流程</li><li>人工审核队列和处理 SLA</li><li>供应商替换策略（评估"换厂商需要多大代价"，避免被单一厂商锁死）</li></ul>
+      <h4>解决的问题</h4>
+      <p>让系统在组织级别可信、可审计、可持续，而不只是"能跑"。</p>
+      <h4>带来的成本</h4>
+      <p>最高，需要专门的平台团队、合规团队配合。</p>
+      <h4>什么时候不值得上</h4>
+      <p>团队/业务规模没有到多租户、多业务线共享的程度，过早引入这些治理成本会拖慢所有人。</p>
+    </div>
+  </div>
+</section>
+
+<section id="s07">
+  <div class="eyebrow"><span class="frame-num">F.07</span> FastAPI 的位置</div>
+  <h2 class="section-title">FastAPI 只在需要服务化时出现<span class="zh-sub">不是架构教程，只是一层薄薄的暴露方式</span></h2>
+  <p class="section-lede">如果脚本能跑通，先展示脚本链路；只有需要暴露成 API 给别的系统/前端调用时，才把它包成 FastAPI 服务。它负责接收请求、上传文件、触发任务、查询状态、返回结果——仅此而已。</p>
+
+  <div class="code-block">
+    <div class="code-head"><span><span class="frame-tag">02A</span> 同步接口：直接返回检索结果</span><span>main.py</span></div>
+    <pre><span class="c-kw">from</span> fastapi <span class="c-kw">import</span> FastAPI, UploadFile
+<span class="c-kw">from</span> pydantic <span class="c-kw">import</span> BaseModel
+
+app = FastAPI()
+
+<span class="c-kw">class</span> SearchResult(BaseModel):
+    path: str
+    score: float
+
+<span class="c-comment">@app.post("/search", response_model=list[SearchResult])</span>
+<span class="c-kw">async def</span> search_image(file: UploadFile, top_k: int = 5):
+    image_bytes = <span class="c-kw">await</span> file.read()
+    <span class="c-comment"># 复用前面脚本里的 search 逻辑，不需要重写一遍</span>
+    results = run_search(image_bytes, top_k=top_k)
+    <span class="c-kw">return</span> [SearchResult(path=p, score=s) <span class="c-kw">for</span> p, s <span class="c-kw">in</span> results]</pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-head"><span><span class="frame-tag">02B</span> 异步接口：耗时任务放后台，不阻塞请求</span><span>main.py</span></div>
+    <pre><span class="c-kw">from</span> fastapi <span class="c-kw">import</span> BackgroundTasks, HTTPException
+
+<span class="c-comment">@app.post("/reindex")</span>
+<span class="c-kw">async def</span> trigger_reindex(background_tasks: BackgroundTasks):
+    task_id = create_task_record()
+    background_tasks.add_task(rebuild_index, task_id)
+    <span class="c-kw">return</span> {<span class="c-str">"task_id"</span>: task_id}
+
+<span class="c-comment">@app.get("/tasks/{task_id}")</span>
+<span class="c-kw">async def</span> get_task_status(task_id: str):
+    status = get_task_record(task_id)
+    <span class="c-comment"># 查不到就显式抛错，不要返回默认的"processing"掩盖问题</span>
+    <span class="c-kw">if</span> status <span class="c-kw">is</span> <span class="c-kw">None</span>:
+        <span class="c-kw">raise</span> HTTPException(status_code=404, detail=<span class="c-str">"task not found"</span>)
+    <span class="c-kw">return</span> status</pre>
+  </div>
+
+  <div class="callout">
+    <strong>什么时候从 <span class="mono">BackgroundTasks</span> 升级到独立队列/worker？</strong>当重建任务需要处理大量并发请求、失败后需要重试机制、需要跨进程/跨机器分发任务，或者需要任务优先级和限流时——这时候才引入 Celery/RQ 等独立队列。不要默认所有 demo 一上来就搭一整套异步架构，大多数 demo 和 POC 阶段，<span class="mono">BackgroundTasks</span> 已经够用。
+  </div>
+</section>
+
+<section id="s08">
+  <div class="eyebrow"><span class="frame-num">F.08</span> 验证与风险</div>
+  <h2 class="section-title">怎么判断做得好不好，出问题先看哪里<span class="zh-sub">验证方法 · 常见失败模式 · 排查顺序</span></h2>
+
+  <h3 class="sub-title">怎么判断方案可用</h3>
+  <ul class="plain">
+    <li><strong>小样本人工验证</strong>：挑 10-20 个典型 query，人工看排序是否合理，适合 demo 阶段。</li>
+    <li><strong>离线评测集</strong>：标注"查询图-预期相似图集合"，跑 <span class="mono">Recall@K</span>（该出现的有没有出现）、<span class="mono">Precision@K</span>（出现的里有多少是真的相似）。</li>
+    <li><strong>排序指标</strong>：如果相似度有分级（非常像/比较像/不像），用更细的排序指标；大多数场景 Recall@K / Precision@K 已经够用。</li>
+    <li><strong>延迟</strong>：端到端（用户点查询到看到结果），而不只是模型推理时间。</li>
+    <li><strong>成本</strong>：单次查询成本 + 离线建索引成本 + 存储成本，要按预期 QPS/数据量估算，不能只看 demo 阶段小数据的成本。</li>
+    <li><strong>失败样本分析</strong>：定期把 Precision 低的 query 拉出来人工看，分类失败原因——是数据问题、模型问题，还是阈值问题。</li>
+    <li><strong>用户验收</strong>：指标达标不代表用户满意，最终还是要看真实用户觉得"这个好用"。</li>
+  </ul>
+
+  <h3 class="sub-title">常见失败模式（点开看排查建议）</h3>
+  <div id="accordion">
+    <div class="acc-item">
+      <div class="acc-head"><span><span class="num">01</span>数据质量差</span><span class="plus">+</span></div>
+      <div class="acc-body"><p>模糊、过曝、遮挡严重、缩略图分辨率太低导致细节丢失。<strong>排查建议</strong>：先看能不能过滤/提高数据质量，而不是急着换模型。</p></div>
+    </div>
+    <div class="acc-item">
+      <div class="acc-head"><span><span class="num">02</span>模型不适配</span><span class="plus">+</span></div>
+      <div class="acc-body"><p>通用模型在细分领域效果差，比如人脸/商标/工业零件这类需要专门模型的场景。<strong>排查建议</strong>：换领域模型，或至少考虑微调。</p></div>
+    </div>
+    <div class="acc-item">
+      <div class="acc-head"><span><span class="num">03</span>向量召回不准</span><span class="plus">+</span></div>
+      <div class="acc-body"><p>embedding 本身没问题，但检索没找到该有的候选，通常是 ANN 索引参数设置不当，比如召回数太小、索引类型选错。<strong>排查建议</strong>：检查 ANN 索引配置，而不是先怀疑模型本身。</p></div>
+    </div>
+    <div class="acc-item">
+      <div class="acc-head"><span><span class="num">04</span>阈值难设</span><span class="plus">+</span></div>
+      <div class="acc-body"><p>不同 query 的"合理相似度分数"分布差异很大，固定阈值要么漏检要么误检。<strong>排查建议</strong>：考虑相对排序而不是绝对阈值，或者按类目/场景分别设阈值。</p></div>
+    </div>
+    <div class="acc-item">
+      <div class="acc-head"><span><span class="num">05</span>索引过期</span><span class="plus">+</span></div>
+      <div class="acc-body"><p>新图片进来了但没有出现在检索结果里，因为索引没有增量更新。<strong>排查建议</strong>：检查增量更新链路是否正常运行，而不是怀疑模型突然变差。</p></div>
+    </div>
+    <div class="acc-item">
+      <div class="acc-head"><span><span class="num">06</span>权限过滤缺失</span><span class="plus">+</span></div>
+      <div class="acc-body"><p>检索返回了用户本不该看到的图片。<strong>排查建议</strong>：这是安全问题，必须显式加权限过滤，不能假设向量检索结果天然是"安全"的。</p></div>
+    </div>
+    <div class="acc-item">
+      <div class="acc-head"><span><span class="num">07</span>云 API 成本过高</span><span class="plus">+</span></div>
+      <div class="acc-body"><p>量上来后按次计费的成本超出预算。<strong>排查建议</strong>：重新评估是否要自建/换成本地模型，或者引入缓存（常见 query 缓存结果）。</p></div>
+    </div>
+    <div class="acc-item">
+      <div class="acc-head"><span><span class="num">08</span>本地模型太慢</span><span class="plus">+</span></div>
+      <div class="acc-body"><p>CPU 推理跟不上 QPS。<strong>排查建议</strong>：考虑 GPU、模型量化、批处理（batching），或者降级到更小的模型。</p></div>
+    </div>
+    <div class="acc-item">
+      <div class="acc-head"><span><span class="num">09</span>企业数据不能出内网</span><span class="plus">+</span></div>
+      <div class="acc-body"><p>合规要求。<strong>排查建议</strong>：这是路线选择问题，不是优化问题——应该在选型阶段就排除云 API，而不是上线后才发现。</p></div>
+    </div>
+  </div>
+
+  <h3 class="sub-title">排查顺序：先看数据，最后才看架构</h3>
+  <div class="pipeline-wrap">
+    <div style="display:flex; flex-wrap:wrap; gap:0; align-items:center; font-family:var(--font-mono); font-size:13px;">
+      <span style="padding:10px 14px; border:1px solid var(--red); border-radius:3px; color:var(--ink);">① 数据</span>
+      <span style="padding:0 8px; color:var(--fog-2);">→</span>
+      <span style="padding:10px 14px; border:1px solid var(--red); border-radius:3px; color:var(--ink);">② 模型</span>
+      <span style="padding:0 8px; color:var(--fog-2);">→</span>
+      <span style="padding:10px 14px; border:1px solid var(--red); border-radius:3px; color:var(--ink);">③ 索引/检索</span>
+      <span style="padding:0 8px; color:var(--fog-2);">→</span>
+      <span style="padding:10px 14px; border:1px solid var(--red); border-radius:3px; color:var(--ink);">④ 后处理/业务规则</span>
+      <span style="padding:0 8px; color:var(--fog-2);">→</span>
+      <span style="padding:10px 14px; border:1px solid var(--teal); border-radius:3px; color:var(--ink);">⑤ 服务架构</span>
+    </div>
+    <p style="margin-top:16px; color:var(--fog); font-size:14px;">反过来"一出问题先怀疑框架/数据库"是最没有效率的排查顺序——架构问题通常是最后才需要考虑的，也是最容易被过度怀疑的。</p>
+  </div>
+
+  <div class="callout teal">
+    <strong>哪些能力不该过度工程化：</strong>数据量很少（几百张以内）、使用频率很低（一天几次甚至更少）、质量要求不高（内部工具/个人验证）、只是想快速看看这个方向靠不靠谱——这些场景下，优先用脚本 + 本地文件 + 轻量索引，不要因为"将来可能要扩展"就提前引入向量数据库/消息队列/多租户设计。这些"面向未来的设计"往往会拖慢真正要解决的问题的验证速度。
+  </div>
+</section>
+
+<footer>
+  <div style="max-width:520px;margin:0 auto 20px;color:var(--fog);font-size:13px;font-family:var(--font-body);">
+    以图搜图 · 一文读懂 —— 从最小可跑链路，到企业级治理。技术路线会变，但"先验证方向、再谈架构"这条主线不会变。
+  </div>
+  proof sheet · end of roll
+</footer>
+</main>
+<script>
+(function(){
+
+  // ---------- side nav (scroll spy) ----------
+  var navSections = [
+    {id:'s01', label:'F.01 概念对齐'},
+    {id:'s02', label:'F.02 最小链路'},
+    {id:'s03', label:'F.03 线下/线上'},
+    {id:'s04', label:'F.04 技术路线'},
+    {id:'s05', label:'F.05 数据与存储'},
+    {id:'s06', label:'F.06 分阶段路线'},
+    {id:'s07', label:'F.07 FastAPI'},
+    {id:'s08', label:'F.08 验证与风险'}
+  ];
+  var sidenav = document.getElementById('sidenav');
+  navSections.forEach(function(s){
+    var a = document.createElement('a');
+    a.href = '#'+s.id;
+    var tip = document.createElement('span');
+    tip.className = 'tip';
+    tip.textContent = s.label;
+    a.appendChild(tip);
+    a.dataset.target = s.id;
+    sidenav.appendChild(a);
+  });
+  var navLinks = Array.prototype.slice.call(sidenav.querySelectorAll('a'));
+  function setActiveNav(id){
+    navLinks.forEach(function(a){
+      a.classList.toggle('active', a.dataset.target === id);
+    });
+  }
+  if ('IntersectionObserver' in window){
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (entry.isIntersecting){ setActiveNav(entry.target.id); }
+      });
+    }, {rootMargin:'-40% 0px -55% 0px', threshold:0});
+    navSections.forEach(function(s){
+      var el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    });
+  }
+
+  // ---------- offline/online pipeline switch ----------
+  var pipeSwitch = document.getElementById('pipe-switch');
+  var lblOff = document.getElementById('lbl-off');
+  var lblOn = document.getElementById('lbl-on');
+  var offDetail = document.getElementById('off-detail');
+  var onDetail = document.getElementById('on-detail');
+  var offSteps = document.querySelectorAll('.off-step');
+  var onSteps = document.querySelectorAll('.on-step');
+  var isOnline = false;
+  function renderPipeSwitch(){
+    pipeSwitch.classList.toggle('is-online', isOnline);
+    lblOff.classList.toggle('on', !isOnline);
+    lblOn.classList.toggle('on', isOnline);
+    offDetail.style.display = isOnline ? 'none' : 'block';
+    onDetail.style.display = isOnline ? 'block' : 'none';
+    offSteps.forEach(function(el){ el.style.opacity = isOnline ? 0.28 : 1; });
+    onSteps.forEach(function(el){ el.style.opacity = isOnline ? 1 : 0.28; });
+  }
+  if (pipeSwitch){
+    pipeSwitch.addEventListener('click', function(){
+      isOnline = !isOnline;
+      renderPipeSwitch();
+    });
+    renderPipeSwitch();
+  }
+
+  // ---------- priority selector (route matrix highlight) ----------
+  var priorityRow = document.getElementById('priority-row');
+  var routeMatrix = document.getElementById('route-matrix');
+  var routeCols = ['local','cloud','vendor','oss','selfbuild','trad'];
+  if (priorityRow){
+    priorityRow.querySelectorAll('.p-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var isActive = btn.classList.contains('active');
+        priorityRow.querySelectorAll('.p-btn').forEach(function(b){ b.classList.remove('active'); });
+        routeCols.forEach(function(c){
+          routeMatrix.querySelectorAll('.col-'+c).forEach(function(td){ td.classList.remove('hl'); });
+        });
+        if (!isActive){
+          btn.classList.add('active');
+          var hl = btn.dataset.hl.split(',');
+          hl.forEach(function(c){
+            routeMatrix.querySelectorAll('.col-'+c).forEach(function(td){ td.classList.add('hl'); });
+          });
+        }
+      });
+    });
+  }
+
+  // ---------- storage decision tree ----------
+  var questions = [
+    {
+      text:'你的图片元数据（权限、类目、上传时间等）需要被结构化查询、筛选、和其他业务表关联吗？',
+      yes:{tag:'关系数据库', no:false}, no:{tag:'关系数据库（可先不加）', no:true}
+    },
+    {
+      text:'原始图片文件/缩略图需要独立于业务数据库存储和访问吗（比如通过 URL 直接访问原图）？',
+      yes:{tag:'对象存储', no:false}, no:{tag:'对象存储（本地目录/数据库先凑合）', no:true}
+    },
+    {
+      text:'图片规模会超过几千到几万张，或者查询并发会变高吗？',
+      yes:{tag:'向量索引/向量数据库', no:false}, no:{tag:'向量索引（numpy/FAISS 内存索引够用）', no:true}
+    },
+    {
+      text:'核心能力是否依赖"图片之间的多跳关系"（比如"找到相似图 → 再找关联商品 → 再找关联商品的相似图"）？',
+      yes:{tag:'图数据库', no:false}, no:{tag:'图数据库（绝大多数场景不需要）', no:true}
+    }
+  ];
+  var qIndex = 0;
+  var qResults = [];
+  var qTextEl = document.getElementById('q-text');
+  var qStepLabel = document.getElementById('q-step-label');
+  var qYes = document.getElementById('q-yes');
+  var qNo = document.getElementById('q-no');
+  var qResult = document.getElementById('q-result');
+  var qProgressSegs = document.querySelectorAll('#decision-tree .q-progress .seg');
+  var qBtnRow = document.querySelector('#decision-tree .btn-row');
+
+  function renderQuestion(){
+    if (qIndex >= questions.length){
+      qTextEl.textContent = '判断完成。根据你的回答，你大概需要：';
+      qBtnRow.style.display = 'none';
+      qResult.style.display = 'flex';
+      qResult.innerHTML = '';
+      qResults.forEach(function(r){
+        var span = document.createElement('span');
+        span.className = 'rt' + (r.no ? ' no' : '');
+        span.textContent = (r.no ? '暂不需要：' : '需要：') + r.tag;
+        qResult.appendChild(span);
+      });
+      var restart = document.createElement('button');
+      restart.className = 'btn';
+      restart.style.marginTop = '4px';
+      restart.textContent = '重新开始';
+      restart.addEventListener('click', function(){
+        qIndex = 0; qResults = [];
+        qBtnRow.style.display = 'flex';
+        qResult.style.display = 'none';
+        renderQuestion();
+      });
+      qResult.appendChild(restart);
+      qProgressSegs.forEach(function(seg){ seg.classList.add('done'); });
+      qStepLabel.textContent = '完成';
+      return;
+    }
+    qStepLabel.textContent = (qIndex+1) + ' / ' + questions.length;
+    qTextEl.textContent = questions[qIndex].text;
+    qProgressSegs.forEach(function(seg,i){ seg.classList.toggle('done', i < qIndex); });
+  }
+  if (qYes){
+    qYes.addEventListener('click', function(){
+      qResults.push(questions[qIndex].yes);
+      qIndex++;
+      renderQuestion();
+    });
+    qNo.addEventListener('click', function(){
+      qResults.push(questions[qIndex].no);
+      qIndex++;
+      renderQuestion();
+    });
+    renderQuestion();
+  }
+
+  // ---------- stage stepper ----------
+  var stageBtns = document.querySelectorAll('#stage-stepper .step-btn');
+  var stageContents = document.querySelectorAll('.stage-content');
+  stageBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      stageBtns.forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      var target = btn.dataset.stage;
+      stageContents.forEach(function(c){
+        c.style.display = (c.dataset.stage === target) ? 'block' : 'none';
+      });
+    });
+  });
+
+  // ---------- accordion ----------
+  document.querySelectorAll('#accordion .acc-item').forEach(function(item){
+    var head = item.querySelector('.acc-head');
+    var body = item.querySelector('.acc-body');
+    head.addEventListener('click', function(){
+      var isOpen = item.classList.contains('open');
+      document.querySelectorAll('#accordion .acc-item').forEach(function(other){
+        other.classList.remove('open');
+        other.querySelector('.acc-body').style.maxHeight = null;
+      });
+      if (!isOpen){
+        item.classList.add('open');
+        body.style.maxHeight = body.scrollHeight + 40 + 'px';
+      }
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
