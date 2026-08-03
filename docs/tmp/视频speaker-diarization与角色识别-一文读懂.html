@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 · 视频 Speaker Diarization 与 Speaker Role Identification</title>
+<style>
+:root{
+  --bg:#faf9f6;
+  --bg-raised:#ffffff;
+  --bg-card:#f3f3ef;
+  --bg-card-2:#ececE6;
+  --line:#e4e3dc;
+  --line-strong:#d2d1c8;
+  --text:#1c1d1a;
+  --text-dim:#54554f;
+  --text-faint:#84857d;
+  --accent:#0b7285;
+  --accent-soft:#e3f1f2;
+  --teal:#0b7285;
+  --amber:#a8571a;
+  --violet:#6b3fa0;
+  --green:#1a7a44;
+  --slate:#475569;
+  --warn:#a8571a;
+  --shadow:0 1px 2px rgba(20,20,15,0.04), 0 4px 14px rgba(20,20,15,0.05);
+  --font-mono:ui-monospace,"SFMono-Regular","Cascadia Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --maxw:760px;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto;}*{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;}}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--font-sans);line-height:1.75;font-size:16px;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+code,pre{font-family:var(--font-mono);}
+::selection{background:var(--accent);color:#ffffff;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* progress bar */
+#progress{position:fixed;top:0;left:0;height:3px;background:var(--accent);width:0%;z-index:200;transition:width .1s linear;}
+
+/* layout */
+.shell{display:flex;max-width:1280px;margin:0 auto;}
+.sidebar{
+  position:sticky;top:0;align-self:flex-start;height:100vh;
+  width:250px;flex:none;padding:28px 18px 28px 28px;overflow-y:auto;
+  border-right:1px solid var(--line);background:var(--bg);
+}
+.sidebar::-webkit-scrollbar{width:6px;}
+.sidebar::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px;}
+.brand{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;color:var(--text-faint);text-transform:uppercase;margin-bottom:22px;}
+.brand b{color:var(--accent);}
+.nav-list{list-style:none;margin:0;padding:0;}
+.nav-list li{margin:0;}
+.nav-list a{
+  display:flex;gap:10px;align-items:baseline;padding:6px 8px;border-radius:6px;
+  font-size:13px;color:var(--text-dim);border-left:2px solid transparent;
+}
+.nav-list a .tc{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);flex:none;width:34px;}
+.nav-list a:hover{color:var(--text);text-decoration:none;background:var(--bg-card);}
+.nav-list a.active{color:var(--accent);border-left-color:var(--accent);background:var(--accent-soft);}
+.nav-list a.active .tc{color:var(--accent);}
+
+main{flex:1;min-width:0;padding:0 28px 120px;}
+.wrap{max-width:var(--maxw);margin:0 auto;}
+section{padding:64px 0;border-bottom:1px solid var(--line);}
+section:last-of-type{border-bottom:none;}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;}
+h2{font-family:var(--font-sans);font-size:24px;letter-spacing:-0.01em;margin:0 0 18px;font-weight:800;color:var(--text);}
+h3{font-size:16.5px;margin:28px 0 10px;color:var(--text);font-weight:700;}
+p{margin:0 0 14px;color:var(--text-dim);}
+p b, li b{color:var(--text);font-weight:600;}
+ul,ol{padding-left:22px;color:var(--text-dim);}
+li{margin-bottom:6px;}
+.lead{font-size:16.5px;color:var(--text);}
+
+/* hero */
+.hero{padding:56px 0 40px;border-bottom:1px solid var(--line);}
+.hero-kicker{font-family:var(--font-mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-faint);margin-bottom:18px;}
+.hero h1{font-family:var(--font-sans);font-size:clamp(26px,4vw,38px);line-height:1.3;margin:0 0 20px;font-weight:800;letter-spacing:-0.01em;}
+.hero h1 .hl{color:var(--accent);}
+.hero-sub{font-size:16.5px;color:var(--text-dim);max-width:640px;margin-bottom:30px;}
+.hero-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:40px;}
+.chip{font-family:var(--font-mono);font-size:12px;padding:6px 12px;border:1px solid var(--line-strong);border-radius:20px;color:var(--text-dim);background:var(--bg-raised);}
+.chip:hover{border-color:var(--accent);color:var(--accent);text-decoration:none;}
+
+/* timeline signature element */
+.timeline-card{background:var(--bg-raised);border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px;box-shadow:var(--shadow);}
+.tl-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
+.tl-title{font-family:var(--font-mono);font-size:12px;color:var(--text-faint);letter-spacing:.06em;}
+.tl-legend{display:flex;gap:14px;flex-wrap:wrap;}
+.tl-legend span{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:5px;}
+.tl-legend i{width:9px;height:9px;border-radius:2px;display:inline-block;}
+.ruler{position:relative;height:16px;margin-bottom:6px;font-family:var(--font-mono);font-size:10px;color:var(--text-faint);}
+.ruler span{position:absolute;transform:translateX(-50%);}
+.track{position:relative;height:34px;background:var(--bg-card);border-radius:6px;margin-bottom:6px;overflow:hidden;border:1px solid var(--line);}
+.track.wave{height:44px;}
+.waveform{position:absolute;inset:0;opacity:.7;}
+.seg{position:absolute;top:3px;bottom:3px;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-family:var(--font-mono);font-size:10.5px;color:#ffffff;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;transition:filter .15s, transform .15s;}
+.seg:hover{filter:brightness(1.12);transform:translateY(-1px);z-index:5;}
+.seg.spk0{background:var(--teal);} .seg.spk1{background:var(--amber);} .seg.spk2{background:var(--violet);}
+.roletag{position:absolute;top:0;height:16px;border-radius:3px;font-family:var(--font-mono);font-size:9px;display:flex;align-items:center;justify-content:center;color:#ffffff;font-weight:700;letter-spacing:.02em;}
+.roletag.host{background:var(--green);} .roletag.guest{background:var(--slate);}
+.playhead{position:absolute;top:0;bottom:0;width:1px;background:rgba(20,20,15,.28);animation:sweep 16s linear infinite;}
+@keyframes sweep{0%{left:0%;opacity:0;}5%{opacity:1;}95%{opacity:1;}100%{left:100%;opacity:0;}}
+.tooltip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#ffffff;border:1px solid var(--line-strong);box-shadow:var(--shadow);color:var(--text);font-family:var(--font-mono);font-size:11px;padding:6px 9px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;z-index:20;}
+.seg:hover .tooltip, .roletag:hover .tooltip{opacity:1;}
+.tl-note{font-size:12px;color:var(--text-faint);margin-top:10px;}
+
+/* generic cards / grids */
+.grid{display:grid;gap:14px;}
+.grid.cols-2{grid-template-columns:1fr 1fr;}
+.grid.cols-3{grid-template-columns:repeat(3,1fr);}
+@media (max-width:640px){.grid.cols-2,.grid.cols-3{grid-template-columns:1fr;}}
+.card{background:var(--bg-raised);border:1px solid var(--line);border-radius:10px;padding:16px 18px;box-shadow:var(--shadow);}
+.card h4{margin:0 0 6px;font-size:14px;color:var(--text);}
+.card p{margin:0;font-size:13.5px;}
+.card .tag{display:inline-block;font-family:var(--font-mono);font-size:10.5px;color:var(--accent);border:1px solid var(--line-strong);border-radius:4px;padding:1px 6px;margin-bottom:8px;background:var(--accent-soft);}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:560px;background:var(--bg-raised);}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+th{font-family:var(--font-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint);background:var(--bg-card);}
+td{color:var(--text-dim);}
+tr:last-child td{border-bottom:none;}
+td b{color:var(--text);}
+tr.hl td{background:var(--accent-soft);}
+
+/* code blocks */
+.codeblock{position:relative;background:var(--bg-card);border:1px solid var(--line);border-radius:10px;margin:14px 0;}
+.codeblock .cb-head{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);}
+.codeblock .cb-head span{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);}
+.codeblock pre{margin:0;padding:14px 16px;overflow-x:auto;font-size:12.5px;line-height:1.65;color:#24261f;}
+.copy-btn{font-family:var(--font-mono);font-size:11px;background:var(--bg-raised);border:1px solid var(--line-strong);color:var(--text-dim);border-radius:5px;padding:3px 9px;cursor:pointer;}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent);}
+.tok-c{color:#8b8d84;font-style:italic;} .tok-s{color:#1a7a44;} .tok-k{color:#a8571a;} .tok-f{color:#0b7285;}
+
+/* tabs */
+.tabbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.tabbtn{font-family:var(--font-mono);font-size:12px;padding:7px 12px;border-radius:7px;border:1px solid var(--line-strong);background:var(--bg-raised);color:var(--text-dim);cursor:pointer;}
+.tabbtn:hover{color:var(--text);border-color:var(--text-faint);}
+.tabbtn[aria-selected="true"]{background:var(--accent);color:#ffffff;border-color:var(--accent);font-weight:700;}
+.tabpanel{display:none;}
+.tabpanel.active{display:block;}
+
+/* toggle / segmented */
+.segctrl{display:inline-flex;border:1px solid var(--line-strong);border-radius:9px;padding:3px;background:var(--bg-card);margin-bottom:16px;}
+.segctrl button{font-family:var(--font-mono);font-size:12.5px;padding:7px 14px;border:none;background:none;color:var(--text-dim);border-radius:6px;cursor:pointer;}
+.segctrl button[aria-selected="true"]{background:var(--accent);color:#ffffff;font-weight:700;}
+
+/* pipeline nodes */
+.pipeline{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:16px 0;}
+.node{font-family:var(--font-mono);font-size:12px;padding:9px 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--bg-raised);color:var(--text-dim);transition:opacity .2s, border-color .2s, color .2s, background .2s;}
+.node.active{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600;}
+.node.dim{opacity:.42;}
+.arrow{color:var(--text-faint);font-size:14px;}
+
+/* roadmap */
+.stage-desc{background:var(--bg-raised);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);}
+.stage-desc .row{display:grid;grid-template-columns:110px 1fr;gap:6px 14px;margin-bottom:8px;font-size:13.5px;}
+.stage-desc .row b{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;}
+.stage-desc .row span{color:var(--text-dim);}
+.chips-flow{display:flex;flex-wrap:wrap;gap:8px;}
+.pill{font-family:var(--font-mono);font-size:11.5px;padding:6px 11px;border-radius:16px;border:1px solid var(--line-strong);color:var(--text-faint);background:var(--bg-raised);transition:all .2s;}
+.pill.on{color:#ffffff;font-weight:700;border-color:transparent;}
+.pill.on.s0{background:var(--teal);} .pill.on.s1{background:var(--amber);} .pill.on.s2{background:var(--green);} .pill.on.s3{background:var(--violet);} .pill.on.s4{background:var(--slate);}
+.pill.locked{opacity:.45;background:var(--bg-card);}
+
+/* accordion (details) */
+details.acc{background:var(--bg-raised);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow);}
+details.acc summary{list-style:none;padding:14px 18px;cursor:pointer;font-weight:600;color:var(--text);display:flex;justify-content:space-between;align-items:center;font-size:14px;}
+details.acc summary::-webkit-details-marker{display:none;}
+details.acc summary::after{content:"+";font-family:var(--font-mono);color:var(--accent);font-size:18px;transition:transform .2s;}
+details.acc[open] summary::after{transform:rotate(45deg);}
+details.acc[open] summary{border-bottom:1px solid var(--line);}
+details.acc .acc-body{padding:14px 18px 16px;font-size:13.5px;color:var(--text-dim);}
+details.acc .acc-body p:last-child{margin-bottom:0;}
+.step-num{font-family:var(--font-mono);color:var(--accent);margin-right:8px;}
+
+/* callouts */
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:12px 16px;border-radius:0 8px 8px 0;font-size:13.5px;color:var(--text-dim);margin:16px 0;}
+.callout.warn{border-left-color:var(--warn);background:#faf1e7;}
+.callout b{color:var(--text);}
+
+/* checklist */
+.checklist{list-style:none;padding:0;}
+.checklist li{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+.checklist li:last-child{border-bottom:none;}
+.checklist .box{flex:none;width:16px;height:16px;border:1px solid var(--line-strong);border-radius:4px;margin-top:2px;background:var(--bg-raised);}
+
+footer{padding:40px 28px 60px;text-align:center;color:var(--text-faint);font-size:12px;font-family:var(--font-mono);border-top:1px solid var(--line);}
+
+@media (max-width:980px){
+  .sidebar{display:none;}
+  main{padding:0 18px 100px;}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">一文读懂 · <b>Speaker Diarization</b></div>
+    <ul class="nav-list" id="navlist">
+      <li><a href="#hero"><span class="tc">00</span>能力总览</a></li>
+      <li><a href="#what-is"><span class="tc">01</span>是什么/不是什么</a></li>
+      <li><a href="#minimal"><span class="tc">02</span>最小可跑链路</a></li>
+      <li><a href="#chain"><span class="tc">03</span>离线 / 线上链路</a></li>
+      <li><a href="#routes"><span class="tc">04</span>技术路线选型</a></li>
+      <li><a href="#models"><span class="tc">05</span>模型怎么选</a></li>
+      <li><a href="#modules"><span class="tc">06</span>算法模块位置</a></li>
+      <li><a href="#deps"><span class="tc">07</span>依赖与组件</a></li>
+      <li><a href="#oss"><span class="tc">08</span>开源怎么借鉴</a></li>
+      <li><a href="#vendor"><span class="tc">09</span>厂商 vs 本地</a></li>
+      <li><a href="#storage"><span class="tc">10</span>数据与存储</a></li>
+      <li><a href="#api"><span class="tc">11</span>线上链路 / FastAPI</a></li>
+      <li><a href="#roadmap"><span class="tc">12</span>分阶段路线</a></li>
+      <li><a href="#eval"><span class="tc">13</span>评估指标</a></li>
+      <li><a href="#trouble"><span class="tc">14</span>排查顺序</a></li>
+      <li><a href="#risks"><span class="tc">15</span>风险与失败</a></li>
+      <li><a href="#accept"><span class="tc">16</span>验收口径</a></li>
+      <li><a href="#noover"><span class="tc">17</span>不要过度工程化</a></li>
+      <li><a href="#closing"><span class="tc">18</span>一页清单</a></li>
+    </ul>
+  </aside>
+
+  <main>
+    <div class="wrap">
+
+    <section class="hero" id="hero">
+      <div class="hero-kicker">AI 工程能力 · 一文读懂</div>
+      <h1>给一段视频，认出<span class="hl">谁在说话</span>，再认出<span class="hl">他是什么角色</span></h1>
+      <p class="hero-sub">Speaker Diarization 回答"哪个时间段是同一个人在说话"，Speaker Role Identification 在此基础上回答"这个人在这段对话里扮演什么角色"（主持人 / 嘉宾、客服 / 客户、医生 / 患者……）。这篇文章带你从"不知道技术上怎么落地"走到能判断 demo 怎么跑、POC 怎么验证、团队怎么上线和扩展、企业怎么治理。</p>
+      <div class="hero-chips">
+        <a class="chip" href="#minimal">→ 最小链路</a>
+        <a class="chip" href="#routes">→ 技术路线</a>
+        <a class="chip" href="#roadmap">→ 分阶段路线</a>
+        <a class="chip" href="#eval">→ 评估指标</a>
+      </div>
+
+      <div class="timeline-card">
+        <div class="tl-head">
+          <div class="tl-title">sample_interview.mp4 · diarization + role output</div>
+          <div class="tl-legend">
+            <span><i style="background:var(--teal)"></i>SPEAKER_00</span>
+            <span><i style="background:var(--amber)"></i>SPEAKER_01</span>
+            <span><i style="background:var(--violet)"></i>SPEAKER_02</span>
+            <span><i style="background:var(--green)"></i>主持人</span>
+            <span><i style="background:var(--coral)"></i>嘉宾</span>
+          </div>
+        </div>
+        <div class="ruler" id="ruler"></div>
+        <div class="track wave" id="waveTrack">
+          <svg class="waveform" viewBox="0 0 1000 44" preserveAspectRatio="none"><path d="M0,22 L1000,22" stroke="var(--teal)" stroke-width="1" fill="none" id="wavepath"/></svg>
+          <div class="playhead"></div>
+        </div>
+        <div class="track" id="segTrack"></div>
+        <div class="track" id="roleTrack" style="height:22px;"></div>
+        <div class="tl-note">悬停时间块查看说话人 / 角色 / 时间戳 — 这是本文将要拆解的完整输出形态。</div>
+      </div>
+    </section>
+
+    <section id="what-is">
+      <div class="eyebrow">01 · 能力定义</div>
+      <h2>这个能力是什么，不是什么</h2>
+      <p class="lead">先把边界画清楚，避免把"转写"“情感分析”“内容摘要”都塞进同一个模块里。</p>
+      <div class="grid cols-2">
+        <div class="card"><span class="tag">输入</span><p>一段视频文件（含音轨，可选含画面）。也可以是纯音频，画面是可选的增强信号（用于 active speaker detection）。</p></div>
+        <div class="card"><span class="tag">输出</span><p>时间片段序列：<code>{start, end, speaker_id, role, text?}</code>。speaker_id 是同一视频内的相对标签（SPEAKER_00/01…），role 是语义角色标签。</p></div>
+        <div class="card"><span class="tag">谁在用</span><p>会议纪要、播客/访谈后期处理、客服质检、法律庭审记录、医患对话结构化、多人视频内容检索。</p></div>
+        <div class="card"><span class="tag">成功标准</span><p>说话人边界误差可控（DER 达标）+ 角色标签在关键类别上准确（不能把客户误判成客服）。</p></div>
+      </div>
+      <h3>它不解决什么</h3>
+      <ul>
+        <li><b>不是语音转写本身</b> —— diarization 只给"谁+何时"，文字内容由 ASR（如 Whisper）另外产出，两者常常配合但不是同一个模型。</li>
+        <li><b>不是跨视频的"这是同一个人"</b>（那是 speaker identification / 声纹检索，需要额外的声纹库，见第 10 节）。</li>
+        <li><b>不是内容理解</b> —— 它不判断对话说得好不好、情绪是否激动，那是下游任务。</li>
+        <li><b>角色识别不是通用能力</b> —— 角色集合（主持人/嘉宾、客服/客户）通常是业务定义的，没有一个模型能"通用地"识别所有角色体系，需要针对场景设计规则或 prompt。</li>
+      </ul>
+    </section>
+
+    <section id="minimal">
+      <div class="eyebrow">02 · 从零跑通</div>
+      <h2>最小可跑通链路（Demo）</h2>
+      <p class="lead">目标不是效果多好，是先让链路"动起来"：一个视频 → 一段 Python 脚本 → 一个 JSON 结果，人工看几眼判断这条路是否可行。</p>
+      <div class="codeblock">
+        <div class="cb-head"><span>demo_pipeline.py</span><button class="copy-btn" data-copy>复制</button></div>
+        <pre><code>import subprocess, json
+from pyannote.audio import Pipeline
+from faster_whisper import WhisperModel
+
+<span class="tok-c"># 1. 从视频提取 16kHz 单声道音频 —— 绝大多数说话人模型要求这个采样率</span>
+subprocess.run(
+    [<span class="tok-s">"ffmpeg"</span>, <span class="tok-s">"-i"</span>, <span class="tok-s">"sample.mp4"</span>, <span class="tok-s">"-ar"</span>, <span class="tok-s">"16000"</span>, <span class="tok-s">"-ac"</span>, <span class="tok-s">"1"</span>, <span class="tok-s">"sample.wav"</span>],
+    check=<span class="tok-k">True</span>  <span class="tok-c"># 显式失败：ffmpeg 出错就应该报错，不要吞掉继续跑</span>
+)
+
+<span class="tok-c"># 2. 说话人分离（需要在 HuggingFace 接受该模型的使用协议并申请 token）</span>
+diar_pipeline = Pipeline.from_pretrained(
+    <span class="tok-s">"pyannote/speaker-diarization-3.1"</span>, use_auth_token=<span class="tok-s">"hf_xxx"</span>
+)
+diarization = diar_pipeline(<span class="tok-s">"sample.wav"</span>)
+
+segments = []
+<span class="tok-k">for</span> turn, _, speaker <span class="tok-k">in</span> diarization.itertracks(yield_label=<span class="tok-k">True</span>):
+    segments.append({<span class="tok-s">"start"</span>: turn.start, <span class="tok-s">"end"</span>: turn.end, <span class="tok-s">"speaker"</span>: speaker})
+
+<span class="tok-c"># 3. 转写（可选，但角色识别几乎离不开文本线索）</span>
+asr_model = WhisperModel(<span class="tok-s">"medium"</span>, device=<span class="tok-s">"cuda"</span>)
+asr_segments, _ = asr_model.transcribe(<span class="tok-s">"sample.wav"</span>, word_timestamps=<span class="tok-k">True</span>)
+words = [w <span class="tok-k">for</span> s <span class="tok-k">in</span> asr_segments <span class="tok-k">for</span> w <span class="tok-k">in</span> s.words]
+
+<span class="tok-c"># 4. 按时间重叠把词分配给每个说话人片段</span>
+<span class="tok-k">for</span> seg <span class="tok-k">in</span> segments:
+    seg[<span class="tok-s">"text"</span>] = <span class="tok-s">""</span>.join(w.word <span class="tok-k">for</span> w <span class="tok-k">in</span> words <span class="tok-k">if</span> seg[<span class="tok-s">"start"</span>] &lt;= w.start &lt; seg[<span class="tok-s">"end"</span>])
+
+<span class="tok-c"># 5. 角色识别：demo 阶段先用最简单的规则，不确定就留空，不要猜</span>
+<span class="tok-k">def</span> <span class="tok-f">guess_role</span>(text):
+    <span class="tok-k">if</span> any(k <span class="tok-k">in</span> text <span class="tok-k">for</span> k <span class="tok-k">in</span> [<span class="tok-s">"欢迎收看"</span>, <span class="tok-s">"感谢大家"</span>, <span class="tok-s">"下一个问题"</span>]):
+        <span class="tok-k">return</span> <span class="tok-s">"host"</span>
+    <span class="tok-k">return</span> <span class="tok-k">None</span>  <span class="tok-c"># None 表示"规则判断不了"，留给人工或 LLM 兜底，而不是默认猜一个</span>
+
+<span class="tok-k">for</span> seg <span class="tok-k">in</span> segments:
+    seg[<span class="tok-s">"role"</span>] = guess_role(seg[<span class="tok-s">"text"</span>])
+
+<span class="tok-c"># 6. 保存结果，人工核对几个视频</span>
+<span class="tok-k">with</span> open(<span class="tok-s">"result.json"</span>, <span class="tok-s">"w"</span>, encoding=<span class="tok-s">"utf-8"</span>) <span class="tok-k">as</span> f:
+    json.dump(segments, f, ensure_ascii=<span class="tok-k">False</span>, indent=2)</code></pre>
+      </div>
+      <div class="callout">这一步只需要验证：<b>说话人边界是否大致对</b>、<b>说话人数量是否合理</b>。角色识别先用最粗糙的规则或干脆留空人工标，不要在 demo 阶段就纠结角色分类的精度。</div>
+      <h3>什么时候可以先不做</h3>
+      <ul>
+        <li>不需要在 demo 阶段就上 GPU 服务器——CPU 跑 pyannote + faster-whisper 的 <code>tiny/base</code> 模型完全够验证方向。</li>
+        <li>不需要数据库——JSON 文件 + 人工看结果就是这一阶段的"评测系统"。</li>
+        <li>不需要处理重叠语音、口音适配等边缘情况——先看主链路通不通。</li>
+      </ul>
+    </section>
+
+    <section id="chain">
+      <div class="eyebrow">03 · 完整工程链路</div>
+      <h2>离线 vs 线上：这个能力比较特殊</h2>
+      <p class="lead">和"知识库问答"这类任务不同——多数 diarization 任务里，<b>单个视频本身就是一次完整的批处理作业</b>，而不是"提前建好索引、线上只做检索"。真正的离线/线上分界线，取决于你是否需要"声纹库"。</p>
+      <div class="segctrl" role="tablist" id="chainToggle">
+        <button role="tab" aria-selected="true" data-phase="online">线上 / 请求时（每个视频都要做）</button>
+        <button role="tab" aria-selected="false" data-phase="offline">离线 / 预处理（仅部分场景需要）</button>
+      </div>
+      <div class="pipeline" id="chainPipeline"></div>
+      <p id="chainDesc" style="font-size:13.5px;"></p>
+      <div class="callout warn"><b>容易搞反的一点：</b>如果你的场景不需要"识别这是同一个人跨视频出现过"，那么根本不需要声纹库，也就没有传统意义上的"离线建索引"步骤——整条链路都是请求时现算。只有做质检/会议系统这类需要跨视频认人的场景，才值得提前维护声纹库。</div>
+    </section>
+
+    <section id="routes">
+      <div class="eyebrow">04 · 技术路线</div>
+      <h2>本地开源 / 云 API / 厂商方案 / 自研，怎么选</h2>
+      <p class="lead">点击下面的路线，对照右侧表格里高亮的一列。</p>
+      <div class="tabbar" id="routeTabs">
+        <button class="tabbtn" data-route="local" aria-selected="true">本地开源模型</button>
+        <button class="tabbtn" data-route="cloud" aria-selected="false">云 API</button>
+        <button class="tabbtn" data-route="vendor" aria-selected="false">厂商一体化</button>
+        <button class="tabbtn" data-route="custom" aria-selected="false">自研 Pipeline</button>
+        <button class="tabbtn" data-route="rule" aria-selected="false">规则增强</button>
+      </div>
+      <div class="tbl-wrap">
+        <table id="routeTable">
+          <thead><tr><th>维度</th><th data-col="local">本地开源<br>(pyannote/whisperX)</th><th data-col="cloud">云 API<br>(Google/AWS/AssemblyAI)</th><th data-col="vendor">厂商一体化<br>(otter.ai/Descript类)</th><th data-col="custom">自研 Pipeline<br>(embedding+聚类自实现)</th><th data-col="rule">规则增强<br>(启发式角色判断)</th></tr></thead>
+          <tbody>
+            <tr><td>适合数据规模</td><td data-col="local">中小到中大规模，受本地 GPU 限制</td><td data-col="cloud">任意规模，按量付费</td><td data-col="vendor">小规模、非定制场景</td><td data-col="custom">中大规模，追求极致定制</td><td data-col="rule">规则清晰、模式固定的小场景</td></tr>
+            <tr><td>质量/定制空间</td><td data-col="local">高，可微调、可换聚类策略</td><td data-col="cloud">中，几乎不可定制角色识别</td><td data-col="vendor">低，黑盒</td><td data-col="custom">最高，但需要自己踩坑</td><td data-col="rule">仅覆盖已知模式，遇新场景失效</td></tr>
+            <tr><td>成本结构</td><td data-col="local">一次性 GPU 投入 + 运维</td><td data-col="cloud">按分钟计费，长期可能更贵</td><td data-col="vendor">按席位/用量订阅</td><td data-col="custom">研发时间成本最高</td><td data-col="rule">几乎零成本</td></tr>
+            <tr><td>延迟</td><td data-col="local">取决于本地算力</td><td data-col="cloud">取决于网络+服务排队</td><td data-col="vendor">通常有产品化的异步流程</td><td data-col="custom">可优化到最优</td><td data-col="rule">近乎零延迟（只是后处理）</td></tr>
+            <tr><td>隐私/合规</td><td data-col="local">数据不出内网，适合敏感场景</td><td data-col="cloud">数据需出域，需评估合规</td><td data-col="vendor">数据完全托管在第三方</td><td data-col="custom">可完全自控</td><td data-col="rule">不涉及额外数据出域</td></tr>
+            <tr><td>团队能力要求</td><td data-col="local">需要会调 PyTorch 模型、管理 GPU</td><td data-col="cloud">只需要会调 API</td><td data-col="vendor">几乎不需要工程能力</td><td data-col="custom">需要算法+工程双料能力</td><td data-col="rule">基础 Python 即可</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="models">
+      <div class="eyebrow">05 · 模型选型</div>
+      <h2>每一类模型解决哪一段问题</h2>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>模型类别</th><th>代表选择</th><th>解决什么</th><th>什么时候用</th></tr></thead>
+          <tbody>
+            <tr><td><b>VAD</b></td><td><code>silero-vad</code>, <code>webrtcvad</code></td><td>判断哪些时间段有语音，过滤静音/噪音</td><td>几乎所有链路都需要，作为第一道过滤</td></tr>
+            <tr><td><b>说话人 Embedding</b></td><td>ECAPA-TDNN（speechbrain/NeMo）, resemblyzer</td><td>把一段语音映射成声纹向量，用于聚类/比对</td><td>自研 pipeline 或需要声纹库检索时单独使用</td></tr>
+            <tr><td><b>端到端 Diarization Pipeline</b></td><td><code>pyannote/speaker-diarization-3.1</code></td><td>VAD+embedding+聚类+重叠检测打包好的现成方案</td><td>demo/POC 默认首选，绝大多数场景不需要自己拼</td></tr>
+            <tr><td><b>ASR + 强制对齐</b></td><td>faster-whisper, whisperX</td><td>拿到文字与词级时间戳，用于和说话人片段对齐</td><td>需要角色识别或字幕场景时必需</td></tr>
+            <tr><td><b>视觉 Active Speaker Detection</b></td><td>TalkNet-ASD, Light-ASD</td><td>结合唇动/画面判断"画面里哪张脸在说话"</td><td>视频里有多人同框画面，音频难以区分或需要人脸绑定时</td></tr>
+            <tr><td><b>角色识别</b></td><td>规则 / LLM few-shot / 微调文本分类器</td><td>把说话人标签映射为业务角色</td><td>规则先行，覆盖不了的场景交给 LLM，规模够大再微调分类器</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>本地 vs 云的选择原则：<b>demo 阶段先用云 API 或轻量本地模型验证方向</b>（不值得为验证阶段的问题投入 GPU 部署）；一旦确认要长期跑、量级上来、或涉及隐私数据，再评估本地部署的一次性成本是否更划算。</p>
+    </section>
+
+    <section id="modules">
+      <div class="eyebrow">06 · 算法与工程模块</div>
+      <h2>每个模块在链路里的位置</h2>
+      <div class="grid cols-2">
+        <div class="card"><span class="tag">01 · VAD</span><p>去掉静音/背景音乐/掌声，只保留可能含语音的区间，减少后续聚类的噪音输入。</p></div>
+        <div class="card"><span class="tag">02 · Embedding 提取</span><p>对每个语音片段提取声纹向量，是聚类和身份比对的基础特征。</p></div>
+        <div class="card"><span class="tag">03 · 聚类</span><p>把声纹向量分组为 SPEAKER_00/01/02…；常见做法是层次聚类（AHC）或谱聚类，说话人数量未知时是最容易出错的一步。</p></div>
+        <div class="card"><span class="tag">04 · 重叠检测</span><p>识别"两人同时说话"的片段，避免把重叠语音硬塞给单一说话人，这是多数标准流程容易漏掉的环节。</p></div>
+        <div class="card"><span class="tag">05 · 角色识别</span><p>基于每个说话人的文本内容/发言位置/时长等特征，判断其角色，规则和 LLM 分类都放在这一层。</p></div>
+        <div class="card"><span class="tag">06 · 后处理</span><p>合并过短片段、平滑边界、按最小时长过滤抖动结果。</p></div>
+        <div class="card"><span class="tag">07 · 人工复核</span><p>对低置信度片段或高风险场景（法律/合规）设置人工确认关卡，不是所有环节都要自动化到底。</p></div>
+        <div class="card"><span class="tag">位置图示</span><p>参见第 03 节的链路图——04/07 是最容易被新手忽略、但决定生产可用性的两环。</p></div>
+      </div>
+    </section>
+
+    <section id="deps">
+      <div class="eyebrow">07 · 依赖清单</div>
+      <h2>按职责挑选 Python 依赖</h2>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>职责</th><th>可选组件</th><th>解决什么问题</th></tr></thead>
+          <tbody>
+            <tr><td>音视频处理</td><td><code>ffmpeg</code> / <code>ffmpeg-python</code> / <code>pydub</code></td><td>从视频提取/重采样音频</td></tr>
+            <tr><td>VAD/Diarization</td><td><code>pyannote.audio</code> / <code>speechbrain</code> / NeMo</td><td>说话人分离核心能力</td></tr>
+            <tr><td>ASR + 对齐</td><td><code>faster-whisper</code> / <code>whisperx</code></td><td>转写 + 词级时间戳</td></tr>
+            <tr><td>推理运行时</td><td><code>torch</code> / <code>torchaudio</code> / <code>onnxruntime</code></td><td>模型加载与推理，onnxruntime 适合 CPU 提速</td></tr>
+            <tr><td>聚类/数值计算</td><td><code>scikit-learn</code> / <code>numpy</code></td><td>层次聚类、谱聚类等后处理算法</td></tr>
+            <tr><td>视觉增强（可选）</td><td><code>opencv-python</code> / insightface / Light-ASD</td><td>人脸检测追踪、audio-visual active speaker detection</td></tr>
+            <tr><td>角色识别</td><td>正则规则 / Anthropic·OpenAI SDK / <code>transformers</code></td><td>规则匹配、LLM few-shot 分类、微调文本分类器</td></tr>
+            <tr><td>服务化</td><td><code>fastapi</code> / <code>uvicorn</code> / <code>python-multipart</code></td><td>接收上传、暴露任务接口</td></tr>
+            <tr><td>队列/任务</td><td><code>celery</code> / <code>rq</code> / <code>arq</code> + Redis</td><td>视频处理耗时较长时的异步执行</td></tr>
+            <tr><td>关系数据库</td><td>SQLite（demo/POC）→ PostgreSQL（生产）</td><td>任务状态、说话人-角色标注、权限、审计</td></tr>
+            <tr><td>对象存储</td><td>本地目录（demo）→ S3/MinIO/OSS（生产）</td><td>原始视频/音频/派生 JSON 文件</td></tr>
+            <tr><td>向量索引</td><td>FAISS（本地）/ Milvus / Qdrant</td><td><b>仅当</b>需要跨视频声纹检索时才需要，见第 10 节</td></tr>
+            <tr><td>评测</td><td><code>pyannote.metrics</code> + pandas</td><td>DER/JER 计算与结果分析</td></tr>
+            <tr><td>部署</td><td>Docker / Docker Compose，规模大时 Triton/BentoML</td><td>环境固化与推理服务化</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="oss">
+      <div class="eyebrow">08 · 开源借鉴</div>
+      <h2>开源项目怎么借鉴，而不是照抄整个技术栈</h2>
+      <details class="acc" open><summary>直接使用整个项目<span></span></summary><div class="acc-body"><p><code>pyannote.audio</code> 的预训练 pipeline 本身就是成熟可直接调用的 diarization 方案，几乎不需要自己重新实现 embedding、聚类、重叠检测的逻辑——demo/POC 阶段直接用它是最省事的路径。</p></div></details>
+      <details class="acc"><summary>只借模型</summary><div class="acc-body"><p>如果需要更定制的聚类策略（比如已知固定说话人数、或域内音色特别接近），可以只从 speechbrain / NeMo 借 ECAPA-TDNN 声纹 embedding 模型，自己实现聚类和后处理逻辑，获得更大的调参空间。</p></div></details>
+      <details class="acc"><summary>只借索引/检索模块</summary><div class="acc-body"><p>需要"声纹库"跨视频识别同一人时，借鉴 FAISS/Milvus 的近似最近邻检索能力即可，不需要引入它们完整的服务生态——demo 阶段一个 FAISS 本地索引文件就够。</p></div></details>
+      <details class="acc"><summary>只借 UI/管理后台思路</summary><div class="acc-body"><p>可以参考 whisperX、otter.ai 类项目"说话人色块 + 文本对照"的可视化呈现方式，用于自己的人工复核界面，但没必要照搬它们的前端代码。</p></div></details>
+      <details class="acc"><summary>只借评测方法</summary><div class="acc-body"><p>即使不使用 pyannote 的模型，也可以直接用 <code>pyannote.metrics</code> 计算 DER/JER——这是业界标准算法实现，重新造轮子没有必要。</p></div></details>
+    </section>
+
+    <section id="vendor">
+      <div class="eyebrow">09 · 厂商 vs 本地</div>
+      <h2>厂商方案减少了什么负担，又带来什么代价</h2>
+      <div class="grid cols-2">
+        <div class="card"><h4>云 ASR + Diarization API</h4><p>（Google Speech-to-Text speaker diarization / AWS Transcribe speaker labels / AssemblyAI / Deepgram）<br>减少模型训练、GPU 部署和版本升级负担；代价是按时长计费成本、数据出域隐私风险，且大多只给 speaker label、不给角色，角色识别仍要自己做。</p></div>
+        <div class="card"><h4>厂商一体化平台</h4><p>（会议纪要类 SaaS、Descript 类后期工具）<br>几乎不需要工程投入，但角色识别逻辑几乎无法定制，数据和结果格式完全托管在第三方，很难迁移。</p></div>
+        <div class="card"><h4>本地开源自部署</h4><p>（pyannote/whisperX 自托管）<br>适合隐私敏感（法律/医疗/金融/内网会议）、成本可控（GPU 投入长期摊薄）、需要深度定制角色识别规则的场景；代价是要自己维护模型版本、GPU 资源与推理性能。</p></div>
+        <div class="card"><h4>判断路径</h4><p>问自己三个问题：数据能不能出内网？长期调用量级下云 API 成本是否可控？角色识别是否需要深度定制？三者任一"不行"，本地方案通常更合适。</p></div>
+      </div>
+    </section>
+
+    <section id="storage">
+      <div class="eyebrow">10 · 数据与存储</div>
+      <h2>要不要向量库、关系库、对象存储、图数据库</h2>
+      <p class="lead">不给固定答案，给判断路径——按顺序回答下面几个问题。</p>
+      <details class="acc" open><summary>Q1 · 需不需要跨多个视频认出"这是同一个人"？</summary><div class="acc-body"><p><b>不需要</b：只在单个视频内部聚类区分 SPEAKER_00/01/02，声纹向量算完即可丢弃，不需要向量数据库。<br><b>需要</b（声纹库/说话人身份持久化，如客服质检要追踪同一客服跨多通电话的表现）：需要向量索引（demo 阶段 FAISS 本地文件即可，规模大了换 Milvus/Qdrant）来做声纹的最近邻检索。</p></div></details>
+      <details class="acc"><summary>Q2 · 需不需要记录任务状态、标注结果、复核状态、权限？</summary><div class="acc-body"><p>需要关系数据库——demo/POC 阶段 SQLite 足够，进入生产后换 PostgreSQL，因为要处理并发写入、事务和权限模型。</p></div></details>
+      <details class="acc"><summary>Q3 · 原始视频/音频/派生 JSON 怎么存？</summary><div class="acc-body"><p>demo 阶段本地目录即可；POC/生产阶段换对象存储（S3/MinIO/OSS），因为视频文件大，需要多副本、版本管理、按需分发（避免把大文件塞进数据库或应用服务器磁盘）。</p></div></details>
+      <details class="acc"><summary>Q4 · 有没有多跳关系推理需求？</summary><div class="acc-body"><p>只有当业务需要"这个人在多场会议中和谁互动过"这类关系网络推理时才需要图数据库——绝大多数 diarization + 角色识别场景不需要，不要为了"看起来完整"而引入。</p></div></details>
+    </section>
+
+    <section id="api">
+      <div class="eyebrow">11 · 服务化</div>
+      <h2>线上请求链路与 FastAPI 的位置</h2>
+      <p class="lead">FastAPI 只负责接收视频、触发任务、查询状态、返回结果——不是本文重点，只给最小示例。</p>
+      <div class="codeblock">
+        <div class="cb-head"><span>service.py</span><button class="copy-btn" data-copy>复制</button></div>
+        <pre><code><span class="tok-k">from</span> fastapi <span class="tok-k">import</span> FastAPI, UploadFile, BackgroundTasks, HTTPException
+<span class="tok-k">import</span> uuid, shutil
+
+app = FastAPI()
+tasks = {}  <span class="tok-c"># demo 阶段用内存字典；生产阶段换成第 10 节的关系数据库</span>
+
+@app.post(<span class="tok-s">"/diarize"</span>)
+<span class="tok-k">async def</span> <span class="tok-f">submit</span>(file: UploadFile, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    video_path = <span class="tok-s">f"/data/uploads/{task_id}.mp4"</span>
+    <span class="tok-k">with</span> open(video_path, <span class="tok-s">"wb"</span>) <span class="tok-k">as</span> f:
+        shutil.copyfileobj(file.file, f)
+    tasks[task_id] = {<span class="tok-s">"status"</span>: <span class="tok-s">"queued"</span>}
+    background_tasks.add_task(run_pipeline, task_id, video_path)
+    <span class="tok-k">return</span> {<span class="tok-s">"task_id"</span>: task_id}
+
+@app.get(<span class="tok-s">"/tasks/{task_id}"</span>)
+<span class="tok-k">async def</span> <span class="tok-f">get_status</span>(task_id: str):
+    <span class="tok-k">if</span> task_id <span class="tok-k">not in</span> tasks:
+        <span class="tok-k">raise</span> HTTPException(404, <span class="tok-s">"task not found"</span>)  <span class="tok-c"># 显式报错，不做静默兜底</span>
+    <span class="tok-k">return</span> tasks[task_id]
+
+@app.get(<span class="tok-s">"/tasks/{task_id}/result"</span>)
+<span class="tok-k">async def</span> <span class="tok-f">get_result</span>(task_id: str):
+    task = tasks[task_id]
+    <span class="tok-k">if</span> task[<span class="tok-s">"status"</span>] != <span class="tok-s">"done"</span>:
+        <span class="tok-k">raise</span> HTTPException(409, <span class="tok-s">f"task status is {task['status']}, not done"</span>)
+    <span class="tok-k">return</span> task[<span class="tok-s">"result"</span>]</code></pre>
+      </div>
+      <p><b>什么时候从 <code>BackgroundTasks</code> 升级到独立队列/worker：</b>当单个视频处理时间从几秒涨到几分钟、并发请求增多导致 API 进程被阻塞、或需要失败重试和优先级调度时，再引入 Celery/RQ + Redis——不要在 demo 阶段默认就上这套异步架构。</p>
+    </section>
+
+    <section id="roadmap">
+      <div class="eyebrow">12 · 落地路线</div>
+      <h2>Demo → POC → 上线 → 扩展 → 企业级</h2>
+      <p class="lead">切换团队阶段，看看每一步新增了什么、解决了什么、值不值得上。</p>
+      <div class="segctrl" role="tablist" id="stageCtrl">
+        <button aria-selected="true" data-stage="0">Demo</button>
+        <button aria-selected="false" data-stage="1">POC</button>
+        <button aria-selected="false" data-stage="2">小团队上线</button>
+        <button aria-selected="false" data-stage="3">中团队扩展</button>
+        <button aria-selected="false" data-stage="4">企业级</button>
+      </div>
+      <div class="stage-desc" id="stageDesc"></div>
+      <div class="chips-flow" id="stageChips"></div>
+    </section>
+
+    <section id="eval">
+      <div class="eyebrow">13 · 评估验收</div>
+      <h2>怎么评估这个能力是否可用</h2>
+      <p class="lead">链路跑通不代表能力达标——诊断类指标要按任务类型分开看。</p>
+      <h3>Diarization 指标</h3>
+      <ul>
+        <li><b>DER（Diarization Error Rate）</b> = (漏检 + 虚检 + 说话人混淆) / 参考语音总时长，行业标准指标，用 <code>pyannote.metrics</code> 直接计算。干净双人对话常见 &lt;10%，多人重叠会议场景 15%~30% 也属正常，不要盲目对标论文数字，要看自己场景的人数和重叠率。</li>
+        <li><b>JER（Jaccard Error Rate）</b>：对每个说话人分别算错误率再平均，避免"发言时间长的说话人"主导整体指标。</li>
+      </ul>
+      <h3>角色识别指标</h3>
+      <ul>
+        <li>这是自定义分类任务，没有统一 benchmark；按角色类别分别看 <b>precision / recall / F1</b>，通常"漏判高风险角色"（比如把客户误判为客服）比"整体 accuracy"更重要。</li>
+        <li>角色数 &gt; 2 时画混淆矩阵，检查是否有系统性混淆（例如"客服"和"主持人"因为都是"引导对话"的角色被搞混）。</li>
+      </ul>
+      <h3>工程与业务指标</h3>
+      <ul>
+        <li>Real-time factor（处理耗时 / 视频时长）、吞吐、每分钟视频成本、人工节省时间、人工复核通过率。</li>
+      </ul>
+      <h3>评测集怎么构造</h3>
+      <p>覆盖不同人数（双人访谈/多人会议/多人辩论）、不同重叠率、不同背景噪音、不同角色场景（主持人-嘉宾/客服-客户/医生-患者）；专门纳入难例：声音相似的同性别同年龄说话人、&lt;1 秒的确认词（"嗯""对"）、多人同时出声的片段；标注规则要写清楚重叠片段怎么标、角色边界怎么定义，并做多人标注一致性检查，标注集要版本化，模型或 prompt 迭代时用同一份标注集才能公平比较。</p>
+      <h3>不同阶段的评估深度</h3>
+      <div class="tbl-wrap"><table><thead><tr><th>阶段</th><th>评估方式</th></tr></thead><tbody>
+        <tr><td>Demo</td><td>人工看 3-5 个样例视频输出是否符合直觉</td></tr>
+        <tr><td>POC</td><td>10-50 个视频的人工标注集 + DER/JER + 角色分类混淆矩阵</td></tr>
+        <tr><td>生产</td><td>离线回归（每次模型/prompt 更新前跑一遍标注集）+ 线上抽样 + 人工审核闭环 + 指标看板</td></tr>
+      </tbody></table></div>
+    </section>
+
+    <section id="trouble">
+      <div class="eyebrow">14 · 排查顺序</div>
+      <h2>指标不达标时，按顺序查</h2>
+      <details class="acc" open><summary><span class="step-num">1</span>数据与音频提取</summary><div class="acc-body"><p>检查采样率/声道/编码是否正确，是否有异常静音或截断——这是最容易被忽略但最常见的问题源。</p></div></details>
+      <details class="acc"><summary><span class="step-num">2</span>VAD 边界</summary><div class="acc-body"><p>是否把非语音误判为语音、或漏掉了短促发言，导致后续聚类输入本身就是错的。</p></div></details>
+      <details class="acc"><summary><span class="step-num">3</span>聚类 / 说话人数估计</summary><div class="acc-body"><p>自动估计的说话人数量本身是否就错了——这是 diarization 最常见的失败点，尤其人少但音色差异大、或人多但音色相似的场景。</p></div></details>
+      <details class="acc"><summary><span class="step-num">4</span>模型适配</summary><div class="acc-body"><p>embedding 模型对目标口音、语言、录音设备是否适配——电话录音和视频会议录音的声学特性差异很大，预训练模型不一定通用。</p></div></details>
+      <details class="acc"><summary><span class="step-num">5</span>角色识别逻辑</summary><div class="acc-body"><p>规则是否覆盖了所有场景变体，还是 LLM prompt 给的示例/上下文不够充分。</p></div></details>
+      <details class="acc"><summary><span class="step-num">6</span>后处理 / 业务规则</summary><div class="acc-body"><p>合并/过滤逻辑本身是否引入了新错误，比如把两个真实存在的短片段错误合并成一个。</p></div></details>
+      <details class="acc"><summary><span class="step-num">7</span>服务架构</summary><div class="acc-body"><p>最后才看是不是超时/并发导致的截断或部分处理——这一层问题最容易定位，也最不该先怀疑。</p></div></details>
+    </section>
+
+    <section id="risks">
+      <div class="eyebrow">15 · 风险</div>
+      <h2>常见失败模式</h2>
+      <details class="acc"><summary>说话人数量未知</summary><div class="acc-body"><p>聚类算法可能高估或低估人数，尤其音色相近或差异极大的极端场景。</p></div></details>
+      <details class="acc"><summary>重叠语音</summary><div class="acc-body"><p>多人抢话时标准 pipeline 容易把重叠段错误分给单一说话人，需要专门的 overlap detection 模块处理。</p></div></details>
+      <details class="acc"><summary>声音相似</summary><div class="acc-body"><p>同性别、同年龄、口音相近的说话人容易被聚类算法混淆为同一人或错误拆分。</p></div></details>
+      <details class="acc"><summary>短促发言</summary><div class="acc-body"><p>"嗯""对"等确认词太短，embedding 不可靠，容易被误分类或被 VAD 过滤掉。</p></div></details>
+      <details class="acc"><summary>背景噪音/音乐</summary><div class="acc-body"><p>视频里的背景音乐、掌声、笑声会干扰 VAD 和 embedding 提取。</p></div></details>
+      <details class="acc"><summary>角色规则过拟合特定视频格式</summary><div class="acc-body"><p>"第一个说话的人是主持人"这类启发式规则，遇到录制顺序不同的视频会直接失效。</p></div></details>
+      <details class="acc"><summary>云 API 隐私/成本</summary><div class="acc-body"><p>视频含敏感内容（法律/医疗/内部会议）不能出内网；大批量视频按时长计费的成本可能远超预期。</p></div></details>
+      <details class="acc"><summary>本地模型速度</summary><div class="acc-body"><p>GPU 资源不足时长视频处理非常慢，real-time factor 可能大于 1（处理时间比视频本身还长）。</p></div></details>
+    </section>
+
+    <section id="accept">
+      <div class="eyebrow">16 · 验收口径</div>
+      <h2>哪些指标必须达标，哪些只是观察项</h2>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>类别</th><th>示例</th><th>处理方式</th></tr></thead>
+          <tbody>
+            <tr class="hl"><td>必须达标（阻断上线）</td><td>DER 在业务可接受范围内；关键角色（如"客户"）的召回率达标</td><td>不达标不上线</td></tr>
+            <tr><td>观察项</td><td>处理延迟、成本、边界样本表现</td><td>持续监控，不阻断首次上线</td></tr>
+            <tr><td>需要人工复核</td><td>低置信度片段、涉及法律/合规的高风险片段</td><td>设置人工确认关卡</td></tr>
+            <tr><td>可接受的失败</td><td>极短确认词归属错误、次要说话人的轻微边界误差</td><td>记录但不阻断</td></tr>
+            <tr class="hl"><td>必须阻断的失败</td><td>角色混淆导致下游业务决策错误；说话人数完全估计错误</td><td>阻断上线，回到排查顺序（第 14 节）定位问题</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="noover">
+      <div class="eyebrow">17 · 边界判断</div>
+      <h2>什么时候不要过度工程化</h2>
+      <ul>
+        <li>只是个人整理几个播客/视频记录——用 pyannote + whisper 脚本手动过一遍结果即可，不需要数据库和服务。</li>
+        <li>视频量很少（每周 &lt;10 个）、对实时性没有要求——脚本 + 人工复核比搭建完整异步服务链路更划算。</li>
+        <li>角色种类很少且模式固定（比如永远是主持人+嘉宾两人）——简单规则（第一个说话/发言更长的人是主持人）可能就够了，不需要上 LLM 分类。</li>
+        <li>角色识别只是辅助浏览、不影响下游决策——可以先上线简单版本，再逐步优化，不必一开始就追求高精度。</li>
+      </ul>
+    </section>
+
+    <section id="closing">
+      <div class="eyebrow">18 · 总结</div>
+      <h2>上线前的一页清单</h2>
+      <ul class="checklist">
+        <li><span class="box"></span>用 3-5 个样例视频跑通了 pyannote + whisper 的最小链路，人工确认说话人边界和数量大致合理</li>
+        <li><span class="box"></span>已经明确回答"是否需要跨视频声纹库"，并据此决定要不要引入向量索引</li>
+        <li><span class="box"></span>有一份人工标注的评测集（覆盖多人数/重叠/噪音/难例），并算出了 DER/JER 和角色分类的 precision/recall</li>
+        <li><span class="box"></span>和业务方对齐了"必须达标"与"可接受失败"的具体阈值，而不是凭感觉判断"效果还不错"</li>
+        <li><span class="box"></span>明确了低置信度或高风险片段的人工复核机制，而不是让模型结果直接生效</li>
+        <li><span class="box"></span>根据团队规模选择了合适的落地阶段，没有为了"看起来完整"而提前引入队列、多租户或图数据库</li>
+        <li><span class="box"></span>所有外部依赖（ffmpeg、模型下载、API 调用）失败时都显式报错，没有静默兜底或返回空结果掩盖问题</li>
+      </ul>
+    </section>
+
+    </div>
+  </main>
+</div>
+
+<footer>一文读懂 · Speaker Diarization &amp; Role Identification · 单文件离线可读</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* progress bar */
+  var progress = document.getElementById('progress');
+  function updateProgress(){
+    var h = document.documentElement;
+    var scrolled = h.scrollTop;
+    var height = h.scrollHeight - h.clientHeight;
+    progress.style.width = (height>0 ? (scrolled/height*100) : 0) + '%';
+  }
+  document.addEventListener('scroll', updateProgress, {passive:true});
+  updateProgress();
+
+  /* sidebar active link */
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('#navlist a'));
+  var sectionEls = navLinks.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      var idx = sectionEls.indexOf(e.target);
+      if(idx===-1) return;
+      if(e.isIntersecting){
+        navLinks.forEach(function(l){l.classList.remove('active');});
+        navLinks[idx].classList.add('active');
+      }
+    });
+  }, {rootMargin:'-20% 0px -70% 0px'});
+  sectionEls.forEach(function(el){ if(el) io.observe(el); });
+
+  /* copy buttons */
+  document.querySelectorAll('[data-copy]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var block = btn.closest('.codeblock').querySelector('pre');
+      var text = block.innerText;
+      if(navigator.clipboard){
+        navigator.clipboard.writeText(text).then(function(){
+          var old = btn.textContent; btn.textContent = '已复制';
+          setTimeout(function(){btn.textContent = old;}, 1400);
+        });
+      }
+    });
+  });
+
+  /* ===== hero timeline ===== */
+  var TOTAL = 140; // seconds represented
+  var segments = [
+    {s:0,  e:6,   spk:0, role:'host'},
+    {s:9,  e:24,  spk:1, role:'guest'},
+    {s:27, e:33,  spk:0, role:'host'},
+    {s:33, e:55,  spk:2, role:'guest'},
+    {s:55, e:58,  spk:1, role:'guest'},
+    {s:61, e:70,  spk:0, role:'host'},
+    {s:70, e:95,  spk:2, role:'guest'},
+    {s:98, e:110, spk:1, role:'guest'},
+    {s:110,e:114, spk:0, role:'host'},
+    {s:114,e:135, spk:2, role:'guest'}
+  ];
+  var speakerNames = {0:'SPEAKER_00', 1:'SPEAKER_01', 2:'SPEAKER_02'};
+  var roleNames = {host:'主持人', guest:'嘉宾'};
+
+  function fmtTime(sec){
+    var m = Math.floor(sec/60), s = Math.floor(sec%60);
+    return (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+  }
+  function pct(v){ return (v/TOTAL*100).toFixed(2)+'%'; }
+
+  var ruler = document.getElementById('ruler');
+  for(var t=0;t<=TOTAL;t+=20){
+    var sp = document.createElement('span');
+    sp.style.left = pct(t);
+    sp.textContent = fmtTime(t);
+    ruler.appendChild(sp);
+  }
+
+  var segTrack = document.getElementById('segTrack');
+  var roleTrack = document.getElementById('roleTrack');
+  segments.forEach(function(seg){
+    var el = document.createElement('div');
+    el.className = 'seg spk'+seg.spk;
+    el.style.left = pct(seg.s);
+    el.style.width = pct(seg.e-seg.s);
+    el.textContent = speakerNames[seg.spk];
+    var tip = document.createElement('div');
+    tip.className = 'tooltip';
+    tip.textContent = speakerNames[seg.spk] + ' · ' + fmtTime(seg.s) + '–' + fmtTime(seg.e) + ' · role: ' + roleNames[seg.role];
+    el.appendChild(tip);
+    segTrack.appendChild(el);
+
+    var rt = document.createElement('div');
+    rt.className = 'roletag ' + seg.role;
+    rt.style.left = pct(seg.s);
+    rt.style.width = pct(seg.e-seg.s);
+    rt.textContent = roleNames[seg.role];
+    roleTrack.appendChild(rt);
+  });
+  // simple waveform path
+  (function(){
+    var path = document.getElementById('wavepath');
+    var d = 'M0,22 ';
+    for(var x=0;x<=1000;x+=6){
+      var amp = 4 + Math.sin(x/17)*10*Math.abs(Math.sin(x/93)) + Math.random()*6;
+      d += 'L'+x+','+(22 - amp)+' ';
+    }
+    d += 'L1000,22';
+    path.setAttribute('d', d);
+    path.setAttribute('stroke-width','1.4');
+  })();
+
+  /* ===== chain toggle (section 03) ===== */
+  var chainNodes = [
+    {label:'注册已知说话人声纹（enrollment）', phase:'offline'},
+    {label:'模型准备/版本固定', phase:'offline'},
+    {label:'历史视频批量回溯', phase:'offline'},
+    {label:'评测集构建与基线评测', phase:'offline'},
+    {label:'视频上传', phase:'online'},
+    {label:'音频提取 (ffmpeg)', phase:'online'},
+    {label:'VAD', phase:'online'},
+    {label:'声纹 Embedding', phase:'online'},
+    {label:'聚类 → speaker_id', phase:'online'},
+    {label:'比对声纹库（可选）', phase:'online'},
+    {label:'ASR + 对齐', phase:'online'},
+    {label:'角色识别', phase:'online'},
+    {label:'后处理', phase:'online'},
+    {label:'落库/返回结果', phase:'online'}
+  ];
+  var chainPipeline = document.getElementById('chainPipeline');
+  var chainDesc = document.getElementById('chainDesc');
+  var descText = {
+    online: '大多数步骤都发生在"请求时"——因为每个视频本质上是一次独立的批处理作业，而不是像检索系统那样提前建好索引、线上只做轻量查询。',
+    offline: '只有当你需要"跨视频认出同一个人"时，才存在真正的离线预处理——提前注册声纹、固定模型版本、批量回溯历史视频、维护评测基线。'
+  };
+  function renderChain(phase){
+    chainPipeline.innerHTML = '';
+    chainNodes.forEach(function(n, i){
+      if(i>0){
+        var arrow = document.createElement('span');
+        arrow.className='arrow'; arrow.textContent='→';
+        chainPipeline.appendChild(arrow);
+      }
+      var el = document.createElement('div');
+      el.className = 'node' + (n.phase===phase ? ' active' : ' dim');
+      el.textContent = n.label;
+      chainPipeline.appendChild(el);
+    });
+    chainDesc.textContent = descText[phase];
+  }
+  renderChain('online');
+  document.querySelectorAll('#chainToggle button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#chainToggle button').forEach(function(b){b.setAttribute('aria-selected','false');});
+      btn.setAttribute('aria-selected','true');
+      renderChain(btn.dataset.phase);
+    });
+  });
+
+  /* ===== route table highlight (section 04) ===== */
+  document.querySelectorAll('#routeTabs .tabbtn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#routeTabs .tabbtn').forEach(function(b){b.setAttribute('aria-selected','false');});
+      btn.setAttribute('aria-selected','true');
+      var route = btn.dataset.route;
+      document.querySelectorAll('#routeTable [data-col]').forEach(function(cell){
+        cell.style.background = cell.dataset.col===route ? 'rgba(11,114,133,0.08)' : '';
+        cell.style.color = cell.dataset.col===route ? 'var(--text)' : '';
+      });
+    });
+  });
+
+  /* ===== roadmap stage switcher (section 12) ===== */
+  var stages = [
+    {
+      name:'Demo',
+      goal:'验证 pyannote+whisper 组合能否在自己的样例视频上给出可用的说话人切分与大致角色',
+      add:'1 个 Python 脚本，本地文件夹存视频，pretrained pipeline，结果打印/存 JSON',
+      cost:'几小时到 1 天',
+      skip:'不需要数据库、不需要服务、不需要处理重叠语音等边缘情况'
+    },
+    {
+      name:'POC',
+      goal:'在真实业务视频上验证 DER、角色识别准确率、延迟、成本是否达标',
+      add:'10-50 个视频的人工标注集、pyannote.metrics 计算 DER/JER、角色识别方案对比（规则 vs LLM）、简单 FastAPI 包装、SQLite 存任务状态',
+      cost:'标注和评测的人力投入是主要成本',
+      skip:'不需要队列/worker、不需要多租户，单机跑批量评测即可'
+    },
+    {
+      name:'小团队上线',
+      goal:'保留简单架构，补齐生产必需的基础设施',
+      add:'PostgreSQL 替代 SQLite、对象存储存视频/音频/结果、基础权限、日志、Docker 部署脚本、人工抽检流程',
+      cost:'基础设施搭建与运维投入',
+      skip:'仍不需要复杂的微服务拆分或多机队列'
+    },
+    {
+      name:'中团队扩展',
+      goal:'应对处理耗时和并发增长，建立可观测性',
+      add:'Celery/RQ + Redis 队列与独立 worker、监控看板、评测回归套件、灰度发布、成本观测',
+      cost:'需要专职维护队列/worker 和监控体系',
+      skip:'如果视频量级仍然很小，这一步可以往后延'
+    },
+    {
+      name:'企业级',
+      goal:'满足合规、隔离与容灾要求',
+      add:'多租户隔离、审计日志、私有化部署、容量规划、模型版本管理与回滚、灾备、供应商替换策略',
+      cost:'合规与基础设施投入显著上升',
+      skip:'只有真正涉及多租户/强合规要求的组织才值得投入'
+    }
+  ];
+  var allChips = [
+    {name:'Python 脚本 + pyannote pipeline', stage:0},
+    {name:'faster-whisper', stage:0},
+    {name:'本地文件夹存储', stage:0},
+    {name:'人工标注集 (10-50 videos)', stage:1},
+    {name:'pyannote.metrics (DER/JER)', stage:1},
+    {name:'FastAPI 提交/查询接口', stage:1},
+    {name:'SQLite 任务状态', stage:1},
+    {name:'PostgreSQL', stage:2},
+    {name:'对象存储 (S3/MinIO)', stage:2},
+    {name:'基础权限与日志', stage:2},
+    {name:'Docker 部署', stage:2},
+    {name:'人工抽检流程', stage:2},
+    {name:'Celery/RQ + Redis 队列', stage:3},
+    {name:'独立 worker', stage:3},
+    {name:'监控看板', stage:3},
+    {name:'评测回归套件', stage:3},
+    {name:'灰度发布 + 成本观测', stage:3},
+    {name:'多租户隔离', stage:4},
+    {name:'审计日志', stage:4},
+    {name:'私有化部署', stage:4},
+    {name:'容量规划', stage:4},
+    {name:'模型版本管理/回滚', stage:4},
+    {name:'灾备 + 供应商替换策略', stage:4}
+  ];
+  var stageClass = ['s0','s1','s2','s3','s4'];
+  var stageDesc = document.getElementById('stageDesc');
+  var stageChips = document.getElementById('stageChips');
+  function renderStage(idx){
+    var st = stages[idx];
+    stageDesc.innerHTML =
+      '<div class="row"><b>目标</b><span>'+st.goal+'</span></div>'+
+      '<div class="row"><b>新增组件</b><span>'+st.add+'</span></div>'+
+      '<div class="row"><b>新增成本</b><span>'+st.cost+'</span></div>'+
+      '<div class="row"><b>可以先不做</b><span>'+st.skip+'</span></div>';
+    stageChips.innerHTML = '';
+    allChips.forEach(function(c){
+      var p = document.createElement('span');
+      var reached = c.stage <= idx;
+      p.className = 'pill' + (reached ? ' on '+stageClass[c.stage] : ' locked');
+      p.textContent = c.name;
+      stageChips.appendChild(p);
+    });
+  }
+  renderStage(0);
+  document.querySelectorAll('#stageCtrl button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#stageCtrl button').forEach(function(b){b.setAttribute('aria-selected','false');});
+      btn.setAttribute('aria-selected','true');
+      renderStage(parseInt(btn.dataset.stage,10));
+    });
+  });
+
+})();
+</script>
+</body>
+</html>

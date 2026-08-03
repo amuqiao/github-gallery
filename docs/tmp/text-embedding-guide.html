@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一文读懂 · Text Embedding —— 当文字变成坐标</title>
+<style>
+  :root{
+    --ink:#0D1321;
+    --panel:#161F35;
+    --panel-light:#1E2A45;
+    --parchment:#E9E2CF;
+    --gold:#E3B23C;
+    --coral:#E8735A;
+    --teal:#4FD1C5;
+    --text:#E7EAF2;
+    --text-dim:#93A0BC;
+    --border:rgba(227,178,60,0.16);
+    --font-sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+  }
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--text);
+    font-family:var(--font-sans);
+    font-size:16.5px;
+    line-height:1.8;
+    position:relative;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      radial-gradient(1.5px 1.5px at 8% 15%, rgba(231,234,242,0.35), transparent),
+      radial-gradient(1px 1px at 22% 60%, rgba(231,234,242,0.25), transparent),
+      radial-gradient(1.5px 1.5px at 35% 25%, rgba(227,178,60,0.30), transparent),
+      radial-gradient(1px 1px at 48% 80%, rgba(231,234,242,0.2), transparent),
+      radial-gradient(1.5px 1.5px at 62% 10%, rgba(231,234,242,0.3), transparent),
+      radial-gradient(1px 1px at 75% 50%, rgba(79,209,197,0.25), transparent),
+      radial-gradient(1.5px 1.5px at 88% 30%, rgba(231,234,242,0.3), transparent),
+      radial-gradient(1px 1px at 95% 70%, rgba(231,234,242,0.2), transparent),
+      radial-gradient(1.5px 1.5px at 15% 90%, rgba(227,178,60,0.2), transparent),
+      radial-gradient(1px 1px at 55% 45%, rgba(231,234,242,0.2), transparent);
+    background-size:100% 100%;
+    opacity:0.6;
+  }
+  .progress-bar{
+    position:fixed; top:0; left:0; height:3px; width:0%;
+    background:linear-gradient(90deg,var(--gold),var(--teal));
+    z-index:999; transition:width .12s linear;
+  }
+  .container{ max-width:860px; margin:0 auto; padding:0 24px; position:relative; z-index:1; }
+  .wide{ max-width:1020px; }
+
+  a{ color:var(--teal); }
+  strong{ color:var(--text); font-weight:700; }
+  .mono{ font-family:var(--font-mono); }
+
+  /* ---------- terms tooltip ---------- */
+  .term{ position:relative; border-bottom:1px dashed var(--teal); cursor:help; }
+  .term:hover::after, .term:focus::after{
+    content:attr(data-tip);
+    position:absolute; left:0; bottom:135%;
+    background:var(--panel-light); color:var(--text);
+    padding:10px 12px; border-radius:8px; font-size:0.82rem; line-height:1.6;
+    width:max-content; max-width:260px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.45);
+    border:1px solid var(--border); z-index:30;
+  }
+  .term:focus{ outline:2px solid var(--teal); outline-offset:2px; }
+
+  /* ---------- hero ---------- */
+  .hero{
+    padding:88px 0 56px;
+    background:radial-gradient(ellipse at 50% -10%, rgba(227,178,60,0.10), transparent 55%);
+    text-align:center;
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    color:var(--gold);
+    letter-spacing:0.12em;
+    font-size:0.8rem;
+    margin:0 0 18px;
+  }
+  .hero h1{
+    font-size:clamp(2.1rem,6vw,3.6rem);
+    font-weight:800;
+    letter-spacing:-0.02em;
+    line-height:1.2;
+    margin:0 0 22px;
+  }
+  .hero-sub{
+    max-width:620px; margin:0 auto;
+    color:var(--text-dim);
+    font-size:1.05rem;
+    line-height:1.9;
+  }
+  .hero-sub strong{ color:var(--gold); }
+
+  .starchart-wrap{
+    max-width:960px; margin:52px auto 0;
+    padding:0 8px;
+    overflow-x:auto;
+  }
+  #starchart{ width:100%; min-width:640px; height:auto; display:block; }
+  .star-dot{ fill:var(--gold); filter:drop-shadow(0 0 6px rgba(227,178,60,0.55)); cursor:pointer; transition:r .15s ease, opacity .15s ease; }
+  .star-label{
+    font-family:var(--font-mono); font-size:20px; fill:var(--text);
+    text-anchor:middle; pointer-events:none; transition:opacity .15s ease;
+  }
+  .star-special-ring{ fill:none; stroke:var(--coral); stroke-width:1.5; stroke-dasharray:4 4; opacity:0.8; }
+  .star-point{ outline:none; }
+  .star-point:focus .star-dot{ stroke:var(--teal); stroke-width:2; }
+  .star-point.is-active .star-dot{ r:11; fill:var(--teal); filter:drop-shadow(0 0 10px rgba(79,209,197,0.7)); }
+  .star-point.is-active .star-label{ fill:var(--teal); font-weight:700; }
+  .star-point.is-dim .star-dot{ opacity:0.28; }
+  .star-point.is-dim .star-label{ opacity:0.3; }
+  .star-line{ stroke:var(--teal); stroke-width:2; }
+  .ring{ fill:none; stroke:rgba(147,160,188,0.18); stroke-dasharray:3 6; }
+
+  .starchart-caption{
+    text-align:center; color:var(--text-dim); font-size:0.9rem; margin-top:18px; max-width:640px; margin-left:auto; margin-right:auto;
+  }
+  .starchart-legend{ text-align:center; color:var(--text-dim); font-size:0.8rem; margin-top:6px; }
+  .starchart-legend .swatch{ display:inline-block; width:10px; height:10px; border:1.5px dashed var(--coral); border-radius:50%; vertical-align:middle; margin-right:4px; }
+
+  .starchart-info{
+    max-width:420px; margin:24px auto 0;
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:16px 18px; min-height:64px;
+  }
+  .starchart-hint{ margin:0 0 8px; color:var(--text-dim); font-size:0.88rem; }
+  .starchart-row{ display:flex; align-items:center; gap:10px; padding:5px 0; font-size:0.9rem; }
+  .starchart-row > span:first-child{ width:52px; flex-shrink:0; }
+  .starchart-row > span.mono{ width:40px; text-align:right; color:var(--teal); flex-shrink:0; }
+  .mini-bar{ flex:1; height:6px; background:rgba(147,160,188,0.18); border-radius:4px; overflow:hidden; }
+  .mini-bar-fill{ height:100%; border-radius:4px; background:var(--teal); transition:width .3s ease; }
+  .mini-bar-fill.is-gold{ background:var(--gold); }
+  .mini-bar-fill.is-teal{ background:var(--teal); }
+
+  /* ---------- section shell ---------- */
+  section{ padding:64px 0; position:relative; z-index:1; }
+  section + section{ border-top:1px solid rgba(147,160,188,0.10); }
+  .section-eyebrow{
+    font-family:var(--font-mono); color:var(--gold); font-size:0.82rem;
+    letter-spacing:0.08em; margin:0 0 10px;
+  }
+  .section-title{ font-size:clamp(1.4rem,3vw,1.9rem); font-weight:700; margin:0 0 22px; letter-spacing:-0.01em; }
+  .section-lead{ color:var(--text); font-size:1.02rem; margin:0 0 24px; }
+  .section-lead + .section-lead{ margin-top:-8px; }
+  p{ margin:0 0 18px; }
+  .text-dim{ color:var(--text-dim); }
+
+  /* ---------- callouts ---------- */
+  .callout{
+    border-left:3px solid var(--coral);
+    background:rgba(232,115,90,0.08);
+    padding:14px 18px; border-radius:0 10px 10px 0;
+    font-size:0.92rem; color:var(--text); margin:18px 0;
+  }
+  .callout strong{ color:var(--coral); }
+  .callout--tip{ border-left-color:var(--teal); background:rgba(79,209,197,0.08); }
+  .callout--tip strong{ color:var(--teal); }
+
+  .fig-caption{ font-size:0.85rem; color:var(--text-dim); margin-top:10px; }
+  .fig-note{ font-size:0.8rem; color:var(--text-dim); display:block; margin-top:4px; }
+
+  /* ---------- tabs (section 1) ---------- */
+  .tabs{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+  .tab-btn{
+    font-family:var(--font-mono); font-size:0.85rem; color:var(--text-dim);
+    background:var(--panel); border:1px solid var(--border); border-radius:999px;
+    padding:8px 18px; cursor:pointer; transition:all .15s ease;
+  }
+  .tab-btn:hover{ color:var(--text); }
+  .tab-btn.is-active{ background:var(--panel-light); color:var(--gold); border-color:var(--gold); }
+  .tab-btn:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+
+  .search-results{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:8px 20px; }
+  .result-row{ display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid rgba(147,160,188,0.10); }
+  .result-row:last-child{ border-bottom:none; }
+  .result-title{ width:230px; flex-shrink:0; font-size:0.92rem; }
+  .result-score{ width:44px; text-align:right; color:var(--text-dim); flex-shrink:0; }
+  @media (max-width:640px){
+    .result-row{ flex-wrap:wrap; }
+    .result-title{ width:100%; }
+  }
+
+  /* ---------- step navigator (section 2) ---------- */
+  .step-nav{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:26px; }
+  .step-btn{
+    font-family:var(--font-mono); font-size:0.82rem; color:var(--text-dim);
+    background:var(--panel); border:1px solid var(--border); border-radius:8px;
+    padding:9px 14px; cursor:pointer; transition:all .15s ease;
+  }
+  .step-btn:hover{ color:var(--text); border-color:var(--teal); }
+  .step-btn.is-active{ background:var(--panel-light); color:var(--gold); border-color:var(--gold); }
+  .step-btn:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+
+  .step-panel{ display:none; }
+  .step-panel.is-active{ display:block; animation:fade .25s ease; }
+  @keyframes fade{ from{ opacity:0; transform:translateY(4px);} to{ opacity:1; transform:translateY(0);} }
+
+  .panel-card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:22px 24px; }
+  .panel-head{ font-weight:700; font-size:1.05rem; margin-bottom:10px; }
+  .panel-head .mono{ color:var(--gold); margin-right:8px; }
+
+  .before-after{ display:flex; gap:16px; align-items:center; margin:16px 0; flex-wrap:wrap; }
+  .ba-box{ background:var(--ink); border:1px solid var(--border); border-radius:8px; padding:10px 14px; font-family:var(--font-mono); font-size:0.85rem; }
+  .ba-box.before{ color:var(--text-dim); }
+  .ba-box.after{ color:var(--teal); border-color:rgba(79,209,197,0.4); }
+  .ba-arrow{ color:var(--gold); font-size:1.2rem; }
+
+  .token-chips{ display:flex; gap:8px; flex-wrap:wrap; margin:16px 0; }
+  .token-chip{ background:var(--panel-light); border:1px solid var(--border); border-radius:6px; padding:6px 12px; font-family:var(--font-mono); font-size:0.88rem; color:var(--teal); }
+
+  .vector-table{ width:100%; border-collapse:collapse; margin:16px 0; font-family:var(--font-mono); font-size:0.82rem; }
+  .vector-table th, .vector-table td{ text-align:left; padding:8px 10px; border-bottom:1px solid rgba(147,160,188,0.12); }
+  .vector-table th{ color:var(--text-dim); font-weight:500; }
+  .vector-table td:first-child{ color:var(--gold); }
+
+  .pool-visual{ display:flex; flex-direction:column; gap:6px; margin:18px 0; align-items:flex-start; }
+  .pool-row{ font-family:var(--font-mono); font-size:0.82rem; color:var(--text-dim); }
+  .pool-arrow{ color:var(--gold); font-size:1.1rem; margin:4px 0; }
+  .pool-result{ font-family:var(--font-mono); font-size:0.92rem; color:var(--teal); background:var(--ink); border:1px solid rgba(79,209,197,0.4); border-radius:8px; padding:8px 14px; }
+
+  .diagram-svg-wrap{ display:flex; justify-content:center; margin:18px 0; overflow-x:auto; }
+  .diagram-svg-wrap svg{ min-width:180px; }
+
+  /* ---------- flow diagram (section 3) ---------- */
+  .flow-diagram{ display:flex; flex-direction:column; align-items:center; gap:0; margin:24px 0; }
+  .flow-row{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; width:100%; }
+  .flow-arrow{ color:var(--gold); font-size:1.3rem; margin:6px 0; }
+  .flow-node{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:14px 18px; text-align:center; font-size:0.9rem; min-width:150px; flex:1 1 150px; max-width:280px;
+  }
+  .flow-node--dim{ opacity:0.55; }
+  .flow-node--hit{ border-color:var(--teal); background:rgba(79,209,197,0.08); }
+  .flow-node--final{ border-color:var(--gold); background:rgba(227,178,60,0.08); }
+  .tag{ display:inline-block; margin-top:6px; font-family:var(--font-mono); font-size:0.72rem; color:var(--text-dim); border:1px solid var(--border); border-radius:999px; padding:2px 10px; }
+  .tag--hit{ color:var(--teal); border-color:var(--teal); }
+
+  .table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin:20px 0; }
+  .cmp-table{ width:100%; border-collapse:collapse; min-width:720px; font-size:0.86rem; }
+  .cmp-table th, .cmp-table td{ text-align:left; padding:12px 14px; border-bottom:1px solid rgba(147,160,188,0.12); vertical-align:top; }
+  .cmp-table thead th{ color:var(--gold); font-family:var(--font-mono); font-weight:600; font-size:0.78rem; letter-spacing:0.03em; border-bottom:1px solid var(--border); }
+  .cmp-table tbody td:first-child{ color:var(--text-dim); font-family:var(--font-mono); font-size:0.78rem; white-space:nowrap; }
+
+  /* ---------- engineering lanes (section 4) ---------- */
+  .flow-lane{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:14px 0; }
+  .lane-label{ font-family:var(--font-mono); font-size:0.78rem; color:var(--text-dim); width:78px; flex-shrink:0; }
+  .lane-chip{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:0.84rem; }
+  .lane-chip--store{ border-color:var(--teal); background:rgba(79,209,197,0.08); color:var(--teal); }
+  .lane-arrow{ color:var(--gold); }
+
+  .info-chips{ display:flex; gap:14px; flex-wrap:wrap; margin:20px 0 28px; }
+  .info-chip{ flex:1 1 240px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
+  .info-chip-label{ font-family:var(--font-mono); font-size:0.75rem; color:var(--gold); letter-spacing:0.04em; margin-bottom:6px; }
+  .info-chip p{ margin:0; font-size:0.86rem; color:var(--text-dim); }
+
+  .code-block{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:20px 22px; overflow-x:auto; font-family:var(--font-mono); font-size:0.84rem; line-height:1.75;
+  }
+  .code-block code{ white-space:pre; }
+  .tok-kw{ color:var(--gold); }
+  .tok-str{ color:var(--teal); }
+  .tok-com{ color:var(--text-dim); font-style:italic; }
+  .tok-fn{ color:var(--coral); }
+  .tok-num{ color:var(--teal); }
+
+  /* ---------- scenario tabs (section 5) ---------- */
+  .scenario-tabs{ display:flex; gap:10px; flex-wrap:wrap; margin:26px 0 0; }
+  .scenario-btn{
+    font-size:0.9rem; color:var(--text-dim); background:var(--panel); border:1px solid var(--border);
+    border-radius:10px; padding:12px 18px; cursor:pointer; flex:1 1 200px; text-align:left; transition:all .15s ease;
+  }
+  .scenario-btn strong{ display:block; color:var(--text); font-size:0.95rem; margin-bottom:2px; }
+  .scenario-btn.is-active{ border-color:var(--gold); background:var(--panel-light); }
+  .scenario-btn.is-active strong{ color:var(--gold); }
+  .scenario-btn:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+
+  .scenario-panel{ display:none; margin-top:16px; }
+  .scenario-panel.is-active{ display:block; animation:fade .25s ease; }
+  .stack-layer{ display:flex; gap:12px; align-items:center; margin-bottom:10px; }
+  .stack-layer .tag2{ font-family:var(--font-mono); font-size:0.72rem; color:var(--ink); background:var(--gold); border-radius:6px; padding:3px 9px; flex-shrink:0; width:70px; text-align:center; }
+  .stack-layer .tag2.alt{ background:var(--teal); }
+
+  /* ---------- closing ---------- */
+  .closing-box{
+    background:linear-gradient(135deg, rgba(227,178,60,0.08), rgba(79,209,197,0.06));
+    border:1px solid var(--border); border-radius:16px; padding:28px 30px;
+  }
+  footer{ text-align:center; color:var(--text-dim); font-size:0.8rem; padding:40px 0 60px; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation:none !important; transition:none !important; }
+    html{ scroll-behavior:auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progressBar"></div>
+
+<!-- ============ HERO ============ -->
+<div class="hero">
+  <div class="container">
+    <p class="eyebrow">一文读懂 · TEXT EMBEDDING</p>
+    <h1>当文字变成坐标</h1>
+    <p class="hero-sub">Text Embedding 做的事情，一句话就能说清：把一段文字变成高维空间里的<strong>一个点</strong>，让「意思相近」变成「坐标相近」——这样"相似"就<strong>可以被计算</strong>，而不只是被感觉。</p>
+  </div>
+  <div class="starchart-wrap">
+    <svg id="starchart" viewBox="0 0 1000 600" role="img" aria-label="语义星图示意">
+      <circle class="ring" cx="500" cy="300" r="150"></circle>
+      <circle class="ring" cx="500" cy="300" r="280"></circle>
+      <circle class="ring" cx="500" cy="300" r="410"></circle>
+      <g id="lines"></g>
+      <g id="points"></g>
+    </svg>
+  </div>
+  <div class="container">
+    <p class="starchart-caption">这是为了讲清原理手工摆出的示意坐标 —— <strong>点击</strong>任意一个点，看看语义空间里"谁离它最近"。真实模型输出的向量通常有 384 ~ 4096 维，没法直接画在纸面上。</p>
+    <p class="starchart-legend"><span class="swatch"></span>虚线圈 = 多义词，向量会随语境改变（第二部分会具体解释）</p>
+    <div class="starchart-info" id="starchartInfo"></div>
+  </div>
+</div>
+
+<!-- ============ SECTION 1：为什么需要它 ============ -->
+<section id="why">
+  <div class="container">
+    <p class="section-eyebrow">01 · 为什么需要它</p>
+    <h2 class="section-title">字面不同，意思相同——这是关键词匹配的盲区</h2>
+    <p class="section-lead">假设你在做一个电商客服知识库。用户输入：<strong class="mono">「手机壳裂了怎么办」</strong>。知识库里刚好有一篇文档，标题是<strong>「屏幕保护壳出现裂痕的处理流程」</strong>——说的是同一件事，但两句话<strong>没有一个共同的词</strong>。</p>
+    <p>关键词匹配和 <span class="term" tabindex="0" data-tip="一种给全文检索文档打分的经典公式，核心思路是：词在这篇文档里出现得越多、在所有文档里越罕见，这篇文档就越可能相关。本质仍是字面统计，不理解语义。">全文检索（BM25）</span> 的核心机制都是"字面重合度"——遇到这种情况，它们通常会判定为不相关，或者打出很低的分。而 Text Embedding 判断的是"意思"，能认出这两句话在说同一件事。下面用这个真实场景的示意打分，对比两种方式的差异：</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab-btn is-active" data-mode="keyword" onclick="setMode('keyword', this)">关键词匹配</button>
+      <button class="tab-btn" data-mode="vector" onclick="setMode('vector', this)">Text Embedding</button>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+    <p class="fig-caption">查询：「手机壳裂了怎么办」—— 上面的分数是为了演示典型规律而设置的<strong>示意值</strong>，不是真实模型的输出。</p>
+
+    <p style="margin-top:28px;">不过 Text Embedding 也不是万能的。它擅长"意思相近但字面不同"的匹配，但不擅长<strong>精确匹配</strong>——订单号、型号、专有名词的唯一性这类场景，字面匹配反而更可靠、更可解释；它也不做逻辑推理，更不会生成新内容，这些是 LLM 生成阶段的工作。这条边界会在第三部分具体展开。</p>
+  </div>
+</section>
+
+<!-- ============ SECTION 2：核心机制 ============ -->
+<section id="mechanism">
+  <div class="container">
+    <p class="section-eyebrow">02 · 核心机制</p>
+    <h2 class="section-title">从字符串到向量：六步拆解</h2>
+    <p class="section-lead">那么，从「手机壳裂了怎么办」这句话，到一个可以拿来算相似度的向量，中间到底发生了什么？整条链路可以拆成六步——点击下面的按钮，跟着这句话一步步走一遍。</p>
+
+    <div class="step-nav" role="tablist">
+      <button class="step-btn is-active" data-step="1" onclick="setStep(1,this)">01 清洗</button>
+      <button class="step-btn" data-step="2" onclick="setStep(2,this)">02 切分</button>
+      <button class="step-btn" data-step="3" onclick="setStep(3,this)">03 Encoder</button>
+      <button class="step-btn" data-step="4" onclick="setStep(4,this)">04 Pooling</button>
+      <button class="step-btn" data-step="5" onclick="setStep(5,this)">05 归一化</button>
+      <button class="step-btn" data-step="6" onclick="setStep(6,this)">06 相似度</button>
+    </div>
+
+    <div class="step-panels">
+
+      <div class="step-panel is-active" data-step="1">
+        <div class="panel-card">
+          <div class="panel-head"><span class="mono">01</span>清洗 · Cleaning</div>
+          <p>目的是去掉与语义无关的噪声——多余空白、重复标点、全 / 半角不统一、控制字符，让后续的切分和编码更稳定。但清洗<strong>不是"删语义"</strong>。</p>
+          <div class="before-after">
+            <div class="ba-box before">"&nbsp;&nbsp;手机壳裂了怎么办!!!&nbsp;&nbsp;"</div>
+            <span class="ba-arrow">→</span>
+            <div class="ba-box after">"手机壳裂了怎么办"</div>
+          </div>
+          <div class="callout"><strong>常见误区：</strong>为了"干净"，把否定词、语气词甚至标点全部删掉——这些往往携带语义（比如"不"直接决定句子意思相反），过度清洗反而会损伤向量质量。</div>
+        </div>
+      </div>
+
+      <div class="step-panel" data-step="2">
+        <div class="panel-card">
+          <div class="panel-head"><span class="mono">02</span>切分 · Tokenization</div>
+          <p>把清洗后的字符串切成模型词表里认识的最小单元（token）。中文里常见的做法不是简单按"字"或"词"切，而是用 <span class="term" tabindex="0" data-tip="Byte Pair Encoding / WordPiece / SentencePiece：几种常见的子词切分算法，会把词切成更小的、模型训练时统计出的高频片段，而不是完整的词。">BPE / WordPiece / SentencePiece</span> 等子词（subword）算法，由模型训练时固定下来的词表决定切分规则。</p>
+          <p class="text-dim" style="font-size:0.88rem;">为了方便阅读，下面按词级展示；真正送入模型的其实是每个 token 对应的整数 id。</p>
+          <div class="token-chips">
+            <span class="token-chip">手机</span><span class="token-chip">壳</span><span class="token-chip">裂</span><span class="token-chip">了</span><span class="token-chip">怎么</span><span class="token-chip">办</span>
+          </div>
+          <div class="callout"><strong>常见误区：</strong>把不同模型的 tokenizer 和 encoder 混着用——tokenizer 和 encoder 是训练时绑定的一对，词表对不上，编码出来的向量没有意义。</div>
+        </div>
+      </div>
+
+      <div class="step-panel" data-step="3">
+        <div class="panel-card">
+          <div class="panel-head"><span class="mono">03</span>Encoder · 模型编码</div>
+          <p>token 先查表变成初始向量，再经过多层 <span class="term" tabindex="0" data-tip="一种神经网络结构，核心是让序列里每个位置都能"看到"其它位置的信息，从而让每个 token 的表示融合上下文。目前主流的文本 encoder 几乎都基于它。">Transformer</span>，让每个 token 的向量融合上下文信息。这一步的输出是"逐 token 的向量矩阵"，形状是 <span class="mono">(token 数, 隐藏维度)</span>，还不是整句话的向量。</p>
+          <table class="vector-table">
+            <thead><tr><th>token</th><th>示意向量（简化为 4 维展示，真实通常是 384 ~ 4096 维）</th></tr></thead>
+            <tbody>
+              <tr><td>手机</td><td>[ 0.12, -0.44, 0.81, 0.09 ]</td></tr>
+              <tr><td>壳</td><td>[ 0.30, -0.10, 0.55, -0.22 ]</td></tr>
+              <tr><td>裂</td><td>[ -0.18, 0.62, 0.14, 0.40 ]</td></tr>
+              <tr><td>了 / 怎么 / 办</td><td>… （省略）</td></tr>
+            </tbody>
+          </table>
+          <p class="text-dim" style="font-size:0.88rem;">回头看开头的星图：在讨论数码产品的语境里，"苹果"的向量会更靠近"手机""电脑"；在讨论水果的语境里，会更靠近"香蕉""橙子"。这正是 encoder 产出的向量是<strong style="color:var(--text)">"上下文相关（contextual）"</strong>的体现——也是它和 word2vec 这类"每个词固定一个向量"的早期方法的关键区别。</p>
+        </div>
+      </div>
+
+      <div class="step-panel" data-step="4">
+        <div class="panel-card">
+          <div class="panel-head"><span class="mono">04</span>Pooling · 池化</div>
+          <p>把"多个 token 向量"压缩成"一个句子向量"。常见方式：<strong>mean pooling</strong>（对所有 token 向量取平均，最常用、效果稳健）、<strong>CLS 向量</strong>（取一个特殊标记位置的向量）、<strong>max pooling</strong>（逐维取最大值）。</p>
+          <div class="pool-visual">
+            <div class="pool-row">[0.12, -0.44, 0.81, 0.09]  手机</div>
+            <div class="pool-row">[0.30, -0.10, 0.55, -0.22]  壳</div>
+            <div class="pool-row">[-0.18, 0.62, 0.14, 0.40]  裂</div>
+            <div class="pool-row text-dim">… 了 / 怎么 / 办</div>
+            <div class="pool-arrow">↓ 逐维取平均（mean pooling）</div>
+            <div class="pool-result">[0.24, -0.06, 0.63, 0.05] —— 整句话的向量</div>
+          </div>
+          <div class="callout"><strong>常见误区：</strong>拿一个没有专门为句子表示训练过的模型的 CLS 向量直接当句向量用——效果通常明显不如 mean pooling，或者选用专门训练过的 sentence embedding 模型（如 sentence-transformers 系列，用对比学习专门优化过句子级别的向量空间）。</div>
+        </div>
+      </div>
+
+      <div class="step-panel" data-step="5">
+        <div class="panel-card">
+          <div class="panel-head"><span class="mono">05</span>归一化 · L2 Normalize</div>
+          <p>把向量缩放成单位长度（模长为 1），只统一"尺度"，<strong>不改变"方向"</strong>（也就是不改变语义指向）。归一化后，余弦相似度可以直接用点积计算——很多向量库默认假设向量已归一化，以此加速检索。</p>
+          <div class="diagram-svg-wrap">
+            <svg viewBox="0 0 200 170" width="240">
+              <circle cx="90" cy="85" r="55" fill="none" stroke="rgba(147,160,188,0.35)" stroke-dasharray="3 4"></circle>
+              <line x1="90" y1="85" x2="155" y2="47" stroke="#E3B23C" stroke-width="2.5"></line>
+              <circle cx="155" cy="47" r="3.5" fill="#E3B23C"></circle>
+              <line x1="90" y1="85" x2="138" y2="58" stroke="#4FD1C5" stroke-width="2.5"></line>
+              <circle cx="138" cy="58" r="3.5" fill="#4FD1C5"></circle>
+              <text x="158" y="40" font-family="ui-monospace,monospace" font-size="11" fill="#E3B23C">‖v‖=1.37</text>
+              <text x="30" y="115" font-family="ui-monospace,monospace" font-size="11" fill="#4FD1C5">‖v̂‖=1.00</text>
+            </svg>
+          </div>
+          <div class="callout"><strong>常见误区：</strong>写入向量库前忘记归一化——结果检索排序被"向量长度"干扰，而不是单纯反映"方向（语义）有多接近"。</div>
+        </div>
+      </div>
+
+      <div class="step-panel" data-step="6">
+        <div class="panel-card">
+          <div class="panel-head"><span class="mono">06</span>相似度计算 · Cosine Similarity</div>
+          <p>用两个（已归一化）向量的余弦值衡量方向接近程度，值域通常在 <span class="mono">[-1, 1]</span> 之间，越接近 1 越相似。检索时对 query 向量和所有候选文档向量批量计算，取分数最高的 <span class="term" tabindex="0" data-tip="Top-K：按分数从高到低排序后，只取前 K 个结果。">Top-K</span>。</p>
+          <div class="diagram-svg-wrap">
+            <svg viewBox="0 0 260 160" width="320">
+              <line x1="30" y1="140" x2="150" y2="40" stroke="#E3B23C" stroke-width="2.5"></line>
+              <line x1="30" y1="140" x2="170" y2="55" stroke="#4FD1C5" stroke-width="2.5"></line>
+              <line x1="30" y1="140" x2="230" y2="120" stroke="#E8735A" stroke-width="2.5"></line>
+              <text x="118" y="34" font-family="ui-monospace,monospace" font-size="11" fill="#E3B23C">query</text>
+              <text x="172" y="50" font-family="ui-monospace,monospace" font-size="11" fill="#4FD1C5">doc A · cosθ=0.86</text>
+              <text x="150" y="132" font-family="ui-monospace,monospace" font-size="11" fill="#E8735A">doc D · cosθ=0.18</text>
+            </svg>
+          </div>
+          <p class="fig-caption">夹角越小，相似度越高——「手机壳裂了怎么办」与「屏幕保护壳出现裂痕的处理流程」（doc A）夹角小，与「蓝牙耳机连接不上怎么解决」（doc D）夹角大。</p>
+        </div>
+      </div>
+
+    </div>
+
+    <p style="margin-top:28px;">把六步串起来看：<strong>文字 → 数字序列 → 上下文向量矩阵 → 单点向量 → 单位向量 → 可比较的相似度</strong>。这就是 Text Embedding 全部的机制。</p>
+  </div>
+</section>
+
+<!-- ============ SECTION 3：边界区别 ============ -->
+<section id="boundary">
+  <div class="container wide">
+    <p class="section-eyebrow">03 · 边界区别</p>
+    <h2 class="section-title">它和谁不一样：关键词匹配 / 全文检索 / LLM 上下文 / RAG</h2>
+    <p class="section-lead">Text Embedding 经常和另外几个词被放在一起说——关键词匹配、全文检索、LLM 上下文、<span class="term" tabindex="0" data-tip="Retrieval-Augmented Generation：检索增强生成。先用某种检索方式找到相关资料，再把资料交给大模型，让它基于这些资料生成回答。">RAG</span>。它们分工完全不同，把同一个客服场景走一遍就清楚了：</p>
+
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node">用户提问<br><span class="mono" style="color:var(--text-dim)">「手机壳裂了怎么办」</span></div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-row flow-row--branch">
+        <div class="flow-node flow-node--dim">关键词匹配<br><span class="tag">未命中</span></div>
+        <div class="flow-node flow-node--dim">全文检索（BM25）<br><span class="tag">低分</span></div>
+        <div class="flow-node flow-node--hit">向量检索（Embedding）<br><span class="tag tag--hit">✓ 命中 doc A</span></div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-row">
+        <div class="flow-node">命中片段：<br><span class="mono" style="color:var(--text-dim); font-size:0.8rem;">"屏幕保护壳出现裂痕的处理流程…"</span></div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-row">
+        <div class="flow-node">LLM 上下文窗口<span class="fig-note">把问题 + 命中片段一起放进 prompt</span></div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-row">
+        <div class="flow-node flow-node--final">LLM 生成回答<br><span class="mono" style="font-size:0.8rem;">"您可以在购买后 7 天内申请更换…"</span></div>
+      </div>
+    </div>
+    <p class="fig-caption" style="text-align:center;">这就是一次典型的 RAG 链路：<strong style="color:var(--text)">Embedding 只负责"召回层"里的一种召回方式，LLM 上下文只是资料的容器，真正生成语言的是 LLM。</strong></p>
+
+    <div class="table-scroll">
+      <table class="cmp-table">
+        <thead>
+          <tr><th>维度</th><th>关键词匹配</th><th>全文检索（BM25）</th><th>Text Embedding</th><th>LLM 上下文</th><th>RAG（组合）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>匹配依据</td><td>字面完全一致</td><td>词频 / 字面相关性统计</td><td>向量方向的语义接近程度</td><td>不做匹配，只是"容器"</td><td>综合检索结果驱动生成</td></tr>
+          <tr><td>典型场景</td><td>精确编号 / 型号查找</td><td>传统搜索引擎、站内搜索</td><td>同义改写、模糊语义搜索</td><td>把资料塞进 prompt 供阅读</td><td>知识库问答、客服助手</td></tr>
+          <tr><td>优势</td><td>精确、可解释、零成本</td><td>成熟、可解释、支持大规模</td><td>能处理"意思一样但字不一样"</td><td>让 LLM"看到"外部资料</td><td>缓解幻觉，答案有据可查</td></tr>
+          <tr><td>局限</td><td>同义词 / 改写全部漏掉</td><td>对同义改写仍不敏感</td><td>对精确值 / 专有名词不够敏感</td><td>窗口长度有限，塞太多会挤占空间</td><td>效果取决于检索质量，检索错生成也会错</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout"><strong>常见误区一：</strong>有了向量检索就不需要关键词匹配 / 全文检索了。生产系统里常见做法其实是<span class="term" tabindex="0" data-tip="同时用 BM25（字面）和向量检索（语义）召回候选，再用一个更精细的模型对候选重新排序，取长补短。">混合检索（hybrid search）</span>——因为向量检索对精确型号、编号、罕见词、否定词的区分力，通常弱于字面匹配。</div>
+    <div class="callout callout--tip"><strong>常见误区二：</strong>把 RAG 简单理解成"把资料塞进 prompt"。RAG 的核心其实是"先检索限定范围，再让 LLM 在这个范围内生成"，用来缓解大模型的幻觉和知识过期问题；Embedding 只负责"找出哪些资料相关"，并不判断资料本身对不对、新不新。</div>
+  </div>
+</section>
+
+<!-- ============ SECTION 4：工程实现 ============ -->
+<section id="engineering">
+  <div class="container wide">
+    <p class="section-eyebrow">04 · 最小工程实现</p>
+    <h2 class="section-title">Python 主链路：从输入文本到检索结果</h2>
+    <p class="section-lead">把 Text Embedding 放进一个真实项目里，先讲清它的输入输出、前置条件和不负责的事情，再讲怎么实现。</p>
+
+    <div class="info-chips">
+      <div class="info-chip">
+        <div class="info-chip-label">输入 / 输出</div>
+        <p>输入是一批文本（字符串列表）；输出是每条文本对应的<strong style="color:var(--text)">定长向量</strong>（numpy array）+ 必要的元数据（id、原文、来源），供检索后还原展示内容。</p>
+      </div>
+      <div class="info-chip">
+        <div class="info-chip-label">前置条件</div>
+        <p>已经确定长文档的<span class="term" tabindex="0" data-tip="把长文档切成多大的片段（chunk），片段之间重叠多少——这是 embedding 之前的独立工程决策，本文只在此处提及边界，不展开讲切分策略本身。">切分（chunking）策略</span>，以及使用哪个 encoder（及其对应的向量维度）。</p>
+      </div>
+      <div class="info-chip">
+        <div class="info-chip-label">不负责</div>
+        <p>不做精确条件过滤（时间 / 权限 / 类目）——交给向量库的 metadata filter；不判断答案对错——交给 LLM 生成 + 人工评估；不做去重与增量更新检测——需要额外的数据流程。</p>
+      </div>
+    </div>
+
+    <p><strong>数据流</strong>分两条链路，建库和查询共用同一个 encoder：</p>
+    <div class="flow-lane">
+      <span class="lane-label">离线建库</span>
+      <div class="lane-chip">文档 chunks</div><span class="lane-arrow">→</span>
+      <div class="lane-chip">清洗</div><span class="lane-arrow">→</span>
+      <div class="lane-chip">批量编码</div><span class="lane-arrow">→</span>
+      <div class="lane-chip">归一化</div><span class="lane-arrow">→</span>
+      <div class="lane-chip lane-chip--store">写入向量库</div>
+    </div>
+    <div class="flow-lane">
+      <span class="lane-label">在线查询</span>
+      <div class="lane-chip">用户 query</div><span class="lane-arrow">→</span>
+      <div class="lane-chip">清洗</div><span class="lane-arrow">→</span>
+      <div class="lane-chip">编码</div><span class="lane-arrow">→</span>
+      <div class="lane-chip">归一化</div><span class="lane-arrow">→</span>
+      <div class="lane-chip lane-chip--store">相似度检索</div><span class="lane-arrow">→</span>
+      <div class="lane-chip">返回结果</div>
+    </div>
+    <div class="callout"><strong>关键约束：</strong>写入和查询必须用<strong>同一个模型、同一套清洗规则</strong>——否则两边的向量不在同一个语义空间里，相似度计算没有意义。</div>
+
+    <p style="margin-top:26px;">下面是主链路的最小伪代码——只展示关键输入输出和决策，不是完整项目脚手架：</p>
+    <div class="code-block"><code><span class="tok-com"># 1) 批量编码 + 归一化：写入和查询都要走这同一个函数</span>
+<span class="tok-kw">def</span> <span class="tok-fn">embed_texts</span>(texts: list[str]) -> np.ndarray:
+    texts = [clean(t) <span class="tok-kw">for</span> t <span class="tok-kw">in</span> texts]                 <span class="tok-com"># 清洗</span>
+    vectors = encoder.encode(texts, batch_size=<span class="tok-num">32</span>)     <span class="tok-com"># -> shape (n, dim)</span>
+    norms = np.linalg.norm(vectors, axis=<span class="tok-num">1</span>, keepdims=<span class="tok-kw">True</span>)
+    <span class="tok-kw">return</span> vectors / norms                             <span class="tok-com"># L2 归一化</span>
+
+<span class="tok-com"># 2) 离线建库：写入向量库</span>
+doc_vectors = <span class="tok-fn">embed_texts</span>(doc_chunks)
+vector_store.upsert(ids=doc_ids, vectors=doc_vectors, metadata=doc_meta)
+
+<span class="tok-com"># 3) 在线查询：编码 query，做相似度检索</span>
+query_vector = <span class="tok-fn">embed_texts</span>([user_query])[<span class="tok-num">0</span>]
+hits = vector_store.search(query_vector, top_k=<span class="tok-num">5</span>, filter={<span class="tok-str">"lang"</span>: <span class="tok-str">"zh"</span>})
+
+<span class="tok-com"># 4) 返回结果：取回原文 + 相似度分数</span>
+results = [(h.metadata[<span class="tok-str">"text"</span>], h.score) <span class="tok-kw">for</span> h <span class="tok-kw">in</span> hits]</code></div>
+  </div>
+</section>
+
+<!-- ============ SECTION 5：方案选型 ============ -->
+<section id="selection">
+  <div class="container wide">
+    <p class="section-eyebrow">05 · 方案怎么选</p>
+    <h2 class="section-title">两个独立维度：怎么编码，存哪 / 怎么查</h2>
+    <p class="section-lead">决定怎么落地，其实是两个独立的选择：用什么把文字变成向量（本地模型 / 云 API），以及把向量放哪里、怎么查（轻量验证 / 向量数据库）。</p>
+    <div class="callout"><strong>常见误区：</strong>把"本地模型 / 云 API"和"向量数据库"当成一个互斥的四选一——它们其实是两个维度，一个决定"怎么编码"，一个决定"编码后存哪里/怎么查"，要组合使用，不是二选一。</div>
+
+    <p style="margin-top:24px;"><strong>维度一：编码方式</strong></p>
+    <div class="table-scroll">
+      <table class="cmp-table">
+        <thead><tr><th></th><th>主要成本</th><th>关键限制</th><th>适合场景</th><th>不推荐场景</th></tr></thead>
+        <tbody>
+          <tr><td>本地模型</td><td>一次性算力 / GPU，长期大批量更省</td><td>需自行维护环境，中文效果依赖模型选型（如 BGE / GTE 系列）</td><td>数据敏感不能出域、调用量巨大、离线场景</td><td>团队没有 ML / 运维能力、短期 MVP 验证</td></tr>
+          <tr><td>云 API</td><td>按 token / 次数计费，随规模线性增长</td><td>数据出境合规问题、网络依赖、有速率限制</td><td>快速验证、中小规模生产、无 GPU 资源团队</td><td>超大规模长期高频调用、强合规要求场景</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:8px;"><strong>维度二：存储与检索方式</strong></p>
+    <div class="table-scroll">
+      <table class="cmp-table">
+        <thead><tr><th></th><th>主要成本</th><th>关键限制</th><th>适合场景</th><th>不推荐场景</th></tr></thead>
+        <tbody>
+          <tr><td>内存暴力搜索</td><td>几乎为零</td><td>无持久化、无元数据过滤，数据量大会变慢</td><td>几百到几千条数据的验证 / demo</td><td>生产环境、数据量大、要求低延迟</td></tr>
+          <tr><td>本地嵌入式向量库<br><span class="text-dim" style="font-size:0.78rem;">如 FAISS / Chroma</span></td><td>免费，占用本地磁盘 / 内存</td><td>单机扩展性有限，一般无原生分布式</td><td>中等数据量、单机应用、原型到小型生产</td><td>超大规模、需要多机分布式、强并发在线服务</td></tr>
+          <tr><td>生产级向量数据库<br><span class="text-dim" style="font-size:0.78rem;">如 Milvus / Qdrant / pgvector</span></td><td>需部署运维或使用云托管服务</td><td>引入额外基础设施复杂度</td><td>大规模数据、高并发、需要 metadata 过滤 / 高可用</td><td>简单 demo、数据量很小、无运维能力</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:30px;"><strong>推荐路径</strong>——点击一个场景，看看两个维度怎么组合：</p>
+    <div class="scenario-tabs" role="tablist">
+      <button class="scenario-btn is-active" data-sc="1" onclick="setScenario(1,this)"><strong>快速验证</strong>几百条 FAQ，想看看效果好不好</button>
+      <button class="scenario-btn" data-sc="2" onclick="setScenario(2,this)"><strong>中小型生产</strong>几千 ~ 几十万条文档的知识库</button>
+      <button class="scenario-btn" data-sc="3" onclick="setScenario(3,this)"><strong>大规模生产</strong>千万级向量、高并发、多业务线</button>
+    </div>
+
+    <div class="scenario-panel is-active" data-sc="1">
+      <div class="panel-card">
+        <div class="stack-layer"><span class="tag2">编码</span> 云 API（如通义 / OpenAI embedding 系列）</div>
+        <div class="stack-layer"><span class="tag2 alt">存储</span> 内存暴力搜索（numpy 直接算余弦相似度）</div>
+        <p class="text-dim" style="margin-top:8px; font-size:0.9rem;"><strong style="color:var(--text)">为什么：</strong>验证阶段最贵的是时间而不是调用费。用最省心的组合几十行代码跑通看效果，效果验证后再决定是否往下走自建路线，不需要搭建任何基础设施。</p>
+      </div>
+    </div>
+    <div class="scenario-panel" data-sc="2">
+      <div class="panel-card">
+        <div class="stack-layer"><span class="tag2">编码</span> 云 API 或本地开源模型（视数据敏感度 / 调用量决定）</div>
+        <div class="stack-layer"><span class="tag2 alt">存储</span> 本地嵌入式向量库（如 Chroma / FAISS）</div>
+        <p class="text-dim" style="margin-top:8px; font-size:0.9rem;"><strong style="color:var(--text)">为什么：</strong>这个量级下单机嵌入式向量库完全撑得住，不需要额外运维分布式系统；是否用本地模型主要看数据能不能出域、以及长期调用量是否大到值得自建。</p>
+      </div>
+    </div>
+    <div class="scenario-panel" data-sc="3">
+      <div class="panel-card">
+        <div class="stack-layer"><span class="tag2">编码</span> 本地部署的专用中文 / 多语言开源模型（或私有化云 API）</div>
+        <div class="stack-layer"><span class="tag2 alt">存储</span> 生产级向量数据库集群（Milvus / Qdrant / pgvector）</div>
+        <p class="text-dim" style="margin-top:8px; font-size:0.9rem;"><strong style="color:var(--text)">为什么：</strong>这个规模下调用成本和延迟稳定性成为主要矛盾，自建模型 + 专业向量数据库的长期综合成本和可控性，优于云 API + 轻量库的组合。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 收尾 ============ -->
+<section id="closing">
+  <div class="container">
+    <p class="section-eyebrow">心智模型回顾</p>
+    <div class="closing-box">
+      <p style="margin:0 0 14px;">Text Embedding 只做一件事：<strong>把文字变成可以计算距离的坐标</strong>。它解决"意思相近但字面不同"的匹配问题，不解决精确匹配、逻辑推理和内容生成——那些分别是关键词匹配、传统程序逻辑和 LLM 生成该做的事。</p>
+      <p style="margin:0;">工程上，最小的实现路径就是：<span class="mono" style="color:var(--teal)">清洗 → 批量编码 → 归一化 → 写入向量库 → 查询时同样编码 → 相似度检索 → 返回结果</span>。选型时先分清"编码"和"存储检索"两个维度，再按数据规模和敏感度组合，而不是纠结选哪一个"最好"的方案。</p>
+    </div>
+  </div>
+</section>
+
+<footer>本文所有示例分数、坐标、向量数值均为手工设计的示意值，用于讲清原理，并非真实模型的输出。</footer>
+
+<script>
+  // ---------- scroll progress ----------
+  window.addEventListener('scroll', function(){
+    var h = document.documentElement;
+    var pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+    document.getElementById('progressBar').style.width = pct + '%';
+  });
+
+  // ---------- hero star chart ----------
+  var points = [
+    {id:'cat', label:'猫', x:140, y:130},
+    {id:'dog', label:'狗', x:195, y:170},
+    {id:'tiger', label:'老虎', x:110, y:210},
+    {id:'happy', label:'开心', x:460, y:80},
+    {id:'sad', label:'难过', x:505, y:135},
+    {id:'angry', label:'愤怒', x:425, y:150},
+    {id:'car', label:'汽车', x:720, y:470},
+    {id:'bike', label:'自行车', x:775, y:415},
+    {id:'plane', label:'飞机', x:830, y:510},
+    {id:'phone', label:'手机', x:650, y:190},
+    {id:'computer', label:'电脑', x:705, y:150},
+    {id:'5g', label:'5G', x:595, y:225},
+    {id:'banana', label:'香蕉', x:290, y:400},
+    {id:'orange', label:'橙子', x:250, y:355},
+    {id:'apple', label:'苹果', x:335, y:340, special:true}
+  ];
+
+  var svgNS = 'http://www.w3.org/2000/svg';
+  var pointsGroup = document.getElementById('points');
+  var linesGroup = document.getElementById('lines');
+  var infoBox = document.getElementById('starchartInfo');
+  var activeId = null;
+  var maxDist = Math.hypot(1000,600);
+
+  function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+  function renderPoints(){
+    points.forEach(function(p){
+      var g = document.createElementNS(svgNS,'g');
+      g.setAttribute('class','star-point');
+      g.setAttribute('data-id', p.id);
+      g.setAttribute('tabindex','0');
+      var inner = '';
+      if(p.special){
+        inner += '<circle cx="'+p.x+'" cy="'+p.y+'" r="18" class="star-special-ring"></circle>';
+      }
+      inner += '<circle cx="'+p.x+'" cy="'+p.y+'" r="'+(p.special?9:7)+'" class="star-dot"></circle>';
+      inner += '<text x="'+p.x+'" y="'+(p.y-16)+'" class="star-label">'+p.label+'</text>';
+      g.innerHTML = inner;
+      g.addEventListener('click', function(){ selectPoint(p.id); });
+      g.addEventListener('keypress', function(e){ if(e.key === 'Enter') selectPoint(p.id); });
+      pointsGroup.appendChild(g);
+    });
+  }
+
+  function selectPoint(id){
+    activeId = (activeId === id) ? null : id;
+    draw();
+  }
+
+  function draw(){
+    linesGroup.innerHTML = '';
+    var allPointEls = document.querySelectorAll('.star-point');
+    allPointEls.forEach(function(el){ el.classList.remove('is-active','is-dim'); });
+
+    if(!activeId){
+      infoBox.innerHTML = '<p class="starchart-hint">点击任意一个点，看看语义空间里谁离它最近。</p>';
+      return;
+    }
+    var center = points.filter(function(p){ return p.id === activeId; })[0];
+    var others = points.filter(function(p){ return p.id !== activeId; })
+      .map(function(p){ return {id:p.id, label:p.label, x:p.x, y:p.y, d:dist(center,p)}; })
+      .sort(function(a,b){ return a.d - b.d; });
+    var neighbors = others.slice(0,3);
+
+    allPointEls.forEach(function(el){ el.classList.add('is-dim'); });
+    var centerEl = document.querySelector('.star-point[data-id="'+activeId+'"]');
+    centerEl.classList.remove('is-dim');
+    centerEl.classList.add('is-active');
+
+    neighbors.forEach(function(n, i){
+      var line = document.createElementNS(svgNS,'line');
+      line.setAttribute('x1', center.x); line.setAttribute('y1', center.y);
+      line.setAttribute('x2', n.x); line.setAttribute('y2', n.y);
+      line.setAttribute('class','star-line');
+      line.style.opacity = (0.9 - i*0.25);
+      linesGroup.appendChild(line);
+      var nEl = document.querySelector('.star-point[data-id="'+n.id+'"]');
+      nEl.classList.remove('is-dim');
+      nEl.classList.add('is-active');
+    });
+
+    var rows = neighbors.map(function(n){
+      var sim = Math.max(0, 1 - n.d/maxDist).toFixed(2);
+      return '<div class="starchart-row"><span>'+n.label+'</span><div class="mini-bar"><div class="mini-bar-fill" style="width:'+(sim*100)+'%"></div></div><span class="mono">'+sim+'</span></div>';
+    }).join('');
+    infoBox.innerHTML = '<p class="starchart-hint">与「'+center.label+'」最接近的：</p>' + rows;
+  }
+
+  renderPoints();
+  draw();
+
+  // ---------- section 1: keyword vs vector ----------
+  var docs = [
+    {id:'A', title:'屏幕保护壳出现裂痕的处理流程', keyword:0.05, vector:0.86},
+    {id:'B', title:'手机壳颜色怎么选购指南', keyword:0.62, vector:0.41},
+    {id:'C', title:'7 天无理由退换货政策说明', keyword:0.10, vector:0.33},
+    {id:'D', title:'蓝牙耳机连接不上怎么解决', keyword:0.03, vector:0.18}
+  ];
+  function renderResults(mode){
+    var sorted = docs.slice().sort(function(a,b){ return b[mode]-a[mode]; });
+    var html = sorted.map(function(d){
+      var barClass = mode === 'vector' ? 'is-teal' : 'is-gold';
+      return '<div class="result-row"><div class="result-title">'+d.title+'</div>'+
+        '<div class="mini-bar"><div class="mini-bar-fill '+barClass+'" style="width:'+(d[mode]*100)+'%"></div></div>'+
+        '<div class="mono result-score">'+d[mode].toFixed(2)+'</div></div>';
+    }).join('');
+    document.getElementById('searchResults').innerHTML = html;
+  }
+  function setMode(mode, btn){
+    document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('is-active'); });
+    btn.classList.add('is-active');
+    renderResults(mode);
+  }
+  renderResults('keyword');
+
+  // ---------- section 2: step navigator ----------
+  function setStep(step, btn){
+    document.querySelectorAll('.step-btn').forEach(function(b){ b.classList.remove('is-active'); });
+    document.querySelectorAll('.step-panel').forEach(function(p){ p.classList.remove('is-active'); });
+    btn.classList.add('is-active');
+    document.querySelector('.step-panel[data-step="'+step+'"]').classList.add('is-active');
+  }
+
+  // ---------- section 5: scenario tabs ----------
+  function setScenario(sc, btn){
+    document.querySelectorAll('.scenario-btn').forEach(function(b){ b.classList.remove('is-active'); });
+    document.querySelectorAll('.scenario-panel').forEach(function(p){ p.classList.remove('is-active'); });
+    btn.classList.add('is-active');
+    document.querySelector('.scenario-panel[data-sc="'+sc+'"]').classList.add('is-active');
+  }
+</script>
+
+</body>
+</html>

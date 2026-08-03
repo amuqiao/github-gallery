@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audio Embedding：把声音变成一串数字 · 一文读懂</title>
+<style>
+  :root{
+    --bg:#0e1620;
+    --bg-alt:#0a121a;
+    --panel:#141f2a;
+    --panel-2:#182432;
+    --line:#25333f;
+    --line-soft:#1c2833;
+    --ink:#e9eef4;
+    --ink-dim:#8fa1b3;
+    --ink-faint:#5c6d7e;
+    --wave:#ffb15e;
+    --wave-soft:#8a6a45;
+    --wave-glow:rgba(255,177,94,0.18);
+    --vector:#5fe3c9;
+    --vector-soft:#3d7d71;
+    --vector-glow:rgba(95,227,201,0.16);
+    --warn:#e2687a;
+    --radius:12px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse 1200px 600px at 50% -10%, rgba(255,177,94,0.06), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+    font-size:16px;
+  }
+  h1,h2,h3{
+    font-family:var(--mono);
+    letter-spacing:0.01em;
+    font-weight:600;
+    margin:0;
+  }
+  p{margin:0 0 1em 0;}
+  b{color:var(--ink);font-weight:600;}
+  ::selection{background:var(--vector-glow);color:var(--ink);}
+  a{color:var(--vector);}
+
+  /* ---------- scroll progress ---------- */
+  .scan-progress{
+    position:fixed;top:0;left:0;height:2px;width:0%;z-index:999;
+    background:linear-gradient(90deg,var(--wave),var(--vector));
+    box-shadow:0 0 8px var(--vector-glow);
+    transition:width .08s linear;
+  }
+
+  /* ---------- shared ---------- */
+  .section{
+    padding:96px 24px;
+    border-top:1px solid var(--line-soft);
+    position:relative;
+  }
+  .section__inner{
+    max-width:880px;
+    margin:0 auto;
+  }
+  .section__eyebrow{
+    font-family:var(--mono);
+    font-size:12.5px;
+    letter-spacing:0.12em;
+    color:var(--vector);
+    text-transform:uppercase;
+    margin:0 0 14px 0;
+  }
+  .section__title{
+    font-size:clamp(22px,3.2vw,30px);
+    color:var(--ink);
+    margin-bottom:28px;
+    line-height:1.4;
+  }
+  .lede{
+    color:var(--ink-dim);
+    font-size:16.5px;
+  }
+
+  .callout{
+    border-left:3px solid var(--ink-faint);
+    background:var(--panel);
+    padding:16px 20px;
+    border-radius:0 8px 8px 0;
+    margin:20px 0;
+    font-size:15px;
+    color:var(--ink-dim);
+  }
+  .callout b{color:var(--ink);}
+  .callout--wave{border-left-color:var(--wave);}
+  .callout--vector{border-left-color:var(--vector);}
+  .callout--misconception{border-left-color:var(--warn);}
+  .callout--insight{border-left-color:var(--vector);background:var(--panel-2);}
+  .callout__tag{
+    display:inline-block;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--warn);
+    margin-bottom:8px;
+  }
+  .callout--insight .callout__tag{color:var(--vector);}
+
+  /* ================= HERO ================= */
+  .hero{
+    position:relative;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:80px 24px 60px;
+    overflow:hidden;
+    text-align:center;
+  }
+  .hero__grid{
+    position:absolute;inset:0;
+    background-image:
+      repeating-linear-gradient(0deg, var(--line-soft) 0, var(--line-soft) 1px, transparent 1px, transparent 64px),
+      repeating-linear-gradient(90deg, var(--line-soft) 0, var(--line-soft) 1px, transparent 1px, transparent 64px);
+    -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 30%, black, transparent);
+    mask-image:radial-gradient(ellipse 60% 55% at 50% 30%, black, transparent);
+    opacity:0.55;
+    pointer-events:none;
+  }
+  .hero__inner{position:relative;max-width:760px;}
+  .hero__eyebrow{
+    font-family:var(--mono);
+    font-size:13px;
+    letter-spacing:0.16em;
+    color:var(--wave);
+    text-transform:uppercase;
+    margin-bottom:22px;
+  }
+  .hero__title{
+    font-size:clamp(34px,6.4vw,58px);
+    line-height:1.18;
+    color:var(--ink);
+    margin-bottom:22px;
+  }
+  .hero__subtitle{
+    color:var(--ink-dim);
+    font-size:clamp(15px,2vw,18px);
+    max-width:520px;
+    margin:0 auto 48px;
+  }
+  .hero__visual{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:22px;
+    flex-wrap:wrap;
+    margin-bottom:22px;
+  }
+  .hero__wave{
+    display:flex;
+    align-items:flex-end;
+    gap:3px;
+    height:64px;
+    padding:0 6px;
+  }
+  .hero__bar{
+    width:4px;
+    min-height:6px;
+    background:var(--wave);
+    border-radius:2px;
+    box-shadow:0 0 6px var(--wave-glow);
+    animation:bar-breathe 2.6s ease-in-out infinite alternate;
+    transform-origin:bottom;
+  }
+  @keyframes bar-breathe{
+    from{transform:scaleY(0.82);opacity:0.75;}
+    to{transform:scaleY(1.05);opacity:1;}
+  }
+  .hero__arrow{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--ink-faint);
+    letter-spacing:0.04em;
+    white-space:nowrap;
+  }
+  .hero__vector{
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .hero__dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--vector);
+    box-shadow:0 0 8px var(--vector-glow);
+    animation:dot-pulse 2.2s ease-in-out infinite alternate;
+  }
+  @keyframes dot-pulse{
+    from{opacity:0.35;transform:scale(0.85);}
+    to{opacity:1;transform:scale(1.1);}
+  }
+  .hero__caption{
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--ink-faint);
+    letter-spacing:0.02em;
+  }
+  .hero__scrolldown{
+    position:absolute;bottom:28px;left:50%;transform:translateX(-50%);
+    font-family:var(--mono);font-size:11px;color:var(--ink-faint);
+    letter-spacing:0.1em;
+  }
+
+  /* ================= WHY DEMO ================= */
+  .demo{
+    margin-top:32px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:24px;
+  }
+  .demo__toggle{
+    display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;
+  }
+  .demo__btn{
+    font-family:var(--mono);
+    font-size:13px;
+    padding:9px 16px;
+    border-radius:20px;
+    border:1px solid var(--line);
+    background:transparent;
+    color:var(--ink-dim);
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .demo__btn:hover{border-color:var(--ink-faint);color:var(--ink);}
+  .demo__btn.is-active{
+    background:var(--vector-glow);
+    border-color:var(--vector-soft);
+    color:var(--vector);
+  }
+  .demo__cards{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:12px;
+  }
+  .demo__card{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    padding:14px 16px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    transition:border-color .2s ease, box-shadow .2s ease;
+  }
+  .demo__card.is-query{border-color:var(--wave-soft);}
+  .demo__icon{font-size:20px;width:28px;text-align:center;flex-shrink:0;}
+  .demo__label{flex:1;min-width:0;}
+  .demo__label b{display:block;font-size:14.5px;}
+  .demo__label span{font-size:12.5px;color:var(--ink-faint);font-family:var(--mono);}
+  .demo__score-wrap{width:180px;flex-shrink:0;}
+  .demo__score-bar{
+    height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-bottom:5px;
+  }
+  .demo__score-fill{
+    height:100%;border-radius:3px;background:var(--vector);
+    transition:width .4s ease, background .4s ease;
+  }
+  .demo__score-num{
+    font-family:var(--mono);font-size:12px;color:var(--ink-dim);text-align:right;
+  }
+  .demo__note{
+    margin-top:16px;margin-bottom:0;
+    font-size:14px;color:var(--ink-dim);
+    border-top:1px dashed var(--line);
+    padding-top:14px;
+  }
+
+  /* ================= PIPELINE (mechanism) ================= */
+  .pipeline{
+    display:flex;
+    flex-wrap:wrap;
+    gap:0;
+    margin:28px 0 0;
+  }
+  .pipeline__step{
+    flex:1 1 140px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .pipeline__btn{
+    flex:1;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--ink-dim);
+    border-radius:8px;
+    padding:14px 10px;
+    cursor:pointer;
+    text-align:center;
+    font-family:var(--mono);
+    transition:all .15s ease;
+  }
+  .pipeline__btn .num{display:block;font-size:11px;color:var(--wave);letter-spacing:0.08em;margin-bottom:6px;}
+  .pipeline__btn .label{display:block;font-size:13.5px;color:var(--ink);}
+  .pipeline__btn .label-en{display:block;font-size:10.5px;color:var(--ink-faint);margin-top:2px;}
+  .pipeline__btn:hover{border-color:var(--ink-faint);}
+  .pipeline__btn.is-active{
+    border-color:var(--vector-soft);
+    background:var(--vector-glow);
+  }
+  .pipeline__btn.is-active .num{color:var(--vector);}
+  .pipeline__arrow{
+    color:var(--ink-faint);font-family:var(--mono);font-size:14px;flex:0 0 auto;
+  }
+  .pipeline__detail{
+    margin-top:20px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px 24px;
+    font-size:15px;
+    color:var(--ink-dim);
+  }
+  .pipeline__detail b{color:var(--ink);}
+
+  @media (max-width:720px){
+    .pipeline{flex-direction:column;}
+    .pipeline__step{flex-direction:column;align-items:stretch;}
+    .pipeline__arrow{align-self:center;transform:rotate(90deg);margin:2px 0;}
+  }
+
+  /* ================= BOUNDARY CARDS ================= */
+  .boundary__grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:14px;
+    margin-top:8px;
+  }
+  .boundary__card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:18px 18px 4px;
+    cursor:pointer;
+    transition:border-color .15s ease;
+  }
+  .boundary__card:hover{border-color:var(--ink-faint);}
+  .boundary__card.is-core{
+    border-color:var(--vector-soft);
+    background:linear-gradient(180deg, var(--vector-glow), var(--panel) 60%);
+  }
+  .boundary__head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+  .boundary__name{font-size:15.5px;color:var(--ink);}
+  .boundary__name-en{font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
+  .boundary__io{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--ink-dim);
+    margin:10px 0 12px;
+  }
+  .boundary__toggle-hint{
+    font-family:var(--mono);font-size:11px;color:var(--vector);
+    margin-bottom:10px;
+  }
+  .boundary__detail{
+    max-height:0;
+    overflow:hidden;
+    transition:max-height .3s ease;
+    font-size:13.5px;
+    color:var(--ink-dim);
+  }
+  .boundary__card.is-open .boundary__detail{max-height:260px;padding-bottom:16px;}
+  .boundary__detail-row{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
+  .boundary__detail-row .k{color:var(--wave);font-family:var(--mono);font-size:11px;letter-spacing:0.05em;}
+  .boundary__card.is-core .boundary__detail-row .k{color:var(--vector);}
+
+  @media (max-width:720px){
+    .boundary__grid{grid-template-columns:1fr;}
+  }
+
+  /* ================= ENGINEERING ================= */
+  .spec-box{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:4px 22px;
+    margin:24px 0 32px;
+  }
+  .spec-row{
+    display:flex;gap:16px;
+    padding:14px 0;
+    border-bottom:1px dashed var(--line);
+  }
+  .spec-row:last-child{border-bottom:none;}
+  .spec-row .k{
+    flex:0 0 108px;
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--wave);
+    letter-spacing:0.03em;
+    padding-top:1px;
+  }
+  .spec-row .v{flex:1;font-size:14.5px;color:var(--ink-dim);}
+  .spec-row .v b{color:var(--ink);}
+
+  .flow{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:28px 0 32px;
+  }
+  .flow__node{
+    flex:1 1 130px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:14px 12px;
+    text-align:center;
+    position:relative;
+  }
+  .flow__node .n{
+    font-family:var(--mono);font-size:10.5px;color:var(--vector);letter-spacing:0.08em;margin-bottom:6px;
+  }
+  .flow__node .t{font-size:13.5px;color:var(--ink);margin-bottom:4px;}
+  .flow__node .d{font-size:11.5px;color:var(--ink-faint);line-height:1.5;}
+  .flow__sep{
+    display:flex;align-items:center;color:var(--ink-faint);font-family:var(--mono);font-size:13px;
+  }
+  @media (max-width:720px){
+    .flow{flex-direction:column;}
+    .flow__sep{justify-content:center;transform:rotate(90deg);margin:-2px 0;}
+  }
+
+  .code-block{
+    background:var(--bg-alt);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+    margin:22px 0;
+  }
+  .code-block__tab{
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--ink-faint);
+    padding:9px 16px;
+    border-bottom:1px solid var(--line);
+    letter-spacing:0.04em;
+  }
+  .code-block pre{
+    margin:0;
+    padding:18px 20px;
+    overflow-x:auto;
+    font-family:var(--mono);
+    font-size:13px;
+    line-height:1.75;
+    color:var(--ink);
+  }
+  .code-block .cm{color:var(--ink-faint);font-style:italic;}
+  .code-block .kw{color:var(--vector);}
+  .code-block .fn{color:var(--wave);}
+  .code-block .st{color:#c9a4ff;}
+
+  /* ================= SELECTION TABLE ================= */
+  .table-wrap{overflow-x:auto;margin:24px 0;border:1px solid var(--line);border-radius:var(--radius);}
+  table.select-table{
+    border-collapse:collapse;
+    width:100%;
+    min-width:720px;
+    font-size:13.5px;
+  }
+  .select-table th, .select-table td{
+    text-align:left;
+    padding:13px 16px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  .select-table thead th{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.06em;
+    color:var(--vector);
+    text-transform:uppercase;
+    background:var(--panel-2);
+  }
+  .select-table tbody tr:last-child td{border-bottom:none;}
+  .select-table tbody tr:hover{background:var(--panel);}
+  .select-table td.scheme{font-family:var(--mono);color:var(--ink);font-size:13px;white-space:nowrap;}
+  .select-table td.no{color:var(--warn);}
+
+  .scenario-tabs__nav{display:flex;gap:8px;margin:28px 0 0;flex-wrap:wrap;}
+  .scenario-tabs__btn{
+    font-family:var(--mono);font-size:13px;
+    padding:9px 18px;border-radius:8px 8px 0 0;
+    border:1px solid var(--line);border-bottom:none;
+    background:var(--panel);color:var(--ink-dim);cursor:pointer;
+  }
+  .scenario-tabs__btn.is-active{background:var(--panel-2);color:var(--vector);border-color:var(--vector-soft);}
+  .scenario-tabs__panel{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:0 8px 8px 8px;
+    padding:22px 24px;
+  }
+  .scenario-tabs__panel h3{font-family:var(--sans);font-size:16px;color:var(--ink);margin-bottom:10px;}
+  .scenario-tabs__panel .pick{
+    display:inline-block;font-family:var(--mono);font-size:12.5px;color:var(--vector);
+    background:var(--vector-glow);padding:5px 12px;border-radius:6px;margin-bottom:12px;
+  }
+  .scenario-tabs__panel p{color:var(--ink-dim);font-size:14.5px;margin-bottom:0;}
+
+  /* ================= DECISION HELPER ================= */
+  .decision__grid{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:8px;
+  }
+  .decision__btn{
+    font-family:var(--sans);
+    font-size:14px;
+    text-align:left;
+    padding:16px 16px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--ink);
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .decision__btn:hover{border-color:var(--vector-soft);}
+  .decision__btn.is-active{border-color:var(--vector-soft);background:var(--vector-glow);}
+  .decision__result{
+    margin-top:18px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px 22px;
+    font-size:14.5px;
+    color:var(--ink-dim);
+    min-height:28px;
+  }
+  .decision__result b{color:var(--vector);font-family:var(--mono);font-weight:600;}
+  @media (max-width:720px){
+    .decision__grid{grid-template-columns:1fr;}
+  }
+
+  .footer{
+    padding:48px 24px 64px;
+    text-align:center;
+    font-size:12.5px;
+    color:var(--ink-faint);
+    font-family:var(--mono);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important;}
+    html{scroll-behavior:auto;}
+  }
+</style>
+</head>
+<body>
+
+<div class="scan-progress" id="scanProgress"></div>
+
+<header class="hero" id="hero">
+  <div class="hero__grid"></div>
+  <div class="hero__inner">
+    <p class="hero__eyebrow">Audio Embedding · 一文读懂</p>
+    <h1 class="hero__title">把声音<br>变成一串数字</h1>
+    <p class="hero__subtitle">不问"说了什么"，只问"像不像"。<br>这是 audio embedding 要解决的问题。</p>
+    <div class="hero__visual">
+      <div class="hero__wave" id="heroWave"></div>
+      <div class="hero__arrow">— encoder →</div>
+      <div class="hero__vector" id="heroVector"></div>
+    </div>
+    <p class="hero__caption">waveform → resample → chunk → encoder → normalize → vector</p>
+  </div>
+  <div class="hero__scrolldown">↓ 向下滚动</div>
+</header>
+
+<main>
+
+  <!-- ============ 01 WHY ============ -->
+  <section class="section" id="why">
+    <div class="section__inner">
+      <p class="section__eyebrow">01 · 问题从哪来</p>
+      <h2 class="section__title">一个真实场景：以声搜声</h2>
+      <p class="lede">假设你有一个音频库——客服录音、播客片段、音效素材，或者一堆零散的 mp3。现在拿到一段新的音频，想问一句："库里有没有跟它相似的？"</p>
+      <p>这里的"相似"其实可能指好几件完全不同的事：</p>
+      <p>· <b>内容层面</b>：两段话说的是不是同一件事——这该交给 ASR + 文本相似度<br>
+      · <b>身份层面</b>：是不是同一个人在说话，不管内容是什么——这是 speaker verification 的领域<br>
+      · <b>声学/风格层面</b>：音色、氛围、节奏像不像，哪怕内容完全不同、甚至没有语言内容（比如两段鼓点、两段环境音）——<b>这才是 audio embedding 真正擅长的</b></p>
+
+      <div class="callout callout--wave">
+        <span class="callout__tag">反例 · 1</span>
+        如果把流程换成"先 ASR 转文字，再做文本相似度"——遇到纯音乐、笑声、环境音，或者"同一句话不同人说"这种要靠音色区分的场景，会直接失效，因为转录出来的文字完全一样。
+      </div>
+      <div class="callout callout--wave">
+        <span class="callout__tag">反例 · 2</span>
+        如果用"整段音频做哈希/逐字节比对"——只要转码、加一点噪声、掐头去尾，比对就会崩，因为哈希对差异极度敏感，容不下任何形变。
+      </div>
+
+      <p>Audio embedding 要解决的正是这个中间地带：不需要知道说了什么（不依赖转录），也不要求逐比特相同（容忍变速、加噪、裁剪），而是把一段音频压缩成一个<b>固定长度的向量</b>，让"向量距离"直接对应"听感/声学层面的相似程度"。</p>
+
+      <div class="demo">
+        <div class="demo__toggle">
+          <button class="demo__btn is-active" data-dim="content">按内容判断"像不像"</button>
+          <button class="demo__btn" data-dim="voice">按声纹判断"像不像"</button>
+        </div>
+        <div class="demo__cards" id="demoCards"></div>
+        <p class="demo__note" id="demoNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 02 MECHANISM ============ -->
+  <section class="section" id="mechanism">
+    <div class="section__inner">
+      <p class="section__eyebrow">02 · 核心机制</p>
+      <h2 class="section__title">从波形到向量，六步</h2>
+      <p class="lede">不管背后用什么模型，audio embedding 的主链路都不会变——点开每一步看细节：</p>
+
+      <div class="pipeline" id="pipeline"></div>
+      <div class="pipeline__detail" id="pipelineDetail"></div>
+
+      <div class="callout callout--misconception">
+        <span class="callout__tag">常见误区</span>
+        <b>MFCC / log-mel spectrogram ≠ embedding。</b>它们是逐帧的时频表示，形状是 (帧数, 特征维度)，帧数随时长变化，本质上还是变长数据——不能直接拿两段音频的 log-mel 去做 cosine 相似度。必须再经过一次 encoder + pooling，压缩成固定长度向量，才是真正可以拿来做相似度检索的 embedding。
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 03 BOUNDARY ============ -->
+  <section class="section" id="boundary">
+    <div class="section__inner">
+      <p class="section__eyebrow">03 · 边界之辨</p>
+      <h2 class="section__title">Audio Embedding 不是什么</h2>
+      <p class="lede">这几个概念经常被混着用，但它们解决的是完全不同层级的问题。点开每张卡片看输入 / 输出 / 边界：</p>
+
+      <div class="boundary__grid" id="boundaryGrid"></div>
+
+      <div class="callout callout--insight">
+        <span class="callout__tag">关键洞察</span>
+        Speaker verification 和音乐指纹，本质上都可以看作"audio embedding + 特定任务的判决规则"的组合——只是训练目标（身份 vs 精确匹配）不同，导致 embedding 空间关注的信息完全不同。而 ASR、TTS 是完全不同方向的任务（内容转录 / 内容生成），根本不在"相似度"这个维度上：不要用 audio embedding 去替代它们，也不要指望它们替代 audio embedding。
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 04 ENGINEERING ============ -->
+  <section class="section" id="engineering">
+    <div class="section__inner">
+      <p class="section__eyebrow">04 · 工程实现</p>
+      <h2 class="section__title">最小工程主链路</h2>
+      <p class="lede">先说清楚边界，再讲链路——避免把它当成"什么都能干"的黑盒。</p>
+
+      <div class="spec-box">
+        <div class="spec-row"><div class="k">输入</div><div class="v">音频文件路径 / 字节流（wav / mp3 / ...），或者已经解码好的 PCM 数组</div></div>
+        <div class="spec-row"><div class="k">输出</div><div class="v">一个<b>定长</b>浮点向量（如长度 512 / 768 的 <code>List[float]</code>）+ 可选 metadata</div></div>
+        <div class="spec-row"><div class="k">前置条件</div><div class="v">提前固定"用哪个模型、多少维度、什么采样率"——同一个向量库里的向量必须来自<b>同一个 embedding 空间</b>，混用不同模型产出的向量做比较没有意义</div></div>
+        <div class="spec-row"><div class="k">不该解决</div><div class="v">不产出文字转写；不直接给出"这是谁"的身份标签（除非叠加一层分类 / 阈值判断）；不适合超低延迟的实时打断场景（除非专门做流式优化）</div></div>
+      </div>
+
+      <p><b>主链路（6 步）：</b></p>
+      <div class="flow" id="engFlow"></div>
+
+      <div class="code-block">
+        <div class="code-block__tab">audio_embed.py</div>
+        <pre>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> <span class="fn">audio_to_embedding</span>(path: <span class="kw">str</span>, model, win_sec=<span class="fn">10</span>, hop_sec=<span class="fn">10</span>) -> np.ndarray:
+    wav, sr = load_audio(path)                      <span class="cm"># 读取</span>
+    wav = resample(wav, sr, target_sr=<span class="fn">16000</span>)      <span class="cm"># 重采样</span>
+    chunks = chunk_audio(wav, win_sec, hop_sec)      <span class="cm"># 切片 -> (N_chunks, samples)</span>
+    embs = model.encode_batch(chunks)                <span class="cm"># 核心处理: (N_chunks, dim)</span>
+    emb = embs.mean(axis=<span class="fn">0</span>)                          <span class="cm"># 后处理: 聚合 (mean pooling)</span>
+    emb = emb / np.linalg.norm(emb)                   <span class="cm"># 后处理: L2 归一化</span>
+    <span class="kw">return</span> emb                                        <span class="cm"># shape: (dim,)</span></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block__tab">build_and_search.py</div>
+        <pre>
+<span class="cm"># 建库: 写入向量库</span>
+<span class="kw">for</span> path, meta <span class="kw">in</span> audio_library:
+    emb = <span class="fn">audio_to_embedding</span>(path, model)
+    vector_store.upsert(id=path, vector=emb, metadata=meta)
+
+<span class="cm"># 检索: 相似度 Top-K</span>
+query_emb = <span class="fn">audio_to_embedding</span>(query_path, model)
+results = vector_store.search(query_emb, top_k=<span class="fn">5</span>, metric=<span class="st">"cosine"</span>)
+
+<span class="cm"># 聚类 (可选，比如按说话人聚类)</span>
+labels = <span class="fn">cluster</span>(all_embeddings, method=<span class="st">"hdbscan"</span>)</pre>
+      </div>
+      <p style="font-size:13.5px;color:var(--ink-faint);">以上为主链路伪代码，省略了错误处理、配置管理、CLI 等脚手架部分。</p>
+    </div>
+  </section>
+
+  <!-- ============ 05 SELECTION ============ -->
+  <section class="section" id="selection">
+    <div class="section__inner">
+      <p class="section__eyebrow">05 · 方案选型</p>
+      <h2 class="section__title">选哪种落地方式</h2>
+      <p class="lede">没有"最好"的方案，只有"匹配场景"的方案：</p>
+
+      <div class="table-wrap">
+        <table class="select-table">
+          <thead>
+            <tr><th>方案</th><th>适合场景</th><th>主要成本</th><th>关键限制</th><th>不推荐场景</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="scheme">通用音频 embedding<br><span style="color:var(--ink-faint)">CLAP / PANNs / VGGish</span></td>
+              <td>音效检索、内容审核去重、跨模态（文本-音频）检索</td>
+              <td>需要 GPU 推理，模型下载与维护</td>
+              <td>对说话人身份、精确旋律匹配区分度弱</td>
+              <td class="no">判断"是不是同一个人" / "是不是同一首歌"</td>
+            </tr>
+            <tr>
+              <td class="scheme">说话人 embedding<br><span style="color:var(--ink-faint)">ECAPA-TDNN / resemblyzer / pyannote</span></td>
+              <td>声纹验证、说话人聚类、通话录音归类</td>
+              <td>中等，轻量模型 CPU 也可跑</td>
+              <td>对内容 / 音乐不敏感，短音频（&lt;2s）准确率明显下降</td>
+              <td class="no">判断音乐、音效的风格相似度</td>
+            </tr>
+            <tr>
+              <td class="scheme">音乐专用 embedding / 指纹<br><span style="color:var(--ink-faint)">chromaprint 一类指纹算法</span></td>
+              <td>音乐版权比对、听歌识曲、相似曲目推荐</td>
+              <td>索引库体量大，需要专门的指纹 / 索引算法</td>
+              <td>指纹类对翻唱 / 伴奏差异不鲁棒（会判为不同）</td>
+              <td class="no">语音、环境音等非音乐场景</td>
+            </tr>
+            <tr>
+              <td class="scheme">云 API<br><span style="color:var(--ink-faint)">各厂商音频 embedding / 检索服务</span></td>
+              <td>快速验证想法、无 GPU 资源、调用量不大</td>
+              <td>按调用量计费，存在网络往返延迟</td>
+              <td>数据需出域上传第三方</td>
+              <td class="no">高频调用、数据敏感 / 合规要求高、离线场景</td>
+            </tr>
+            <tr>
+              <td class="scheme">轻量验证方案<br><span style="color:var(--ink-faint)">openL3 类小模型 + 本地 faiss</span></td>
+              <td>原型验证、小数据集（几千条以内）、demo</td>
+              <td>低，笔记本 CPU 即可</td>
+              <td>精度上限低于大模型，扩展性有限</td>
+              <td class="no">生产级、千万级规模的大规模检索</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><b>推荐路径</b>（按典型场景）：</p>
+      <div class="scenario-tabs">
+        <div class="scenario-tabs__nav" id="scenarioNav"></div>
+        <div class="scenario-tabs__panel" id="scenarioPanel"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 06 DECISION ============ -->
+  <section class="section" id="decide">
+    <div class="section__inner">
+      <p class="section__eyebrow">06 · 决策速查</p>
+      <h2 class="section__title">你要解决的是哪种"像不像"</h2>
+      <p class="lede">选一个最贴近你需求的问题：</p>
+      <div class="decision__grid" id="decisionGrid"></div>
+      <div class="decision__result" id="decisionResult">↑ 点一个按钮试试</div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>Audio Embedding · 一文读懂 — 面向 Python 开发者的心智模型与最小工程实现路径</p>
+</footer>
+
+<script>
+(function(){
+  // ---------- scroll progress ----------
+  var bar = document.getElementById('scanProgress');
+  function updateProgress(){
+    var h = document.documentElement;
+    var scrolled = h.scrollTop;
+    var height = h.scrollHeight - h.clientHeight;
+    var pct = height > 0 ? (scrolled / height) * 100 : 0;
+    bar.style.width = pct + '%';
+  }
+  window.addEventListener('scroll', updateProgress, {passive:true});
+  updateProgress();
+
+  // ---------- hero visual ----------
+  var wave = document.getElementById('heroWave');
+  var vector = document.getElementById('heroVector');
+  for (var i=0;i<28;i++){
+    var b = document.createElement('span');
+    b.className='hero__bar';
+    var h = 18 + Math.random()*46;
+    b.style.height = h + 'px';
+    b.style.animationDelay = (Math.random()*1.4).toFixed(2)+'s';
+    wave.appendChild(b);
+  }
+  for (var j=0;j<7;j++){
+    var d = document.createElement('span');
+    d.className='hero__dot';
+    d.style.animationDelay = (Math.random()*1.6).toFixed(2)+'s';
+    vector.appendChild(d);
+  }
+
+  // ================= WHY DEMO =================
+  var demoData = {
+    content: {
+      note: '当前用的是「内容 / 语义」导向的 embedding：内容相同的 A 和 B 几乎重合（0.86），即使声音完全不同；换成同一个人说的完全不同内容（候选 2），相似度反而很低（0.21）。',
+      cards: [
+        {icon:'🎙️', title:'候选 1 · 说话人 B', sub:'"早上好，今天天气不错"', score:0.86},
+        {icon:'🎙️', title:'候选 2 · 说话人 A', sub:'"会议室已经预定"', score:0.21},
+        {icon:'🎵', title:'候选 3 · 纯钢琴曲', sub:'无语言内容', score:0.04}
+      ]
+    },
+    voice: {
+      note: '当前用的是「声纹」导向的 embedding（speaker embedding）：结果完全反过来——候选 2 虽然内容不同，但因为是同一个人的声音，相似度高达 0.91；候选 1 内容相同但声音不同，反而只有 0.18。',
+      cards: [
+        {icon:'🎙️', title:'候选 1 · 说话人 B', sub:'"早上好，今天天气不错"', score:0.18},
+        {icon:'🎙️', title:'候选 2 · 说话人 A', sub:'"会议室已经预定"', score:0.91},
+        {icon:'🎵', title:'候选 3 · 纯钢琴曲', sub:'无语言内容', score:0.05}
+      ]
+    }
+  };
+  var demoCards = document.getElementById('demoCards');
+  var demoNote = document.getElementById('demoNote');
+  var demoBtns = document.querySelectorAll('.demo__btn');
+
+  function renderDemo(mode){
+    var d = demoData[mode];
+    var html = '<div class="demo__card is-query">' +
+      '<div class="demo__icon">🎙️</div>' +
+      '<div class="demo__label"><b>Query · 说话人 A</b><span>"早上好，今天天气不错"</span></div>' +
+      '<div class="demo__score-wrap"><div class="demo__score-num" style="color:var(--wave)">查询音频</div></div>' +
+      '</div>';
+    d.cards.forEach(function(c){
+      var pct = Math.round(c.score*100);
+      var color = c.score >= 0.5 ? 'var(--vector)' : 'var(--ink-faint)';
+      html += '<div class="demo__card">' +
+        '<div class="demo__icon">'+c.icon+'</div>' +
+        '<div class="demo__label"><b>'+c.title+'</b><span>'+c.sub+'</span></div>' +
+        '<div class="demo__score-wrap">' +
+          '<div class="demo__score-bar"><div class="demo__score-fill" style="width:'+pct+'%;background:'+color+'"></div></div>' +
+          '<div class="demo__score-num">cos = '+c.score.toFixed(2)+'</div>' +
+        '</div>' +
+      '</div>';
+    });
+    demoCards.innerHTML = html;
+    demoNote.textContent = d.note;
+  }
+  demoBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      demoBtns.forEach(function(b){b.classList.remove('is-active');});
+      btn.classList.add('is-active');
+      renderDemo(btn.getAttribute('data-dim'));
+    });
+  });
+  renderDemo('content');
+
+  // ================= PIPELINE =================
+  var steps = [
+    {label:'读取', en:'Load', detail:'把音频文件解码成 PCM 数值数组。一个 wav / mp3 文件被解码后，得到形如 (samples, channels) 的浮点数组，附带一个采样率 (sample rate)。<br><br><b>常见坑：</b>不同格式解码后精度、声道数可能不一致，通常需要先统一转单声道 (mono)。'},
+    {label:'重采样', en:'Resample', detail:'模型通常只在固定采样率下训练过，比如 16kHz。如果直接喂入采样率不匹配的音频，效果会显著下降，而且往往不会报错——只是"悄悄地"变差，这是最容易被忽略的一步。<br><br>语音类模型常见 16kHz；音乐 / 通用音频类模型为保留更多高频信息，常见会用到 22.05kHz 到 48kHz 不等，以模型文档为准。'},
+    {label:'切片', en:'Chunk', detail:'模型对输入长度通常有限制（比如 30 秒），长音频要切成固定窗口，一般带一定重叠 (overlap) 避免边界信息丢失。<br><br>切片还有另一层意义：如果要做<b>片段级</b>检索——比如从一整集播客里定位某 15 秒片段——就必须先切片、分别编码，而不是整段音频只拿一个向量。'},
+    {label:'特征 / Encoder', en:'Feature / Encoder', detail:'这一步最容易混淆概念。<br><br><b>传统特征</b>（如 MFCC、log-mel spectrogram）是逐帧 (frame-level) 的时频表示，形状是 (帧数, 特征维度)——帧数随时长变化，本质上还是变长数据，不能直接拿两段的 log-mel 做 cosine 相似度。<br><br><b>Encoder + Pooling</b>：用神经网络 encoder（如 wav2vec2、CLAP 的 audio tower、VGGish、PANNs、ECAPA-TDNN 等）处理这些逐帧特征，再做 pooling（mean pooling、attention pooling，或直接取 encoder 自带的全局 token），才能把变长输入压缩成固定长度向量——这个定长向量才是真正的 <b>embedding</b>。'},
+    {label:'归一化', en:'L2 Normalize', detail:'把向量除以自身的模长，变成单位向量 (||v||=1)。<br><br>这样做之后，两个向量的点积 (dot product) 就直接等于 cosine 相似度，可以用向量库最基础的内积索引；同时避免"响度 / 能量大小"主导相似度判断——不归一化的话，音量大的音频向量模长天然更大，会干扰真正的方向相似性。'},
+    {label:'相似度计算', en:'Similarity', detail:'归一化后，用 cosine similarity 衡量两个向量的接近程度，取值范围 [-1, 1]，越接近 1 越相似。<br><br>工程上通常配合近似最近邻 (ANN) 索引——如 faiss、qdrant、milvus——做大规模检索，而不是对库里每一条都做暴力比对 (brute-force)。'}
+  ];
+  var pipelineEl = document.getElementById('pipeline');
+  var pipelineDetail = document.getElementById('pipelineDetail');
+  var pipelineHtml = '';
+  steps.forEach(function(s, idx){
+    pipelineHtml += '<div class="pipeline__step">' +
+      '<button class="pipeline__btn" data-idx="'+idx+'">' +
+        '<span class="num">'+(idx+1).toString().padStart(2,'0')+'</span>' +
+        '<span class="label">'+s.label+'</span>' +
+        '<span class="label-en">'+s.en+'</span>' +
+      '</button>' +
+      (idx < steps.length-1 ? '<span class="pipeline__arrow">→</span>' : '') +
+    '</div>';
+  });
+  pipelineEl.innerHTML = pipelineHtml;
+  var pipelineBtns = pipelineEl.querySelectorAll('.pipeline__btn');
+  function showStep(idx){
+    pipelineBtns.forEach(function(b){b.classList.remove('is-active');});
+    pipelineBtns[idx].classList.add('is-active');
+    pipelineDetail.innerHTML = '<b>'+steps[idx].label+' · '+steps[idx].en+'</b><br><br>' + steps[idx].detail;
+  }
+  pipelineBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){ showStep(parseInt(btn.getAttribute('data-idx'),10)); });
+  });
+  showStep(0);
+
+  // ================= BOUNDARY CARDS =================
+  var boundaryData = [
+    {name:'ASR', en:'Automatic Speech Recognition', io:'语音 → 文字', solves:'"说了什么"', not:'音色、旋律、非语言声音的相似性；两段内容相同但声音完全不同的音频，转录结果会一样', core:false},
+    {name:'TTS', en:'Text-to-Speech', io:'文字 → 语音波形', solves:'反方向的生成任务——把文字变成声音', not:'跟"相似度 / 检索"基本无关，是内容生成问题，不是表示学习问题', core:false},
+    {name:'Speaker Diarization', en:'说话人分离', io:'多人对话音频 → 时间轴分段', solves:'"什么时候是谁在说"（同一段音频内的相对身份）', not:'不判断这个 "speaker 1" 具体是现实中的哪个人，也不能跨音频比对身份', core:false},
+    {name:'Speaker Verification', en:'说话人确认', io:'两段音频 → 是 / 否 + 分数', solves:'"这两段是不是同一个人"', not:'只关注说话人身份这一个维度，内容、情绪、音乐性都被压缩掉了；本质是 speaker embedding + 阈值判决', core:false},
+    {name:'音乐指纹', en:'Music Fingerprinting (Shazam 类)', io:'音频片段 → 精确匹配某首歌', solves:'"这是哪首歌"，对截取、噪声、轻微失真鲁棒', not:'无法表达"风格相似"这种模糊相似性——同一首歌的翻唱 / 伴奏版本会被判定为完全不同的东西', core:false},
+    {name:'Audio Embedding', en:'通用音频表示', io:'任意音频 → 定长向量', solves:'衡量任意两段音频在某个维度（内容 / 音色 / 风格）上"像不像"，支持检索、聚类、去重', not:'不直接给出文字 / 身份 / 歌曲名这类确定性答案，只给出连续的相似度', core:true}
+  ];
+  var boundaryGrid = document.getElementById('boundaryGrid');
+  var bHtml = '';
+  boundaryData.forEach(function(item, idx){
+    bHtml += '<div class="boundary__card'+(item.core?' is-core':'')+'" data-idx="'+idx+'">' +
+      '<div class="boundary__head"><span class="boundary__name">'+item.name+'</span><span class="boundary__name-en">'+item.en+'</span></div>' +
+      '<div class="boundary__io">'+item.io+'</div>' +
+      '<div class="boundary__toggle-hint">点击展开 ↓</div>' +
+      '<div class="boundary__detail">' +
+        '<div class="boundary__detail-row"><span class="k">解决</span><br>'+item.solves+'</div>' +
+        '<div class="boundary__detail-row"><span class="k">不解决</span><br>'+item.not+'</div>' +
+      '</div>' +
+    '</div>';
+  });
+  boundaryGrid.innerHTML = bHtml;
+  boundaryGrid.querySelectorAll('.boundary__card').forEach(function(card){
+    card.addEventListener('click', function(){
+      card.classList.toggle('is-open');
+    });
+  });
+
+  // ================= ENGINEERING FLOW =================
+  var flowSteps = [
+    {t:'输入准备', d:'加载 + 重采样 + 切片'},
+    {t:'核心处理', d:'调用 encoder 批量提取 embedding'},
+    {t:'后处理', d:'聚合 (pooling) + L2 归一化'},
+    {t:'写入向量库', d:'连同 metadata upsert 进 faiss / qdrant / milvus / pgvector'},
+    {t:'检索 / 聚类', d:'cosine 相似度 Top-K，或 KMeans / HDBSCAN 聚类'},
+    {t:'返回结果', d:'Top-K 列表 + 分数，或 cluster 标签'}
+  ];
+  var engFlow = document.getElementById('engFlow');
+  var fHtml = '';
+  flowSteps.forEach(function(s, idx){
+    fHtml += '<div class="flow__node"><div class="n">STEP '+(idx+1)+'</div><div class="t">'+s.t+'</div><div class="d">'+s.d+'</div></div>';
+    if (idx < flowSteps.length-1) fHtml += '<div class="flow__sep">→</div>';
+  });
+  engFlow.innerHTML = fHtml;
+
+  // ================= SCENARIO TABS =================
+  var scenarios = [
+    {label:'场景 A', title:'内部音效 / 素材库检索与去重（几万条素材）',
+     pick:'推荐：通用音频 embedding（如 CLAP）+ 本地 faiss',
+     reason:'不涉及说话人身份或精确歌曲匹配，只关心"听起来像不像"；几万条规模本地 faiss 完全够用，不需要 GPU 集群，一次性建库、增量更新即可，也不必为此接入云端付费 API。'},
+    {label:'场景 B', title:'客服通话按说话人聚类做质检',
+     pick:'推荐：speaker embedding（如 ECAPA-TDNN）+ HDBSCAN 聚类',
+     reason:'核心问题是"区分说话人"而不是"内容检索"，通用音频 embedding 反而会被内容和背景噪声干扰；聚类比"分类"更合适，因为通常不预先知道有多少个不同的坐席 / 客户身份。'},
+    {label:'场景 C', title:'快速验证一个新想法是否可行（PoC）',
+     pick:'推荐：云 API 或轻量本地模型（如 openL3）+ 内存暴力 cosine 比对',
+     reason:'阶段目标是验证"这个方向有没有效果"，而不是追求生产级精度和规模；先用最低成本把流程跑通、看看相似度排序是否符合直觉，再决定要不要投入自建模型和向量库。'}
+  ];
+  var scenarioNav = document.getElementById('scenarioNav');
+  var scenarioPanel = document.getElementById('scenarioPanel');
+  var navHtml = '';
+  scenarios.forEach(function(s, idx){
+    navHtml += '<button class="scenario-tabs__btn'+(idx===0?' is-active':'')+'" data-idx="'+idx+'">'+s.label+'</button>';
+  });
+  scenarioNav.innerHTML = navHtml;
+  function showScenario(idx){
+    var s = scenarios[idx];
+    scenarioNav.querySelectorAll('.scenario-tabs__btn').forEach(function(b,i){
+      b.classList.toggle('is-active', i===idx);
+    });
+    scenarioPanel.innerHTML = '<h3>'+s.title+'</h3><div class="pick">'+s.pick+'</div><p>'+s.reason+'</p>';
+  }
+  scenarioNav.querySelectorAll('.scenario-tabs__btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ showScenario(parseInt(btn.getAttribute('data-idx'),10)); });
+  });
+  showScenario(0);
+
+  // ================= DECISION HELPER =================
+  var decisions = [
+    {q:'内容是什么', a:'这其实是 <b>ASR</b>（+ 文本相似度）要解决的问题，不是 audio embedding 的强项——回看「边界之辨」里 ASR 那一栏。'},
+    {q:'是不是同一个人在说话', a:'用 <b>speaker embedding</b>（如 ECAPA-TDNN / resemblyzer），配合阈值判断或聚类——参考「方案选型」场景 B。'},
+    {q:'是不是同一首歌 / 同一段原始录音', a:'用<b>音乐指纹</b>（如 chromaprint 一类算法），不是通用 audio embedding——指纹要求内容几乎逐比特一致。'},
+    {q:'声音风格 / 氛围像不像，不管内容和身份', a:'用<b>通用音频 embedding</b>（如 CLAP / PANNs），走「工程实现」里的主链路即可——参考场景 A。'}
+  ];
+  var decisionGrid = document.getElementById('decisionGrid');
+  var decisionResult = document.getElementById('decisionResult');
+  var dHtml = '';
+  decisions.forEach(function(item, idx){
+    dHtml += '<button class="decision__btn" data-idx="'+idx+'">'+item.q+'</button>';
+  });
+  decisionGrid.innerHTML = dHtml;
+  decisionGrid.querySelectorAll('.decision__btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      decisionGrid.querySelectorAll('.decision__btn').forEach(function(b){b.classList.remove('is-active');});
+      btn.classList.add('is-active');
+      var idx = parseInt(btn.getAttribute('data-idx'),10);
+      decisionResult.innerHTML = decisions[idx].a;
+    });
+  });
+
+})();
+</script>
+</body>
+</html>

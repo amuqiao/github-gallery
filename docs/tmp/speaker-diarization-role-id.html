@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一文读懂 · 视频里的 Speaker Diarization 与 Speaker Role Identification</title>
+<style>
+:root{
+  --page:#F6F8FA;
+  --card:#FFFFFF;
+  --sub:#F1F5F8;
+  --code:#F7F9FB;
+  --line:#DDE4EA;
+  --line2:#E9EEF2;
+  --tx:#111A22;
+  --tx2:#4E5D6B;
+  --tx3:#7C8B99;
+  /* 说话人调色板：本文的语义色系统就是 speaker 标签系统。
+     深色用于文字，浅色用于时间轴色块。 */
+  --s0:#A96B00;  --s0f:#E29A2E;
+  --s1:#0E6E7E;  --s1f:#2E9AAF;
+  --s2:#9C2F63;  --s2f:#C85C93;
+  --s3:#3F6F1C;  --s3f:#79A93F;
+  --danger:#B3372E;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei UI","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,sans-serif;
+  --display:ui-sans-serif,-apple-system,"Segoe UI","Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono","DejaVu Sans Mono",monospace;
+  --sh:0 1px 2px rgba(17,26,34,.05),0 1px 3px rgba(17,26,34,.04);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:64px}
+body{
+  margin:0;background:var(--page);color:var(--tx);
+  font-family:var(--sans);font-size:16.5px;line-height:1.78;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1060px;margin:0 auto;padding:0 24px;position:relative}
+
+/* ---------- transport bar：滚动位置即播放头 ---------- */
+.transport{
+  position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+}
+.transport-in{max-width:1060px;margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:16px;height:52px}
+.tp-label{font-family:var(--mono);font-size:11px;color:var(--tx3);letter-spacing:.14em;white-space:nowrap}
+.tp-track{position:relative;flex:1;height:28px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.tp-track::-webkit-scrollbar{display:none}
+.tp-inner{display:flex;gap:2px;min-width:max-content;height:28px;align-items:stretch}
+.tp-mark{
+  font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--tx3);
+  background:transparent;border:0;border-bottom:2px solid var(--line);
+  padding:0 10px;cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s;
+}
+.tp-mark:hover{color:var(--tx)}
+.tp-mark.on{color:var(--s1);border-bottom-color:var(--s1)}
+.tp-mark b{font-weight:600;opacity:.6;margin-right:6px}
+
+/* ---------- hero ---------- */
+.hero{padding:56px 0 44px;background:var(--card);border-bottom:1px solid var(--line)}
+.kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;color:var(--s1);margin-bottom:18px}
+h1{
+  font-family:var(--display);font-weight:800;letter-spacing:-.025em;line-height:1.08;
+  font-size:clamp(31px,5.2vw,54px);margin:0 0 20px;color:#0A1118;
+}
+h1 .dim{color:var(--tx3);font-weight:800}
+.lede{font-size:17px;color:var(--tx2);max-width:66ch;margin:0 0 10px}
+.lede b{color:var(--tx);font-weight:600}
+
+/* ---------- 排版 ---------- */
+.sec{padding:60px 0;border-top:1px solid var(--line)}
+.sec-head{display:flex;gap:14px;align-items:baseline;margin-bottom:10px;flex-wrap:wrap}
+.tc{font-family:var(--mono);font-size:12px;color:var(--s1);letter-spacing:.08em}
+h2{font-family:var(--display);font-weight:800;letter-spacing:-.02em;line-height:1.2;
+   font-size:clamp(24px,3.3vw,35px);margin:0;color:#0A1118}
+h3{font-family:var(--display);font-weight:700;font-size:19.5px;letter-spacing:-.01em;margin:34px 0 10px;color:#0A1118}
+h4{font-size:15px;font-weight:700;margin:0 0 8px}
+p{margin:0 0 14px}
+.sec p{max-width:74ch}
+ul,ol{margin:0 0 16px;padding-left:22px;max-width:74ch}
+li{margin-bottom:8px}
+code{font-family:var(--mono);font-size:.87em;background:var(--sub);border:1px solid var(--line2);
+     border-radius:4px;padding:1px 5px;color:#1D3F4A}
+strong{color:#050B11;font-weight:600}
+.muted{color:var(--tx2)}
+.small{font-size:14.5px}
+a{color:var(--s1)}
+
+/* ---------- 面板 ---------- */
+.rack{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:22px 0;overflow:hidden;box-shadow:var(--sh)}
+.rack-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line2);
+  background:var(--sub);font-family:var(--mono);font-size:11px;
+  letter-spacing:.13em;color:var(--tx2)}
+.rack-bar .dot{width:7px;height:7px;border-radius:50%;background:var(--s0f);flex:none}
+.rack-body{padding:20px}
+.rack-body>*:last-child{margin-bottom:0}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:16px 18px;box-shadow:var(--sh)}
+.card p:last-child{margin-bottom:0}
+.card.warn{border-color:#EED2CE;background:#FDF5F4}
+
+.tag{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;
+  padding:2px 7px;border-radius:3px;border:1px solid var(--line);color:var(--tx2);margin-right:6px;background:var(--sub)}
+.tag.s0{color:var(--s0);border-color:#EBD3A8;background:#FDF6EA}
+.tag.s1{color:var(--s1);border-color:#BDDDE3;background:#EDF7F9}
+.tag.s2{color:var(--s2);border-color:#E7C5D6;background:#FCF0F5}
+.tag.s3{color:var(--s3);border-color:#CFE0BB;background:#F2F8EC}
+
+/* ---------- 按钮 ---------- */
+.btnrow{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+.btn{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--tx2);
+  background:var(--card);border:1px solid var(--line);border-radius:5px;padding:7px 12px;cursor:pointer;
+  transition:.14s;
+}
+.btn:hover{color:var(--tx);border-color:#B9C5CF}
+.btn.on{background:#EAF5F7;color:var(--s1);border-color:#8FC5CF;font-weight:600}
+.btn:focus-visible,.tp-mark:focus-visible,summary:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+
+/* ---------- 代码 ---------- */
+pre{
+  margin:0;background:var(--code);border:1px solid var(--line2);border-left:2px solid var(--s1);
+  border-radius:0 6px 6px 0;padding:15px 17px;overflow-x:auto;
+  font-family:var(--mono);font-size:12.8px;line-height:1.68;color:#243542;
+}
+pre .c{color:#7A8A97}
+pre .k{color:#9C2F63}
+pre .s{color:#2C7A4B}
+pre .f{color:#9A6100}
+
+/* ---------- 表格 ---------- */
+.tblwrap{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:7px;background:var(--card);box-shadow:var(--sh)}
+table{border-collapse:collapse;width:100%;min-width:660px;font-size:14.5px}
+th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line2);vertical-align:top}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;color:var(--tx3);
+   background:var(--sub);font-weight:500;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.k{font-weight:600;color:#0A1118;white-space:nowrap}
+tr.dim{opacity:.34}
+
+/* ---------- hero 时间轴 ---------- */
+.tl{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px 18px 14px;margin:28px 0 16px;box-shadow:var(--sh)}
+.tl-scroll{overflow-x:auto}
+.tl-scroll svg{min-width:660px}
+.tl .seg:focus{stroke:#0A1118;stroke-width:2}
+.tl svg{display:block;width:100%;height:auto}
+.tl .seg{cursor:pointer;transition:opacity .15s}
+.tl .seg:hover{opacity:.7}
+.tl-cap{
+  font-family:var(--mono);font-size:12.5px;color:var(--tx2);margin-top:12px;padding-top:12px;
+  border-top:1px solid var(--line2);min-height:44px;line-height:1.6;
+}
+.tl-cap b{color:var(--tx);font-weight:600}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--tx2);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(0,0,0,.08)}
+
+details{border:1px solid var(--line);border-radius:7px;background:var(--card);margin-bottom:9px;box-shadow:var(--sh)}
+summary{cursor:pointer;padding:13px 16px;font-weight:600;font-size:15px;list-style:none;display:flex;gap:10px;align-items:baseline}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";font-family:var(--mono);color:var(--s1);font-size:15px;flex:none}
+details[open] summary::before{content:"−"}
+details[open] summary{border-bottom:1px solid var(--line2)}
+details .d-body{padding:13px 16px 15px 42px;color:var(--tx2);font-size:14.5px}
+details .d-body p:last-child{margin-bottom:0}
+
+.callout{border:1px solid #EBDCC0;border-left:3px solid var(--s0f);background:#FDF9F1;padding:14px 18px;margin:20px 0;border-radius:0 6px 6px 0}
+.callout p:last-child{margin-bottom:0}
+.callout.no{border-color:#EED2CE;border-left-color:var(--danger);background:#FDF5F4}
+
+footer{border-top:1px solid var(--line);padding:36px 0 60px;color:var(--tx3);font-size:13px;font-family:var(--mono);background:var(--card)}
+
+@media (max-width:820px){
+  .grid2,.grid3{grid-template-columns:1fr}
+  body{font-size:15.5px}
+  .transport-in{height:48px;gap:10px}
+  .tp-label{display:none}
+  .sec{padding:46px 0}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+
+<nav class="transport" aria-label="章节导航">
+  <div class="transport-in">
+    <span class="tp-label">TIMELINE</span>
+    <div class="tp-track"><div class="tp-inner" id="tpInner"></div></div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">AI 工程能力 · 一文读懂</div>
+    <h1>给一段视频，<br>切出<span class="dim">「谁在什么时候说话」</span>，<br>再判定<span class="dim">「他是什么角色」</span></h1>
+    <p class="lede"><b>Speaker Diarization</b> 回答 who spoke when，输出的是匿名标签 <code>SPEAKER_00</code>；<b>Speaker Role Identification</b> 把匿名标签映射到业务角色——面试官/候选人、医生/患者、坐席/客户。这是两个任务，用的是两套方法、两套指标，也在两个不同的阶段失败。</p>
+    <p class="lede">下面这条时间轴就是最终产物。点击任意色块看这一段的输出，切换按钮看两个任务的差别。</p>
+
+    <div class="tl">
+      <div class="btnrow" style="margin-bottom:12px">
+        <button class="btn on" data-hero="id">显示 speaker_id</button>
+        <button class="btn" data-hero="role">显示 role</button>
+        <button class="btn" data-hero="overlap">高亮 overlap 与静音</button>
+      </div>
+      <div class="tl-scroll"><svg id="heroSvg" viewBox="0 0 1000 210" role="img" aria-label="说话人分段时间轴"></svg></div>
+      <div class="tl-cap" id="heroCap">把指针移到色块上，或用 Tab 键聚焦，看这一段的结构化输出。</div>
+      <div class="legend">
+        <span><i style="background:var(--s0f)"></i><span id="lg0">SPEAKER_00</span></span>
+        <span><i style="background:var(--s1f)"></i><span id="lg1">SPEAKER_01</span></span>
+        <span><i style="background:var(--s2f)"></i><span id="lg2">SPEAKER_02</span></span>
+        <span><i style="background:#EFC9C5"></i>overlap（重叠语音）</span>
+      </div>
+    </div>
+
+    <p class="lede small">全文以「线上面试录像 → 结构化面试纪要」为主线例子。医患问诊、客服质检、庭审记录、课堂分析的链路几乎一致，差别只在角色定义、隐私约束和验收口径，文中会分别标出。</p>
+  </div>
+</header>
+
+<main>
+
+<section class="sec" id="s-scope">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">00:00</span><h2>先把能力边界钉死</h2></div>
+    <p>这个能力最容易翻车的地方不在模型，而在一开始没说清它到底交付什么。</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h4><span class="tag s3">IN</span>输入</h4>
+        <p class="small muted">一个视频文件（<code>mp4/mov</code>），可能带多路音轨。真正被用到的通常只有一条 16kHz 单声道 PCM。画面在基础方案里完全不参与，只有在做视听融合时才有用。</p>
+      </div>
+      <div class="card">
+        <h4><span class="tag s0">OUT</span>输出</h4>
+        <p class="small muted">一个分段列表：<code>[{start, end, speaker, role, text}]</code>。<code>speaker</code> 是聚类出的匿名标签，<code>role</code> 是映射后的业务角色，<code>text</code> 来自 ASR，是可选的第三方能力。</p>
+      </div>
+    </div>
+
+    <h3>它解决什么</h3>
+    <ul>
+      <li><strong>分段与聚类</strong>：把连续音频切成语音片段，并把属于同一个人的片段聚到同一个标签下。片段数、说话人数都可能是未知的。</li>
+      <li><strong>角色映射</strong>：把 <code>SPEAKER_01</code> 判定为「候选人」，让下游能按角色统计——候选人说话占比、面试官提问数量、患者主诉片段。</li>
+    </ul>
+
+    <h3>它明确不解决</h3>
+    <ul>
+      <li><strong>不是 speaker identification（声纹身份认证）</strong>。diarization 不知道这个人是张三，它只知道「这几段是同一个人」。要认到具体的人，需要事先注册的声纹库，那是另一个任务，也是另一套合规要求。</li>
+      <li><strong>不是 ASR</strong>。它不产出文字。文字要么不需要，要么由 Whisper/云 ASR 提供，再和分段对齐。</li>
+      <li><strong>不做语义理解</strong>。「这场面试通过与否」是下游 LLM 的事，diarization 只提供带角色的结构化文本。</li>
+      <li><strong>不保证跨文件一致</strong>。同一个人在两个视频里会拿到不同的 <code>SPEAKER_00</code>。跨会议追同一个人需要额外的声纹检索层。</li>
+    </ul>
+
+    <h3>成功标准长什么样</h3>
+    <p>不要用「跑通了」当验收。这个能力的验收至少三条同时成立：分段边界和说话人归属的错误率（DER）在可接受区间；角色映射在真实数据上的准确率达标；单位时长的处理成本和延迟在预算内。三条中任意一条塌了，下游的纪要、质检、统计全部不可信。</p>
+
+    <div class="callout no">
+      <p><strong>动手前先问一句：这段音频真的需要 diarization 吗？</strong></p>
+      <p class="small">如果录制源本身就分轨——客服系统的双声道录音（坐席一路、客户一路）、会议平台导出的每人独立音轨（多数云会议录制支持按参会者分文件）、多人各戴一支麦克风——那么说话人归属是<b>已知的</b>，直接按 channel 或按文件切分即可，DER 恒等于 0，角色也直接来自平台元数据。花力气去 diarize 一段本来就分好轨的音频，是这个领域里最常见的浪费。先去查录制源。</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-min">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">01:00</span><h2>最小可跑链路：一个下午，一个脚本</h2></div>
+    <p>第一版不要服务、不要数据库、不要队列。目标只有一个：拿 3~5 段真实视频，跑出一份带角色的 JSON，然后人眼看它错在哪。下面五步就是全部。</p>
+
+    <div class="rack">
+      <div class="rack-bar"><span class="dot"></span>MINIMAL PIPELINE · run_once.py</div>
+      <div class="rack-body">
+        <div class="btnrow" id="minTabs">
+          <button class="btn on" data-min="0">1 · 抽音频</button>
+          <button class="btn" data-min="1">2 · diarization</button>
+          <button class="btn" data-min="2">3 · ASR + 对齐</button>
+          <button class="btn" data-min="3">4 · 角色识别</button>
+          <button class="btn" data-min="4">5 · 输出与自查</button>
+        </div>
+        <div id="minPanes">
+<div class="pane on" data-min="0">
+<pre><span class="c"># 1) 抽音频。所有 diarization 模型的通用输入都是 16kHz 单声道 PCM。</span>
+<span class="c">#    直接喂 mp4 多数库也能跑，但显式抽一次，失败点才清楚。</span>
+<span class="k">import</span> subprocess, pathlib
+
+<span class="k">def</span> <span class="f">extract_audio</span>(video: str, wav: str) -&gt; str:
+    cmd = [<span class="s">"ffmpeg"</span>, <span class="s">"-y"</span>, <span class="s">"-i"</span>, video,
+           <span class="s">"-vn"</span>,                 <span class="c"># 丢掉视频流</span>
+           <span class="s">"-ac"</span>, <span class="s">"1"</span>,             <span class="c"># 单声道（先确认源不是分轨的！）</span>
+           <span class="s">"-ar"</span>, <span class="s">"16000"</span>,         <span class="c"># 16kHz，模型的训练采样率</span>
+           <span class="s">"-c:a"</span>, <span class="s">"pcm_s16le"</span>, wav]
+    subprocess.<span class="f">run</span>(cmd, check=<span class="k">True</span>)   <span class="c"># 解码失败直接抛，不要吞</span>
+    <span class="k">return</span> wav
+
+wav = <span class="f">extract_audio</span>(<span class="s">"interview_001.mp4"</span>, <span class="s">"work/interview_001.wav"</span>)</pre>
+<p class="small muted" style="margin-top:12px">先确认原始视频是不是多音轨。<code>ffprobe</code> 一行就能看：如果每个参会者一条轨，后面四步全都不用做。</p>
+</div>
+
+<div class="pane" data-min="1">
+<pre><span class="c"># 2) diarization。这一步只回答 who spoke when，不产生任何文字。</span>
+<span class="k">from</span> pyannote.audio <span class="k">import</span> Pipeline
+<span class="k">import</span> torch
+
+pipeline = Pipeline.<span class="f">from_pretrained</span>(
+    <span class="s">"pyannote/speaker-diarization-3.1"</span>,
+    use_auth_token=HF_TOKEN,      <span class="c"># 需先在模型页面接受使用条款</span>
+)
+pipeline.<span class="f">to</span>(torch.<span class="f">device</span>(<span class="s">"cuda"</span>))    <span class="c"># CPU 也能跑，RTF 差一个数量级</span>
+
+<span class="c"># 已知人数就传进去。这一个参数带来的提升常常超过换模型。</span>
+diar = <span class="f">pipeline</span>(wav, num_speakers=<span class="s">2</span>)
+<span class="c"># 人数不确定时用区间：min_speakers=2, max_speakers=4</span>
+
+<span class="k">with</span> <span class="f">open</span>(<span class="s">"work/interview_001.rttm"</span>, <span class="s">"w"</span>) <span class="k">as</span> f:
+    diar.<span class="f">write_rttm</span>(f)          <span class="c"># RTTM 是评测工具的标准输入格式</span>
+
+turns = [
+    {<span class="s">"start"</span>: seg.start, <span class="s">"end"</span>: seg.end, <span class="s">"speaker"</span>: spk}
+    <span class="k">for</span> seg, _, spk <span class="k">in</span> diar.<span class="f">itertracks</span>(yield_label=<span class="k">True</span>)
+]
+<span class="f">print</span>(<span class="f">len</span>(turns), <span class="f">len</span>({t[<span class="s">"speaker"</span>] <span class="k">for</span> t <span class="k">in</span> turns}))   <span class="c"># 段数、人数</span></pre>
+<p class="small muted" style="margin-top:12px">跑完先看两个数：段数和人数。人数离谱（面试跑出 6 个人）说明这条路线在你的音频上要调，先别往下走。</p>
+</div>
+
+<div class="pane" data-min="2">
+<pre><span class="c"># 3) ASR + 对齐。注意必须要词级时间戳——句子会跨说话人。</span>
+<span class="k">from</span> faster_whisper <span class="k">import</span> WhisperModel
+
+asr = <span class="f">WhisperModel</span>(<span class="s">"large-v3"</span>, device=<span class="s">"cuda"</span>, compute_type=<span class="s">"float16"</span>)
+segments, info = asr.<span class="f">transcribe</span>(wav, language=<span class="s">"zh"</span>, word_timestamps=<span class="k">True</span>)
+words = [w <span class="k">for</span> s <span class="k">in</span> segments <span class="k">for</span> w <span class="k">in</span> s.words]
+
+<span class="k">def</span> <span class="f">speaker_of</span>(t: float) -&gt; str:
+    <span class="s">"""词中点落在哪个 turn 内就归谁；落在空隙里归最近的 turn。"""</span>
+    <span class="k">for</span> tn <span class="k">in</span> turns:
+        <span class="k">if</span> tn[<span class="s">"start"</span>] &lt;= t &lt;= tn[<span class="s">"end"</span>]:
+            <span class="k">return</span> tn[<span class="s">"speaker"</span>]
+    <span class="k">return</span> <span class="f">min</span>(turns, key=<span class="k">lambda</span> tn: <span class="f">min</span>(<span class="f">abs</span>(tn[<span class="s">"start"</span>]-t),
+                                          <span class="f">abs</span>(tn[<span class="s">"end"</span>]-t)))[<span class="s">"speaker"</span>]
+
+<span class="c"># 把连续同说话人的词合并成 utterance</span>
+utts, cur = [], <span class="k">None</span>
+<span class="k">for</span> w <span class="k">in</span> words:
+    spk = <span class="f">speaker_of</span>((w.start + w.end) / <span class="s">2</span>)
+    <span class="k">if</span> cur <span class="k">is None</span> <span class="k">or</span> cur[<span class="s">"speaker"</span>] != spk:
+        cur = {<span class="s">"speaker"</span>: spk, <span class="s">"start"</span>: w.start, <span class="s">"end"</span>: w.end, <span class="s">"text"</span>: w.word}
+        utts.<span class="f">append</span>(cur)
+    <span class="k">else</span>:
+        cur[<span class="s">"end"</span>] = w.end
+        cur[<span class="s">"text"</span>] += w.word</pre>
+<p class="small muted" style="margin-top:12px">这段胶水逻辑就是 <code>WhisperX</code> 帮你做的事。自己写一遍的价值是：出错时你知道该看时间戳还是看分段。</p>
+</div>
+
+<div class="pane" data-min="3">
+<pre><span class="c"># 4) 角色识别。输入不是音频，是「每个 speaker 的画像」。</span>
+<span class="c">#    粒度是 speaker 级：一个 SPEAKER_xx 一个角色，不要逐段判。</span>
+<span class="k">import</span> json, collections
+
+profile = collections.<span class="f">defaultdict</span>(<span class="k">lambda</span>: {<span class="s">"sec"</span>: <span class="s">0.0</span>, <span class="s">"turns"</span>: <span class="s">0</span>, <span class="s">"samples"</span>: []})
+<span class="k">for</span> u <span class="k">in</span> utts:
+    p = profile[u[<span class="s">"speaker"</span>]]
+    p[<span class="s">"sec"</span>] += u[<span class="s">"end"</span>] - u[<span class="s">"start"</span>]
+    p[<span class="s">"turns"</span>] += <span class="s">1</span>
+    <span class="k">if</span> <span class="f">len</span>(p[<span class="s">"samples"</span>]) &lt; <span class="s">8</span>:            <span class="c"># 采样，别塞整篇</span>
+        p[<span class="s">"samples"</span>].<span class="f">append</span>(u[<span class="s">"text"</span>][:<span class="s">80</span>])
+
+prompt = <span class="f">f</span><span class="s">"""这是一场线上面试的转写，说话人已被匿名聚类。
+可选角色（封闭集合）：interviewer / candidate / observer / unknown
+判定线索：提问密度、单段长度、发言时长占比、是否介绍流程。
+规则：不确定输出 unknown；interviewer 可以有多人；不要臆造角色。
+只输出 JSON，形如 {{"SPEAKER_00": {{"role": "...", "confidence": 0.0, "reason": "..."}}}}
+
+数据：
+{json.dumps(profile, ensure_ascii=False, indent=2)}"""</span>
+
+mapping = json.<span class="f">loads</span>(<span class="f">call_llm</span>(prompt))   <span class="c"># 解析失败就让它抛</span>
+<span class="k">for</span> u <span class="k">in</span> utts:
+    u[<span class="s">"role"</span>] = mapping[u[<span class="s">"speaker"</span>]][<span class="s">"role"</span>]</pre>
+<p class="small muted" style="margin-top:12px">在写这段之前，先花十分钟确认规则能不能直接判出来：会议元数据里有没有面试官账号？画面上有没有姓名条？能规则解决的，不要给 LLM。</p>
+</div>
+
+<div class="pane" data-min="4">
+<pre><span class="c"># 5) 输出 + 立即自查。这份结构就是后面 API 的响应结构，早点定死。</span>
+<span class="k">import</span> json, pathlib
+
+result = {
+    <span class="s">"job_id"</span>: <span class="s">"interview_001"</span>,
+    <span class="s">"speakers"</span>: mapping,
+    <span class="s">"segments"</span>: [
+        {<span class="s">"start"</span>: <span class="f">round</span>(u[<span class="s">"start"</span>], <span class="s">2</span>), <span class="s">"end"</span>: <span class="f">round</span>(u[<span class="s">"end"</span>], <span class="s">2</span>),
+         <span class="s">"speaker"</span>: u[<span class="s">"speaker"</span>], <span class="s">"role"</span>: u[<span class="s">"role"</span>], <span class="s">"text"</span>: u[<span class="s">"text"</span>]}
+        <span class="k">for</span> u <span class="k">in</span> utts
+    ],
+}
+pathlib.<span class="f">Path</span>(<span class="s">"out/interview_001.json"</span>).<span class="f">write_text</span>(
+    json.<span class="f">dumps</span>(result, ensure_ascii=<span class="k">False</span>, indent=<span class="s">2</span>), encoding=<span class="s">"utf-8"</span>)
+
+<span class="c"># --- 三条自查，不通过就别继续做工程 ---</span>
+n_spk = <span class="f">len</span>(mapping)
+speech = <span class="f">sum</span>(u[<span class="s">"end"</span>]-u[<span class="s">"start"</span>] <span class="k">for</span> u <span class="k">in</span> utts) / info.duration
+<span class="k">assert</span> <span class="s">2</span> &lt;= n_spk &lt;= <span class="s">4</span>, <span class="f">f</span><span class="s">"说话人数异常: {n_spk}"</span>
+<span class="k">assert</span> speech &gt; <span class="s">0.3</span>, <span class="f">f</span><span class="s">"语音占比过低: {speech:.2f}，检查音轨与 VAD"</span>
+<span class="f">print</span>({r: <span class="f">round</span>(<span class="f">sum</span>(u[<span class="s">"end"</span>]-u[<span class="s">"start"</span>] <span class="k">for</span> u <span class="k">in</span> utts <span class="k">if</span> u[<span class="s">"role"</span>]==r), <span class="s">1</span>)
+       <span class="k">for</span> r <span class="k">in</span> {u[<span class="s">"role"</span>] <span class="k">for</span> u <span class="k">in</span> utts}})
+<span class="c"># 面试官时长应显著少于候选人；反了就是角色整体对调，最危险的失败。</span></pre>
+<p class="small muted" style="margin-top:12px">最后那行 print 是最有价值的一行：角色整体对调时，JSON 看起来完全正常，只有时长分布会露馅。</p>
+</div>
+</div>
+
+      </div>
+    </div>
+
+    <h3>这一版为什么够用</h3>
+    <ul>
+      <li>它验证了三件最贵的事：<strong>你的音频质量能不能被切开</strong>、<strong>说话人数能不能估对</strong>、<strong>角色信号是否存在于文本里</strong>。这三件事中任何一件失败，后面所有工程都白做。</li>
+      <li>它产出的 JSON 就是最终 API 的响应结构。数据形状定早了，后面换模型、换厂商都不用改下游。</li>
+      <li>它天然产出第一批失败样本。跑完立刻人工看 3 段，把「切碎了」「两个人被合成一个」「角色反了」分别记下来，这就是 POC 评测集的种子。</li>
+    </ul>
+
+    <h3>什么时候可以先不做</h3>
+    <div class="grid3">
+      <div class="card"><h4>先不做 ASR</h4><p class="small muted">如果只要「谁说了多久」的统计（发言占比、打断次数），diarization 单独就够。ASR 是链路里最贵的一段，能省则省。</p></div>
+      <div class="card"><h4>先不做视频画面</h4><p class="small muted">画面能显著提升准确率，但也让链路复杂度翻倍。先用纯音频摸清基线 DER，再判断值不值得引入。</p></div>
+      <div class="card"><h4>先不做微调</h4><p class="small muted">预训练 diarization 模型在通用场景已经可用。微调只有在你有标注数据、且基线明显不够时才谈。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-onoff">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">02:00</span><h2>哪些步骤离线做，哪些在请求里做</h2></div>
+    <p>这个能力和 RAG 那类「离线建索引、线上查」的结构不一样：<strong>它的重活几乎全在离线（或异步）侧</strong>，线上请求只是在读已经算好的结果。想清楚这一点，架构就不会跑偏。</p>
+
+    <div class="btnrow" id="flowTabs">
+      <button class="btn on" data-flow="off">离线 / 异步处理链路</button>
+      <button class="btn" data-flow="on">线上请求链路</button>
+    </div>
+    <div class="rack">
+      <div class="rack-bar"><span class="dot"></span><span id="flowTitle">OFFLINE · 一次处理，多次读取</span></div>
+      <div class="rack-body"><div id="flowPane">
+<div class="pane on" data-flow="off">
+<ol class="chain">
+  <li><span class="step">01 · INGEST</span><div><h5>接收视频，落对象存储，登记任务</h5><p class="why">为什么需要：原始文件必须可回溯，重跑、复现指标、追责都靠它。<b>可省：</b>demo 阶段就是本地目录。</p></div></li>
+  <li><span class="step">02 · DECODE</span><div><h5>ffmpeg 抽 16k 单声道 wav</h5><p class="why">为什么需要：统一采样率和声道，隔离掉容器格式的坑。这里也是判断「是否本来就分轨」的地方。<b>可省：</b>永远不能省。</p></div></li>
+  <li><span class="step">03 · DIARIZE</span><div><h5>VAD → 分段 → embedding → 聚类 → 重叠处理</h5><p class="why">为什么需要：这是能力本体，也是整条链路里最耗 GPU 的一段。<b>可省：</b>录制源分轨时整段跳过。</p></div></li>
+  <li><span class="step">04 · ASR</span><div><h5>转写，要词级时间戳</h5><p class="why">为什么需要：只有词级时间戳才能把文字正确切给说话人。<b>可省：</b>只做时长统计、不要文本时省掉，能省一大笔。</p></div></li>
+  <li><span class="step">05 · ALIGN</span><div><h5>把词分配给 turn，合并成 utterance</h5><p class="why">为什么需要：这是把两条并行结果缝在一起的地方，也是最容易出「文字归错人」的地方。<b>可省：</b>不做 ASR 时不存在。</p></div></li>
+  <li><span class="step">06 · ROLE</span><div><h5>规则先验 → LLM / 分类器 → 落 speaker→role 映射</h5><p class="why">为什么需要：把匿名标签变成业务可消费的角色。<b>可省：</b>下游只需要「有几个人分别说了多久」时不需要。</p></div></li>
+  <li><span class="step">07 · PERSIST</span><div><h5>写分段表、写派生产物、更新任务状态</h5><p class="why">为什么需要：线上请求只读这里。状态必须能区分成功、失败和失败原因。<b>可省：</b>单机脚本写一个 JSON 就够。</p></div></li>
+  <li><span class="step">08 · EVAL</span><div><h5>对评测集批量跑分，写入指标表</h5><p class="why">为什么需要：模型、参数、厂商任何一次变更，都要能对比。没有这一步，你无法证明新版本更好。<b>可省：</b>demo 阶段用人眼看 3 段代替。</p></div></li>
+</ol>
+</div>
+
+<div class="pane" data-flow="on">
+<ol class="chain">
+  <li><span class="step">01 · REQUEST</span><div><h5>用户提交视频，或查询已有结果</h5><p class="why">提交类请求只做三件事：校验、落存储、入队，然后立刻返回 job_id。<b>绝不</b>在请求里等处理完成。</p></div></li>
+  <li><span class="step">02 · AUTH &amp; SCOPE</span><div><h5>鉴权，确定这个人能看哪些 job</h5><p class="why">为什么需要：面试、问诊、通话录音全是强隐私数据，权限过滤缺失是最常见的严重事故。<b>可省：</b>只有本地单人使用时。</p></div></li>
+  <li><span class="step">03 · READ</span><div><h5>按 job_id 读分段，可按 role / 时间区间过滤</h5><p class="why">为什么需要：这是线上侧唯一的「计算」，本质是一次带索引的数据库查询，毫秒级。</p></div></li>
+  <li><span class="step">04 · RENDER</span><div><h5>拼装成转写视图、纪要输入或下载链接</h5><p class="why">为什么需要：前端要的是可读结构（按角色分栏、可点击跳转时间点）。<b>可省：</b>直接返回原始 JSON 由调用方处理。</p></div></li>
+</ol>
+<div class="callout" style="margin-bottom:0">
+<p class="small">线上链路应该短到无聊。如果你发现自己在请求里调模型，多半是需求被误解成了「实时字幕」——那是另一个能力（流式 diarization，用 <code>diart</code> 或厂商的实时接口），架构完全不同：它要处理增量聚类和标签回溯修正，而不是批处理。</p>
+</div>
+</div>
+</div>
+</div>
+    </div>
+
+    <div class="callout">
+      <p><strong>判断依据只有一条：这一步的结果对同一个视频是否只算一次。</strong></p>
+      <p class="small">抽音频、VAD、embedding、聚类、ASR、角色判定，对同一个视频算一次就够，全部离线。查询、按角色过滤、按时间跳转、拼接展示，每次请求都不一样，放线上。一段 60 分钟的视频，即便在 GPU 上，整条链路也常是分钟级——它<b>不可能</b>放在一次 HTTP 请求里同步完成。</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-route">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">03:00</span><h2>技术路线：四条，各自的适用边界</h2></div>
+    <p>先选路线，再选模型。选错路线的代价是重做，选错模型的代价只是换个权重。用下面的约束筛一遍，看哪几条会被淘汰。</p>
+
+    <div class="btnrow" id="routeFilter">
+      <span class="tp-label" style="align-self:center;display:inline">按约束筛选：</span>
+      <button class="btn on" data-rf="all">不设约束</button>
+      <button class="btn" data-rf="privacy">数据不能出内网</button>
+      <button class="btn" data-rf="fast">要低延迟 / 准实时</button>
+      <button class="btn" data-rf="cheap">量大、单位成本敏感</button>
+      <button class="btn" data-rf="thin">团队没有算法人力</button>
+    </div>
+
+    <div class="tblwrap">
+      <table id="routeTbl">
+        <thead><tr><th>路线</th><th>典型选择</th><th>适合</th><th>代价</th></tr></thead>
+        <tbody>
+          <tr data-tags="privacy,cheap">
+            <td class="k">本地开源模型</td>
+            <td><code>pyannote.audio</code> 3.x（segmentation + wespeaker embedding + 聚类）<br><code>NVIDIA NeMo</code>（MSDD / Sortformer，端到端）<br><code>3D-Speaker</code>（CAM++ / ERes2Net，中文场景友好）</td>
+            <td>隐私敏感、内网部署、量大到云 API 成本不可接受、需要改中间结果（自定义聚类阈值、注入先验说话人数）</td>
+            <td>要自己扛 GPU、模型版本、显存和推理运行时；首次接入 <code>pyannote</code> 需要在 Hugging Face 上接受模型使用条款并配置 token；效果调优要人。</td>
+          </tr>
+          <tr data-tags="fast,thin">
+            <td class="k">云 ASR API 附带 diarization</td>
+            <td>AssemblyAI、Deepgram、Azure AI Speech、AWS Transcribe、Google STT，以及国内的阿里云/腾讯云/讯飞语音</td>
+            <td>ASR 和 diarization 一起要、量不大、团队没有算法人力、要最快出第一版；多数厂商一个参数就开（如 <code>diarize=true</code> / <code>ShowSpeakerLabels</code>）</td>
+            <td>数据出网；说话人数上限和聚类策略基本不可调；按分钟计费，量大后成本曲线陡；厂商换模型时你的指标会无声漂移。</td>
+          </tr>
+          <tr data-tags="thin">
+            <td class="k">会议平台 / 一体化方案</td>
+            <td>会议软件自带的转写与发言人区分、企业会议纪要平台、CCaaS 质检模块</td>
+            <td>场景刚好就是「会议纪要」「客服质检」这类标准需求，且不需要把结果深度接进自家系统</td>
+            <td>能力边界由厂商定，角色体系通常固定；深度定制基本不可能；数据留在厂商侧。<b>但它常常直接给你分轨音频和参会者姓名</b>，这本身是巨大的捷径。</td>
+          </tr>
+          <tr data-tags="privacy,fast,cheap">
+            <td class="k">开源项目二次开发</td>
+            <td><code>WhisperX</code>（ASR + 强制对齐 + 说话人分配一条龙）<br><code>diart</code>（流式 / 在线 diarization）<br>ASD 项目如 <code>TalkNet-ASD</code>、<code>Light-ASD</code></td>
+            <td>已经确定要本地化，但不想从零拼 VAD、对齐、分配这些胶水逻辑；或需要流式而非离线</td>
+            <td>项目维护活跃度参差，依赖冲突常见（<code>torch</code>/<code>torchaudio</code>/<code>onnxruntime</code> 版本地狱）；要有人能读源码并锁死环境。</td>
+          </tr>
+          <tr data-tags="privacy">
+            <td class="k">自研 pipeline</td>
+            <td>自己串 VAD → 分段 → speaker embedding → 聚类 → 重叠检测 → 后处理</td>
+            <td>场景高度特殊（固定 2 人、固定麦位、极短音频、特定噪声），通用模型明显不适配，且有算法人力</td>
+            <td>最贵。只有当你能证明通用方案在你的数据上确实不行时才启动，且要先有评测集才能证明。</td>
+          </tr>
+          <tr data-tags="privacy,fast,cheap,thin">
+            <td class="k">规则与结构先验（加在任意路线之上）</td>
+            <td>按声道分离、按会议元数据、按发言时长占比、按开场顺序、按屏幕姓名条 OCR</td>
+            <td><b>几乎所有场景都该先做这一层。</b>尤其是角色识别——很多场景里角色根本不需要模型来判。</td>
+            <td>规则会随业务变化失效，必须有回归测试；不要把规则藏在代码深处，要能被看见、被改。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted" id="routeNote">筛选只是提示哪些路线会先被淘汰，真正的决定要拿你自己的 20 段真实数据跑一遍再下。</p>
+
+    <h3>模型怎么选</h3>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>模型类型</th><th>在链路里的位置</th><th>选型要点</th></tr></thead>
+        <tbody>
+          <tr><td class="k">VAD / 分段模型</td><td>最前端，切出语音区间</td><td>决定 miss 和 false alarm 的下限。<code>silero-vad</code> 轻量够用；<code>pyannote</code> 的 segmentation 模型自带重叠语音的多标签输出，比传统单标签 VAD 更适合多人场景。</td></tr>
+          <tr><td class="k">Speaker embedding</td><td>把每个片段编码成向量</td><td>直接决定聚类质量。<code>wespeaker</code> ResNet 系、NeMo <code>TitaNet</code>、<code>3D-Speaker</code> 的 <code>CAM++</code>/<code>ERes2Net</code> 都是常见选择。中文/远场场景优先试国产权重，跨语种差异是真实存在的。</td></tr>
+          <tr><td class="k">端到端 diarization</td><td>一步出分段+标签</td><td>EEND 系（含 NeMo Sortformer）天生处理重叠语音，且延迟结构更适合流式；代价是<b>支持的说话人上限通常固定</b>（常见 4 人），超过就退化。人数多、且未知，倾向传统 pipeline。</td></tr>
+          <tr><td class="k">ASR</td><td>并行分支，产出词级时间戳</td><td>要角色化文本就必须有<b>词级</b>时间戳，句级不够——句子会跨说话人。<code>faster-whisper</code>（CTranslate2 推理）性价比高；<code>WhisperX</code> 用 wav2vec2 做强制对齐把时间戳打准。</td></tr>
+          <tr><td class="k">LLM</td><td>最后一段，做角色判定</td><td>用于零样本角色分类和纪要生成。它<b>不参与</b>分段，不要指望它修正 diarization 的边界错误。</td></tr>
+          <tr><td class="k">视觉模型</td><td>可选分支，见下一节</td><td>人脸检测/跟踪、主动说话人检测（ASD）、姓名条 OCR。只在音频方案触到天花板、且画面确实有信息时引入。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>依赖清单：按职责，不按流行度</h3>
+    <div class="grid2">
+      <div class="card">
+        <h4>处理与推理</h4>
+        <p class="small muted"><code>ffmpeg</code> 抽音频重采样 · <code>torch</code>/<code>torchaudio</code> 推理底座 · <code>onnxruntime</code> 或 <code>CTranslate2</code> 做量化加速 · <code>librosa</code>/<code>soundfile</code> 音频 IO · <code>pyannote.metrics</code>/<code>dscore</code>/<code>meeteval</code> 算指标</p>
+      </div>
+      <div class="card">
+        <h4>服务与存储</h4>
+        <p class="small muted"><code>FastAPI</code> 暴露接口 · <code>Celery</code>/<code>RQ</code>/<code>arq</code> + <code>Redis</code> 做任务队列 · <code>PostgreSQL</code> 存任务与分段 · <code>MinIO</code>/S3 存视频、音频与中间产物 · <code>Prometheus</code>+<code>Grafana</code> 看 RTF 与失败率</p>
+      </div>
+    </div>
+    <p class="small muted">注意这里<strong>没有向量数据库</strong>。原因见「存储决策」一节——大多数 diarization 系统压根不需要它。</p>
+
+    <h3>开源方案怎么借</h3>
+    <ul>
+      <li><strong>直接用整个项目</strong>：只在场景和项目假设高度吻合时（比如就是要「音频转带说话人的字幕」，<code>WhisperX</code> 直接用）。</li>
+      <li><strong>只借模型权重</strong>：最常见也最稳。把 embedding 模型或 segmentation 模型抠出来，聚类和后处理自己写，你就能控制阈值和说话人数先验。</li>
+      <li><strong>只借评测方法</strong>：DIHARD、AMI、VoxConverse 这些基准的评测脚本和 collar 口径，是你自建评测集时最值得抄的东西。抄口径比抄代码有价值。</li>
+      <li><strong>只借前端</strong>：人工校正说话人标签的界面（波形 + 泳道 + 拖拽边界）不必自研，找现成的转写校对界面改。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="sec" id="s-video">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">04:00</span><h2>它是视频，画面里藏着最便宜的答案</h2></div>
+    <p>纯音频方案在会议室远场、麦克风共用、多人抢话时会明显退化。而视频里往往有音频给不了的强信号。按「投入产出比从高到低」排，画面能提供三样东西：</p>
+
+    <div class="grid3">
+      <div class="card">
+        <h4><span class="tag s3">最划算</span>屏幕上的姓名</h4>
+        <p class="small muted">线上会议录像的画面里通常直接印着参会者姓名条。用 <code>PaddleOCR</code>/<code>RapidOCR</code> 每隔几秒抽帧识别一次，配合「当前高亮/说话中」的边框，你几乎<b>白拿</b>了说话人身份和角色。这条线索经常比任何声学模型都准，却最常被忽略。</p>
+      </div>
+      <div class="card">
+        <h4><span class="tag s0">中等</span>主动说话人检测</h4>
+        <p class="small muted">ASD（<code>TalkNet-ASD</code>、<code>Light-ASD</code> 等）判断画面中哪张脸此刻在说话：人脸检测跟踪 → 唇动与音频的时序相关性 → 逐帧「说/不说」。把 ASD 的人脸轨迹当作聚类约束，能大幅压低说话人混淆，尤其在重叠语音段。</p>
+      </div>
+      <div class="card">
+        <h4><span class="tag s2">辅助</span>位置与人脸聚类</h4>
+        <p class="small muted">固定机位下，座位位置本身就是角色先验（主位=面试官/法官/主诊医生）。人脸 embedding 聚类还能提供一个<b>独立于声音</b>的说话人数估计，用来校验音频聚类估出的 K。</p>
+      </div>
+    </div>
+
+    <div class="callout no">
+      <p><strong>什么时候不要碰画面。</strong></p>
+      <p class="small">画面里没有人脸（共享屏幕全程占满）、分辨率太低、只录了一个大远景、或者摄像头根本没开——这些情况下视觉分支只会白烧 GPU。另外人脸是比声纹更敏感的生物识别信息，一旦引入，合规评估的范围立刻扩大。先用纯音频拿到基线 DER，再拿一批「音频失败样本」验证画面是否真的能救回来，再决定。</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-role">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">05:00</span><h2>角色识别：先穷尽规则，再考虑模型</h2></div>
+    <p>Role identification 的输入不是音频，而是<strong>已经聚好类的说话人</strong>。它的粒度是 speaker 级——一个 <code>SPEAKER_00</code> 对应一个角色，而不是逐段判定（逐段判定既慢又不稳，还会自相矛盾）。四层方法，从上往下试，能在上层解决就别往下走。</p>
+
+    <div class="rack">
+      <div class="rack-bar"><span class="dot"></span>ROLE RESOLUTION · 四层，按顺序尝试</div>
+      <div class="rack-body">
+        <details open>
+          <summary><span class="tag s3">L1</span>结构先验与元数据：零成本，先榨干</summary>
+          <div class="d-body">
+            <p>录制源的 channel（坐席/客户）、会议邀请里的参会者身份、面试系统里已知的面试官账号、屏幕姓名条 OCR 的结果、诊室固定麦位。这些是<b>确定性信息</b>，不是预测。</p>
+            <p>还有一类弱先验很好用：说话总时长占比、首个发言人、提问句占比、平均语段长度。在面试场景里，「提问密度高、单段短」几乎就等于面试官。这类规则的价值不在于单独准，而在于它给 LLM 提供了可核对的特征。</p>
+          </div>
+        </details>
+        <details>
+          <summary><span class="tag s0">L2</span>LLM 零样本分类：POC 阶段的默认解</summary>
+          <div class="d-body">
+            <p>把每个 speaker 的若干条代表性发言采样出来（不要塞整篇，长会议会爆预算也会稀释信号），连同角色定义和判定线索一起给 LLM，要求输出 <code>speaker → role</code> 的 JSON 映射，并<b>强制要求给出理由和置信度</b>。理由不是为了好看，是为了让人工复核时能一眼看出它是不是抓错了线索。</p>
+            <p>关键约束要写进 prompt：角色集合是封闭的、允许输出 <code>unknown</code>、同一角色是否允许多人（两个面试官）、是否必须每个角色都被分配到。这四条不写清，输出就会漂。</p>
+          </div>
+        </details>
+        <details>
+          <summary><span class="tag s1">L3</span>微调文本分类器：量大且角色固定时更划算</summary>
+          <div class="d-body">
+            <p>把一个 speaker 的所有发言拼成一篇文档，做文档级分类。中文场景用 <code>bert-base-chinese</code> 一类的编码器就够，几千条标注样本可以打平甚至超过 LLM，推理成本低两三个数量级，延迟稳定。</p>
+            <p>触发条件很明确：角色体系半年不变、日处理量到了让 LLM 费用变显眼的程度、且你已经在 L2 阶段积累了可直接当训练集的人工修正记录。</p>
+          </div>
+        </details>
+        <details>
+          <summary><span class="tag s2">L4</span>声纹注册匹配：当「角色」其实等于「特定的人」</summary>
+          <div class="d-body">
+            <p>坐席工号、固定主诊医生、公司内固定面试官——这类场景里角色是绑定到人的。做法是维护一个声纹注册库，把 diarization 出来的每个 speaker 的 embedding 与注册库比对，超过阈值就认。</p>
+            <p><b>这是全文唯一需要向量检索的地方</b>，也是合规压力最大的地方：声纹属于生物识别信息，在国内《个人信息保护法》下属敏感个人信息，需要单独同意和更严格的存储、留存、删除策略。没有法务确认之前不要建这个库。</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <h3>角色识别的失败长什么样</h3>
+    <ul>
+      <li><strong>整体对调</strong>：两个角色被完整互换。这是最危险的失败——下游统计全反，但输出看上去完全正常。必须有专门的检测规则（比如「面试官提问数应显著多于候选人」这类不变量）。</li>
+      <li><strong>上游污染</strong>：diarization 把两个人合并成一个 speaker，角色识别再准也只能给出一个角色。<b>角色错误里有相当一部分根本不是角色模型的问题</b>，排查时先看 diarization。</li>
+      <li><strong>角色不在集合内</strong>：突然进来一个 HR、一个家属、一段背景电视声。必须允许 <code>unknown</code>，强行分配比留空危害更大。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="sec" id="s-store">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">06:00</span><h2>存储：先问需要什么，再决定用什么</h2></div>
+    <p>这个能力经常被默认套上「AI 应用 = 向量数据库」的模板，但它的数据其实是<strong>时间区间</strong>，不是语义向量。逐个判断：</p>
+
+    <div class="rack">
+      <div class="rack-bar"><span class="dot"></span>STORAGE DECISION · 点选你的情况</div>
+      <div class="rack-body">
+        <div id="dtree"></div>
+      </div>
+    </div>
+
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>存储</th><th>负责什么</th><th>demo 阶段替代</th><th>什么时候撑不住</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="k">关系数据库</td>
+            <td>任务状态、视频元数据、分段表（start/end/speaker/role/text）、人工修正记录、评测结果、权限与配额、审计</td>
+            <td><code>SQLite</code> 或直接一个 JSON 文件</td>
+            <td>并发写任务状态、需要多人同时校对、需要按角色跨视频聚合统计时</td>
+          </tr>
+          <tr>
+            <td class="k">对象存储</td>
+            <td>原始视频、抽取的 wav、RTTM、转写 JSON、抽帧图片等派生产物</td>
+            <td>本地目录 <code>data/raw</code> + <code>data/derived</code></td>
+            <td>单机磁盘放不下、worker 要横向扩、需要给前端发临时下载链接时</td>
+          </tr>
+          <tr>
+            <td class="k">向量索引</td>
+            <td><b>只有一个用途</b>：跨文件的说话人声纹检索与注册匹配（L4）</td>
+            <td>一个 <code>numpy</code> 数组 + 余弦相似度，几千人以内完全够</td>
+            <td>注册人数到十万级、需要在线增删、需要多副本时才考虑专门的向量库</td>
+          </tr>
+          <tr>
+            <td class="k">图数据库</td>
+            <td>基本不需要</td>
+            <td>—</td>
+            <td>除非核心需求是「谁和谁在多少场会议里共同出现、经由谁认识谁」这类多跳关系推理，否则关系库两张表就够。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p><strong>一个容易忽略的表：人工修正记录。</strong></p>
+      <p class="small">从第一天就把「人改了什么」存下来——哪个 speaker 被合并、哪个角色被改、边界被拖到哪。它同时是你的评测集来源、微调数据来源和质量趋势指标来源。等到需要时再补，历史就没了。</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-stage">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">07:00</span><h2>五个阶段：每一步新增了什么，代价是什么</h2></div>
+    <p>不要跳级。每一级解决的是上一级已经暴露出来的具体痛点，没痛就别加。</p>
+
+    <div class="btnrow" id="stageTabs">
+      <button class="btn on" data-stage="0">demo</button>
+      <button class="btn" data-stage="1">POC</button>
+      <button class="btn" data-stage="2">小团队上线</button>
+      <button class="btn" data-stage="3">中团队扩展</button>
+      <button class="btn" data-stage="4">企业级</button>
+    </div>
+    <div class="rack">
+      <div class="rack-bar"><span class="dot"></span><span id="stageTitle"></span></div>
+      <div class="rack-body"><div id="stagePane">
+<div class="pane on" data-stage="0">
+  <p><strong>时间盒：一天。</strong>3~5 段真实视频，一个 Python 脚本，本地目录，本地模型或直接云 API。</p>
+  <div class="grid2">
+    <div class="card"><h4>组件</h4><p class="small muted"><code>ffmpeg</code> + 一个 diarization 方案 + 可选 ASR + 一次 LLM 调用 + 本地 JSON。没有服务、没有数据库、没有队列。</p></div>
+    <div class="card"><h4>解决什么</h4><p class="small muted">回答「我的音频能不能被切开、人数能不能估对、角色信号在不在文本里」。</p></div>
+  </div>
+  <div class="grid2" style="margin-top:14px">
+    <div class="card"><h4>代价</h4><p class="small muted">几乎没有。最大的成本是环境——<code>torch</code>/<code>onnxruntime</code>/CUDA 版本冲突能耗掉半天，用容器锁死。</p></div>
+    <div class="card warn"><h4>不要做</h4><p class="small muted">不要在这一步搭 FastAPI、上向量库、写 Dockerfile、设计多租户。也不要用最干净的样例来验证——那会给你一个假的信心。</p></div>
+  </div>
+</div>
+
+<div class="pane" data-stage="1">
+  <p><strong>时间盒：两到三周。</strong>目标不是「跑得更好」，是<b>拿到能写进结论的数字</b>。</p>
+  <div class="grid2">
+    <div class="card"><h4>新增组件</h4><p class="small muted">30~50 段人工标注的评测集（RTTM + 角色标签）、批量跑分脚本、<code>pyannote.metrics</code>/<code>dscore</code>、失败样本目录、一个最小 FastAPI（提交/查状态/取结果）、SQLite 或 PostgreSQL 存任务。</p></div>
+    <div class="card"><h4>解决什么</h4><p class="small muted">给出 DER 及其三项分解、角色 macro-F1、RTF、单位时长成本、失败率。同时验证 2~3 条候选路线到底差多少——这是决定要不要自建的唯一依据。</p></div>
+  </div>
+  <div class="grid2" style="margin-top:14px">
+    <div class="card"><h4>代价</h4><p class="small muted">标注是主要开销，也是唯一不能外包给直觉的部分。先标 20 段做一致性检查再规模化。</p></div>
+    <div class="card warn"><h4>什么时候不值得上</h4><p class="small muted">如果处理量一年也就几百个视频，POC 的结论大概率是「用云 API + 人工校对」，不必再往下走。</p></div>
+  </div>
+</div>
+
+<div class="pane" data-stage="2">
+  <p><strong>目标：每天稳定跑，出问题能查。</strong>架构保持简单，补的是持久化和可运维性，不是抽象层。</p>
+  <div class="grid2">
+    <div class="card"><h4>新增组件</h4><p class="small muted">PostgreSQL（任务、分段、人工修正）、对象存储或挂载盘、结构化日志（带 job_id）、配置文件化（模型版本、阈值、num_speakers 策略）、部署脚本或容器、一个人工校对页面、每周抽检流程。</p></div>
+    <div class="card"><h4>解决什么</h4><p class="small muted">结果不再丢；失败可追溯到具体 job 和具体阶段；有人在持续看质量而不是等用户投诉。</p></div>
+  </div>
+  <div class="grid2" style="margin-top:14px">
+    <div class="card"><h4>代价</h4><p class="small muted">一台带 GPU 的机器（或稳定的 API 预算）、一个人的部分精力做运维和抽检。</p></div>
+    <div class="card warn"><h4>什么时候不值得上</h4><p class="small muted">别在这一步引入 Kubernetes、服务网格、特征平台或统一 AI 中台。这个阶段的瓶颈是质量和人工校对效率，不是架构。</p></div>
+  </div>
+</div>
+
+<div class="pane" data-stage="3">
+  <p><strong>目标：扛住量，并且看得见质量在往哪走。</strong></p>
+  <div class="grid2">
+    <div class="card"><h4>新增组件</h4><p class="small muted">Celery/RQ + Redis 队列与独立 GPU worker（关键是<b>限制 GPU 并发</b>）、任务优先级与重试策略、监控看板（RTF、队列深度、失败类型分布、成本/小时）、离线回归评测接进 CI、模型与阈值版本化、灰度发布（新旧版本双跑对比 DER）。</p></div>
+    <div class="card"><h4>解决什么</h4><p class="small muted">高峰期不再堆积或 OOM；换模型、换厂商、改阈值有了可对比的证据；质量下滑能在用户之前被发现。</p></div>
+  </div>
+  <div class="grid2" style="margin-top:14px">
+    <div class="card"><h4>代价</h4><p class="small muted">GPU 资源池的调度与成本；回归评测本身也要跑 GPU；灰度双跑意味着一段时间内算力翻倍。</p></div>
+    <div class="card warn"><h4>什么时候不值得上</h4><p class="small muted">日处理量还在几十个视频、且没有并发峰值时，队列只是增加了一层调试难度。</p></div>
+  </div>
+</div>
+
+<div class="pane" data-stage="4">
+  <p><strong>目标：可审计、可隔离、可替换。</strong>到这一步，工程难点已经不在模型上了。</p>
+  <div class="grid2">
+    <div class="card"><h4>新增组件</h4><p class="small muted">多租户与数据隔离（存储、索引、日志三层都要隔）、细粒度权限与访问审计、数据留存与删除策略（含声纹与人脸的单独同意与删除路径）、私有化部署与离线模型分发、容量规划与灾备、模型版本与评测结果的完整追溯、人工审核闭环、供应商替换预案。</p></div>
+    <div class="card"><h4>解决什么</h4><p class="small muted">让这套能力可以合法地处理面试录像、问诊录音、通话记录这类高敏数据，并在合规审查中说得清每一条数据的来路和去处。</p></div>
+  </div>
+  <div class="grid2" style="margin-top:14px">
+    <div class="card"><h4>代价</h4><p class="small muted">合规评审周期通常比开发周期长。私有化部署意味着你要为每个客户维护一套模型版本和硬件基线。</p></div>
+    <div class="card warn"><h4>最容易被低估的一条</h4><p class="small muted">「供应商替换」不是备用方案文档，而是要求你的分段结构、评测集和接口层从一开始就不绑定任何单一厂商的输出格式。这个决定要在 POC 阶段就做，不是企业级阶段才补。</p></div>
+  </div>
+</div>
+</div>
+</div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-eval">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">08:00</span><h2>评测：跑通不等于能用</h2></div>
+    <p>这是全文最该多花时间的一节。diarization 有一个非常成熟的标准指标体系，不用自创；角色识别则要自己定，但也别只写「准确率」。</p>
+
+    <h3>DER 是什么，以及它怎么骗你</h3>
+    <p>Diarization Error Rate 是三类错误时长之和除以总语音时长：<strong>false alarm</strong>（把非语音判成语音）、<strong>missed detection</strong>（漏掉了真实语音）、<strong>speaker confusion</strong>（说话人归属错了）。注意它可以超过 100%，因为重叠语音会被重复计数。</p>
+
+    <div class="rack">
+      <div class="rack-bar"><span class="dot"></span>DER CALCULATOR · 拖动看三类错误各自的权重</div>
+      <div class="rack-body">
+        <div id="derCalc"></div>
+      </div>
+    </div>
+
+    <div class="callout no">
+      <p><strong>报 DER 必须同时报口径，否则数字没有意义。</strong></p>
+      <p class="small">同一份结果，用 0.25s 的 collar（宽容边界）和不用 collar，DER 能差出一倍；跳过重叠语音段（<code>skip overlap</code>）和不跳，又是另一个量级。学术论文里的漂亮数字大多带 collar。你自建评测时，<b>把口径写进配置文件并固定下来</b>，之后所有版本对比都用同一套。用 <code>pyannote.metrics</code>、<code>dscore</code> 或 <code>meeteval</code> 算，不要自己写。</p>
+    </div>
+
+    <h3>按任务类型选指标</h3>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>任务</th><th>核心指标</th><th>为什么</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Diarization</td><td><code>DER</code>（拆开看 FA / Miss / Confusion 三项）、<code>JER</code>、说话人数估计准确率</td><td>只看总 DER 会掩盖问题：FA 高是 VAD 阈值问题，Confusion 高是 embedding/聚类问题，两者的修法完全不同。说话人数估错是最致命的单点故障。</td></tr>
+          <tr><td class="k">Diarization + ASR 端到端</td><td><code>cpWER</code>、<code>WDER</code></td><td>业务真正消费的是「带说话人的文本」。cpWER 把说话人排列和识别错误一起算，最贴近用户感受；WDER 单看词级说话人归属错误率。</td></tr>
+          <tr><td class="k">Role identification</td><td>speaker 级 accuracy、macro-F1、<b>per-role recall</b>、confusion matrix、<code>unknown</code> 判出率</td><td>角色分布通常极不均衡（面试官 1 人、候选人 1 人、旁听 3 人）。只看 accuracy 会被多数类带跑，必须看每个角色单独的 recall，尤其是业务上最贵的那个角色。</td></tr>
+          <tr><td class="k">下游纪要 / 质检</td><td>关键字段抽取准确率、引用片段命中率、人工修正率</td><td>它反映的是整条链路的复合质量，是给业务方看的口径。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>工程与业务指标</h3>
+    <ul>
+      <li><strong>RTF（real-time factor）</strong>：处理时长 / 音频时长。这是这个能力最重要的成本指标——它直接决定单位时长成本和 GPU 需求量。GPU 与 CPU 的 RTF 常差一个数量级，<b>必须在你自己的硬件和典型时长上实测</b>，别信别人的数。</li>
+      <li><strong>端到端时延</strong>：从上传到结果可读，包含排队时间。用户感知的是这个，不是模型推理时间。</li>
+      <li><strong>失败率与失败类型</strong>：解码失败、无语音、超时、显存溢出要分开统计，混在一起看等于没看。</li>
+      <li><strong>业务侧</strong>：人工校对每小时音频所花的分钟数（这是最能打动业务方的数字）、纪要采纳率、质检误判带来的申诉量。</li>
+    </ul>
+
+    <h3>评测集怎么造</h3>
+    <p>随手挑几段清晰录音验证是自欺。一个能用的评测集需要分层：</p>
+    <ul>
+      <li><strong>常规样本</strong>（约六成）：覆盖典型时长、典型人数、典型录制设备。</li>
+      <li><strong>难例</strong>（约三成）：重叠说话、抢话打断、远场回声、背景音乐或电视、口音、中英夹杂、超短应答（「嗯」「对」——它们极难切且极常见）、单人独白（会诱发模型硬切出第二个人）。</li>
+      <li><strong>高风险样本</strong>（约一成）：角色对调会造成业务事故的场景、涉及敏感内容的场景。这部分的验收标准要单独定，通常要求接近零错。</li>
+      <li><strong>标注规则</strong>：静音多长算段落切分、语气词算不算语音、重叠段怎么标、说话人数以什么为准。规则不统一，两个标注员的一致性会低到让指标失去意义——先标 20 段做一致性检查，再大规模标。</li>
+      <li><strong>版本管理</strong>：评测集和模型版本要一起打 tag。指标变化时，你必须能区分「模型变了」和「评测集变了」。</li>
+    </ul>
+
+    <h3>指标不达标时的排查顺序</h3>
+    <ol>
+      <li><strong>数据与标注</strong>：采样率被重采样错了吗？多声道被错误混音了吗？标注规则一致吗？大量「模型问题」最后查出来是 <code>ffmpeg</code> 参数错了。</li>
+      <li><strong>分解 DER</strong>：FA 高 → 调 VAD 阈值、查背景噪声；Miss 高 → 查短语音段和低音量段；Confusion 高 → 换 embedding 模型、查聚类。</li>
+      <li><strong>说话人数与聚类阈值</strong>：如果业务上人数已知（面试就是 2~3 人），把 <code>num_speakers</code> 或 <code>min/max_speakers</code> 传进去。这一个参数带来的提升，常常超过换模型。</li>
+      <li><strong>ASR 对齐</strong>：角色化文本错了，先确认是 diarization 错还是词级时间戳偏移。</li>
+      <li><strong>角色层的 prompt / 规则</strong>：到这一步再改 prompt 和分类器。</li>
+      <li><strong>最后才是服务架构</strong>。排队慢、超时不会让 DER 变差，别在这里找算法问题。</li>
+    </ol>
+  </div>
+</section>
+
+<section class="sec" id="s-api">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">09:00</span><h2>服务化：三个接口就够</h2></div>
+    <p>脚本跑通之后再包服务。因为处理是分钟级的，接口必须是<strong>异步任务模式</strong>：提交、轮询、取结果。不要设计同步接口，那会在第一个长视频上超时。</p>
+
+    <div class="rack">
+      <div class="rack-bar"><span class="dot"></span>FastAPI · 最小三接口</div>
+      <div class="rack-body">
+        <pre><span class="c"># app.py —— 只做三件事：收任务、报状态、给结果</span>
+<span class="k">from</span> fastapi <span class="k">import</span> FastAPI, UploadFile, HTTPException, BackgroundTasks
+<span class="k">from</span> pydantic <span class="k">import</span> BaseModel
+
+app = FastAPI()
+
+<span class="k">class</span> <span class="f">JobCreated</span>(BaseModel):
+    job_id: str
+    status: str
+
+<span class="f">@app.post</span>(<span class="s">"/jobs"</span>, response_model=JobCreated)
+<span class="k">async def</span> <span class="f">create_job</span>(file: UploadFile, bg: BackgroundTasks,
+                     num_speakers: int | <span class="k">None</span> = <span class="k">None</span>):
+    <span class="s">"""上传视频，落对象存储，入队。已知人数就传进来，它比换模型更有用。"""</span>
+    <span class="k">if</span> file.content_type <span class="k">not in</span> ALLOWED_TYPES:
+        <span class="c"># 不接受的格式直接 400，不要静默转码成别的东西</span>
+        <span class="k">raise</span> HTTPException(<span class="s">415</span>, <span class="f">f</span><span class="s">"unsupported content_type: {file.content_type}"</span>)
+    job_id = storage.<span class="f">put_and_register</span>(file, num_speakers=num_speakers)
+    bg.<span class="f">add_task</span>(run_pipeline, job_id)   <span class="c"># 仅限 POC；见下方说明</span>
+    <span class="k">return</span> JobCreated(job_id=job_id, status=<span class="s">"queued"</span>)
+
+<span class="f">@app.get</span>(<span class="s">"/jobs/{job_id}"</span>)
+<span class="k">async def</span> <span class="f">get_status</span>(job_id: str):
+    <span class="s">"""queued / running / succeeded / failed。失败必须带原因，不要只回 failed。"""</span>
+    job = db.<span class="f">get_job</span>(job_id)          <span class="c"># 不存在时直接抛 404,不返回空对象</span>
+    <span class="k">if</span> job <span class="k">is None</span>:
+        <span class="k">raise</span> HTTPException(<span class="s">404</span>, <span class="f">f</span><span class="s">"job not found: {job_id}"</span>)
+    <span class="k">return</span> {<span class="s">"job_id"</span>: job.id, <span class="s">"status"</span>: job.status,
+            <span class="s">"progress"</span>: job.progress, <span class="s">"error"</span>: job.error}
+
+<span class="f">@app.get</span>(<span class="s">"/jobs/{job_id}/transcript"</span>)
+<span class="k">async def</span> <span class="f">get_transcript</span>(job_id: str, role: str | <span class="k">None</span> = <span class="k">None</span>):
+    <span class="s">"""取结果，可按角色过滤。这是唯一在线上做的"计算"。"""</span>
+    job = db.<span class="f">get_job</span>(job_id)
+    <span class="k">if</span> job <span class="k">is None</span>:
+        <span class="k">raise</span> HTTPException(<span class="s">404</span>, <span class="f">f</span><span class="s">"job not found: {job_id}"</span>)
+    <span class="k">if</span> job.status != <span class="s">"succeeded"</span>:
+        <span class="c"># 没跑完就明确告诉调用方状态，不要返回半截结果</span>
+        <span class="k">raise</span> HTTPException(<span class="s">409</span>, <span class="f">f</span><span class="s">"job not ready: {job.status}"</span>)
+    <span class="k">return</span> db.<span class="f">get_segments</span>(job_id, role=role)</pre>
+      </div>
+    </div>
+
+    <h3>什么时候从 BackgroundTasks 换成真队列</h3>
+    <p><code>BackgroundTasks</code> 跑在同一个进程里：进程重启任务就没了、没有重试、没有并发控制、GPU 会被多个请求同时抢。它只适合 POC。出现下面任意一条就该换成 <code>Celery</code>/<code>RQ</code>/<code>arq</code> + 独立 worker：</p>
+    <ul>
+      <li>任务会超过几分钟，或用户会在处理期间刷新页面。</li>
+      <li>需要限制 GPU 并发（这是最常见的触发原因——两个任务同时抢显存会直接 OOM）。</li>
+      <li>需要重试、需要区分「可重试的失败」和「不可重试的失败」（坏文件重试一万次也没用）。</li>
+      <li>API 进程需要独立于 GPU 机器扩缩容。</li>
+    </ul>
+
+    <div class="callout no">
+      <p><strong>不要为了「更稳」吞掉错误。</strong></p>
+      <p class="small">这条链路上最该显式暴露的四类失败：<code>ffmpeg</code> 解码失败、音频中检测不到任何语音、模型权重加载/授权失败、GPU 显存不足。见过太多实现把它们兜成「返回空分段列表」，结果下游拿到一份空纪要，以为这场会真的没人说话。空结果和失败是两件事，状态里必须能分开。</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-risk">
+  <div class="wrap">
+    <div class="sec-head"><span class="tc">10:00</span><h2>失败模式、验收口径、以及别过度工程化</h2></div>
+
+    <h3>常见失败模式</h3>
+    <details>
+      <summary><span class="tag s2">高频</span>说话人被合并或被拆散</summary>
+      <div class="d-body"><p>两个音色相近的人（同性别、同年龄段）被聚成一个；或同一个人因为音量/位置变化被拆成 <code>SPEAKER_00</code> 和 <code>SPEAKER_03</code>。前者靠传入已知人数和更强的 embedding 模型缓解，后者常需要后处理合并（把时长极短、且与某个主标签高度相似的簇并回去）。</p></div>
+    </details>
+    <details>
+      <summary><span class="tag s2">高频</span>短应答被吃掉</summary>
+      <div class="d-body"><p>「嗯」「对」「好的」这类 0.3 秒的回应，VAD 常常漏掉或归给正在说话的人。它在客服质检和问诊场景里恰恰重要（表示确认）。修法是调低 VAD 的最小语音时长，代价是 false alarm 上升——这是一个必须由业务决定的取舍。</p></div>
+    </details>
+    <details>
+      <summary><span class="tag s2">高频</span>重叠语音</summary>
+      <div class="d-body"><p>抢话、附和、串音。传统 pipeline 在重叠段只能给一个标签，天然产生 miss。端到端模型（EEND/Sortformer 系）在这里更强。评测时把「含重叠段」的样本单独拉出来看，否则整体 DER 会掩盖它。</p></div>
+    </details>
+    <details>
+      <summary><span class="tag s0">中频</span>单人独白被切成多人</summary>
+      <div class="d-body"><p>模型倾向于在不确定时多切一个说话人。一段一个人讲了 40 分钟的视频，可能被切出 3 个 speaker。如果场景里存在单人视频，一定要把它放进评测集，并考虑用 <code>max_speakers</code> 兜住。</p></div>
+    </details>
+    <details>
+      <summary><span class="tag s0">中频</span>成本与延迟失控</summary>
+      <div class="d-body"><p>云 API 按分钟计费，一旦接入全量历史视频回溯，账单会以你没预期的方式增长——上线前先用真实时长分布估一遍。本地模型则是 RTF 失控：CPU 上跑一小时音频可能要几十分钟，队列越积越长。两者都要在 POC 阶段就实测，不要用「以后再优化」搪塞。</p></div>
+    </details>
+    <details>
+      <summary><span class="tag s1">必须提前处理</span>数据不能出内网 / 生物识别合规</summary>
+      <div class="d-body"><p>面试录像、问诊录音、客服通话大多含个人信息，声纹和人脸更属于敏感的生物识别信息。这不是上线前补个说明就能过的——它直接否决整条「云 API」路线，并决定你是否能建声纹注册库。这个约束要在选路线的第一天问清楚，不要做到一半才发现。</p></div>
+    </details>
+
+    <h3>验收口径</h3>
+    <div class="grid3">
+      <div class="card">
+        <h4><span class="tag s3">必须达标</span></h4>
+        <p class="small muted">评测集上的 DER 达到约定阈值（口径固定）；核心角色的 recall 达标；高风险样本集零角色对调；解码与超时失败率低于约定值；成本/小时在预算内。</p>
+      </div>
+      <div class="card">
+        <h4><span class="tag s0">观察项</span></h4>
+        <p class="small muted">整体 accuracy、次要角色的 F1、平均段长分布、说话人数估计偏差、P95 端到端时延。持续记录、看趋势，但不阻断上线。</p>
+      </div>
+      <div class="card warn">
+        <h4><span class="tag s2">必须阻断</span></h4>
+        <p class="small muted">角色整体对调；把失败静默返回成空结果；未授权用户能读到他人任务；含敏感个人信息的数据流出约定边界。这四条任意一条出现，不上线。</p>
+      </div>
+    </div>
+
+    <h3>可以接受的失败</h3>
+    <p>边界偏差在几百毫秒内、重叠段归属不完美、极端噪声样本失败、罕见角色被判为 <code>unknown</code>——这些应当被明确写成「接受」，并配套人工复核入口。把所有失败都当 bug 修，会让这个项目永远上不了线。</p>
+
+    <div class="callout">
+      <p><strong>什么时候根本不该做这套工程。</strong></p>
+      <p class="small">视频只有几十个、一个月处理一次、结果只给自己看、准确率差一点无所谓——那就一个 Python 脚本、一个本地目录、一个 JSON 文件，跑完人工扫一眼。没有队列、没有数据库、没有服务。这个能力的价值来自「量」和「持续」，两者都不具备时，工程投入不会有回报。</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>SPEAKER DIARIZATION + ROLE IDENTIFICATION · 一文读懂 · 单文件离线版</p>
+    <p style="color:#4A5D70">文中的模型名、库名与基准均为写作时的常见选择，版本与效果会变；上线前请以官方文档和你自己数据上的实测为准。</p>
+  </div>
+</footer>
+
+<style>
+.pane{display:none}
+.pane.on{display:block}
+.chain{list-style:none;padding:0;margin:0}
+.chain li{display:grid;grid-template-columns:140px 1fr;gap:18px;padding:13px 0;border-bottom:1px solid var(--line2)}
+.chain li:last-child{border-bottom:0}
+.chain .step{font-family:var(--mono);font-size:11px;letter-spacing:.07em;color:var(--s1);padding-top:4px}
+.chain .why{font-size:14.5px;color:var(--tx2);margin:4px 0 0}
+.chain .why b{color:var(--s0);font-weight:600}
+.chain h5{margin:0;font-size:15.5px;font-weight:600;color:#0A1118}
+@media(max-width:640px){.chain li{grid-template-columns:1fr;gap:4px}}
+
+.q{border-bottom:1px solid var(--line2);padding:16px 0}
+.q:last-of-type{border-bottom:0}
+.q p{margin:0 0 10px;font-weight:600;font-size:15px}
+.verdict{font-size:14.5px;color:var(--tx2);border-left:3px solid var(--s3f);background:#F4F8F0;
+  padding:10px 14px;margin-top:12px;display:none;border-radius:0 5px 5px 0}
+.verdict.on{display:block}
+.verdict.neg{border-left-color:var(--s0f);background:#FDF8EF}
+
+.slider{display:grid;grid-template-columns:154px 1fr 78px;gap:14px;align-items:center;margin-bottom:13px;font-size:14px}
+.slider label{font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;color:var(--tx2)}
+.slider output{font-family:var(--mono);font-size:12.5px;color:var(--tx);text-align:right}
+input[type=range]{width:100%;accent-color:var(--s1);background:transparent}
+.derbar{display:flex;height:28px;border-radius:5px;overflow:hidden;margin:20px 0 12px;
+  background:#EEF2F5;border:1px solid var(--line2)}
+.derbar span{transition:width .18s}
+.derout{font-family:var(--mono);font-size:13px;color:var(--tx2)}
+.derout b{font-family:var(--display);font-size:30px;font-weight:800;color:#0A1118;letter-spacing:-.02em;margin-right:8px}
+@media(max-width:640px){.slider{grid-template-columns:104px 1fr 62px;gap:8px}}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(s,r){ return (r||document).querySelector(s); };
+  var $$ = function(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+
+  /* ---------- transport 章节导航 ---------- */
+  var NAV = [
+    ["s-scope","00:00","能力边界"],
+    ["s-min","01:00","最小链路"],
+    ["s-onoff","02:00","离线 / 线上"],
+    ["s-route","03:00","路线选型"],
+    ["s-video","04:00","视频线索"],
+    ["s-role","05:00","角色识别"],
+    ["s-store","06:00","存储决策"],
+    ["s-stage","07:00","阶段演进"],
+    ["s-eval","08:00","评测"],
+    ["s-api","09:00","服务化"],
+    ["s-risk","10:00","风险与验收"]
+  ];
+  var inner = $("#tpInner");
+  NAV.forEach(function(n){
+    var b = document.createElement("button");
+    b.className = "tp-mark"; b.dataset.target = n[0];
+    b.innerHTML = "<b>"+n[1]+"</b>"+n[2];
+    b.addEventListener("click", function(){
+      var el = document.getElementById(n[0]);
+      if (el) el.scrollIntoView({block:"start"});
+    });
+    inner.appendChild(b);
+  });
+  var marks = $$(".tp-mark");
+  function syncNav(){
+    var y = window.scrollY + 120, cur = 0;
+    NAV.forEach(function(n,i){
+      var el = document.getElementById(n[0]);
+      if (el && el.offsetTop <= y) cur = i;
+    });
+    marks.forEach(function(m,i){ m.classList.toggle("on", i===cur); });
+  }
+  var ticking = false;
+  window.addEventListener("scroll", function(){
+    if (ticking) return; ticking = true;
+    window.requestAnimationFrame(function(){ syncNav(); ticking = false; });
+  }, {passive:true});
+  syncNav();
+
+  /* ---------- hero 时间轴 ---------- */
+  var SPK = ["SPEAKER_00","SPEAKER_01","SPEAKER_02"];
+  var ROLE = ["interviewer · 面试官","candidate · 候选人","observer · 旁听评委"];
+  var COLOR = ["#E29A2E","#2E9AAF","#C85C93"];   /* 时间轴色块 */
+  var LABEL = ["#A96B00","#0E6E7E","#9C2F63"];   /* 文字，白底上要够深 */
+  var SEG = [
+    [0,6.2,0,"我们先简单介绍一下今天的流程"],
+    [6.0,6.9,1,"好的"],
+    [7.2,14.5,0,"那你先讲一下最近做的一个项目"],
+    [15.0,34.8,1,"这个项目是做视频结构化的，我主要负责数据这块"],
+    [34.2,35.1,0,"嗯"],
+    [35.5,41.0,1,"数据量大概是每天两万个视频"],
+    [41.6,47.2,0,"你们怎么评估效果的"],
+    [47.5,62.0,1,"我们建了一个五百条的标注集，按场景分层"],
+    [60.8,63.5,2,"我插一句，标注一致性怎么保证"],
+    [63.8,70.4,1,"做了双标，冲突的部分人工裁决"],
+    [70.9,76.0,2,"明白"],
+    [76.5,83.0,0,"那延迟这块有做优化吗"],
+    [83.4,97.6,1,"用了量化推理，RTF 从 0.4 降到 0.08"],
+    [98.0,101.2,2,"成本呢"],
+    [101.5,110.0,1,"单位成本大概降了六成"],
+    [110.5,116.0,0,"好，那我们进入下一轮"],
+    [116.3,117.4,1,"好的，谢谢"]
+  ];
+  var DUR = 120, ML = 100, MR = 12, W = 1000, LANE_H = 34, LANE_Y = [46,96,146];
+  var sc = function(t){ return ML + t*(W-ML-MR)/DUR; };
+  function tc(t){
+    var m = Math.floor(t/60), s = t-m*60;
+    return (m<10?"0":"")+m+":"+(s<10?"0":"")+s.toFixed(1);
+  }
+  var heroMode = "id", heroOv = false;
+
+  function overlaps(){
+    var out = [];
+    for (var i=0;i<SEG.length;i++) for (var j=i+1;j<SEG.length;j++){
+      var a=SEG[i], b=SEG[j];
+      if (a[2]===b[2]) continue;
+      var s=Math.max(a[0],b[0]), e=Math.min(a[1],b[1]);
+      if (e>s) out.push([s,e]);
+    }
+    return out;
+  }
+  function gaps(){
+    var pts = SEG.map(function(s){return [s[0],s[1]];}).sort(function(a,b){return a[0]-b[0];});
+    var out=[], cur=0;
+    pts.forEach(function(p){ if (p[0]>cur+0.05) out.push([cur,p[0]]); cur=Math.max(cur,p[1]); });
+    if (cur<DUR) out.push([cur,DUR]);
+    return out;
+  }
+  function renderHero(){
+    var svg = $("#heroSvg"), h = [];
+    h.push('<rect x="0" y="0" width="1000" height="210" fill="none"/>');
+    /* ruler */
+    for (var t=0;t<DUR;t+=15){
+      var x = sc(t);
+      h.push('<line x1="'+x.toFixed(1)+'" y1="16" x2="'+x.toFixed(1)+'" y2="188" stroke="#E3E9EE" stroke-width="1"/>');
+      h.push('<text x="'+x.toFixed(1)+'" y="12" fill="#8B98A4" font-family="ui-monospace,Menlo,monospace" font-size="10">'+tc(t).slice(0,5)+'</text>');
+    }
+    /* lanes */
+    for (var i=0;i<3;i++){
+      h.push('<rect x="'+ML+'" y="'+LANE_Y[i]+'" width="'+(W-ML-MR)+'" height="'+LANE_H+'" fill="#EFF3F6" rx="3"/>');
+      var label = heroMode==="id" ? SPK[i] : ROLE[i].split(" · ")[1];
+      h.push('<text x="0" y="'+(LANE_Y[i]+21)+'" fill="'+LABEL[i]+'" font-family="ui-monospace,Menlo,monospace" font-size="11.5">'+label+'</text>');
+    }
+    if (heroOv){
+      gaps().forEach(function(g){
+        h.push('<rect x="'+sc(g[0]).toFixed(1)+'" y="30" width="'+(sc(g[1])-sc(g[0])).toFixed(1)+'" height="158" fill="#DFE6EB"/>');
+      });
+    }
+    /* segments */
+    SEG.forEach(function(s,idx){
+      var x=sc(s[0]), w=Math.max(2.5, sc(s[1])-sc(s[0]));
+      h.push('<rect class="seg" tabindex="0" data-i="'+idx+'" x="'+x.toFixed(1)+'" y="'+(LANE_Y[s[2]]+3)+'" width="'+w.toFixed(1)+'" height="'+(LANE_H-6)+'" rx="2" fill="'+COLOR[s[2]]+'" opacity="0.95"><title>'+tc(s[0])+' '+SPK[s[2]]+'</title></rect>');
+    });
+    if (heroOv){
+      overlaps().forEach(function(o){
+        h.push('<rect x="'+sc(o[0]).toFixed(1)+'" y="30" width="'+Math.max(2,(sc(o[1])-sc(o[0]))).toFixed(1)+'" height="158" fill="#C4453C" opacity="0.18"/>');
+      });
+    }
+    svg.innerHTML = h.join("");
+    $$(".seg", svg).forEach(function(r){
+      var f = function(){
+        var s = SEG[+r.dataset.i];
+        $("#heroCap").innerHTML = '<b>'+tc(s[0])+' → '+tc(s[1])+'</b> &nbsp;·&nbsp; '+SPK[s[2]]+' &nbsp;·&nbsp; <span style="color:'+LABEL[s[2]]+'">'+ROLE[s[2]]+'</span><br>“'+s[3]+'”';
+      };
+      r.addEventListener("mouseenter", f);
+      r.addEventListener("focus", f);
+    });
+    $("#lg0").textContent = heroMode==="id" ? SPK[0] : ROLE[0];
+    $("#lg1").textContent = heroMode==="id" ? SPK[1] : ROLE[1];
+    $("#lg2").textContent = heroMode==="id" ? SPK[2] : ROLE[2];
+  }
+  $$("[data-hero]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var k = b.dataset.hero;
+      if (k==="overlap"){ heroOv = !heroOv; b.classList.toggle("on", heroOv); }
+      else {
+        heroMode = k;
+        $$("[data-hero]").forEach(function(o){ if(o.dataset.hero!=="overlap") o.classList.toggle("on", o===b); });
+      }
+      renderHero();
+      if (heroOv) $("#heroCap").innerHTML = '红色竖带是<b>重叠语音</b>：两个人同时说话，传统 pipeline 在这里只能给一个标签，必然产生 miss。灰色区块是<b>非语音区</b>，它决定 false alarm。';
+    });
+  });
+  renderHero();
+
+  /* ---------- 通用 tab 切换 ---------- */
+  function bindTabs(btnSel, paneSel, attr, onSwitch){
+    var btns = $$(btnSel), panes = $$(paneSel);
+    btns.forEach(function(b){
+      b.addEventListener("click", function(){
+        btns.forEach(function(o){ o.classList.toggle("on", o===b); });
+        var v = b.dataset[attr];
+        panes.forEach(function(p){ p.classList.toggle("on", p.dataset[attr]===v); });
+        if (onSwitch) onSwitch(v, b);
+      });
+    });
+  }
+  bindTabs("#minTabs .btn", "#minPanes .pane", "min");
+  bindTabs("#flowTabs .btn", "#flowPane .pane", "flow", function(v){
+    $("#flowTitle").textContent = v==="off"
+      ? "OFFLINE · 一次处理，多次读取"
+      : "ONLINE · 每次请求都不同，必须轻";
+  });
+  var STAGE_TITLE = [
+    "DEMO · 目标：证明这件事可行",
+    "POC · 目标：在真实数据上拿到数字",
+    "SMALL TEAM · 目标：稳定地每天跑",
+    "MID TEAM · 目标：扛住量，看得见质量",
+    "ENTERPRISE · 目标：可审计、可隔离、可替换"
+  ];
+  $("#stageTitle").textContent = STAGE_TITLE[0];
+  bindTabs("#stageTabs .btn", "#stagePane .pane", "stage", function(v){
+    $("#stageTitle").textContent = STAGE_TITLE[+v];
+  });
+
+  /* ---------- 路线筛选 ---------- */
+  $$("#routeFilter .btn").forEach(function(b){
+    b.addEventListener("click", function(){
+      $$("#routeFilter .btn").forEach(function(o){ o.classList.toggle("on", o===b); });
+      var f = b.dataset.rf;
+      $$("#routeTbl tbody tr").forEach(function(tr){
+        var ok = (f==="all") || (tr.dataset.tags||"").split(",").indexOf(f) >= 0;
+        tr.classList.toggle("dim", !ok);
+      });
+      $("#routeNote").textContent = f==="all"
+        ? "筛选只是提示哪些路线会先被淘汰，真正的决定要拿你自己的 20 段真实数据跑一遍再下。"
+        : "变暗的行在这个约束下会先被淘汰。约束可以叠加——现实里通常不止一条，剩下的往往只有一两个选择。";
+    });
+  });
+
+  /* ---------- 存储决策 ---------- */
+  var TREE = [
+    { q:"需要跨视频找同一个人吗？（比如「这个坐席这个月所有通话」）",
+      a:[["不需要，每个视频独立","不需要向量索引。分段结果按 job_id 存关系库即可，向量存了也没人查。",false],
+         ["需要，且已有声纹注册库","这是唯一要向量检索的场景。先用 numpy 数组做，几千人以内不需要向量数据库；同时立刻启动生物识别信息的合规评估。",true]] },
+    { q:"结果会被多人同时校对、或需要按角色跨视频统计吗？",
+      a:[["不会，单人看结果","JSON 文件或 SQLite 足够。等到出现并发写冲突或查询变慢再迁 PostgreSQL。",false],
+         ["会","上关系数据库。分段表建 (job_id, start) 和 role 索引，人工修正单独一张表。",true]] },
+    { q:"单次处理会超过一两分钟，或需要限制 GPU 并发吗？",
+      a:[["不会","FastAPI 的 BackgroundTasks 够用，别急着上 Celery。",false],
+         ["会","上队列 + 独立 worker。触发点通常是 GPU 显存被并发请求抢爆，而不是 QPS。",true]] },
+    { q:"原始视频需要长期留存、或给前端发下载链接吗？",
+      a:[["只是本地跑","本地目录 data/raw 和 data/derived 两个文件夹，够用很久。",false],
+         ["需要","上对象存储（S3 / MinIO），同时把留存期限和删除策略一起定下来，别只定「存」。",true]] }
+  ];
+  var dt = $("#dtree");
+  TREE.forEach(function(item, qi){
+    var d = document.createElement("div");
+    d.className = "q";
+    var html = "<p>"+item.q+"</p><div class='btnrow' style='margin-bottom:0'>";
+    item.a.forEach(function(a,ai){ html += "<button class='btn' data-q='"+qi+"' data-a='"+ai+"'>"+a[0]+"</button>"; });
+    html += "</div><div class='verdict' id='v"+qi+"'></div>";
+    d.innerHTML = html;
+    dt.appendChild(d);
+  });
+  $$("#dtree .btn").forEach(function(b){
+    b.addEventListener("click", function(){
+      var qi = +b.dataset.q, ai = +b.dataset.a;
+      $$("#dtree .btn[data-q='"+qi+"']").forEach(function(o){ o.classList.toggle("on", o===b); });
+      var v = $("#v"+qi);
+      v.textContent = TREE[qi].a[ai][1];
+      v.classList.add("on");
+      v.classList.toggle("neg", TREE[qi].a[ai][2]);
+    });
+  });
+
+  /* ---------- DER 计算器 ---------- */
+  var TOTAL = 3600;
+  var DERS = [
+    ["false alarm", "fa", 72, "#B44E82", "把非语音判成语音。降 VAD 敏感度可减，但会带高 miss。"],
+    ["missed detection", "miss", 108, "#1B7E90", "漏掉真实语音。短应答和重叠语音是主要来源。"],
+    ["speaker confusion", "conf", 180, "#B57A12", "说话人归属错。embedding 质量和聚类阈值决定它。"]
+  ];
+  var dc = $("#derCalc"), rows = "";
+  DERS.forEach(function(d){
+    rows += "<div class='slider'><label>"+d[0]+"</label>"+
+      "<input type='range' min='0' max='600' step='6' value='"+d[2]+"' data-der='"+d[1]+"'>"+
+      "<output id='o_"+d[1]+"'>"+d[2]+"s</output></div>";
+  });
+  rows += "<div class='derbar' id='derbar'></div><div class='derout' id='derout'></div>";
+  dc.innerHTML = rows;
+  function calcDer(){
+    var vals = {}, sum = 0;
+    $$("[data-der]").forEach(function(i){
+      var v = +i.value; vals[i.dataset.der] = v; sum += v;
+      $("#o_"+i.dataset.der).textContent = v+"s";
+    });
+    var bar = "";
+    DERS.forEach(function(d){
+      bar += "<span style='width:"+(vals[d[1]]/TOTAL*100).toFixed(2)+"%;background:"+d[3]+"'></span>";
+    });
+    bar += "<span style='flex:1;background:#EEF2F5'></span>";
+    $("#derbar").innerHTML = bar;
+    var worst = DERS.slice().sort(function(a,b){ return vals[b[1]]-vals[a[1]]; })[0];
+    $("#derout").innerHTML = "<b>DER "+(sum/TOTAL*100).toFixed(1)+"%</b> = ("+
+      vals.fa+" + "+vals.miss+" + "+vals.conf+") / "+TOTAL+"s 语音<br>"+
+      "当前最大贡献是 <span style='color:"+worst[3]+"'>"+worst[0]+"</span> —— "+worst[4];
+  }
+  $$("[data-der]").forEach(function(i){ i.addEventListener("input", calcDer); });
+  calcDer();
+})();
+</script>
+</body>
+</html>

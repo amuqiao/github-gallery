@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG：让大模型先查资料再回答</title>
+<style>
+/* ============ 基础变量 ============ */
+:root{
+  --bg:#12161d;
+  --bg-alt:#171d27;
+  --paper:#f1ecdd;
+  --paper-line:#d9d0b4;
+  --ink:#ece8dc;
+  --ink-dim:#98a1af;
+  --ink-faint:#6b7481;
+  --ink-on-paper:#242023;
+  --ink-on-paper-dim:#6b6456;
+  --amber:#c6892e;
+  --amber-soft:rgba(198,137,46,.14);
+  --brick:#b3503b;
+  --brick-soft:rgba(179,80,59,.14);
+  --teal:#4f9484;
+  --teal-soft:rgba(79,148,132,.14);
+  --line:#2a3240;
+  --line-soft:#232a37;
+  --font-display:"Noto Serif SC","Songti SC","STSong","Source Han Serif SC",serif;
+  --font-body:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+  --wrap:760px;
+  --wrap-wide:960px;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-body);
+  font-size:16px;
+  line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:var(--font-display);font-weight:700;margin:0;color:var(--ink);}
+p{margin:0 0 1em;}
+a{color:inherit;}
+button{font-family:inherit;cursor:pointer;}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+code,.mono{font-family:var(--font-mono);}
+::selection{background:var(--amber-soft);}
+
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 24px;}
+.wrap--wide{max-width:var(--wrap-wide);margin:0 auto;padding:0 24px;}
+
+.section{padding:88px 0;position:relative;}
+.section--alt{background:var(--bg-alt);}
+@media(max-width:640px){.section{padding:56px 0;}}
+
+.eyebrow{
+  font-family:var(--font-mono);
+  font-size:12.5px;
+  letter-spacing:.08em;
+  color:var(--amber);
+  text-transform:uppercase;
+  margin-bottom:14px;
+  display:block;
+}
+.h2{font-size:clamp(1.5rem,3vw,2.05rem);margin-bottom:14px;letter-spacing:.01em;}
+.h2-sub{color:var(--ink-dim);font-size:1rem;max-width:640px;margin-bottom:40px;}
+.h3{font-size:1.15rem;margin-bottom:8px;}
+
+.divider{
+  height:1px;
+  background-image:linear-gradient(90deg,var(--line) 0,var(--line) 6px,transparent 6px,transparent 12px);
+  background-size:12px 1px;
+  margin:56px 0;
+}
+
+/* ============ 顶部进度条 + 目录 ============ */
+#progressBar{
+  position:fixed;top:0;left:0;height:3px;background:var(--amber);
+  width:0%;z-index:60;transition:width .1s linear;
+}
+#tocToggle{
+  position:fixed;right:22px;bottom:22px;z-index:55;
+  background:var(--paper);color:var(--ink-on-paper);
+  border:1px solid var(--paper-line);border-radius:999px;
+  padding:11px 18px;font-size:13px;font-weight:600;
+  box-shadow:0 10px 26px -10px rgba(0,0,0,.55);
+  display:flex;align-items:center;gap:8px;
+}
+#tocToggle .dot{width:6px;height:6px;border-radius:50%;background:var(--amber);}
+#tocPanel{
+  position:fixed;right:22px;bottom:70px;z-index:56;
+  background:var(--bg-alt);border:1px solid var(--line);
+  border-radius:10px;padding:10px;width:200px;
+  box-shadow:0 20px 40px -14px rgba(0,0,0,.6);
+  display:none;
+}
+#tocPanel.open{display:block;}
+#tocPanel a{
+  display:block;padding:8px 10px;border-radius:6px;
+  font-size:13.5px;color:var(--ink-dim);text-decoration:none;
+}
+#tocPanel a:hover,#tocPanel a:focus-visible{background:var(--line-soft);color:var(--ink);}
+
+/* ============ 通用组件：索引卡（签名元素） ============ */
+.index-card{
+  background:var(--paper);color:var(--ink-on-paper);
+  border:1px solid var(--paper-line);border-radius:3px;
+  padding:24px 24px 20px;position:relative;
+  box-shadow:0 1px 0 rgba(0,0,0,.06),0 20px 36px -18px rgba(0,0,0,.5);
+}
+.index-card .tab{
+  position:absolute;top:-13px;left:20px;
+  background:var(--amber);color:#211603;
+  font-family:var(--font-mono);font-size:11px;font-weight:700;
+  padding:4px 11px;border-radius:3px 3px 0 0;letter-spacing:.05em;
+}
+.index-card h4{color:var(--ink-on-paper);}
+.index-card .foot{color:var(--ink-on-paper-dim);font-size:13px;}
+.stamp{
+  display:inline-flex;align-items:center;gap:6px;
+  border:2px solid var(--teal);color:var(--teal);
+  padding:4px 11px;border-radius:5px;font-family:var(--font-mono);
+  font-size:12px;font-weight:700;transform:rotate(-2deg);
+  background:var(--teal-soft);
+}
+.stamp.miss{border-color:var(--brick);color:var(--brick);background:var(--brick-soft);}
+
+/* ============ Hero ============ */
+.hero{padding:104px 0 84px;position:relative;overflow:hidden;}
+.hero::before{
+  content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(600px 320px at 15% -10%, rgba(198,137,46,.10), transparent 60%),
+    radial-gradient(500px 280px at 100% 0%, rgba(79,148,132,.08), transparent 60%);
+  pointer-events:none;
+}
+.hero-wrap{position:relative;max-width:var(--wrap-wide);margin:0 auto;padding:0 24px;}
+.hero-title{
+  font-size:clamp(2.3rem,6vw,3.6rem);line-height:1.15;
+  margin-bottom:22px;letter-spacing:.01em;
+}
+.hero-title em{font-style:normal;color:var(--amber);}
+.hero-sub{
+  max-width:600px;color:var(--ink-dim);font-size:1.06rem;margin-bottom:44px;
+}
+.hero-demo__query{
+  display:flex;flex-wrap:wrap;align-items:center;gap:12px;
+  padding:14px 18px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg-alt);margin-bottom:22px;font-size:14.5px;
+}
+.hero-demo__label{color:var(--ink-faint);font-family:var(--font-mono);font-size:12px;flex-shrink:0;}
+#heroQueryText{color:var(--ink);flex:1;min-width:220px;}
+.btn-ghost{
+  background:transparent;border:1px solid var(--line);color:var(--ink-dim);
+  padding:7px 13px;border-radius:6px;font-size:12.5px;white-space:nowrap;
+  transition:border-color .15s,color .15s;
+}
+.btn-ghost:hover{border-color:var(--amber);color:var(--amber);}
+.hero-demo__cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media(max-width:720px){.hero-demo__cards{grid-template-columns:1fr;}}
+.demo-card{border-radius:6px;padding:20px 22px;position:relative;}
+.demo-card--bad{
+  background:var(--bg-alt);border:1px dashed var(--line);
+}
+.demo-card__head{
+  font-family:var(--font-mono);font-size:11.5px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px;
+}
+.demo-card--good .demo-card__head{color:var(--ink-on-paper-dim);}
+.demo-card__body{font-size:15px;margin-bottom:14px;}
+.demo-card--bad .demo-card__body{color:var(--ink-dim);}
+.demo-card--good .demo-card__body{color:var(--ink-on-paper);}
+.demo-card__foot{font-size:12.5px;color:var(--brick);font-family:var(--font-mono);}
+
+/* ============ 为什么存在：对比表 ============ */
+.why-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+@media(max-width:640px){.why-grid{grid-template-columns:1fr;}}
+.why-col{padding:26px 26px;}
+.why-col:first-child{background:var(--bg-alt);border-right:1px solid var(--line);}
+@media(max-width:640px){.why-col:first-child{border-right:none;border-bottom:1px solid var(--line);}}
+.why-col h4{font-size:1rem;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.why-col .mark{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.why-col:first-child .mark{background:var(--brick);}
+.why-col:last-child .mark{background:var(--teal);}
+.why-row{padding:12px 0;border-top:1px solid var(--line-soft);font-size:14.5px;color:var(--ink-dim);}
+.why-row:first-of-type{border-top:none;}
+.why-row b{color:var(--ink);font-weight:600;display:block;font-size:13px;margin-bottom:3px;font-family:var(--font-mono);letter-spacing:.02em;}
+
+/* ============ 边界对比 tabs ============ */
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
+.tab-btn{
+  background:var(--bg-alt);border:1px solid var(--line);color:var(--ink-dim);
+  padding:9px 16px;border-radius:999px;font-size:13.5px;font-weight:600;
+  transition:all .15s;
+}
+.tab-btn.active{background:var(--amber);border-color:var(--amber);color:#211603;}
+.tab-btn:not(.active):hover{border-color:var(--ink-faint);color:var(--ink);}
+.tab-panel{display:none;border:1px solid var(--line);border-radius:10px;padding:26px 28px;background:var(--bg-alt);}
+.tab-panel.active{display:block;animation:fadeUp .25s ease;}
+.tab-panel .row{display:grid;grid-template-columns:120px 1fr;gap:6px 18px;padding:10px 0;border-top:1px solid var(--line-soft);font-size:14.5px;}
+.tab-panel .row:first-child{border-top:none;padding-top:0;}
+.tab-panel .row b{color:var(--amber);font-family:var(--font-mono);font-size:12.5px;font-weight:700;}
+.tab-panel .row span{color:var(--ink-dim);}
+.tab-panel .verdict{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);font-size:14px;color:var(--ink);font-style:normal;}
+.tab-panel .verdict b{color:var(--teal);}
+
+/* ============ 主链路 stepper ============ */
+.phase-label{
+  display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);
+  font-size:12px;letter-spacing:.06em;color:var(--ink-faint);
+  margin:36px 0 18px;text-transform:uppercase;
+}
+.phase-label:first-child{margin-top:0;}
+.phase-label::before{content:"";width:16px;height:1px;background:var(--line);}
+.stepper{border-left:2px solid var(--line);margin-left:14px;}
+.step{position:relative;padding:0 0 4px 32px;margin-bottom:2px;}
+.step-btn{
+  width:100%;text-align:left;background:none;border:none;color:var(--ink);
+  padding:14px 0;display:flex;align-items:center;gap:14px;
+}
+.step-num{
+  position:absolute;left:-14px;top:16px;width:26px;height:26px;border-radius:50%;
+  background:var(--bg-alt);border:2px solid var(--line);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:11px;color:var(--ink-dim);flex-shrink:0;
+}
+.step.open .step-num{border-color:var(--amber);color:var(--amber);background:var(--amber-soft);}
+.step-title{font-weight:700;font-size:15.5px;}
+.step-one-liner{color:var(--ink-faint);font-size:13.5px;font-weight:400;}
+.step-caret{margin-left:auto;color:var(--ink-faint);transition:transform .2s;flex-shrink:0;}
+.step.open .step-caret{transform:rotate(90deg);color:var(--amber);}
+.step-detail{
+  max-height:0;overflow:hidden;transition:max-height .28s ease,opacity .2s ease;opacity:0;
+}
+.step.open .step-detail{max-height:220px;opacity:1;}
+.step-detail-inner{padding:0 0 20px;font-size:14.5px;color:var(--ink-dim);}
+.step-detail-inner .example{
+  margin-top:10px;padding:12px 14px;background:var(--bg-alt);border-left:2px solid var(--amber);
+  border-radius:0 6px 6px 0;font-size:13.5px;color:var(--ink);
+}
+.step-detail-inner .example b{color:var(--amber);font-family:var(--font-mono);font-size:11.5px;display:block;margin-bottom:4px;letter-spacing:.04em;}
+
+/* ============ 切分演示 ============ */
+.chunk-demo{border:1px solid var(--line);border-radius:10px;padding:26px;background:var(--bg-alt);}
+.chunk-controls{display:flex;flex-wrap:wrap;gap:24px;align-items:center;margin-bottom:20px;}
+.chunk-slider-group{flex:1;min-width:220px;}
+.chunk-slider-group label{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-dim);margin-bottom:8px;font-family:var(--font-mono);}
+input[type=range]{width:100%;accent-color:var(--amber);}
+.chunk-toggle{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink-dim);white-space:nowrap;}
+.chunk-toggle input{accent-color:var(--amber);width:16px;height:16px;}
+.chunk-blocks{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;line-height:1.9;}
+.chunk-blocks .blk{
+  padding:8px 10px;border-radius:5px;font-size:13px;font-family:var(--font-mono);
+  background:var(--bg);border:1px solid var(--line);color:var(--ink-dim);
+}
+.chunk-blocks .blk .ov{color:var(--amber);background:var(--amber-soft);border-radius:2px;padding:0 2px;}
+.chunk-meta{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink-faint);font-family:var(--font-mono);margin-bottom:14px;}
+.chunk-meta b{color:var(--ink);}
+.chunk-warn{
+  padding:12px 14px;border-radius:6px;font-size:13.5px;display:none;
+}
+.chunk-warn.show{display:block;}
+.chunk-warn--small{background:var(--brick-soft);color:var(--brick);border:1px solid rgba(179,80,59,.35);}
+.chunk-warn--big{background:var(--brick-soft);color:var(--brick);border:1px solid rgba(179,80,59,.35);}
+.chunk-warn--ok{background:var(--teal-soft);color:var(--teal);border:1px solid rgba(79,148,132,.35);}
+
+/* 表格/代码专项处理卡片 */
+.rule-cards{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:28px;}
+@media(max-width:640px){.rule-cards{grid-template-columns:1fr;}}
+.rule-card{border:1px solid var(--line);border-radius:10px;padding:20px 22px;background:var(--bg-alt);}
+.rule-card h4{font-size:14.5px;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.rule-card p{font-size:14px;color:var(--ink-dim);margin:0;}
+
+/* ============ 检索质量 ============ */
+.retrieval-switch{display:flex;gap:0;border:1px solid var(--line);border-radius:999px;padding:3px;width:max-content;margin-bottom:24px;}
+.retrieval-switch button{
+  background:none;border:none;color:var(--ink-dim);padding:8px 18px;border-radius:999px;font-size:13.5px;font-weight:600;
+}
+.retrieval-switch button.active{background:var(--amber);color:#211603;}
+.result-list{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:16px;}
+.result-row{display:flex;gap:14px;padding:15px 18px;border-top:1px solid var(--line-soft);align-items:flex-start;}
+.result-row:first-child{border-top:none;}
+.result-mark{font-size:16px;flex-shrink:0;width:20px;text-align:center;margin-top:1px;}
+.result-mark.hit{color:var(--teal);}
+.result-mark.miss{color:var(--brick);}
+.result-row .rtitle{font-size:14.5px;font-weight:600;margin-bottom:3px;}
+.result-row .rnote{font-size:13px;color:var(--ink-faint);}
+.retrieval-verdict{font-size:14px;padding:14px 16px;border-radius:8px;border:1px dashed var(--line);color:var(--ink-dim);}
+.retrieval-verdict b{color:var(--ink);}
+
+.hybrid-diagram{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin:28px 0;font-size:13px;font-family:var(--font-mono);}
+.hd-box{background:var(--bg-alt);border:1px solid var(--line);border-radius:8px;padding:12px 16px;text-align:center;color:var(--ink-dim);}
+.hd-box b{display:block;color:var(--ink);font-family:var(--font-body);font-size:14px;margin-bottom:2px;}
+.hd-arrow{color:var(--ink-faint);padding:0 10px;font-size:16px;}
+@media(max-width:600px){.hybrid-diagram{flex-direction:column;align-items:stretch;}.hd-arrow{text-align:center;padding:6px 0;transform:rotate(90deg);}}
+
+/* ============ 生成质量卡片 ============ */
+.gen-rules{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:32px;}
+@media(max-width:640px){.gen-rules{grid-template-columns:1fr;}}
+.gen-rule{display:flex;gap:12px;padding:14px 16px;background:var(--bg-alt);border:1px solid var(--line);border-radius:8px;font-size:14px;}
+.gen-rule .n{font-family:var(--font-mono);color:var(--amber);font-weight:700;flex-shrink:0;}
+.gen-rule span{color:var(--ink-dim);}
+
+.bad-card{
+  border:1px solid rgba(179,80,59,.4);background:var(--brick-soft);border-radius:10px;
+  padding:22px 24px;margin-bottom:20px;
+}
+.bad-card .label{font-family:var(--font-mono);font-size:12px;color:var(--brick);letter-spacing:.04em;margin-bottom:10px;font-weight:700;}
+.bad-card p{font-size:14.5px;color:var(--ink);margin:0 0 10px;}
+.bad-card .why{font-size:13px;color:var(--ink-dim);border-top:1px dashed rgba(179,80,59,.4);padding-top:10px;margin:0;}
+
+.good-pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+@media(max-width:640px){.good-pair{grid-template-columns:1fr;}}
+.good-card{border:1px solid rgba(79,148,132,.4);background:var(--teal-soft);border-radius:10px;padding:20px 22px;}
+.good-card .label{font-family:var(--font-mono);font-size:12px;color:var(--teal);letter-spacing:.04em;margin-bottom:10px;font-weight:700;}
+.good-card p{font-size:14px;color:var(--ink);margin:0;}
+
+/* ============ 代码块 ============ */
+.code-block{
+  background:#0d1015;border:1px solid var(--line);border-radius:10px;
+  padding:24px 26px;overflow-x:auto;font-family:var(--font-mono);font-size:13px;
+  line-height:1.8;color:#d7dbe0;
+}
+.code-block .c{color:#5f6a78;}
+.code-block .kw{color:#c6892e;}
+.code-block .fn{color:#7fb5a8;}
+.code-block .str{color:#b9c67a;}
+
+/* ============ 工程边界四象限 ============ */
+.scope-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:640px){.scope-grid{grid-template-columns:1fr;}}
+.scope-box{border:1px solid var(--line);border-radius:10px;padding:20px 22px;background:var(--bg-alt);}
+.scope-box.no{border-color:rgba(179,80,59,.4);background:var(--brick-soft);}
+.scope-box h4{font-size:13.5px;font-family:var(--font-mono);letter-spacing:.02em;margin-bottom:12px;color:var(--amber);}
+.scope-box.no h4{color:var(--brick);}
+.scope-box ul{margin:0;padding-left:18px;font-size:14px;color:var(--ink-dim);}
+.scope-box li{margin-bottom:6px;}
+
+/* ============ 方案选型卡片 ============ */
+.option-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+@media(max-width:720px){.option-grid{grid-template-columns:1fr;}}
+.option-card{border:1px solid var(--line);border-radius:10px;background:var(--bg-alt);overflow:hidden;}
+.option-head{padding:18px 22px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.option-head h4{font-size:15.5px;}
+.option-head .scene{font-size:12.5px;color:var(--ink-faint);margin-top:4px;font-weight:400;font-family:var(--font-body);}
+.option-caret{color:var(--ink-faint);flex-shrink:0;transition:transform .2s;}
+.option-card.open .option-caret{transform:rotate(45deg);color:var(--amber);}
+.option-body{max-height:0;overflow:hidden;transition:max-height .3s ease;}
+.option-card.open .option-body{max-height:400px;}
+.option-body-inner{padding:0 22px 20px;font-size:14px;}
+.option-row{display:grid;grid-template-columns:64px 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--line-soft);}
+.option-row:first-child{border-top:1px solid var(--line-soft);}
+.option-row b{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint);text-transform:uppercase;padding-top:2px;}
+.option-row span{color:var(--ink-dim);}
+.option-row.warn span{color:var(--brick);}
+
+/* ============ 推荐路径 ============ */
+.recommend-list{display:flex;flex-direction:column;gap:16px;}
+.recommend-item{display:grid;grid-template-columns:34px 1fr;gap:16px;padding:20px 0;border-top:1px solid var(--line-soft);}
+.recommend-item:first-child{border-top:none;}
+.recommend-item .rn{font-family:var(--font-mono);color:var(--amber);font-size:15px;font-weight:700;}
+.recommend-item h4{font-size:15.5px;margin-bottom:6px;}
+.recommend-item .scene{font-size:13.5px;color:var(--ink-faint);margin-bottom:8px;}
+.recommend-item .pick{
+  display:inline-block;font-family:var(--font-mono);font-size:12px;color:var(--teal);
+  background:var(--teal-soft);border:1px solid rgba(79,148,132,.35);border-radius:5px;padding:3px 10px;margin-bottom:8px;
+}
+.recommend-item p{font-size:14px;color:var(--ink-dim);margin:0;}
+
+/* ============ 失败模式诊断卡 ============ */
+.fail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:720px){.fail-grid{grid-template-columns:1fr;}}
+.fail-card{border:1px solid var(--line);border-radius:10px;background:var(--bg-alt);padding:0;overflow:hidden;}
+.fail-head{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.fail-head h4{font-size:14.5px;}
+.fail-plus{color:var(--ink-faint);font-size:18px;transition:transform .2s;flex-shrink:0;}
+.fail-card.open .fail-plus{transform:rotate(45deg);color:var(--amber);}
+.fail-body{max-height:0;overflow:hidden;transition:max-height .3s ease;}
+.fail-card.open .fail-body{max-height:260px;}
+.fail-body-inner{padding:0 20px 18px;font-size:13.5px;}
+.fail-line{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:7px 0;}
+.fail-line b{font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);padding-top:2px;}
+.fail-line span{color:var(--ink-dim);}
+.fail-line.fix span{color:var(--teal);}
+
+/* ============ footer ============ */
+.footer{padding:60px 0 90px;text-align:center;color:var(--ink-faint);font-size:13.5px;}
+.footer .mono{font-family:var(--font-mono);font-size:12px;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+.fade-in{animation:fadeUp .5s ease both;}
+
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important;}
+}
+</style>
+</head>
+<body>
+
+<div id="progressBar"></div>
+<button id="tocToggle" aria-label="打开目录"><span class="dot"></span>目录</button>
+<nav id="tocPanel">
+  <a href="#why">为什么存在</a>
+  <a href="#boundary">边界对比</a>
+  <a href="#pipeline">主链路</a>
+  <a href="#chunking">切分策略</a>
+  <a href="#retrieval">检索质量</a>
+  <a href="#generation">生成质量</a>
+  <a href="#code">Python 实现</a>
+  <a href="#scope">落地边界</a>
+  <a href="#options">方案选型</a>
+  <a href="#recommend">推荐路径</a>
+  <a href="#pitfalls">常见失败模式</a>
+</nav>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="hero">
+  <div class="hero-wrap">
+    <span class="eyebrow fade-in">Embedding 应用专题 · Retrieval-Augmented Generation</span>
+    <h1 class="hero-title fade-in" style="animation-delay:.05s">先查资料，<br><em>再</em>回答。</h1>
+    <p class="hero-sub fade-in" style="animation-delay:.1s">大模型的参数记忆，本质上是一本查不了目录、改不了内容、也说不清页码的书。RAG 做的事很朴素：在它开口之前，先把正确的那一页翻出来给它看。</p>
+
+    <div class="fade-in" style="animation-delay:.16s">
+      <div class="hero-demo__query">
+        <span class="hero-demo__label">员工问：</span>
+        <span id="heroQueryText"></span>
+        <button class="btn-ghost" id="heroCycleBtn" type="button">换一个问题 ↻</button>
+      </div>
+      <div class="hero-demo__cards">
+        <div class="demo-card demo-card--bad">
+          <div class="demo-card__head">仅凭参数记忆回答</div>
+          <p class="demo-card__body" id="heroBadAnswer"></p>
+          <div class="demo-card__foot" id="heroBadFoot"></div>
+        </div>
+        <div class="demo-card demo-card--good index-card">
+          <span class="tab">RAG</span>
+          <div class="demo-card__head">先检索，再回答</div>
+          <p class="demo-card__body" id="heroGoodAnswer"></p>
+          <div class="stamp" id="heroStamp">✓ 引用</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 为什么存在 ============ -->
+<section class="section" id="why">
+  <div class="wrap">
+    <span class="eyebrow">为什么存在</span>
+    <h2 class="h2">模型的"记得"，和知识库的"记录"不是一回事</h2>
+    <p class="h2-sub">训练把海量文本压缩进了参数，那是一种统计意义上的记忆——大部分时候够用，但恰好不满足业务场景最在意的三件事：能不能随时更新、能不能说清出处、能不能按人分权限。RAG 的解法很直接：把"知识"从参数里搬出来，放进一个可以增删、能标来源、可加权限过滤的外部知识库，让模型先去查，再照着查到的内容作答。</p>
+
+    <div class="why-grid">
+      <div class="why-col">
+        <h4><span class="mark"></span>只靠参数记忆</h4>
+        <div class="why-row"><b>更新方式</b>重新训练或微调，周期以周/月计，改一条事实要等一整轮迭代</div>
+        <div class="why-row"><b>可审计性</b>说不清某句话具体来自哪份文档、哪一条，无法逐句核实</div>
+        <div class="why-row"><b>权限控制</b>所有用户共享同一套"记忆"，做不到"这段内容只有 HR 能看到"</div>
+        <div class="why-row"><b>成本模式</b>一次性沉没成本，训练完成后局部纠正很麻烦</div>
+      </div>
+      <div class="why-col">
+        <h4><span class="mark"></span>外部知识库（RAG 思路）</h4>
+        <div class="why-row"><b>更新方式</b>增删一条文档、改一个字段，近乎实时生效，不用碰模型本身</div>
+        <div class="why-row"><b>可审计性</b>每句回答都能对应到具体 chunk 和文档出处，可点开原文核实</div>
+        <div class="why-row"><b>权限控制</b>检索阶段按 metadata / ACL 过滤，天然支持"谁能看什么"</div>
+        <div class="why-row"><b>成本模式</b>按查询量增量付费，知识库本身可以持续独立维护</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 边界对比 ============ -->
+<section class="section section--alt" id="boundary">
+  <div class="wrap">
+    <span class="eyebrow">边界对比</span>
+    <h2 class="h2">RAG 不是唯一答案，也不是万能答案</h2>
+    <p class="h2-sub">同样是"让模型知道更多"，微调、长上下文、传统搜索都能部分做到，但各自解决的问题不一样，边界也不一样。搞清楚这几条边界，才知道什么时候该用 RAG、什么时候该用别的、或者几个一起用。</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="ft" type="button">微调 Fine-tuning</button>
+      <button class="tab-btn" data-tab="lc" type="button">长上下文 Long Context</button>
+      <button class="tab-btn" data-tab="ks" type="button">传统搜索 Keyword Search</button>
+      <button class="tab-btn" data-tab="em" type="button">Text Embedding</button>
+    </div>
+
+    <div class="tab-panel active" data-panel="ft">
+      <div class="row"><b>解决什么</b><span>教模型"怎么说话、怎么做任务"——固定的输出格式、领域术语、特定的推理套路，这些是改权重能学会的行为模式。</span></div>
+      <div class="row"><b>不能替代</b><span>快速变化的具体事实。改一条知识就要重新训练，无法在回答里指出"这句话来自哪份文档"，事后也很难单独撤回某条被学进去的内容。</span></div>
+      <div class="verdict">判断标准：<b>要改的是"行为习惯"还是"具体事实"</b>——前者考虑微调，后者用 RAG。两者常常一起用：微调定风格和任务套路，RAG 提供作答依据。</div>
+    </div>
+    <div class="tab-panel" data-panel="lc">
+      <div class="row"><b>解决什么</b><span>把一批必须整体通读、互相关联的文档直接塞进 prompt，适合一次性、跨文档的综合分析或推理。</span></div>
+      <div class="row"><b>不能替代</b><span>知识库天然会持续增长，长上下文做不到"只挑相关的看"——每次都要重新读一遍全部资料，token 成本和延迟随内容量线性上升；也没有权限过滤能力，也不解决"知识怎么增删改"的管理问题。</span></div>
+      <div class="verdict">判断标准：<b>资料范围是固定且必须整体读完，还是持续增长且每次只需要一小部分</b>——前者用长上下文，后者用 RAG 精准检索。</div>
+    </div>
+    <div class="tab-panel" data-panel="ks">
+      <div class="row"><b>解决什么</b><span>基于关键词的精确匹配（如 BM25 / Elasticsearch），排序机制成熟、可控、运维经验丰富，对编号、专有名词、精确术语非常敏感。</span></div>
+      <div class="row"><b>不能替代</b><span>理解不了语义相近但措辞不同的提问（"住宿封顶"≈"住宿报销上限"），而且只能返回一堆文档链接，用户还得自己点进去读——不会直接生成一句可用的答案并标注引用。</span></div>
+      <div class="verdict">判断标准：<b>这不是二选一</b>——RAG 的召回阶段经常直接把关键词检索作为一路输入，和向量检索混合使用，取长补短。</div>
+    </div>
+    <div class="tab-panel" data-panel="em">
+      <div class="row"><b>解决什么</b><span>Embedding 只是"把文本变成向量、支持语义相似度计算"这一项技术，可以单独用在推荐、聚类、去重、语义搜索 UI 等和"生成回答"完全无关的场景里。</span></div>
+      <div class="row"><b>不能替代</b><span>RAG 是一整条业务链路——采集、清洗、切分、写入、召回、重排、组装、生成、引用，Embedding 只支撑其中"把文本变成向量"这一环。反过来，RAG 也不是非向量检索不可，可以只用关键词检索，或者两者混合。</span></div>
+      <div class="verdict">一句话：<b>RAG ⊃ 向量检索 ⊃ Text Embedding</b>。本文假设你已经了解 Embedding，重点讲的是 RAG 这条完整链路怎么把检索结果变成一个可信、可核实的回答。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 主链路 ============ -->
+<section class="section" id="pipeline">
+  <div class="wrap">
+    <span class="eyebrow">主链路</span>
+    <h2 class="h2">从一份文件，到一句带引用的回答</h2>
+    <p class="h2-sub">跟着同一个例子走完全程：员工想知道 <b style="color:var(--ink)">OA-2024-017《差旅管理办法》</b> 里"一线城市住宿一晚最多能报多少"。点开每一步，看这份文件和这个问题分别经历了什么。整条链路分两个阶段——建索引在离线批量做一次，问答在线上每次请求都会跑一遍。</p>
+
+    <div class="phase-label">离线阶段 · 建索引（一次性 / 定期更新）</div>
+    <div class="stepper" id="stepperOffline"></div>
+    <div class="phase-label">在线阶段 · 一次问答（每次请求都跑一遍）</div>
+    <div class="stepper" id="stepperOnline"></div>
+  </div>
+</section>
+
+<!-- ============ 切分策略 ============ -->
+<section class="section section--alt" id="chunking">
+  <div class="wrap">
+    <span class="eyebrow">切分策略</span>
+    <h2 class="h2">chunk 是检索的最小单位，切分决定能不能捞到对的那一段</h2>
+    <p class="h2-sub">切分质量直接决定后面所有环节的上限：切得不好，向量再准也白搭。拖动下面的滑块，看同一段《差旅管理办法》原文在不同切分参数下会被切成什么样子。</p>
+
+    <div class="chunk-demo">
+      <div class="chunk-controls">
+        <div class="chunk-slider-group">
+          <label>chunk 大小（字符数，实际工程中常按 token 数）<span id="chunkSizeVal">140</span></label>
+          <input type="range" id="chunkSizeSlider" min="40" max="280" value="140" step="10">
+        </div>
+        <label class="chunk-toggle">
+          <input type="checkbox" id="overlapToggle" checked>
+          开启 overlap（重叠 30 字符）
+        </label>
+      </div>
+      <div class="chunk-meta">
+        <span>切出 <b id="chunkCount">-</b> 个 chunk</span>
+        <span>原文长度 <b id="chunkTotalLen">-</b> 字符</span>
+      </div>
+      <div class="chunk-blocks" id="chunkBlocks"></div>
+      <div class="chunk-warn chunk-warn--small" id="warnSmall">⚠ chunk 太小：很可能把"3.2 住宿标准"这个标题和后面具体的城市数字拆到不同 chunk，检索命中其中一个数字时，模型看不出它到底是哪个标准、哪个城市的。</div>
+      <div class="chunk-warn chunk-warn--big" id="warnBig">⚠ chunk 太大：一个 chunk 里混进了 3.1 交通标准、3.2 住宿标准、3.3 餐费标准好几个不同主题，向量语义被稀释，即使召回了也会带进大量无关内容。</div>
+      <div class="chunk-warn chunk-warn--ok" id="warnOk">✓ 这个大小基本能让"3.2 住宿标准"独立成段，同时不混入其他小节——这是本例比较合适的区间。</div>
+    </div>
+
+    <div class="rule-cards">
+      <div class="rule-card">
+        <h4>📐 标题层级 &amp; 元数据</h4>
+        <p>按文档的标题结构（如 "3. 差旅报销 → 3.2 住宿标准"）做切分锚点，并把标题路径、文档名、版本、更新日期、权限标签一起存进 metadata——这些字段既用于检索时的 filter，也是最终引用信息的来源。</p>
+      </div>
+      <div class="rule-card">
+        <h4>✂️ 段落边界</h4>
+        <p>尽量按语义完整的段落 / 句子切，不要在句子中间硬切断。宁可让相邻两个 chunk 稍微有重叠（overlap），也不要让一句话被拦腰截断在两个 chunk 之间。</p>
+      </div>
+      <div class="rule-card">
+        <h4>📊 表格</h4>
+        <p>表格按字符数硬切，很容易把表头和某一行数据拆开，变成一堆看不懂的孤立数字。更稳妥的做法：把每行转成一句自然语言描述（"一线城市：660 元/晚"），或者保留完整表头 + 整张表作为一个 chunk。</p>
+      </div>
+      <div class="rule-card">
+        <h4>💻 代码块</h4>
+        <p>代码块最好整体作为一个 chunk，哪怕超过常规大小上限也不要切开——代码的语义依赖完整上下文，一个函数被切成两半既不可读也不可执行。通常给代码块单独设置更宽松的 max size。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 检索质量 ============ -->
+<section class="section" id="retrieval">
+  <div class="wrap">
+    <span class="eyebrow">检索质量</span>
+    <h2 class="h2">向量检索管语义，关键词检索管精确，两个都要</h2>
+    <p class="h2-sub">向量检索擅长理解"住一晚能报多少"约等于"住宿报销标准"，但对编号、文件代号这类精确字符串不敏感。当查询里带着 <span class="mono" style="color:var(--amber)">"OA-2024-017"</span> 这样的文件编号时，两种检索方式的差别会很明显。</p>
+
+    <div class="retrieval-switch">
+      <button class="active" data-mode="vec" type="button">只用向量检索</button>
+      <button data-mode="hybrid" type="button">向量 + 关键词混合</button>
+    </div>
+
+    <div class="result-list" id="resultList"></div>
+    <div class="retrieval-verdict" id="resultVerdict"></div>
+
+    <div class="divider"></div>
+
+    <h3 class="h3">召回之后，还有三道减噪工序</h3>
+    <div class="hybrid-diagram">
+      <div class="hd-box"><b>混合召回</b>拿回 top-k 候选</div>
+      <div class="hd-arrow">→</div>
+      <div class="hd-box"><b>Rerank</b>更贵的模型精排</div>
+      <div class="hd-arrow">→</div>
+      <div class="hd-box"><b>Filter</b>按 metadata / 权限过滤</div>
+      <div class="hd-arrow">→</div>
+      <div class="hd-box"><b>去重 + 压缩</b>只留真正相关的句子</div>
+    </div>
+    <div class="rule-cards">
+      <div class="rule-card">
+        <h4>Reranker：先快后准</h4>
+        <p>召回阶段追求"快"，通常一次拿回几十条粗筛候选；reranker 是一个更贵但更准的模型，对这几十条重新计算"和查询的真实相关性"并排序，把真正对的那条（"3.2 住宿标准"）推到最前面。</p>
+      </div>
+      <div class="rule-card">
+        <h4>Metadata filter：权限和版本的第一道闸</h4>
+        <p>检索前先按 metadata 硬性过滤——只搜"2024 版"、只搜当前用户有权限看的知识库范围，避免语义相似但版本已过期、或者用户本不该看到的内容混进候选列表。</p>
+      </div>
+      <div class="rule-card">
+        <h4>Query rewrite：补全口语化提问</h4>
+        <p>用户的提问常常省略上下文（多轮对话里的"那二线城市呢"），查询改写把它转成更适合检索的完整形式，或者拆成多个子查询分别检索再合并结果。</p>
+      </div>
+      <div class="rule-card">
+        <h4>去重 + 上下文压缩</h4>
+        <p>多路召回容易带回重复或高度相似的内容，去重后再对每条候选做压缩（只保留和问题相关的句子），减少无关内容占用的上下文窗口，也降低"重复强调=更可信"的错觉。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 生成质量控制 ============ -->
+<section class="section section--alt" id="generation">
+  <div class="wrap">
+    <span class="eyebrow">生成质量控制</span>
+    <h2 class="h2">检索得再准，生成这一步也可能把事情搞砸</h2>
+    <p class="h2-sub">即使召回和排序都做对了，模型仍然可能把不相关的召回内容当真、或者在找不到答案时硬编一个。生成阶段要守住四条规矩：</p>
+
+    <div class="gen-rules">
+      <div class="gen-rule"><span class="n">01</span><span>只允许基于检索到的材料回答，不能补充模型自己"记得"的内容</span></div>
+      <div class="gen-rule"><span class="n">02</span><span>保留引用，每条结论尽量对应到具体来源，方便核实和点击跳转原文</span></div>
+      <div class="gen-rule"><span class="n">03</span><span>找不到答案就如实说找不到，而不是给一个听起来合理的错误答案</span></div>
+      <div class="gen-rule"><span class="n">04</span><span>判断召回内容是否真的回答了问题，而不是无脑总结所有检索到的片段</span></div>
+    </div>
+
+    <div class="bad-card">
+      <div class="label">❌ 把召回噪声写成事实</div>
+      <p>提问："一线城市住宿一晚最多报多少" —— 除了 §3.2 住宿标准，检索还顺带召回了一条不相关的 §3.1 交通标准。</p>
+      <p style="color:var(--brick);font-weight:600;">生成结果："一线城市住宿及交通合计每晚最多可报销 760 元（660 元住宿 + 100 元交通）。"</p>
+      <p class="why">问题：模型把两个完全不同维度的报销标准强行加在了一起，编出了原文里根本不存在的"合计 760 元"。这不是检索错了，是生成阶段没有守住"只依据检索材料、不做自由推导"这条规矩。</p>
+    </div>
+
+    <div class="good-pair">
+      <div class="good-card">
+        <div class="label">✅ 有依据时：精确回答 + 引用</div>
+        <p>"一线城市住宿报销上限为 <b>660 元/晚</b>。<br>[来源: OA-2024-017 §3.2]"</p>
+      </div>
+      <div class="good-card">
+        <div class="label">✅ 没依据时：如实说明，不编造</div>
+        <p>提问变成"境外出差的住宿标准是多少"——"检索到的资料（OA-2024-017）只覆盖境内差旅，未找到境外住宿标准相关内容，建议确认是否存在《境外差旅管理办法》。"</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Python 实现 ============ -->
+<section class="section" id="code">
+  <div class="wrap">
+    <span class="eyebrow">Python 实现主链路</span>
+    <h2 class="h2">把上面的链路落成代码，大概长这样</h2>
+    <p class="h2-sub">只展示主链路的骨架，省去了框架选择、异常处理、批处理调度这些工程细节——重点是让每一步和前面讲的概念对上号。</p>
+    <div class="code-block"><pre style="margin:0;white-space:pre;"><span class="c"># ---- 离线阶段：建索引 ----</span>
+docs = load_documents(<span class="str">"./knowledge_base"</span>)          <span class="c"># 采集</span>
+docs = [clean(d) <span class="kw">for</span> d <span class="kw">in</span> docs]                     <span class="c"># 清洗：去页眉页脚、表格转文本</span>
+
+chunks = []
+<span class="kw">for</span> doc <span class="kw">in</span> docs:
+    <span class="kw">for</span> piece <span class="kw">in</span> split_by_heading(doc, max_chars=<span class="fn">500</span>, overlap=<span class="fn">80</span>):
+        chunks.append({
+            <span class="str">"text"</span>: piece.text,
+            <span class="str">"doc"</span>: doc.name,                     <span class="c"># 如 "OA-2024-017"</span>
+            <span class="str">"section"</span>: piece.heading_path,       <span class="c"># 如 "3. 差旅报销 > 3.2 住宿标准"</span>
+            <span class="str">"version"</span>: doc.version,
+            <span class="str">"acl"</span>: doc.acl_tags,                 <span class="c"># 权限标签</span>
+        })
+
+vectors = embed_batch([c[<span class="str">"text"</span>] <span class="kw">for</span> c <span class="kw">in</span> chunks])   <span class="c"># 批量 embedding</span>
+vector_store.upsert(chunks, vectors)                  <span class="c"># 写入向量库（附带 metadata）</span>
+keyword_index.index(chunks)                           <span class="c"># 同时建关键词索引（如 BM25）</span>
+
+
+<span class="c"># ---- 在线阶段：一次问答 ----</span>
+<span class="kw">def</span> <span class="fn">answer</span>(query, user):
+    q = rewrite_query(query, history=user.history)        <span class="c"># 查询改写</span>
+
+    vec_hits = vector_store.search(embed(q), top_k=<span class="fn">20</span>, filter={<span class="str">"acl"</span>: user.acl})
+    kw_hits  = keyword_index.search(q, top_k=<span class="fn">20</span>, filter={<span class="str">"acl"</span>: user.acl})
+    candidates = merge_and_dedup(vec_hits, kw_hits)       <span class="c"># 混合召回 + 去重</span>
+
+    ranked = reranker.rerank(q, candidates, top_k=<span class="fn">4</span>)      <span class="c"># 重排，只留最相关的几条</span>
+
+    context = assemble_context(ranked, max_tokens=<span class="fn">1500</span>)   <span class="c"># 上下文组装（可加压缩）</span>
+
+    prompt = build_prompt(
+        query=q, context=context,
+        rule=<span class="str">"只依据 context 回答；找不到依据就说找不到；标注引用"</span>,
+    )
+
+    resp = llm.generate(prompt)
+
+    <span class="kw">return</span> {
+        <span class="str">"answer"</span>: resp.text,
+        <span class="str">"citations"</span>: [c[<span class="str">"doc"</span>] + <span class="str">" "</span> + c[<span class="str">"section"</span>] <span class="kw">for</span> c <span class="kw">in</span> ranked],
+    }</pre></div>
+  </div>
+</section>
+
+<!-- ============ 工程落地边界 ============ -->
+<section class="section section--alt" id="scope">
+  <div class="wrap">
+    <span class="eyebrow">工程落地边界</span>
+    <h2 class="h2">RAG 在真实项目里接什么、产出什么、不管什么</h2>
+    <div class="scope-grid">
+      <div class="scope-box">
+        <h4>输入 / 输出</h4>
+        <ul>
+          <li>输入：用户的自然语言问题（可能带对话历史）+ 一个已建好索引的知识库</li>
+          <li>输出：一段基于检索内容生成的回答 + 对应的引用列表（chunk / 文档 / 章节）</li>
+        </ul>
+      </div>
+      <div class="scope-box">
+        <h4>前置条件</h4>
+        <ul>
+          <li>知识库已完成采集、清洗、切分、embedding、建索引</li>
+          <li>有基本的权限 / 租户体系（如果面向多用户）</li>
+          <li>有一个可用的 LLM（本地部署或 API）</li>
+        </ul>
+      </div>
+      <div class="scope-box no">
+        <h4>不该指望 RAG 解决</h4>
+        <ul>
+          <li>复杂多步数值计算 / 精确逻辑推理——喂给模型的是资料，不会让它突然变得会算数或做复杂规划</li>
+          <li>源头数据本身质量差、内容有误——RAG 不能提升知识库本身的正确性，原文错了，检索越准，答案越"自信地错"</li>
+        </ul>
+      </div>
+      <div class="scope-box no">
+        <h4>不该指望 RAG 解决（续）</h4>
+        <ul>
+          <li>强实时性事务操作，比如下单、改库存——这类需求应该走工具调用 / API，而不是"检索资料回答"</li>
+          <li>完全开放的创造性生成任务（写诗、脑暴）——这类任务不需要"先查资料"这一步，加了反而束缚</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 方案选型 ============ -->
+<section class="section" id="options">
+  <div class="wrap">
+    <span class="eyebrow">方案选型</span>
+    <h2 class="h2">四种常见落地方式，怎么选</h2>
+    <p class="h2-sub">点开每张卡片看场景、成本和限制。</p>
+
+    <div class="option-grid" id="optionGrid"></div>
+  </div>
+</section>
+
+<!-- ============ 推荐路径 ============ -->
+<section class="section section--alt" id="recommend">
+  <div class="wrap">
+    <span class="eyebrow">推荐路径</span>
+    <h2 class="h2">按三种典型场景给出建议</h2>
+    <div class="recommend-list" id="recommendList"></div>
+  </div>
+</section>
+
+<!-- ============ 常见失败模式 ============ -->
+<section class="section" id="pitfalls">
+  <div class="wrap">
+    <span class="eyebrow">常见失败模式</span>
+    <h2 class="h2">效果不好，大概率是这八个原因之一</h2>
+    <p class="h2-sub">点开每张卡片看症状、原因和修复方式。</p>
+    <div class="fail-grid" id="failGrid"></div>
+  </div>
+</section>
+
+<div class="footer">
+  <p>RAG 的核心不是"接一个向量库"，而是让每一句回答都能被追问"这是从哪来的"。</p>
+  <p class="mono">EMBEDDING SERIES · RAG</p>
+</div>
+
+<script>
+/* ============ 目录面板 ============ */
+const tocToggle = document.getElementById('tocToggle');
+const tocPanel = document.getElementById('tocPanel');
+tocToggle.addEventListener('click', () => tocPanel.classList.toggle('open'));
+document.querySelectorAll('#tocPanel a').forEach(a=>{
+  a.addEventListener('click', ()=> tocPanel.classList.remove('open'));
+});
+document.addEventListener('click', (e)=>{
+  if(!tocPanel.contains(e.target) && !tocToggle.contains(e.target)){
+    tocPanel.classList.remove('open');
+  }
+});
+
+/* ============ 滚动进度条 ============ */
+const progressBar = document.getElementById('progressBar');
+function updateProgress(){
+  const h = document.documentElement;
+  const scrolled = h.scrollTop;
+  const height = h.scrollHeight - h.clientHeight;
+  progressBar.style.width = (height>0 ? (scrolled/height*100) : 0) + '%';
+}
+document.addEventListener('scroll', updateProgress, {passive:true});
+updateProgress();
+
+/* ============ Hero 切换问题 ============ */
+const heroQueries = [
+  {
+    q: '"OA-2024-017《差旅管理办法》里，一线城市住宿一晚最多能报多少？"',
+    bad: '一般来说，一线城市的差旅住宿标准大多在每晚 600–800 元区间，但具体金额请以贵公司最新的差旅管理制度为准，我无法获取你们公司内部文件的实时内容。',
+    badFoot: '没有来源 · 无法核实 · 依赖训练时见过的泛化经验',
+    good: '根据 OA-2024-017《差旅管理办法》第 3.2 条，一线城市（北京 / 上海 / 广州 / 深圳）住宿报销上限为每晚 <b>660 元</b>。',
+    stamp: '✓ 引用 OA-2024-017 §3.2'
+  },
+  {
+    q: '"上周三的客户会议里，对方要求的交付日期是哪天？"',
+    bad: '根据以往合作的一般节奏，对方通常会要求下一季度初交付，估计是 10 月 15 日左右。',
+    badFoot: '没有来源 · 凭经验推断 · 实际日期可能完全不同',
+    good: '根据 7 月 23 日客户会议纪要，对方要求的交付日期是 <b>8 月 28 日</b>。',
+    stamp: '✓ 引用 会议纪要-20260723'
+  }
+];
+let heroIdx = 0;
+function renderHero(){
+  const d = heroQueries[heroIdx];
+  document.getElementById('heroQueryText').textContent = d.q;
+  document.getElementById('heroBadAnswer').textContent = d.bad;
+  document.getElementById('heroBadFoot').textContent = d.badFoot;
+  document.getElementById('heroGoodAnswer').innerHTML = d.good;
+  document.getElementById('heroStamp').textContent = d.stamp;
+}
+document.getElementById('heroCycleBtn').addEventListener('click', ()=>{
+  heroIdx = (heroIdx+1) % heroQueries.length;
+  renderHero();
+});
+renderHero();
+
+/* ============ 边界对比 tabs ============ */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector('.tab-panel[data-panel="'+btn.dataset.tab+'"]').classList.add('active');
+  });
+});
+
+/* ============ 主链路 stepper ============ */
+const offlineSteps = [
+  {t:'采集 Ingest', o:'从 OA、Wiki、共享盘等多种来源抓取原始文档', e:'把《差旅管理办法》从 OA 系统里以 docx 格式抓下来，连同更新日期、所属部门一起记录。'},
+  {t:'清洗 Clean', o:'去掉页眉页脚等噪声，把表格 / 图片转成结构化文本', e:'去掉每页重复的"内部文件·请勿外传"页眉，把住宿标准表格转成"一线城市：660 元/晚；二线城市：480 元/晚"这样的文本。'},
+  {t:'切分 Chunk', o:'按标题层级、语义段落切成大小适中且保留上下文的小段', e:'按"3.2 住宿标准"这个小节切出一个 chunk，并把"3. 差旅报销 > 3.2 住宿标准"这条标题路径存进 metadata。'},
+  {t:'Embedding', o:'把每个 chunk 转成向量，让语义相近的内容彼此靠近', e:'"3.2 住宿标准"这个 chunk 被转成一个高维向量，会和"酒店报销额度"这类语义相近的提问比较接近。'},
+  {t:'写入向量库 Index', o:'把文本、向量、metadata 一起存进向量数据库，同时可建关键词索引', e:'存进 Milvus / pgvector，附带 {doc:"OA-2024-017", section:"3.2", version:"2024", acl:["all_staff"]}。'}
+];
+const onlineSteps = [
+  {t:'查询改写 Query Rewrite', o:'把口语化、省略上下文的提问，转成更适合检索的形式', e:'把"住一晚最多报多少"补全为"OA-2024-017 一线城市 差旅 住宿 报销 上限"。'},
+  {t:'召回 Retrieve', o:'向量检索和关键词检索分别拿回一批候选 chunk', e:'向量检索捞回几条"住宿/报销"相关 chunk，关键词检索精确命中包含"OA-2024-017"和"3.2"的那一条。'},
+  {t:'重排 Rerank', o:'用更精细的模型，对候选按"和查询的真实相关性"重新打分', e:'40 条候选里，"3.2 住宿标准"被重排到第 1 位，"3.1 交通标准"排到后面。'},
+  {t:'上下文组装 Assemble Context', o:'去重、压缩后，把靠前的几条 chunk 连同来源标记拼进 prompt', e:'最终只保留"3.2 住宿标准"和"3.3 餐费标准"两条 chunk，每条都标好来源和章节号。'},
+  {t:'LLM 生成 Generate', o:'模型被要求只依据组装的上下文作答，并标出对应来源', e:'模型输出"一线城市住宿报销上限为 660 元/晚"，并标记这句话对应"3.2 住宿标准"。'},
+  {t:'引用返回 Cite', o:'把生成结果和对应来源一起返回，支持点击跳转原文核实', e:'前端在回答下方展示"[来源: OA-2024-017 §3.2, 2024 版]"，员工点击可看到原文截图。'}
+];
+function buildStepper(container, steps, startIdx){
+  steps.forEach((s, i)=>{
+    const step = document.createElement('div');
+    step.className = 'step';
+    step.innerHTML = `
+      <div class="step-num">${startIdx+i}</div>
+      <button class="step-btn" type="button">
+        <span class="step-title">${s.t} <span class="step-one-liner">— ${s.o}</span></span>
+        <span class="step-caret">▸</span>
+      </button>
+      <div class="step-detail"><div class="step-detail-inner">
+        <div class="example"><b>本例中会发生什么</b>${s.e}</div>
+      </div></div>
+    `;
+    const btn = step.querySelector('.step-btn');
+    btn.addEventListener('click', ()=> step.classList.toggle('open'));
+    container.appendChild(step);
+  });
+}
+buildStepper(document.getElementById('stepperOffline'), offlineSteps, 1);
+buildStepper(document.getElementById('stepperOnline'), onlineSteps, 6);
+// 默认展开第一个offline和第一个online步骤，给出提示
+document.querySelector('#stepperOffline .step').classList.add('open');
+document.querySelector('#stepperOnline .step').classList.add('open');
+
+/* ============ 切分演示 ============ */
+const sampleText = "3.差旅报销 3.1交通标准:机票经济舱据实报销,高铁二等座据实报销,出租车每日不超过100元。3.2住宿标准:一线城市(北京/上海/广州/深圳)住宿报销上限为每晚660元;二线城市住宿报销上限为每晚480元;其余城市住宿报销上限为每晚350元。如遇当地会议统一安排酒店,按实际发生金额报销。3.3餐费标准:差旅期间餐费按每人每天150元包干,不需要发票。";
+const chunkSizeSlider = document.getElementById('chunkSizeSlider');
+const overlapToggle = document.getElementById('overlapToggle');
+const chunkBlocks = document.getElementById('chunkBlocks');
+const chunkSizeVal = document.getElementById('chunkSizeVal');
+const chunkCount = document.getElementById('chunkCount');
+const chunkTotalLen = document.getElementById('chunkTotalLen');
+
+function renderChunks(){
+  const size = parseInt(chunkSizeSlider.value, 10);
+  const overlap = overlapToggle.checked ? 30 : 0;
+  chunkSizeVal.textContent = size;
+  chunkTotalLen.textContent = sampleText.length;
+
+  const parts = [];
+  let pos = 0;
+  while(pos < sampleText.length){
+    const end = Math.min(pos + size, sampleText.length);
+    parts.push({start:pos, end:end, text: sampleText.slice(pos, end)});
+    if(end >= sampleText.length) break;
+    pos = end - overlap;
+    if(pos < 0) pos = 0;
+  }
+  chunkCount.textContent = parts.length;
+
+  chunkBlocks.innerHTML = '';
+  parts.forEach((p, idx)=>{
+    const div = document.createElement('div');
+    div.className = 'blk';
+    let html = 'chunk ' + (idx+1) + ': "' + p.text.replace(/</g,'&lt;') + '"';
+    if(overlap > 0 && idx > 0){
+      // 高亮显示与前一个chunk重叠的开头部分
+      const ovLen = Math.min(overlap, p.text.length);
+      const ovText = p.text.slice(0, ovLen).replace(/</g,'&lt;');
+      const rest = p.text.slice(ovLen).replace(/</g,'&lt;');
+      html = 'chunk ' + (idx+1) + ': "<span class="ov">' + ovText + '</span>' + rest + '"';
+    }
+    div.innerHTML = html;
+    chunkBlocks.appendChild(div);
+  });
+
+  document.getElementById('warnSmall').classList.toggle('show', size < 90);
+  document.getElementById('warnBig').classList.toggle('show', size > 200);
+  document.getElementById('warnOk').classList.toggle('show', size >= 90 && size <= 200);
+}
+chunkSizeSlider.addEventListener('input', renderChunks);
+overlapToggle.addEventListener('change', renderChunks);
+renderChunks();
+
+/* ============ 检索质量 hybrid demo ============ */
+const retrievalData = {
+  vec: {
+    verdict: '向量检索理解"住宿""报销"这些词的语义，但对 <b>"OA-2024-017"</b> 这种编号不敏感——编号在语义向量空间里没有天然的邻近关系，容易被语义相似但版本、来源不对的内容抢到前排。',
+    rows: [
+      {mark:'miss', title:'《2022 年差旅暂行规定》住宿部分', note:'语义高度相似，但已是旧版，数字早已过期——向量检索认为它"很相关"'},
+      {mark:'miss', title:'《员工手册》通用福利说明', note:'提到"住宿"但和报销标准无关，语义有一定关联但答非所问'},
+      {mark:'miss', title:'OA-2024-017 §3.2 住宿标准', note:'真正对的那条，因为编号未被有效利用，排名靠后甚至没进前 3'}
+    ]
+  },
+  hybrid: {
+    verdict: '关键词检索精确命中字符串 <b>"OA-2024-017"</b> 和 <b>"3.2"</b>，向量检索确认语义确实相关，两路证据叠加后排名靠前——<b>关键词管精确，向量管语义</b>，缺一不可。',
+    rows: [
+      {mark:'hit', title:'OA-2024-017 §3.2 住宿标准', note:'关键词精确命中文件编号 + 向量语义相关，合并后排第 1'},
+      {mark:'miss', title:'《2022 年差旅暂行规定》住宿部分', note:'关键词检索未命中编号 "OA-2024-017"，排序被压低'},
+      {mark:'miss', title:'《员工手册》通用福利说明', note:'两路都判定相关性较低，排在最后'}
+    ]
+  }
+};
+const resultList = document.getElementById('resultList');
+const resultVerdict = document.getElementById('resultVerdict');
+function renderRetrieval(mode){
+  const d = retrievalData[mode];
+  resultList.innerHTML = '';
+  d.rows.forEach(r=>{
+    const row = document.createElement('div');
+    row.className = 'result-row';
+    row.innerHTML = `<span class="result-mark ${r.mark}">${r.mark==='hit'?'✓':'✕'}</span>
+      <div><div class="rtitle">${r.title}</div><div class="rnote">${r.note}</div></div>`;
+    resultList.appendChild(row);
+  });
+  resultVerdict.innerHTML = d.verdict;
+}
+document.querySelectorAll('.retrieval-switch button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.retrieval-switch button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    renderRetrieval(btn.dataset.mode);
+  });
+});
+renderRetrieval('vec');
+
+/* ============ 方案选型卡片 ============ */
+const options = [
+  {
+    name:'轻量本地验证',
+    scene:'个人 / 小团队快速验证想法',
+    rows:[
+      ['场景','几百到几千个 chunk 规模，本地文件 + FAISS/Chroma，跑通一个 demo'],
+      ['成本','低，几乎只有开发时间成本'],
+      ['限制','没有权限体系、扩展性差，单机重启要注意持久化配置'],
+      ['不推荐','多用户生产环境、超大规模知识库']
+    ]
+  },
+  {
+    name:'云 API + 托管向量库',
+    scene:'中小团队快速上线，不想自建基础设施',
+    rows:[
+      ['场景','用 Claude / OpenAI 等 API 做 embedding + 生成，配合 Pinecone / Weaviate Cloud / Qdrant Cloud 等托管向量库'],
+      ['成本','按量计费：embedding 调用量 + 向量库存储/查询量 + LLM 调用量'],
+      ['限制','数据需出境到第三方，需评估合规；强依赖第三方可用性和延迟'],
+      ['不推荐','数据合规红线明确不允许出内网的场景']
+    ]
+  },
+  {
+    name:'企业内网知识库',
+    scene:'数据不能出内网、有明确审计要求',
+    rows:[
+      ['场景','私有部署向量库（如自建 Milvus 集群）+ 私有部署或专线访问的 LLM，和企业已有权限系统（SSO/ACL）打通'],
+      ['成本','高——需要自己的运维团队和 GPU 资源'],
+      ['限制','上线周期长，运维负担重'],
+      ['不推荐','小团队 / 短期项目，运维投入和收益不成正比']
+    ]
+  },
+  {
+    name:'多租户知识库',
+    scene:'把 RAG 作为 SaaS 功能提供给多个客户',
+    rows:[
+      ['场景','同一套系统服务多个客户/部门，用 namespace/collection 隔离数据，查询时按租户 id 强制 filter'],
+      ['成本','在云 API 或内网方案基础上叠加隔离与用量统计的工程成本'],
+      ['限制','隔离必须足够硬——不能因为向量检索的模糊性导致跨租户召回到别人的数据'],
+      ['不推荐','知识库天然全公司共享、没有隔离需求时，做多租户反而增加不必要的复杂度']
+    ]
+  }
+];
+const optionGrid = document.getElementById('optionGrid');
+options.forEach((opt, i)=>{
+  const card = document.createElement('div');
+  card.className = 'option-card';
+  card.innerHTML = `
+    <div class="option-head">
+      <div><h4>${opt.name}</h4><div class="scene">${opt.scene}</div></div>
+      <span class="option-caret">+</span>
+    </div>
+    <div class="option-body"><div class="option-body-inner">
+      ${opt.rows.map(r=>`<div class="option-row ${r[0]==='不推荐'?'warn':''}"><b>${r[0]}</b><span>${r[1]}</span></div>`).join('')}
+    </div></div>
+  `;
+  card.querySelector('.option-head').addEventListener('click', ()=> card.classList.toggle('open'));
+  optionGrid.appendChild(card);
+});
+optionGrid.children[0].classList.add('open');
+
+/* ============ 推荐路径 ============ */
+const recommends = [
+  {
+    scene:'个人 / 小团队想验证"内部文档问答有没有价值"',
+    pick:'轻量本地验证',
+    why:'几百个文档规模，本地 embedding + Chroma/FAISS 几天内能跑通。先验证"检索能不能捞到对的内容"这个核心假设，不用一开始就啃基础设施。'
+  },
+  {
+    scene:'价值已验证，要上线给几十到几百内部员工用，数据敏感度中等（如公司制度、产品文档）',
+    pick:'云 API + 托管向量库',
+    why:'不需要自建团队维护向量库和 GPU，能快速迭代；做好 metadata filter 和访问控制，就能覆盖大部分权限需求。'
+  },
+  {
+    scene:'涉及合规红线的数据（医疗、金融、政务、涉密文档），或对外部 API 有强烈的数据不出境要求',
+    pick:'企业内网知识库',
+    why:'数据全程留在内网 / 私有云，配合审计日志能满足合规要求；代价是要接受更高的运维成本和更长的上线周期。'
+  }
+];
+const recommendList = document.getElementById('recommendList');
+recommends.forEach((r, i)=>{
+  const item = document.createElement('div');
+  item.className = 'recommend-item';
+  item.innerHTML = `
+    <div class="rn">0${i+1}</div>
+    <div>
+      <h4>${r.scene}</h4>
+      <div class="pick">推荐：${r.pick}</div>
+      <p>${r.why}</p>
+    </div>
+  `;
+  recommendList.appendChild(item);
+});
+
+/* ============ 常见失败模式 ============ */
+const pitfalls = [
+  {t:'切分太碎', s:'回答支离破碎，经常"找不到"', c:'chunk 丢失了必要的上下文', f:'增大 chunk / 加 overlap / 按标题层级切'},
+  {t:'切分太大', s:'回答里经常夹带无关内容、张冠李戴', c:'一个 chunk 混了多个主题，向量语义被稀释', f:'减小 chunk，按语义段落切分'},
+  {t:'只用向量检索', s:'精确术语 / 编号查不到（如文件编号）', c:'向量检索对稀有词、精确匹配不敏感', f:'混合关键词检索，两路合并排序'},
+  {t:'top_k 不合理', s:'要么漏召回，要么噪声太多', c:'固定阈值，没有结合 reranker 精选', f:'先召回稍大的候选集，再用 reranker 精排前几条'},
+  {t:'上下文塞太多', s:'生成变慢、成本高，模型抓不住重点甚至前后矛盾', c:'把所有召回结果不加筛选全部塞进 prompt', f:'rerank + 压缩，只保留真正相关的几条'},
+  {t:'引用丢失', s:'回答说得头头是道，但没法验证出处', c:'上下文组装时只保留了文本，没保留来源标记', f:'chunk 从入库起就绑定 metadata，组装和生成都要求带引用'},
+  {t:'权限过滤缺失', s:'用户查到了不该看到的内容（如其他部门薪酬文件）', c:'检索只做了语义排序，没做权限 filter', f:'检索前置一步硬性的 metadata/ACL 过滤，而不是靠模型自觉'},
+  {t:'没有离线评测集', s:'每次改切分策略、换模型都不知道效果变好还是变坏', c:'没有一批"问题-标准答案-应命中 chunk"的测试样本', f:'哪怕只有几十条，也建立一个可重复跑的评测集，量化召回率/准确率'}
+];
+const failGrid = document.getElementById('failGrid');
+pitfalls.forEach(p=>{
+  const card = document.createElement('div');
+  card.className = 'fail-card';
+  card.innerHTML = `
+    <div class="fail-head"><h4>${p.t}</h4><span class="fail-plus">+</span></div>
+    <div class="fail-body"><div class="fail-body-inner">
+      <div class="fail-line"><b>症状</b><span>${p.s}</span></div>
+      <div class="fail-line"><b>原因</b><span>${p.c}</span></div>
+      <div class="fail-line fix"><b>修复</b><span>${p.f}</span></div>
+    </div></div>
+  `;
+  card.querySelector('.fail-head').addEventListener('click', ()=> card.classList.toggle('open'));
+  failGrid.appendChild(card);
+});
+</script>
+</body>
+</html>

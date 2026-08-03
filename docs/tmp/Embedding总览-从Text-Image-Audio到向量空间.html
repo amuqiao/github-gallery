@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Embedding：从 Text / Image / Audio 到向量空间</title>
+<style>
+/* ============================================================
+   Design tokens
+   ============================================================ */
+:root{
+  --ink: #0D1220;
+  --ink-deep: #090C16;
+  --panel: #141A2E;
+  --panel-2: #1B2338;
+  --panel-3: #202A46;
+  --grid-line: #232B48;
+  --grid-line-soft: #1A2038;
+  --border: #2B3355;
+  --border-soft: #202848;
+  --text-primary: #EDEFF8;
+  --text-body: #C7CBE2;
+  --text-muted: #8B92B3;
+  --text-dim: #565D80;
+
+  --c-text: #6EA8FE;      /* text embedding — blue */
+  --c-text-dim: #2E4370;
+  --c-image: #FF6EC7;     /* image embedding — magenta */
+  --c-image-dim: #5C2C48;
+  --c-audio: #FFB454;     /* audio embedding — amber */
+  --c-audio-dim: #5C4726;
+  --c-shared: #66F0C9;    /* shared vector space — mint */
+  --c-shared-dim: #1F4A3E;
+  --c-warn: #FF7A7A;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Consolas", "PingFang SC", monospace;
+
+  --container: 1120px;
+  --section-pad: clamp(4.5rem, 9vw, 7.5rem);
+}
+
+*, *::before, *::after{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce){
+  html{ scroll-behavior: auto; }
+  *, *::before, *::after{ animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+body{
+  margin:0;
+  background: var(--ink);
+  color: var(--text-body);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1,h2,h3,h4{
+  color: var(--text-primary);
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+p{ margin: 0 0 1em; }
+a{ color: var(--c-shared); }
+
+.container{
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 clamp(1.25rem, 4vw, 2.5rem);
+  position: relative;
+}
+
+.section{
+  padding: var(--section-pad) 0;
+  position: relative;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.eyebrow{
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  margin-bottom: 1.1rem;
+}
+.eyebrow::before{
+  content: "";
+  width: 1.4em;
+  height: 1px;
+  background: var(--text-dim);
+  display: inline-block;
+}
+
+/* ============================================================
+   Ambient grid backdrop (thematic: coordinate space everywhere)
+   ============================================================ */
+.grid-overlay{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--grid-line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line-soft) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.35;
+  mask-image: radial-gradient(ellipse 100% 60% at 50% 0%, black 40%, transparent 100%);
+}
+
+/* ============================================================
+   Progress axis (top) + side coordinate nav
+   ============================================================ */
+.progress-axis{
+  position: fixed; top:0; left:0; right:0; height:3px;
+  background: var(--border-soft); z-index: 100;
+}
+.progress-fill{
+  height:100%; width:0%;
+  background: linear-gradient(90deg, var(--c-text), var(--c-shared), var(--c-image));
+  transition: width .08s linear;
+}
+
+.axis-nav{
+  position: fixed;
+  right: clamp(0.75rem, 2vw, 1.75rem);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+}
+.axis-item{
+  display:flex; align-items:center; gap:.6em;
+  background:none; border:none; cursor:pointer;
+  padding: 2px 0; font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+.axis-item .tick{
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1.5px solid var(--text-dim);
+  background: var(--ink);
+  transition: all .25s ease;
+  flex-shrink:0;
+}
+.axis-item .label{
+  font-size: .68rem; letter-spacing: .06em;
+  white-space: nowrap;
+  max-width: 0; overflow: hidden; opacity: 0;
+  transition: all .25s ease;
+}
+.axis-item:hover .label{ max-width: 140px; opacity: 1; }
+.axis-item.active .tick{
+  border-color: var(--c-shared);
+  background: var(--c-shared);
+  box-shadow: 0 0 0 4px rgba(102,240,201,.15);
+}
+.axis-item.active .label{ color: var(--c-shared); max-width: 140px; opacity: 1;}
+@media (max-width: 860px){ .axis-nav{ display:none; } }
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero{
+  position: relative;
+  padding: clamp(5rem, 12vw, 8rem) 0 4rem;
+  overflow: hidden;
+}
+.hero::before{
+  content:"";
+  position:absolute; inset: -20% -10% auto -10%; height: 60%;
+  background: radial-gradient(ellipse at 30% 0%, rgba(110,168,254,.16), transparent 60%),
+              radial-gradient(ellipse at 75% 10%, rgba(255,110,199,.12), transparent 55%),
+              radial-gradient(ellipse at 50% 30%, rgba(102,240,201,.10), transparent 60%);
+  pointer-events:none;
+}
+.hero-inner{ position:relative; z-index:2; }
+.hero-title{
+  font-size: clamp(2.3rem, 5.4vw, 4rem);
+  line-height: 1.18;
+  max-width: 16em;
+  margin-bottom: 1.4rem;
+}
+.hero-title .hl-text{ color: var(--c-text); }
+.hero-title .hl-image{ color: var(--c-image); }
+.hero-title .hl-audio{ color: var(--c-audio); }
+.hero-sub{
+  font-size: clamp(1rem, 1.6vw, 1.18rem);
+  color: var(--text-body);
+  max-width: 42em;
+}
+.hero-hint{
+  display:inline-flex; align-items:center; gap:.6em;
+  font-family: var(--font-mono); font-size: .78rem; color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: .5em 1em; margin-top: 1.4rem;
+  background: rgba(255,255,255,.02);
+}
+.hero-hint .dot{ width:6px;height:6px;border-radius:50%; background: var(--c-shared); animation: pulse 1.8s ease-in-out infinite; }
+@keyframes pulse{ 0%,100%{ opacity:1; transform:scale(1);} 50%{ opacity:.4; transform:scale(1.6);} }
+
+.hero-stage{
+  position: relative;
+  margin-top: clamp(2.5rem, 5vw, 3.5rem);
+  z-index: 2;
+}
+.stage-panel{
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  padding: clamp(1rem, 2.5vw, 1.75rem);
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(220px, 280px);
+  gap: 1.5rem;
+  box-shadow: 0 30px 60px -30px rgba(0,0,0,.6);
+}
+@media (max-width: 780px){
+  .stage-panel{ grid-template-columns: 1fr; }
+}
+.stage-svg-wrap{ position:relative; }
+#heroSvg{ width:100%; height:auto; display:block; touch-action: none; }
+.pt{ cursor: pointer; }
+.pt circle{ transition: r .15s ease, stroke-width .15s ease, filter .15s ease; }
+.pt:hover circle, .pt.is-selected circle{ filter: brightness(1.3); }
+.pt.is-selected circle{ stroke: #fff; stroke-width: 2.5; }
+.pt-label{
+  font-family: var(--font-mono); font-size: 10.5px; fill: var(--text-muted);
+  pointer-events:none;
+}
+.vec-line{ stroke-dasharray: 3 4; opacity: 0; transition: opacity .2s ease; }
+.vec-line.show{ opacity: .8; }
+.link-line{ opacity: 0; transition: opacity .2s ease; }
+.link-line.show{ opacity: 1; }
+.origin-mark{ opacity:.9; }
+.axis-line{ stroke: var(--border); stroke-width: 1; }
+
+.readout{
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: rgba(0,0,0,.18);
+  padding: 1.1rem 1.2rem;
+  display:flex; flex-direction:column; gap: .9rem;
+  font-family: var(--font-mono);
+  min-height: 100%;
+}
+.readout h4{
+  font-family: var(--font-sans); font-size: .82rem; letter-spacing:.04em;
+  color: var(--text-muted); font-weight:600; text-transform: uppercase;
+}
+.readout .pair{ display:flex; flex-direction:column; gap:.15rem; font-size: .85rem; }
+.readout .pair .tag{ font-size:.72rem; padding: .1em .5em; border-radius:5px; display:inline-block; margin-right:.3em;}
+.readout .metric{ display:flex; justify-content:space-between; align-items:baseline; padding: .5rem 0; border-top: 1px dashed var(--border-soft); }
+.readout .metric .k{ color: var(--text-muted); font-size:.78rem; }
+.readout .metric .v{ color: var(--text-primary); font-size: 1.05rem; font-weight:600; }
+.readout .empty-hint{ color: var(--text-dim); font-size:.82rem; line-height:1.6; font-family: var(--font-sans); }
+.readout .note{ font-family: var(--font-sans); font-size:.78rem; color: var(--text-dim); line-height:1.6; }
+.legend{ display:flex; flex-wrap:wrap; gap: .9rem; margin-top: 1rem; font-family: var(--font-mono); font-size:.76rem; color: var(--text-muted);}
+.legend span{ display:inline-flex; align-items:center; gap:.4em; }
+.legend i{ width:9px;height:9px;border-radius:50%; display:inline-block; }
+.tag-text{ background: var(--c-text-dim); color: var(--c-text); }
+.tag-image{ background: var(--c-image-dim); color: var(--c-image); }
+.tag-audio{ background: var(--c-audio-dim); color: var(--c-audio); }
+
+/* ============================================================
+   WHY (section 01)
+   ============================================================ */
+.section-head{ max-width: 46em; margin-bottom: 2.75rem; }
+.section-head h2{ font-size: clamp(1.7rem, 3.2vw, 2.5rem); margin-bottom: .85rem; line-height:1.28;}
+.section-head p{ color: var(--text-body); font-size: 1.02rem; }
+
+.why-grid{
+  display:grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+@media (max-width: 900px){ .why-grid{ grid-template-columns: 1fr; } }
+
+.raw-card{
+  border:1px solid var(--border); border-radius:16px;
+  background: var(--panel);
+  padding: 1.4rem 1.4rem 1.5rem;
+  display:flex; flex-direction:column; gap: 1rem;
+}
+.raw-card .rc-head{ display:flex; align-items:center; gap:.6em; }
+.raw-card .rc-tag{
+  font-family: var(--font-mono); font-size:.68rem; letter-spacing:.06em;
+  padding: .25em .6em; border-radius: 6px; text-transform:uppercase;
+}
+.raw-card.text .rc-tag{ background: var(--c-text-dim); color: var(--c-text); }
+.raw-card.image .rc-tag{ background: var(--c-image-dim); color: var(--c-image); }
+.raw-card.audio .rc-tag{ background: var(--c-audio-dim); color: var(--c-audio); }
+.raw-card .rc-title{ font-size: .98rem; color: var(--text-primary); font-weight:600; }
+
+.raw-compare{ display:flex; align-items:center; gap:.6rem; }
+.raw-compare .vs{ font-family: var(--font-mono); font-size:.7rem; color: var(--text-dim); flex-shrink:0; }
+.raw-block{
+  flex:1; min-width:0;
+  border:1px solid var(--border-soft); border-radius:10px;
+  background: rgba(0,0,0,.2);
+  padding: .6rem .5rem;
+}
+
+/* text char codes */
+.char-row{ display:flex; flex-wrap:wrap; gap:.3rem; justify-content:center; }
+.char-chip{ text-align:center; font-family: var(--font-mono); }
+.char-chip .ch{ font-size: .95rem; color: var(--text-primary); }
+.char-chip .code{ font-size: .58rem; color: var(--text-dim); display:block; }
+
+/* pixel grid */
+.pixel-grid{ display:grid; grid-template-columns: repeat(6, 1fr); gap:2px; }
+.pixel-grid div{ aspect-ratio:1; border-radius:2px; }
+
+/* waveform */
+.wave-svg{ width:100%; height:44px; display:block; }
+
+.naive-metric{
+  display:flex; justify-content:space-between; align-items:center;
+  font-family: var(--font-mono); font-size:.78rem;
+  padding: .55rem .75rem; border-radius: 8px;
+  background: rgba(255,122,122,.08); border: 1px solid rgba(255,122,122,.25);
+  color: var(--c-warn);
+}
+.raw-card .rc-caption{ font-size:.85rem; color: var(--text-muted); line-height:1.6; }
+.raw-card .rc-caption b{ color: var(--text-body); }
+
+.translate-flow{
+  display:flex; align-items:center; gap: 1rem; flex-wrap:wrap;
+  border:1px solid var(--border); border-radius:16px;
+  background: linear-gradient(135deg, var(--panel), var(--panel-2));
+  padding: 1.75rem 1.5rem;
+  margin-bottom: 1.75rem;
+}
+.flow-col{ display:flex; flex-direction:column; align-items:center; gap:.5rem; text-align:center; }
+.flow-col .fc-box{
+  font-family: var(--font-mono); font-size:.78rem;
+  border:1px dashed var(--border); border-radius:10px;
+  padding: .8rem 1rem; color: var(--text-muted); min-width:120px;
+}
+.flow-col .fc-label{ font-size:.72rem; color: var(--text-dim); }
+.flow-arrow{ color: var(--text-dim); font-size:1.3rem; flex-shrink:0; }
+.flow-col.encoder .fc-box{
+  border-style: solid; border-color: var(--c-shared);
+  color: var(--c-shared); background: rgba(102,240,201,.06);
+  font-weight:600;
+}
+.flow-col.vector .fc-box{ color: var(--text-primary); border-color:var(--border); text-align:left; }
+
+.definition-box{
+  border-left: 3px solid var(--c-shared);
+  background: rgba(102,240,201,.06);
+  border-radius: 0 12px 12px 0;
+  padding: 1.1rem 1.4rem;
+  font-size: 1rem;
+  color: var(--text-body);
+}
+.definition-box b{ color: var(--text-primary); }
+
+/* ============================================================
+   SPACE (section 02)
+   ============================================================ */
+.concept-grid{
+  display:grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+@media (max-width: 900px){ .concept-grid{ grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 520px){ .concept-grid{ grid-template-columns: 1fr; } }
+.concept-card{
+  border:1px solid var(--border); border-radius: 14px; background: var(--panel);
+  padding: 1.1rem; display:flex; flex-direction:column; gap:.7rem;
+}
+.concept-card .cc-icon{ width:100%; height:56px; }
+.concept-card .cc-title{ color: var(--text-primary); font-weight:600; font-size: .96rem; }
+.concept-card .cc-desc{ font-size:.83rem; color: var(--text-muted); line-height:1.6; }
+
+.demo-panel{
+  border:1px solid var(--border); border-radius: 20px;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  padding: clamp(1.25rem, 3vw, 2rem);
+  display:grid; grid-template-columns: minmax(0,1.1fr) minmax(240px, 320px);
+  gap: 2rem; margin-bottom: 2rem;
+}
+@media (max-width: 820px){ .demo-panel{ grid-template-columns: 1fr; } }
+#angleSvg{ width:100%; height:auto; display:block; }
+.slider-row{ display:flex; flex-direction:column; gap:.4rem; margin-top: 1rem; }
+.slider-row label{ display:flex; justify-content:space-between; font-family: var(--font-mono); font-size:.78rem; color: var(--text-muted); }
+.slider-row label b{ color: var(--text-primary); font-weight:600; }
+.slider-row input[type=range]{
+  -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+  background: var(--border); outline:none;
+}
+.slider-row input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%;
+  background: var(--c-shared); cursor:pointer; border: 2px solid var(--ink);
+  box-shadow: 0 0 0 2px var(--c-shared);
+}
+.slider-row input[type=range]::-moz-range-thumb{
+  width:16px; height:16px; border-radius:50%; background: var(--c-shared); cursor:pointer; border: 2px solid var(--ink);
+}
+
+.demo-readout{ display:flex; flex-direction:column; gap: .9rem; }
+.demo-readout .metric-big{
+  border:1px solid var(--border-soft); border-radius: 12px; padding: .9rem 1.1rem;
+  background: rgba(0,0,0,.18);
+}
+.demo-readout .metric-big .k{ font-family: var(--font-mono); font-size:.72rem; color: var(--text-muted); text-transform:uppercase; letter-spacing:.05em;}
+.demo-readout .metric-big .v{ font-size: 1.6rem; font-weight:700; color: var(--text-primary); font-family: var(--font-mono); }
+.demo-readout .interp{ font-size:.85rem; color: var(--text-body); line-height:1.6; padding-top:.2rem; }
+.demo-readout .interp b{ color: var(--c-shared); }
+
+.cluster-toggle-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap: .75rem;}
+.toggle-btn{
+  font-family: var(--font-mono); font-size:.78rem; color: var(--text-primary);
+  background: var(--panel-2); border:1px solid var(--border); border-radius: 999px;
+  padding: .5em 1.1em; cursor:pointer; transition: all .2s ease;
+}
+.toggle-btn.active{ background: var(--c-shared); color: var(--ink-deep); border-color: var(--c-shared); font-weight:700; }
+#clusterSvg{ width:100%; height:auto; display:block; }
+.zone-rect{ opacity:0; transition: opacity .3s ease; }
+.zone-rect.show{ opacity: 1; }
+.boundary-line{ opacity:0; transition: opacity .3s ease; stroke-dasharray: 6 5; }
+.boundary-line.show{ opacity:1; }
+
+.metric-table{ width:100%; border-collapse: collapse; margin-top: 1rem; font-size: .9rem; }
+.metric-table th, .metric-table td{ text-align:left; padding: .85rem 1rem; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+.metric-table th{ font-family: var(--font-mono); font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--text-dim); font-weight:600; }
+.metric-table td{ color: var(--text-body); }
+.metric-table td b, .metric-table td code{ color: var(--text-primary); }
+.metric-table code{ font-family: var(--font-mono); font-size:.85em; background: rgba(255,255,255,.05); padding:.1em .4em; border-radius:4px; }
+.metric-table tr:last-child td{ border-bottom:none; }
+.table-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:16px; background:var(--panel); padding: .5rem 1.25rem; }
+
+/* ============================================================
+   TASKS (section 03) — radial hub diagram
+   ============================================================ */
+.tasks-wrap{
+  display:grid; grid-template-columns: minmax(0,1.15fr) minmax(260px,360px); gap: 2rem;
+  align-items: stretch;
+}
+@media (max-width: 860px){ .tasks-wrap{ grid-template-columns: 1fr; } }
+#tasksSvg{ width:100%; height:auto; display:block; }
+.task-node{ cursor:pointer; }
+.task-node .tn-circle{ transition: all .2s ease; }
+.task-node:hover .tn-circle, .task-node.active .tn-circle{
+  filter: brightness(1.25);
+  stroke: var(--text-primary);
+}
+.task-node .tn-label{
+  font-family: var(--font-mono); font-size: 12.5px; fill: var(--text-primary);
+  text-anchor: middle; pointer-events:none;
+}
+.task-spoke{ stroke: var(--border); stroke-width: 1.5; transition: stroke .2s ease; }
+.task-node.active ~ .task-spoke,
+.task-spoke.active{ stroke: var(--c-shared); }
+.hub-circle{ fill: var(--panel-2); stroke: var(--c-shared); stroke-width: 1.5; }
+.hub-label{ font-family: var(--font-mono); font-size: 14px; fill: var(--c-shared); text-anchor: middle; font-weight:700; }
+.hub-sub{ font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-dim); text-anchor: middle; }
+
+.task-detail{
+  border: 1px solid var(--border); border-radius: 18px;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  padding: 1.6rem 1.5rem;
+  display:flex; flex-direction:column; gap: 1rem;
+  min-height: 260px;
+}
+.task-detail .td-tag{
+  font-family: var(--font-mono); font-size:.7rem; letter-spacing:.05em;
+  color: var(--c-shared); text-transform:uppercase;
+}
+.task-detail .td-title{ font-size: 1.3rem; color: var(--text-primary); font-weight:700; }
+.task-detail .td-mech{ font-size:.92rem; color: var(--text-body); line-height:1.7; }
+.task-detail .td-example{
+  font-size:.85rem; color: var(--text-muted); line-height:1.6;
+  border-top: 1px dashed var(--border-soft); padding-top: .9rem;
+}
+.task-detail .td-example b{ color: var(--text-body); }
+
+/* ============================================================
+   COMPARE (section 04)
+   ============================================================ */
+.pipeline-grid{
+  display:grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+@media (max-width: 900px){ .pipeline-grid{ grid-template-columns: 1fr; } }
+.pipeline-col{
+  border:1px solid var(--border); border-radius:16px; background: var(--panel);
+  padding: 1.3rem 1.2rem; display:flex; flex-direction:column; gap: .55rem;
+}
+.pipeline-col .pc-head{ display:flex; align-items:center; gap:.5em; margin-bottom:.4rem; }
+.pipeline-col .pc-dot{ width:10px;height:10px;border-radius:50%; }
+.pipeline-col.text .pc-dot{ background: var(--c-text); }
+.pipeline-col.image .pc-dot{ background: var(--c-image); }
+.pipeline-col.audio .pc-dot{ background: var(--c-audio); }
+.pipeline-col .pc-title{ font-weight:700; color: var(--text-primary); font-size: 1rem; }
+
+.stage-box{
+  border:1px solid var(--border-soft); border-radius: 10px;
+  background: rgba(255,255,255,.02);
+  padding: .65rem .8rem; cursor:pointer;
+  transition: all .18s ease;
+}
+.stage-box:hover, .stage-box.hl{
+  border-color: var(--c-shared); background: rgba(102,240,201,.08);
+}
+.stage-box .sb-stage{ font-family: var(--font-mono); font-size:.65rem; color: var(--text-dim); text-transform:uppercase; letter-spacing:.05em; }
+.stage-box .sb-text{ font-size:.87rem; color: var(--text-body); margin-top:.15rem; }
+.pipeline-col .pc-arrow{ text-align:center; color: var(--text-dim); font-size:.85rem; }
+
+.compare-hint{ font-size:.85rem; color: var(--text-dim); text-align:center; margin-bottom: 2rem; font-family: var(--font-mono);}
+.compare-table-wrap{ overflow-x:auto; }
+.compare-table{ width:100%; min-width: 720px; border-collapse:collapse; font-size:.9rem; }
+.compare-table th, .compare-table td{ padding: .85rem 1rem; border-bottom:1px solid var(--border-soft); text-align:left; vertical-align:top; }
+.compare-table thead th{ font-family: var(--font-mono); font-size:.75rem; color: var(--text-primary); text-transform:uppercase; letter-spacing:.04em; border-bottom: 1px solid var(--border); }
+.compare-table th:first-child, .compare-table td:first-child{ color: var(--text-dim); font-family: var(--font-mono); font-size:.78rem; white-space:nowrap; }
+.compare-table td{ color: var(--text-body); line-height:1.6; }
+.compare-table th.col-text{ color: var(--c-text); }
+.compare-table th.col-image{ color: var(--c-image); }
+.compare-table th.col-audio{ color: var(--c-audio); }
+.compare-table tr:last-child td{ border-bottom: none; }
+
+/* ============================================================
+   PITFALLS (section 05) — accordion
+   ============================================================ */
+.accordion{ display:flex; flex-direction:column; gap: .8rem; }
+.acc-item{
+  border:1px solid var(--border); border-radius: 14px; background: var(--panel);
+  overflow:hidden;
+}
+.acc-header{
+  width:100%; display:flex; align-items:center; gap: 1rem;
+  background:none; border:none; cursor:pointer; text-align:left;
+  padding: 1.05rem 1.3rem; color: var(--text-primary);
+  font-size: 1rem; font-weight:600; font-family: var(--font-sans);
+}
+.acc-header .acc-no{
+  font-family: var(--font-mono); font-size:.78rem; color: var(--c-warn);
+  border: 1px solid rgba(255,122,122,.35); border-radius:6px;
+  padding: .15em .5em; flex-shrink:0;
+}
+.acc-header .acc-q{ flex:1; }
+.acc-header .acc-chevron{
+  color: var(--text-dim); transition: transform .25s ease; flex-shrink:0; font-size:.85rem;
+}
+.acc-item.open .acc-chevron{ transform: rotate(180deg); color: var(--c-shared); }
+.acc-body{ display:grid; grid-template-rows: 0fr; transition: grid-template-rows .32s ease; }
+.acc-item.open .acc-body{ grid-template-rows: 1fr; }
+.acc-body-inner{ overflow:hidden; }
+.acc-body-content{
+  padding: 0 1.3rem 1.3rem calc(1.3rem + 2.6rem);
+  font-size: .92rem; color: var(--text-body); line-height:1.75;
+}
+.acc-body-content b{ color: var(--text-primary); }
+@media (max-width: 560px){ .acc-body-content{ padding-left: 1.3rem; } }
+
+/* ============================================================
+   ROADMAP (section 06)
+   ============================================================ */
+.recap-box{
+  border:1px solid var(--border); border-radius: 18px;
+  background: linear-gradient(135deg, var(--panel), var(--panel-2));
+  padding: clamp(1.5rem, 3vw, 2.25rem);
+  font-size: 1.02rem; color: var(--text-body); line-height: 1.85;
+  margin-bottom: 3rem;
+}
+.recap-box b{ color: var(--text-primary); }
+
+.roadmap-track{ position:relative; padding-top: 1.2rem; }
+.roadmap-line{
+  position:absolute; top: calc(1.2rem + 11px); left: 0; right:0; height: 2px;
+  background: repeating-linear-gradient(90deg, var(--border) 0 8px, transparent 8px 14px);
+}
+.roadmap-stops{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; position:relative; }
+@media (max-width: 860px){ .roadmap-stops{ grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px){ .roadmap-stops{ grid-template-columns: 1fr; } }
+.roadmap-stop{ display:flex; flex-direction:column; gap:.6rem; }
+.rs-node{
+  width: 24px; height:24px; border-radius:50%;
+  background: var(--panel); border: 2px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-family: var(--font-mono); font-size:.65rem; color: var(--text-dim);
+}
+.roadmap-stop.current .rs-node{ background: var(--c-shared); border-color: var(--c-shared); color: var(--ink-deep); font-weight:700; }
+.rs-tag{ font-family: var(--font-mono); font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color: var(--text-dim); }
+.roadmap-stop.current .rs-tag{ color: var(--c-shared); }
+.rs-title{ font-size:.98rem; font-weight:700; color: var(--text-primary); }
+.rs-desc{ font-size:.83rem; color: var(--text-muted); line-height:1.6; }
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.site-footer{
+  padding: 2.5rem 0 4rem;
+  text-align:center;
+  font-family: var(--font-mono); font-size:.78rem; color: var(--text-dim);
+}
+
+/* SECTION PLACEHOLDER: FOOTER */
+
+</style>
+</head>
+<body>
+
+<div class="grid-overlay" aria-hidden="true"></div>
+
+<div class="progress-axis" aria-hidden="true"><div class="progress-fill" id="progressFill"></div></div>
+
+<nav class="axis-nav" id="axisNav" aria-label="章节导航">
+  <button class="axis-item" data-target="hero"><span class="label">起点</span><span class="tick"></span></button>
+  <button class="axis-item" data-target="why"><span class="label">为什么需要 Embedding</span><span class="tick"></span></button>
+  <button class="axis-item" data-target="space"><span class="label">向量空间怎么表达相似</span><span class="tick"></span></button>
+  <button class="axis-item" data-target="tasks"><span class="label">能支撑哪些任务</span><span class="tick"></span></button>
+  <button class="axis-item" data-target="compare"><span class="label">三种模态对比</span><span class="tick"></span></button>
+  <button class="axis-item" data-target="pitfalls"><span class="label">常见误区</span><span class="tick"></span></button>
+  <button class="axis-item" data-target="roadmap"><span class="label">小结与路线图</span><span class="tick"></span></button>
+</nav>
+
+<header class="hero" id="hero">
+  <div class="container hero-inner">
+    <div class="eyebrow">EMBEDDING 系列 · 总览篇</div>
+    <h1 class="hero-title">
+      把 <span class="hl-text">文本</span>、<span class="hl-image">图片</span>、<span class="hl-audio">声音</span><br>
+      都变成空间里的一个坐标
+    </h1>
+    <p class="hero-sub">
+      计算机没法直接判断"这句话"和"那句话"意思像不像，也没法判断两张图片、两段声音是不是在说同一件事——
+      它们本来就是完全不同的数据形式。Embedding 做的事情，就是把这些五花八门的原始输入，统一"翻译"成一组数字（向量），
+      让"意思相不相近"这件事，变成向量空间里可以计算的"距离"和"方向"。
+    </p>
+    <div class="hero-hint"><span class="dot"></span> 下面这些点是示意数据，点选任意两个点，看看空间里的"相似"是怎么算出来的</div>
+  </div>
+
+  <div class="hero-stage container">
+    <div class="stage-panel">
+      <div class="stage-svg-wrap">
+        <svg id="heroSvg" viewBox="0 0 800 520" xmlns="http://www.w3.org/2000/svg">
+          <line class="axis-line" x1="0" y1="260" x2="800" y2="260"></line>
+          <line class="axis-line" x1="400" y1="0" x2="400" y2="520"></line>
+
+          <g id="vecLines"></g>
+          <line id="linkLine" class="link-line" x1="0" y1="0" x2="0" y2="0" stroke="var(--c-shared)" stroke-width="2"></line>
+
+          <g class="origin-mark">
+            <circle cx="400" cy="260" r="4" fill="var(--text-muted)"></circle>
+            <text x="410" y="278" class="pt-label">参照原点</text>
+          </g>
+
+          <g id="pointsLayer">
+            <!-- text embedding points -->
+            <g class="pt" data-id="t_cat" data-modality="text" data-label="文本：「猫」" data-x="250" data-y="150">
+              <circle cx="250" cy="150" r="9" fill="var(--c-text)" fill-opacity="0.85" stroke="var(--c-text)"></circle>
+              <text x="250" y="136" class="pt-label" text-anchor="middle">「猫」</text>
+            </g>
+            <g class="pt" data-id="t_catsyn" data-modality="text" data-label="文本：「猫咪」（同义改写）" data-x="275" data-y="128">
+              <circle cx="275" cy="128" r="9" fill="var(--c-text)" fill-opacity="0.85" stroke="var(--c-text)"></circle>
+              <text x="295" y="120" class="pt-label">「猫咪」</text>
+            </g>
+            <g class="pt" data-id="t_dog" data-modality="text" data-label="文本：「狗」" data-x="430" data-y="108">
+              <circle cx="430" cy="108" r="9" fill="var(--c-text)" fill-opacity="0.85" stroke="var(--c-text)"></circle>
+              <text x="430" y="94" class="pt-label" text-anchor="middle">「狗」</text>
+            </g>
+            <g class="pt" data-id="t_stock" data-modality="text" data-label="文本：「股票」" data-x="604" data-y="398">
+              <circle cx="604" cy="398" r="9" fill="var(--c-text)" fill-opacity="0.85" stroke="var(--c-text)"></circle>
+              <text x="604" y="416" class="pt-label" text-anchor="middle">「股票」</text>
+            </g>
+            <g class="pt" data-id="t_piano" data-modality="text" data-label="文本：「钢琴曲」" data-x="150" data-y="378">
+              <circle cx="150" cy="378" r="9" fill="var(--c-text)" fill-opacity="0.85" stroke="var(--c-text)"></circle>
+              <text x="150" y="364" class="pt-label" text-anchor="middle">「钢琴曲」</text>
+            </g>
+
+            <!-- image embedding points -->
+            <g class="pt" data-id="i_cat1" data-modality="image" data-label="图片：猫照片 A" data-x="305" data-y="168">
+              <circle cx="305" cy="168" r="9" fill="var(--c-image)" fill-opacity="0.85" stroke="var(--c-image)"></circle>
+              <text x="322" y="176" class="pt-label">猫照片 A</text>
+            </g>
+            <g class="pt" data-id="i_cat2" data-modality="image" data-label="图片：猫照片（裁剪 + 滤镜版）" data-x="232" data-y="188">
+              <circle cx="232" cy="188" r="9" fill="var(--c-image)" fill-opacity="0.85" stroke="var(--c-image)"></circle>
+              <text x="215" y="206" class="pt-label" text-anchor="end">猫照片（裁剪版）</text>
+            </g>
+            <g class="pt" data-id="i_dog" data-modality="image" data-label="图片：狗照片" data-x="460" data-y="138">
+              <circle cx="460" cy="138" r="9" fill="var(--c-image)" fill-opacity="0.85" stroke="var(--c-image)"></circle>
+              <text x="472" y="130" class="pt-label">狗照片</text>
+            </g>
+            <g class="pt" data-id="i_chart" data-modality="image" data-label="图片：股价走势截图" data-x="636" data-y="420">
+              <circle cx="636" cy="420" r="9" fill="var(--c-image)" fill-opacity="0.85" stroke="var(--c-image)"></circle>
+              <text x="636" y="438" class="pt-label" text-anchor="middle">股价截图</text>
+            </g>
+            <g class="pt" data-id="i_piano" data-modality="image" data-label="图片：钢琴照片" data-x="118" data-y="348">
+              <circle cx="118" cy="348" r="9" fill="var(--c-image)" fill-opacity="0.85" stroke="var(--c-image)"></circle>
+              <text x="103" y="336" class="pt-label" text-anchor="end">钢琴照片</text>
+            </g>
+
+            <!-- audio embedding points -->
+            <g class="pt" data-id="a_meow" data-modality="audio" data-label="音频：一段猫叫声" data-x="282" data-y="118">
+              <circle cx="282" cy="118" r="9" fill="var(--c-audio)" fill-opacity="0.85" stroke="var(--c-audio)"></circle>
+              <text x="282" y="104" class="pt-label" text-anchor="middle">猫叫声</text>
+            </g>
+            <g class="pt" data-id="a_piano" data-modality="audio" data-label="音频：一段钢琴录音" data-x="182" data-y="408">
+              <circle cx="182" cy="408" r="9" fill="var(--c-audio)" fill-opacity="0.85" stroke="var(--c-audio)"></circle>
+              <text x="182" y="426" class="pt-label" text-anchor="middle">钢琴录音</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="readout" id="heroReadout">
+        <h4>相似度读数</h4>
+        <div id="readoutBody">
+          <p class="empty-hint">先点一个点，再点第二个点 —— 我会画出它们和原点连成的"向量"，并算出两种最常用的"相似"指标。</p>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--c-text)"></i>文本</span>
+          <span><i style="background:var(--c-image)"></i>图片</span>
+          <span><i style="background:var(--c-audio)"></i>音频</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section id="why" class="section">
+  <div class="container">
+    <div class="section-head">
+      <div class="eyebrow">01 · 问题从哪来</div>
+      <h2>计算机看到的，从来不是"意思"</h2>
+      <p>
+        「我买了一杯咖啡」和「我今天喝了拿铁」，人一眼就能看出说的是相近的事；两张裁剪角度不同的猫照片，
+        一看就知道是同一只猫；升调播放的一段语音，听感上还是同一句话。但如果你让计算机去"逐字符 / 逐像素 / 逐采样点"地直接比较，
+        这些"明明很像"的东西，反而会被判定成几乎完全不同——原始数据的表层，根本不是意思本身。
+      </p>
+    </div>
+
+    <div class="why-grid">
+      <div class="raw-card text">
+        <div class="rc-head"><span class="rc-tag">Text</span><span class="rc-title">文字是字符序列</span></div>
+        <div class="raw-block">
+          <div class="char-row">
+            <span class="char-chip"><span class="ch">我</span><span class="code">25105</span></span>
+            <span class="char-chip"><span class="ch">买</span><span class="code">20080</span></span>
+            <span class="char-chip"><span class="ch">咖</span><span class="code">21654</span></span>
+            <span class="char-chip"><span class="ch">啡</span><span class="code">21857</span></span>
+          </div>
+        </div>
+        <div class="raw-compare"><span class="vs">vs</span></div>
+        <div class="raw-block">
+          <div class="char-row">
+            <span class="char-chip"><span class="ch">我</span><span class="code">25105</span></span>
+            <span class="char-chip"><span class="ch">拿</span><span class="code">25343</span></span>
+            <span class="char-chip"><span class="ch">铁</span><span class="code">38081</span></span>
+          </div>
+        </div>
+        <div class="naive-metric"><span>逐字符重合度</span><span>≈ 18%</span></div>
+        <p class="rc-caption">但两句话说的其实是<b>同一类事情</b>——买了杯咖啡。字面重合度低，不代表意思远。</p>
+      </div>
+
+      <div class="raw-card image">
+        <div class="rc-head"><span class="rc-tag">Image</span><span class="rc-title">图片是像素矩阵</span></div>
+        <div class="raw-compare">
+          <div class="raw-block">
+            <div class="pixel-grid" id="pixelGridA"></div>
+          </div>
+          <span class="vs">vs</span>
+          <div class="raw-block">
+            <div class="pixel-grid" id="pixelGridB"></div>
+          </div>
+        </div>
+        <div class="naive-metric"><span>逐像素差异</span><span>≈ 89%</span></div>
+        <p class="rc-caption">同一张猫照片，<b>裁剪 / 平移一点</b>，对应像素值就大面积错位——但看的人知道，还是同一只猫。</p>
+      </div>
+
+      <div class="raw-card audio">
+        <div class="rc-head"><span class="rc-tag">Audio</span><span class="rc-title">声音是波形采样点</span></div>
+        <div class="raw-block">
+          <svg class="wave-svg" viewBox="0 0 200 44" preserveAspectRatio="none">
+            <path d="M0,22 Q10,4 20,22 T40,22 T60,22 T80,22 T100,22 T120,22 T140,22 T160,22 T180,22 T200,22" fill="none" stroke="var(--c-audio)" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="raw-compare"><span class="vs">vs</span></div>
+        <div class="raw-block">
+          <svg class="wave-svg" viewBox="0 0 200 44" preserveAspectRatio="none">
+            <path d="M0,22 Q6,2 12,22 T24,22 T36,22 T48,22 T60,22 T72,22 T84,22 T96,22 T108,22 T120,22 T132,22 T144,22 T156,22 T168,22 T180,22 T192,22 T204,22" fill="none" stroke="var(--c-audio)" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="naive-metric"><span>逐采样点相关性</span><span>≈ 0.06</span></div>
+        <p class="rc-caption">同一句话被<b>加速 / 升调</b>播放后，波形形状完全对不上，但听到的人知道内容没变。</p>
+      </div>
+    </div>
+
+    <div class="translate-flow">
+      <div class="flow-col">
+        <div class="fc-box">文本 / 图片 / 音频<br>原始输入</div>
+        <div class="fc-label">形式各异，无法直接比较</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-col encoder">
+        <div class="fc-box">Encoder<br>（编码模型）</div>
+        <div class="fc-label">学会"什么样才算像"</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-col vector">
+        <div class="fc-box">[ 0.12, &minus;0.45, 0.88,<br>&hellip; , 0.03 ]</div>
+        <div class="fc-label">定长向量，可计算可索引</div>
+      </div>
+    </div>
+
+    <div class="definition-box">
+      <b>Embedding</b>：用一组固定长度的数字（向量），表示一个对象在"语义空间"里的位置。
+      Encoder 在训练中被反复要求——把意思相近的东西，映射到空间里离得近的位置；把意思不相关的东西，推得远一点。
+      从这一步开始，"相不相似"就从一个模糊的直觉，变成了向量之间可以直接计算的<b>距离</b>和<b>方向</b>。
+    </div>
+  </div>
+</section>
+
+<section id="space" class="section">
+  <div class="container">
+    <div class="section-head">
+      <div class="eyebrow">02 · 核心机制</div>
+      <h2>向量空间里，"相似"到底是什么</h2>
+      <p>
+        一旦文本、图片、音频都变成了向量，"相似"就不再是一句模糊的形容词，而是几种可以直接算出来的几何关系：
+        点和点挨得有多近（<b style="color:var(--text-primary)">距离</b>），指向是不是差不多（<b style="color:var(--text-primary)">方向</b>），
+        一群点是不是扎在一起（<b style="color:var(--text-primary)">聚类</b>），以及能不能画一条线把两类分开（<b style="color:var(--text-primary)">边界</b>）。
+      </p>
+    </div>
+
+    <div class="concept-grid">
+      <div class="concept-card">
+        <svg class="cc-icon" viewBox="0 0 120 56"><line x1="14" y1="40" x2="106" y2="18" stroke="var(--border)" stroke-width="2" stroke-dasharray="4 4"/><circle cx="14" cy="40" r="6" fill="var(--c-text)"/><circle cx="106" cy="18" r="6" fill="var(--c-image)"/></svg>
+        <div class="cc-title">距离</div>
+        <div class="cc-desc">两个向量隔多远。离得越近，通常代表原始内容的意思越接近。</div>
+      </div>
+      <div class="concept-card">
+        <svg class="cc-icon" viewBox="0 0 120 56"><line x1="10" y1="48" x2="100" y2="48" stroke="var(--border)" stroke-width="1"/><line x1="10" y1="48" x2="10" y2="8" stroke="var(--border)" stroke-width="1"/>
+          <line x1="10" y1="48" x2="90" y2="16" stroke="var(--c-shared)" stroke-width="2.5" marker-end="url(#arrow1)"/>
+          <line x1="10" y1="48" x2="70" y2="30" stroke="var(--c-audio)" stroke-width="2.5" marker-end="url(#arrow2)"/>
+          <defs><marker id="arrow1" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--c-shared)"/></marker>
+          <marker id="arrow2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--c-audio)"/></marker></defs>
+        </svg>
+        <div class="cc-title">方向</div>
+        <div class="cc-desc">从原点出发指向哪。方向越接近，代表"语义倾向"越一致，和向量本身长短无关。</div>
+      </div>
+      <div class="concept-card">
+        <svg class="cc-icon" viewBox="0 0 120 56">
+          <ellipse cx="30" cy="30" rx="26" ry="18" fill="var(--c-text)" fill-opacity="0.12"/>
+          <ellipse cx="90" cy="26" rx="22" ry="16" fill="var(--c-image)" fill-opacity="0.12"/>
+          <circle cx="20" cy="24" r="4" fill="var(--c-text)"/><circle cx="34" cy="36" r="4" fill="var(--c-text)"/><circle cx="30" cy="18" r="4" fill="var(--c-text)"/>
+          <circle cx="84" cy="20" r="4" fill="var(--c-image)"/><circle cx="98" cy="30" r="4" fill="var(--c-image)"/><circle cx="88" cy="34" r="4" fill="var(--c-image)"/>
+        </svg>
+        <div class="cc-title">聚类</div>
+        <div class="cc-desc">相近的点会自然扎堆。不用标签，肉眼 / 算法都能看出空间里有几团。</div>
+      </div>
+      <div class="concept-card">
+        <svg class="cc-icon" viewBox="0 0 120 56">
+          <path d="M50,4 L70,52" stroke="var(--border)" stroke-width="2" stroke-dasharray="5 4"/>
+          <rect x="0" y="0" width="55" height="56" fill="var(--c-text)" fill-opacity="0.06"/>
+          <rect x="65" y="0" width="55" height="56" fill="var(--c-image)" fill-opacity="0.06"/>
+          <circle cx="18" cy="16" r="4" fill="var(--c-text)"/><circle cx="26" cy="38" r="4" fill="var(--c-text)"/><circle cx="10" cy="34" r="4" fill="var(--c-text)"/>
+          <circle cx="98" cy="18" r="4" fill="var(--c-image)"/><circle cx="106" cy="38" r="4" fill="var(--c-image)"/><circle cx="90" cy="40" r="4" fill="var(--c-image)"/>
+        </svg>
+        <div class="cc-title">边界</div>
+        <div class="cc-desc">在空间里画一条分界线（或超平面），就是一个分类器——这条线可以是学出来的。</div>
+      </div>
+    </div>
+
+    <div class="demo-panel">
+      <div>
+        <div class="eyebrow" style="margin-bottom:.6rem;">交互 · 角度与长度</div>
+        <svg id="angleSvg" viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg">
+          <line x1="20" y1="220" x2="380" y2="220" stroke="var(--border)" stroke-width="1"/>
+          <line x1="20" y1="220" x2="20" y2="20" stroke="var(--border)" stroke-width="1"/>
+          <circle cx="20" cy="220" r="3" fill="var(--text-muted)"/>
+          <line id="vecA" x1="20" y1="220" x2="150" y2="220" stroke="var(--c-shared)" stroke-width="3" marker-end="url(#arrowA)"/>
+          <text x="155" y="216" fill="var(--c-shared)" font-family="var(--font-mono)" font-size="12">A（参照向量）</text>
+          <line id="vecB" x1="20" y1="220" x2="150" y2="220" stroke="var(--c-audio)" stroke-width="3" marker-end="url(#arrowB)"/>
+          <text id="vecBLabel" x="150" y="200" fill="var(--c-audio)" font-family="var(--font-mono)" font-size="12">B（滑块可调）</text>
+          <path id="angleArc" d="" fill="none" stroke="var(--text-dim)" stroke-width="1.5" stroke-dasharray="2 3"/>
+          <defs>
+            <marker id="arrowA" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="var(--c-shared)"/></marker>
+            <marker id="arrowB" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="var(--c-audio)"/></marker>
+          </defs>
+        </svg>
+        <div class="slider-row">
+          <label>向量 B 的角度 &theta;<b id="angleVal">0°</b></label>
+          <input type="range" id="angleSlider" min="0" max="180" value="0" step="1">
+        </div>
+        <div class="slider-row">
+          <label>向量 B 的长度（模长）<b id="lenVal">100</b></label>
+          <input type="range" id="lenSlider" min="30" max="160" value="100" step="1">
+        </div>
+      </div>
+      <div class="demo-readout">
+        <div class="metric-big">
+          <div class="k">Cosine Similarity</div>
+          <div class="v" id="cosVal">1.00</div>
+        </div>
+        <div class="metric-big">
+          <div class="k">Euclidean Distance</div>
+          <div class="v" id="distVal">0.0</div>
+        </div>
+        <div class="interp" id="interpText">
+          两个向量方向完全一致，<b>cosine similarity = 1</b>。试试只拖"长度"滑块——你会发现 cosine 完全不变，但 distance 会跟着变，这正是两种指标的关键区别：<b>cosine 只看方向，distance 连长度一起算</b>。
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap" style="margin-bottom:2.5rem;">
+      <div class="cluster-toggle-row">
+        <div class="eyebrow" style="margin-bottom:0;">交互 · 同一批点，两种看法</div>
+        <div>
+          <button class="toggle-btn active" id="btnCluster">聚类视图</button>
+          <button class="toggle-btn" id="btnBoundary">分类边界视图</button>
+        </div>
+      </div>
+      <svg id="clusterSvg" viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg">
+        <rect class="zone-rect" id="zoneLeft" x="0" y="0" width="350" height="220" fill="var(--c-shared)" fill-opacity="0.06"></rect>
+        <rect class="zone-rect" id="zoneRight" x="350" y="0" width="350" height="220" fill="var(--c-image)" fill-opacity="0.06"></rect>
+        <line class="boundary-line" id="boundaryLine" x1="350" y1="0" x2="350" y2="220" stroke="var(--text-primary)" stroke-width="2"></line>
+        <g id="clusterA"></g>
+        <g id="clusterB"></g>
+      </svg>
+      <p class="rc-caption" style="padding-bottom:1rem;">
+        左边一团、右边一团，是<b>聚类</b>：不需要标签，算法只看点和点的距离就能把它们分组。
+        给这两团点之间画一条线，就变成了<b>分类</b>：新来一个点落在哪一侧，就归到哪一类——这条线本身，往往就是在向量空间里训练出来的。
+      </p>
+    </div>
+
+    <div class="table-wrap">
+      <table class="metric-table">
+        <thead><tr><th>指标</th><th>关注什么</th><th>常见坑</th><th>什么时候常用</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>Cosine Similarity</b><br><code>cos&theta;</code></td>
+            <td>只看两个向量的<b>方向</b>是否一致，取值 &minus;1 ~ 1</td>
+            <td>会"抹平"向量长度信息；不同模型输出的向量不能直接混用比较</td>
+            <td>语义检索、文本 / 图像相似度，是目前最常用的默认选项</td>
+          </tr>
+          <tr>
+            <td><b>Euclidean Distance</b><br><code>L2</code></td>
+            <td>两点之间的直线距离，同时受<b>方向和长度</b>影响</td>
+            <td>向量没做归一化时，长度差异会主导结果，掩盖真正的语义差异</td>
+            <td>聚类算法（如 k-means）、需要真实几何距离的场景</td>
+          </tr>
+          <tr>
+            <td><b>Dot Product</b><br><code>A&middot;B</code></td>
+            <td>方向和长度都算在内，且计算最快</td>
+            <td>向量长度越大分数天然越高，容易让"热门项"score 虚高</td>
+            <td>大规模向量检索的底层加速计算，常配合归一化一起用</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="tasks" class="section">
+  <div class="container">
+    <div class="section-head">
+      <div class="eyebrow">03 · 能力全景</div>
+      <h2>一旦有了向量空间，这些任务都是"顺带"的</h2>
+      <p>
+        检索、聚类、分类、推荐、去重、匹配、跨模态搜索——听起来是七件不同的事，但把它们放进向量空间里看，
+        本质上都是同一批几何运算：找最近的邻居、按距离分组、画一条边界、按相似度排序、判断距离是否小于某个阈值。
+        点击下面的节点，看看每个任务具体对应哪种运算。
+      </p>
+    </div>
+
+    <div class="tasks-wrap">
+      <svg id="tasksSvg" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="task-detail" id="taskDetail">
+        <div class="td-tag">向量空间 · 中心</div>
+        <div class="td-title">这些任务，都是空间里的几何运算</div>
+        <div class="td-mech">点击左边任意一个节点，看看"检索 / 聚类 / 分类 / 推荐 / 去重 / 匹配 / 跨模态搜索"分别对应向量空间里的哪一种操作。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="compare" class="section">
+  <div class="container">
+    <div class="section-head">
+      <div class="eyebrow">04 · 模态对比</div>
+      <h2>管线长得一样，"语义"来源不同</h2>
+      <p>
+        文本、图片、音频的 embedding 流程，骨架其实是同一套：<b style="color:var(--text-primary)">原始输入 → 预处理 → Encoder → 向量</b>。
+        差异藏在细节里：预处理怎么做、Encoder 结构是什么、以及最关键的——向量最终捕捉的是"哪种相似"。
+      </p>
+    </div>
+
+    <div class="pipeline-grid">
+      <div class="pipeline-col text">
+        <div class="pc-head"><span class="pc-dot"></span><span class="pc-title">Text</span></div>
+        <div class="stage-box" data-stage="raw"><div class="sb-stage">原始输入</div><div class="sb-text">字符 / 词序列</div></div>
+        <div class="pc-arrow">↓</div>
+        <div class="stage-box" data-stage="prep"><div class="sb-stage">预处理</div><div class="sb-text">分词（tokenization），转成 token id</div></div>
+        <div class="pc-arrow">↓</div>
+        <div class="stage-box" data-stage="encoder"><div class="sb-stage">Encoder</div><div class="sb-text">Transformer 系列（BERT / 大模型隐藏层）</div></div>
+        <div class="pc-arrow">↓</div>
+        <div class="stage-box" data-stage="vector"><div class="sb-stage">向量语义</div><div class="sb-text">取 [CLS] 或做 mean pooling，得到语义向量</div></div>
+      </div>
+
+      <div class="pipeline-col image">
+        <div class="pc-head"><span class="pc-dot"></span><span class="pc-title">Image</span></div>
+        <div class="stage-box" data-stage="raw"><div class="sb-stage">原始输入</div><div class="sb-text">像素矩阵 H × W × C</div></div>
+        <div class="pc-arrow">↓</div>
+        <div class="stage-box" data-stage="prep"><div class="sb-stage">预处理</div><div class="sb-text">resize / crop / 归一化，统一色彩空间</div></div>
+        <div class="pc-arrow">↓</div>
+        <div class="stage-box" data-stage="encoder"><div class="sb-stage">Encoder</div><div class="sb-text">CNN（ResNet 系）或 ViT</div></div>
+        <div class="pc-arrow">↓</div>
+        <div class="stage-box" data-stage="vector"><div class="sb-stage">向量语义</div><div class="sb-text">全局池化 / [CLS] token，得到视觉特征向量</div></div>
+      </div>
+
+      <div class="pipeline-col audio">
+        <div class="pc-head"><span class="pc-dot"></span><span class="pc-title">Audio</span></div>
+        <div class="stage-box" data-stage="raw"><div class="sb-stage">原始输入</div><div class="sb-text">波形采样点序列</div></div>
+        <div class="pc-arrow">↓</div>
+        <div class="stage-box" data-stage="prep"><div class="sb-stage">预处理</div><div class="sb-text">统一采样率、分帧，转梅尔频谱图</div></div>
+        <div class="pc-arrow">↓</div>
+        <div class="stage-box" data-stage="encoder"><div class="sb-stage">Encoder</div><div class="sb-text">处理频谱的 CNN / Transformer（如 Wav2Vec2、Whisper encoder）</div></div>
+        <div class="pc-arrow">↓</div>
+        <div class="stage-box" data-stage="vector"><div class="sb-stage">向量语义</div><div class="sb-text">内容向量 or 音色向量——取决于训练目标</div></div>
+      </div>
+    </div>
+    <p class="compare-hint">提示：点击任意一个方框，会高亮三列里"同一层级"的方框</p>
+
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr><th>维度</th><th class="col-text">Text</th><th class="col-image">Image</th><th class="col-audio">Audio</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>输入形态</td>
+            <td>离散的字符 / 词元序列，长度可变</td>
+            <td>连续的像素值矩阵，天然是二维网格</td>
+            <td>连续的一维波形采样点，时间维度长且高频</td>
+          </tr>
+          <tr>
+            <td>关键预处理</td>
+            <td>分词、构建词表、处理大小写与特殊符号</td>
+            <td>裁剪缩放到统一尺寸、像素值归一化</td>
+            <td>重采样到统一采样率、分帧加窗、转频谱图</td>
+          </tr>
+          <tr>
+            <td>典型 Encoder</td>
+            <td>BERT / RoBERTa / 大语言模型的隐藏层</td>
+            <td>ResNet、ViT，跨模态场景常见 CLIP 图像塔</td>
+            <td>Wav2Vec2、Whisper encoder、声纹专用网络</td>
+          </tr>
+          <tr>
+            <td>向量捕捉的相似</td>
+            <td>话题、语义、情感等语言层面的接近程度</td>
+            <td>视觉结构，如物体、颜色、构图（不等于"标签相同"）</td>
+            <td>因训练目标而异：内容相同 or 音色 / 说话人相同，二者不是一回事</td>
+          </tr>
+          <tr>
+            <td>典型用途</td>
+            <td>语义搜索、FAQ 匹配、文本聚类、RAG 检索</td>
+            <td>以图搜图、重复图片检测、图文跨模态检索</td>
+            <td>语音检索、说话人识别、音乐推荐、声音事件去重</td>
+          </tr>
+          <tr>
+            <td>常见误区</td>
+            <td>把"语义相似"当成"事实一致"；检索用和分类用的模型混着使</td>
+            <td>默认像素差异等于语义差异（反之亦然）</td>
+            <td>没先明确要比的是"内容"还是"音色"，就直接算相似度</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="pitfalls" class="section">
+  <div class="container">
+    <div class="section-head">
+      <div class="eyebrow">05 · 边界与误区</div>
+      <h2>心智模型好用，也容易被滥用</h2>
+      <p>把 embedding 理解成"意思的坐标"很直观，但正因为直观，也最容易被过度推广。展开看看几个最常见的踩坑点。</p>
+    </div>
+
+    <div class="accordion" id="accordion">
+      <div class="acc-item open">
+        <button class="acc-header"><span class="acc-no">01</span><span class="acc-q">向量维度越高，效果就越好？</span><span class="acc-chevron">⌄</span></button>
+        <div class="acc-body"><div class="acc-body-inner"><div class="acc-body-content">
+          不一定。维度决定的是向量能装下多少信息的"上限"，但实际效果更多取决于<b>训练数据和训练目标</b>。
+          维度太低会挤压掉语义细节，维度太高又可能带来过拟合、存储和检索成本上升，收益却边际递减。
+          常见 embedding 模型的维度从几十到几千不等，选模型时维度只是参考项之一，不是决定性指标。
+        </div></div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-header"><span class="acc-no">02</span><span class="acc-q">不同模型的 embedding，可以直接混着比较吗？</span><span class="acc-chevron">⌄</span></button>
+        <div class="acc-body"><div class="acc-body-inner"><div class="acc-body-content">
+          不行。每个模型的向量空间都是它自己训练出来的坐标系，即使两个模型输出的向量维度相同，"同一个位置"在两套坐标系里的含义也完全不同——
+          就像"3 米"和"3 英尺"数字一样但单位不同。换模型、甚至换模型的版本，都需要把数据重新过一遍新模型，不能直接拿旧向量和新向量比相似度。
+        </div></div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-header"><span class="acc-no">03</span><span class="acc-q">随便拿一个文本模型和一个图片模型，就能做跨模态搜索？</span><span class="acc-chevron">⌄</span></button>
+        <div class="acc-body"><div class="acc-body-inner"><div class="acc-body-content">
+          不能。文本 encoder 和图片 encoder 如果是分开训练的，各自的向量空间彼此独立，维度对上了也不代表语义对齐。
+          真正能"以文搜图"的系统（比如 CLIP 这类模型），是专门用图文对做<b>对比学习</b>，把两种模态的向量强行拉进同一个空间训练出来的——
+          跨模态能力是训练目标带来的，不是把两个向量拼在一起就自动获得的。
+        </div></div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-header"><span class="acc-no">04</span><span class="acc-q">Cosine similarity 越高，就代表业务上越"相关"？</span><span class="acc-chevron">⌄</span></button>
+        <div class="acc-body"><div class="acc-body-inner"><div class="acc-body-content">
+          Embedding 捕捉的相似，是<b>训练目标定义下</b>的相似——可能是主题相近，也可能只是措辞风格相近，未必等于事实一致，也未必等于对业务有用。
+          比如两句话可能主题很像但一个是肯定一个是否定，cosine 值依然可以很高。真实场景里通常还需要结合下游任务的评测指标，
+          而不是只看相似度分数本身。
+        </div></div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-header"><span class="acc-no">05</span><span class="acc-q">向量的每一维，都对应一个人能看懂的含义吗？</span><span class="acc-chevron">⌄</span></button>
+        <div class="acc-body"><div class="acc-body-inner"><div class="acc-body-content">
+          通常不是。大多数 embedding 的每一维都不是独立、可解释的"红色程度"或"欢乐程度"，而是把语义<b>分布式地纠缠</b>在了所有维度里——
+          真正有意义的往往是多个维度组合出的方向，而不是某一个维度单独的数值。想解释向量的含义，一般要靠降维可视化或探针实验，
+          而不是直接读某一维的数字。
+        </div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap" class="section" style="border-bottom:none;">
+  <div class="container">
+    <div class="section-head">
+      <div class="eyebrow">06 · 小结</div>
+      <h2>把这套心智模型带走</h2>
+    </div>
+
+    <div class="recap-box">
+      Embedding 做的事情，从头到尾都是同一件事：把<b>文本 / 图片 / 音频</b>这些原本无法直接比较的原始输入，
+      经过一个学过"什么样才算像"的 Encoder，转换成<b>固定长度的向量</b>。一旦落进这个共同的坐标系，
+      "相似"就变成了空间里的<b>距离</b>和<b>方向</b>，"分组"就是<b>聚类</b>，"分类"就是画一条<b>边界</b>——
+      检索、推荐、去重、匹配、跨模态搜索，说到底都是在这个空间里做不同形式的几何运算。
+      三种模态的差异，不在这套流程的形状，而在每一步具体怎么做、以及向量最终对齐的是哪一种"相似"。
+    </div>
+
+    <div class="roadmap-track">
+      <div class="roadmap-line" aria-hidden="true"></div>
+      <div class="roadmap-stops">
+        <div class="roadmap-stop current">
+          <div class="rs-node">●</div>
+          <div class="rs-tag">当前 · 总览篇</div>
+          <div class="rs-title">Embedding 心智模型</div>
+          <div class="rs-desc">向量空间、相似度、下游任务全景</div>
+        </div>
+        <div class="roadmap-stop">
+          <div class="rs-node">→</div>
+          <div class="rs-tag">专题 · 规划中</div>
+          <div class="rs-title">Text Embedding 详解</div>
+          <div class="rs-desc">分词、pooling 策略、检索 vs 分类模型选型</div>
+        </div>
+        <div class="roadmap-stop">
+          <div class="rs-node">→</div>
+          <div class="rs-tag">专题 · 规划中</div>
+          <div class="rs-title">Image Embedding 详解</div>
+          <div class="rs-desc">CNN vs ViT、对比学习、以图搜图工程实现</div>
+        </div>
+        <div class="roadmap-stop">
+          <div class="rs-node">→</div>
+          <div class="rs-tag">专题 · 规划中</div>
+          <div class="rs-title">Audio Embedding 详解</div>
+          <div class="rs-desc">内容向量 vs 声纹向量、频谱预处理细节</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  EMBEDDING 系列 · 总览篇 — 心智模型建立完毕，专题篇见 <span style="color:var(--c-shared)">→</span>
+</footer>
+
+<script>
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+/* ============================================================
+   1. Scroll progress + axis navigation
+   ============================================================ */
+(function(){
+  const progressFill = document.getElementById('progressFill');
+  const axisItems = Array.from(document.querySelectorAll('.axis-item'));
+  const sectionIds = ['hero','why','space','tasks','compare','pitfalls','roadmap'];
+  const sections = sectionIds.map(id=>document.getElementById(id)).filter(Boolean);
+
+  function onScroll(){
+    const scrollTop = window.scrollY;
+    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const pct = docHeight > 0 ? Math.min(100, Math.max(0,(scrollTop/docHeight)*100)) : 0;
+    if(progressFill) progressFill.style.width = pct + '%';
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+
+  axisItems.forEach(item=>{
+    item.addEventListener('click', ()=>{
+      const target = document.getElementById(item.dataset.target);
+      if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+
+  if('IntersectionObserver' in window){
+    const observer = new IntersectionObserver((entries)=>{
+      entries.forEach(entry=>{
+        if(entry.isIntersecting){
+          const id = entry.target.id;
+          axisItems.forEach(item=> item.classList.toggle('active', item.dataset.target === id));
+        }
+      });
+    }, {rootMargin: '-42% 0px -42% 0px', threshold: 0});
+    sections.forEach(sec=> observer.observe(sec));
+  }
+})();
+
+/* ============================================================
+   2. Hero vector space explorer
+   ============================================================ */
+(function(){
+  const originX = 400, originY = 260;
+  const vecLinesG = document.getElementById('vecLines');
+  const linkLine = document.getElementById('linkLine');
+  const readoutBody = document.getElementById('readoutBody');
+  const ptEls = Array.from(document.querySelectorAll('#pointsLayer .pt'));
+  let selected = [];
+
+  function pointData(el){
+    return {
+      id: el.dataset.id,
+      modality: el.dataset.modality,
+      label: el.dataset.label,
+      x: parseFloat(el.dataset.x),
+      y: parseFloat(el.dataset.y)
+    };
+  }
+
+  const modColor = m => m==='text' ? 'var(--c-text)' : m==='image' ? 'var(--c-image)' : 'var(--c-audio)';
+  const modTagClass = m => m==='text' ? 'tag-text' : m==='image' ? 'tag-image' : 'tag-audio';
+  const modName = m => m==='text' ? '文本' : m==='image' ? '图片' : '音频';
+
+  // native tooltips
+  ptEls.forEach(el=>{
+    const pd = pointData(el);
+    const title = document.createElementNS(SVGNS,'title');
+    title.textContent = pd.label;
+    el.appendChild(title);
+  });
+
+  function ensureVecLine(pd){
+    let line = document.getElementById('vecline-' + pd.id);
+    if(!line){
+      line = document.createElementNS(SVGNS,'line');
+      line.setAttribute('id','vecline-' + pd.id);
+      line.setAttribute('class','vec-line');
+      line.setAttribute('x1', originX); line.setAttribute('y1', originY);
+      line.setAttribute('x2', pd.x); line.setAttribute('y2', pd.y);
+      line.setAttribute('stroke', modColor(pd.modality));
+      line.setAttribute('stroke-width', '1.6');
+      vecLinesG.appendChild(line);
+    }
+    return line;
+  }
+
+  function updateHero(){
+    Array.from(vecLinesG.children).forEach(l=>l.classList.remove('show'));
+    ptEls.forEach(el=>el.classList.remove('is-selected'));
+
+    selected.forEach(pd=>{
+      const el = ptEls.find(e=>e.dataset.id === pd.id);
+      if(el) el.classList.add('is-selected');
+      ensureVecLine(pd).classList.add('show');
+    });
+
+    if(selected.length === 2){
+      const [a,b] = selected;
+      const ax = a.x-originX, ay = a.y-originY;
+      const bx = b.x-originX, by = b.y-originY;
+      const dot = ax*bx + ay*by;
+      const magA = Math.hypot(ax,ay), magB = Math.hypot(bx,by);
+      const cosine = dot/(magA*magB);
+      const dist = Math.hypot(a.x-b.x, a.y-b.y);
+
+      linkLine.setAttribute('x1', a.x); linkLine.setAttribute('y1', a.y);
+      linkLine.setAttribute('x2', b.x); linkLine.setAttribute('y2', b.y);
+      linkLine.classList.add('show');
+
+      let verdict;
+      if(cosine > 0.85) verdict = '方向非常接近 —— 语义上大概率是"同一件事"，即便原始形式（文字 / 图片 / 声音）完全不同。';
+      else if(cosine > 0.4) verdict = '方向部分接近 —— 可能相关，但不是强对应关系。';
+      else if(cosine > -0.2) verdict = '方向差别较大 —— 基本不相关。';
+      else verdict = '方向相反 —— 在这个示意空间里，可以理解为语义上偏"对立"。';
+
+      readoutBody.innerHTML =
+        '<div class="pair"><span><span class="tag ' + modTagClass(a.modality) + '">' + modName(a.modality) + '</span>' + a.label + '</span></div>' +
+        '<div class="pair"><span><span class="tag ' + modTagClass(b.modality) + '">' + modName(b.modality) + '</span>' + b.label + '</span></div>' +
+        '<div class="metric"><span class="k">Cosine Similarity</span><span class="v">' + cosine.toFixed(2) + '</span></div>' +
+        '<div class="metric"><span class="k">Euclidean Distance</span><span class="v">' + dist.toFixed(0) + '</span></div>' +
+        '<p class="note">' + verdict + '</p>';
+    } else if(selected.length === 1){
+      linkLine.classList.remove('show');
+      const a = selected[0];
+      readoutBody.innerHTML =
+        '<div class="pair"><span><span class="tag ' + modTagClass(a.modality) + '">' + modName(a.modality) + '</span>' + a.label + '</span></div>' +
+        '<p class="empty-hint">再点一个点，看看它俩在向量空间里离多远、方向差多少。</p>';
+    } else {
+      linkLine.classList.remove('show');
+      readoutBody.innerHTML = '<p class="empty-hint">先点一个点，再点第二个点 —— 我会画出它们和原点连成的"向量"，并算出两种最常用的"相似"指标。</p>';
+    }
+  }
+
+  ptEls.forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const pd = pointData(el);
+      const idx = selected.findIndex(s=>s.id === pd.id);
+      if(idx >= 0) selected.splice(idx,1);
+      else {
+        if(selected.length >= 2) selected = [];
+        selected.push(pd);
+      }
+      updateHero();
+    });
+  });
+
+  updateHero();
+})();
+
+/* ============================================================
+   3. Pixel-grid illustration (WHY section)
+   ============================================================ */
+(function(){
+  const gridA = document.getElementById('pixelGridA');
+  const gridB = document.getElementById('pixelGridB');
+  if(!gridA || !gridB) return;
+  const cols = 6, rows = 4, total = cols*rows;
+  const hues = [28, 32, 24, 40, 18, 35, 30];
+  const colors = [];
+  for(let i=0;i<total;i++){
+    const hue = hues[i % hues.length];
+    const light = 30 + ((i*11) % 30);
+    colors.push('hsl(' + hue + ' 50% ' + light + '%)');
+  }
+  colors.forEach(c=>{
+    const d = document.createElement('div');
+    d.style.background = c;
+    gridA.appendChild(d);
+  });
+  const shift = 7;
+  for(let i=0;i<total;i++){
+    const d = document.createElement('div');
+    if(i % cols === 0){
+      d.style.background = 'var(--ink-deep)';
+    } else {
+      d.style.background = colors[(i + shift) % total];
+    }
+    gridB.appendChild(d);
+  }
+})();
+
+/* ============================================================
+   4. Angle / length demo (cosine vs euclidean)
+   ============================================================ */
+(function(){
+  const angleSlider = document.getElementById('angleSlider');
+  const lenSlider = document.getElementById('lenSlider');
+  if(!angleSlider || !lenSlider) return;
+  const angleVal = document.getElementById('angleVal');
+  const lenVal = document.getElementById('lenVal');
+  const vecB = document.getElementById('vecB');
+  const vecBLabel = document.getElementById('vecBLabel');
+  const angleArc = document.getElementById('angleArc');
+  const cosVal = document.getElementById('cosVal');
+  const distVal = document.getElementById('distVal');
+  const interpText = document.getElementById('interpText');
+
+  const AX = 20, AY = 220, A_LEN = 130;
+
+  function update(){
+    const theta = parseFloat(angleSlider.value);
+    const len = parseFloat(lenSlider.value);
+    angleVal.textContent = theta.toFixed(0) + '°';
+    lenVal.textContent = len.toFixed(0);
+
+    const rad = theta * Math.PI / 180;
+    const bx = AX + len*Math.cos(rad);
+    const by = AY - len*Math.sin(rad);
+    vecB.setAttribute('x2', bx); vecB.setAttribute('y2', by);
+    vecBLabel.setAttribute('x', Math.min(bx + 8, 330));
+    vecBLabel.setAttribute('y', theta > 95 ? by - 10 : by - 8);
+
+    const arcR = 42;
+    const startX = AX + arcR, startY = AY;
+    const endX = AX + arcR*Math.cos(rad), endY = AY - arcR*Math.sin(rad);
+    const largeArc = theta > 180 ? 1 : 0;
+    angleArc.setAttribute('d', 'M ' + startX + ' ' + startY + ' A ' + arcR + ' ' + arcR + ' 0 ' + largeArc + ' 0 ' + endX + ' ' + endY);
+
+    const ax = A_LEN, ay = 0;
+    const bxv = len*Math.cos(rad), byv = len*Math.sin(rad);
+    const dot = ax*bxv + ay*byv;
+    const cosine = dot / (A_LEN * len);
+    cosVal.textContent = cosine.toFixed(2);
+
+    const distPx = Math.hypot(bx - (AX + A_LEN), by - AY);
+    distVal.textContent = (distPx/10).toFixed(1);
+
+    let interp;
+    if(theta < 1){
+      interp = '两个向量方向完全一致，<b>cosine similarity = 1</b>。试试只拖"长度"滑块——cosine 完全不变，但 distance 会跟着变，这正是两种指标的关键区别：<b>cosine 只看方向，distance 连长度一起算</b>。';
+    } else if(theta <= 30){
+      interp = '方向依然很接近，<b>cosine ≈ ' + cosine.toFixed(2) + '</b>，接近 1。这时哪怕长度差很多，方向上仍然会被判定为"高度相似"。';
+    } else if(theta <= 90){
+      interp = '夹角变大了，<b>cosine ≈ ' + cosine.toFixed(2) + '</b>，相似度明显下降。注意如果这时两个向量长度接近，distance 未必很大——cosine 和 distance 给出的"相似程度"可能并不一致。';
+    } else if(theta < 179){
+      interp = '夹角超过 90°，<b>cosine 变成负数（' + cosine.toFixed(2) + '）</b>，说明两个方向已经开始"相反"了。';
+    } else {
+      interp = '夹角到 180°，两个向量方向完全相反，<b>cosine = -1</b>，是"相反"的极限情况。';
+    }
+    interpText.innerHTML = interp;
+  }
+
+  angleSlider.addEventListener('input', update);
+  lenSlider.addEventListener('input', update);
+  update();
+})();
+
+/* ============================================================
+   5. Cluster / boundary toggle
+   ============================================================ */
+(function(){
+  const gA = document.getElementById('clusterA');
+  const gB = document.getElementById('clusterB');
+  if(!gA || !gB) return;
+
+  const clusterAData = [[80,60],[122,142],[58,112],[152,80],[100,172],[178,50],[138,190]];
+  const clusterBData = [[560,70],[500,150],[622,112],[470,60],[600,180],[540,42],[480,190]];
+
+  clusterAData.forEach(([x,y])=>{
+    const c = document.createElementNS(SVGNS,'circle');
+    c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',7.5);
+    c.setAttribute('fill','var(--c-shared)'); c.setAttribute('fill-opacity','0.9');
+    c.setAttribute('stroke','var(--ink)'); c.setAttribute('stroke-width','1.5');
+    gA.appendChild(c);
+  });
+  clusterBData.forEach(([x,y])=>{
+    const c = document.createElementNS(SVGNS,'circle');
+    c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',7.5);
+    c.setAttribute('fill','var(--c-image)'); c.setAttribute('fill-opacity','0.9');
+    c.setAttribute('stroke','var(--ink)'); c.setAttribute('stroke-width','1.5');
+    gB.appendChild(c);
+  });
+
+  const btnCluster = document.getElementById('btnCluster');
+  const btnBoundary = document.getElementById('btnBoundary');
+  const zoneLeft = document.getElementById('zoneLeft');
+  const zoneRight = document.getElementById('zoneRight');
+  const boundaryLine = document.getElementById('boundaryLine');
+
+  btnCluster.addEventListener('click', ()=>{
+    btnCluster.classList.add('active'); btnBoundary.classList.remove('active');
+    zoneLeft.classList.remove('show'); zoneRight.classList.remove('show');
+    boundaryLine.classList.remove('show');
+  });
+  btnBoundary.addEventListener('click', ()=>{
+    btnBoundary.classList.add('active'); btnCluster.classList.remove('active');
+    zoneLeft.classList.add('show'); zoneRight.classList.add('show');
+    boundaryLine.classList.add('show');
+  });
+})();
+
+/* ============================================================
+   6. Downstream-tasks radial diagram
+   ============================================================ */
+(function(){
+  const svg = document.getElementById('tasksSvg');
+  if(!svg) return;
+  const panel = document.getElementById('taskDetail');
+  const cx = 300, cy = 300, R = 215, nodeR = 46;
+
+  const tasksData = [
+    {id:'retrieval', label:['检索'], mech:'给定一个 query 向量，在向量库里找出距离最近的 top-k 个向量——这是语义搜索和 RAG 检索的核心操作。', example:'例子：输入一句问题，从知识库里直接找出语义最相关的几段文本，而不需要关键词完全命中。'},
+    {id:'clustering', label:['聚类'], mech:'不使用任何标签，只按向量之间的距离，把相近的点自动分成若干组，比如 k-means、层次聚类。', example:'例子：把海量用户评论自动分成几类话题，事先不需要定义这些话题是什么。'},
+    {id:'classification', label:['分类'], mech:'在向量空间里学出一条边界（或一个小型分类头），新向量落在边界哪一侧，就被判为哪一类。', example:'例子：判断一封邮件是不是垃圾邮件，依据的是它的内容向量落在空间里的位置。'},
+    {id:'recommendation', label:['推荐'], mech:'把用户和物品都映射成向量，用户向量和物品向量越接近（或点积越大），推荐排序就越靠前。', example:'例子：根据用户过去的行为算出一个向量，找出向量最接近的商品推荐给他。'},
+    {id:'dedup', label:['去重'], mech:'两个对象的向量距离小于某个阈值，就判定为重复或近似重复，不需要逐字逐像素地比对原始内容。', example:'例子：识别出内容几乎一样、只是措辞略有差异的重复工单或重复图片。'},
+    {id:'matching', label:['匹配'], mech:'在两个不同集合之间，为每一侧的向量找最近邻，实现双边的最优或近似最优配对。', example:'例子：简历向量和职位向量互相寻找最近邻，做智能匹配推荐。'},
+    {id:'crossmodal', label:['跨模态','搜索'], mech:'如果文本和图像的向量被专门训练进了同一个空间，就能直接用文本向量去检索图像向量，反之亦然。', example:'例子：输入一句文字描述，直接搜出符合描述的图片——如 CLIP 这类跨模态模型。'}
+  ];
+  const n = tasksData.length;
+
+  const hub = document.createElementNS(SVGNS,'circle');
+  hub.setAttribute('cx',cx); hub.setAttribute('cy',cy); hub.setAttribute('r',64);
+  hub.setAttribute('class','hub-circle');
+  svg.appendChild(hub);
+
+  const hubLabel = document.createElementNS(SVGNS,'text');
+  hubLabel.setAttribute('x',cx); hubLabel.setAttribute('y',cy-2);
+  hubLabel.setAttribute('class','hub-label');
+  hubLabel.textContent = '向量空间';
+  svg.appendChild(hubLabel);
+
+  const hubSub = document.createElementNS(SVGNS,'text');
+  hubSub.setAttribute('x',cx); hubSub.setAttribute('y',cy+16);
+  hubSub.setAttribute('class','hub-sub');
+  hubSub.textContent = 'VECTOR SPACE';
+  svg.appendChild(hubSub);
+
+  const positions = {};
+  tasksData.forEach((t,i)=>{
+    const angle = -90 + (360/n)*i;
+    const rad = angle*Math.PI/180;
+    positions[t.id] = { x: cx + R*Math.cos(rad), y: cy + R*Math.sin(rad) };
+  });
+
+  tasksData.forEach(t=>{
+    const p = positions[t.id];
+    const spoke = document.createElementNS(SVGNS,'line');
+    spoke.setAttribute('x1',cx); spoke.setAttribute('y1',cy);
+    spoke.setAttribute('x2',p.x); spoke.setAttribute('y2',p.y);
+    spoke.setAttribute('class','task-spoke');
+    spoke.setAttribute('id','spoke-'+t.id);
+    svg.appendChild(spoke);
+  });
+
+  tasksData.forEach(t=>{
+    const p = positions[t.id];
+    const g = document.createElementNS(SVGNS,'g');
+    g.setAttribute('class','task-node');
+    g.setAttribute('id','node-'+t.id);
+    g.dataset.id = t.id;
+
+    const circle = document.createElementNS(SVGNS,'circle');
+    circle.setAttribute('cx',p.x); circle.setAttribute('cy',p.y); circle.setAttribute('r',nodeR);
+    circle.setAttribute('class','tn-circle');
+    circle.setAttribute('fill','var(--panel-2)');
+    circle.setAttribute('stroke','var(--border)');
+    circle.setAttribute('stroke-width','1.5');
+    g.appendChild(circle);
+
+    const lines = t.label;
+    const lineHeight = 15;
+    const startY = p.y - ((lines.length-1)*lineHeight)/2 + 4;
+    const text = document.createElementNS(SVGNS,'text');
+    text.setAttribute('class','tn-label');
+    lines.forEach((line,i)=>{
+      const tspan = document.createElementNS(SVGNS,'tspan');
+      tspan.setAttribute('x', p.x);
+      tspan.setAttribute('y', startY + i*lineHeight);
+      tspan.textContent = line;
+      text.appendChild(tspan);
+    });
+    g.appendChild(text);
+
+    g.addEventListener('click', ()=>selectTask(t.id));
+    svg.appendChild(g);
+  });
+
+  function selectTask(id){
+    document.querySelectorAll('.task-node').forEach(node=> node.classList.toggle('active', node.dataset.id === id));
+    document.querySelectorAll('.task-spoke').forEach(s=> s.classList.toggle('active', s.id === 'spoke-'+id));
+    const t = tasksData.find(t=>t.id === id);
+    if(!t || !panel) return;
+    panel.innerHTML =
+      '<div class="td-tag">向量空间 · ' + t.label.join('') + '</div>' +
+      '<div class="td-title">' + t.label.join('') + '</div>' +
+      '<div class="td-mech">' + t.mech + '</div>' +
+      '<div class="td-example">' + t.example + '</div>';
+  }
+})();
+
+/* ============================================================
+   7. Pipeline stage cross-highlight (COMPARE section)
+   ============================================================ */
+(function(){
+  const boxes = Array.from(document.querySelectorAll('.stage-box'));
+  boxes.forEach(box=>{
+    box.addEventListener('click', ()=>{
+      const stage = box.dataset.stage;
+      const alreadyOn = box.classList.contains('hl');
+      boxes.forEach(b=>b.classList.remove('hl'));
+      if(!alreadyOn){
+        boxes.filter(b=>b.dataset.stage === stage).forEach(b=>b.classList.add('hl'));
+      }
+    });
+  });
+})();
+
+/* ============================================================
+   8. Accordion (PITFALLS section)
+   ============================================================ */
+(function(){
+  document.querySelectorAll('.acc-item').forEach(item=>{
+    const header = item.querySelector('.acc-header');
+    header.setAttribute('aria-expanded', item.classList.contains('open') ? 'true' : 'false');
+    header.addEventListener('click', ()=>{
+      item.classList.toggle('open');
+      header.setAttribute('aria-expanded', item.classList.contains('open') ? 'true' : 'false');
+    });
+  });
+})();
+</script>
+</body>
+</html>
