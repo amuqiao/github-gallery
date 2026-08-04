@@ -21,61 +21,74 @@
 
 ## 英文术语表
 
-重要程度列用于个人学习标记，可按需改成 `[x] 核心`、`[x] 常用`、`[x] 按需`、`[x] 高风险` 或 `[x] 指标`。
+重要程度列用于个人学习标记，可按需改成 `★`、`[x] 核心`、`[x] 常用`、`[x] 按需`、`[x] 高风险` 或 `[x] 指标`。备注列用于说明它是否属于主流程、按需增强、质检辅助或高风险能力。
 
-| 简称 | 英文全称 | 中文名 | 在链路中的作用 | 重要程度 |
-| --- | --- | --- | --- | --- |
-| L10n | Localization | 本地化 | 把源语言内容转成目标语用户能理解、能接受、能播放的最终视频。 | |
-| VSL | Video Speech Localization | 视频语音本地化 | 本文主任务：视频输入，目标语种输出，本地化后视频交付。 | |
-| POC | Proof of Concept | 概念验证 | 用最小样例先跑通链路，验证技术路线是否可行。 | |
-| QA | Quality Assurance | 质量保证 / 质检 | 交付前检查媒体、字幕、语音、同步、语义和合规问题。 | |
-| LLM | Large Language Model | 大语言模型 | 可用于翻译、本地化改写、术语一致性检查和 QA 辅助。 | |
-| FFmpeg | Fast Forward MPEG | 音视频处理工具集 | 探测、抽取、转码、封装、烧录字幕、替换音轨。 | |
-| FPS | Frames Per Second | 帧率 | 影响时间码、字幕同步、镜头切分和音画同步。 | |
-| CFR | Constant Frame Rate | 恒定帧率 | 每秒帧数稳定，时间轴更容易对齐。 | |
-| VFR | Variable Frame Rate | 可变帧率 | 手机录屏和部分素材常见，会导致字幕、切片或对齐漂移。 | |
-| PTS | Presentation Timestamp | 显示时间戳 | 决定视频帧或音频帧何时显示或播放。 | |
-| DTS | Decoding Timestamp | 解码时间戳 | 决定编码流解码顺序，和 PTS 不总是相同。 | |
-| BGM | Background Music | 背景音乐 | 配音版视频通常要保留、压低或从原声中分离。 | |
-| SFX | Sound Effects | 音效 | 本地化时通常应保留，避免替换人声时破坏场景声音。 | |
-| LUFS | Loudness Units relative to Full Scale | 响度单位 | 用于判断最终音轨响度是否适合交付。 | |
-| VAD | Voice Activity Detection | 语音活动检测 | 判断哪些时间段有人声，是 ASR 和 diarization 的前置过滤。 | |
-| SAD | Speech Activity Detection | 语音活动检测 | 和 VAD 近义，常见于 diarization 文献。 | |
-| ASR | Automatic Speech Recognition | 自动语音识别 | 把源语音转成源语文本和初步时间段。 | ★ |
-| STT | Speech To Text | 语音转文字 | ASR 的通用说法。 | |
-| FA | Forced Alignment | 强制对齐 | 把已有文字或 ASR 文本对齐到音频时间轴，生成词级时间戳。 | |
-| WTS | Word Timestamp | 词级时间戳 | 每个词的开始和结束时间，用于字幕、说话人合并和配音对齐。 | |
-| SRT | SubRip Subtitle | SRT 字幕 | 最常见字幕交付格式。 | |
-| VTT | WebVTT | Web 字幕 | Web 播放器常用字幕格式。 | |
-| ASS | Advanced SubStation Alpha | ASS 字幕 | 支持更复杂样式和特效的字幕格式。 | |
-| MT | Machine Translation | 机器翻译 | 把源语文本转成目标语文本。 | |
-| TMS | Translation Memory System | 翻译记忆系统 | 复用历史翻译，保持术语和表达一致。 | |
-| SD | Speaker Diarization | 说话人分离 | 判断“谁在什么时候说话”，输出匿名 speaker label。 | ★ |
-| SCD | Speaker Change Detection | 说话人变化检测 | 发现说话人切换点，是 diarization 子任务之一。 | |
-| OSD | Overlapped Speech Detection | 重叠语音检测 | 识别多人同时说话片段，影响 diarization 和字幕归属。 | |
-| SID | Speaker Identification | 说话人身份识别 | 把匿名 speaker label 映射到已知身份，需要声纹库和授权。 | ★ |
-| SV | Speaker Verification | 说话人验证 | 判断两段声音是否来自同一人。 | ★ |
-| SE | Speaker Embedding | 说话人向量 | 把一段语音编码成声纹向量，用于聚类、识别或验证。 | ★ |
-| FD | Face Detection | 人脸检测 | 在视频帧中找到人脸位置。 | |
-| FT | Face Tracking | 人脸跟踪 | 把跨帧人脸连成同一条 face track。 | |
-| ReID | Re-identification | 重识别 | 判断跨帧、跨镜头或跨片段对象是否为同一人。 | |
-| ASD | Active Speaker Detection | 活跃说话人检测 | 判断画面中哪张脸正在说话。 | |
-| TTS | Text To Speech | 文本转语音 | 把目标语文本生成目标语音频。 | |
-| VC | Voice Conversion | 声音转换 | 把已有语音转换成目标音色或风格。 | |
-| RVC | Retrieval-based Voice Conversion | 检索增强声音转换 | 常见开源声音转换路线之一，适合音色转换实验。 | |
-| VClo | Voice Cloning | 声音克隆 | 用参考音频生成相似音色，涉及授权和滥用风险。 | |
-| TSM | Time Scale Modification | 时间尺度修改 | 拉伸或压缩音频时长，尽量不改变音高。 | |
-| SS | Source Separation | 声源分离 | 把人声、伴奏、音效等从混合音频中分离。 | |
-| A/V Sync | Audio Video Synchronization | 音画同步 | 目标语音频、字幕、口型和画面时间一致。 | |
-| Lip Sync | Lip Synchronization | 口型同步 | 让画面嘴型匹配目标语音频。 | |
-| Mux | Multiplexing | 封装 / 复用 | 把视频流、音频流、字幕流合并进同一个容器文件。 | |
-| Burn-in | Burn-in Subtitle | 字幕烧录 | 把字幕渲染进视频画面，输出后不可像外挂字幕一样编辑。 | |
-| Ducking | Audio Ducking | 自动压低背景声 | 说话时降低 BGM/SFX 音量，让人声更清楚。 | |
-| WER | Word Error Rate | 词错误率 | 衡量 ASR 转写错误。 | |
-| CER | Character Error Rate | 字错误率 | 中文、日文等场景常用的 ASR 错误指标。 | |
-| DER | Diarization Error Rate | 说话人分离错误率 | 衡量 diarization 的漏检、虚警和说话人混淆。 | |
-| JER | Jaccard Error Rate | Jaccard 错误率 | 另一类 diarization 评估指标，避免长说话人主导结果。 | |
-| MOS | Mean Opinion Score | 主观听感评分 | 评价配音自然度、音质和可接受度。 | |
+| 简称       | 英文全称                                  | 中文名            | 在链路中的作用                               | 备注                          | 重要程度     |
+| -------- | ------------------------------------- | -------------- | ------------------------------------- | --------------------------- | -------- |
+| L10n     | Localization                          | 本地化            | 把源语言内容转成目标语用户能理解、能接受、能播放的最终视频。        | 主任务目标。                      |          |
+| VSL      | Video Speech Localization             | 视频语音本地化        | 本文主任务：视频输入，目标语种输出，本地化后视频交付。           | 本文范围。                       |          |
+| POC      | Proof of Concept                      | 概念验证           | 用最小样例先跑通链路，验证技术路线是否可行。                | 工程验证方式。                     |          |
+| QA       | Quality Assurance                     | 质量保证 / 质检      | 交付前检查媒体、字幕、语音、同步、语义和合规问题。             | 必需阶段。                       |          |
+| LLM      | Large Language Model                  | 大语言模型          | 可用于翻译、本地化改写、术语一致性检查和 QA 辅助。           | 按需增强，不是媒体处理工具。              |          |
+| Emb      | Embedding                             | 向量表征           | 把文本、语音、图像或人脸编码成可比较、可检索的向量。            | 通用基础概念，支撑声纹、人脸、文本和画面检索。     | \[ ] 常用  |
+| TE       | Text Embedding                        | 文本向量           | 把字幕、转写或术语文本编码成向量，用于检索、去重、术语一致性和 QA。   | 不属于默认主流程，常用于本地化 QA 或上下文召回。  | \[ ] 按需  |
+| VE       | Visual Embedding                      | 视觉向量 / 画面向量    | 把画面、镜头或图像编码成向量，用于画面相似检索和视觉语义辅助判断。     | 适合镜头检索、画面语义 QA，不是语音本地化必经节点。 | \[ ] 按需  |
+| FE       | Face Embedding                        | 人脸向量           | 把人脸编码成向量，用于人脸聚类、重识别或身份候选召回。           | 涉及人脸识别和隐私，必须有授权和复核边界。       | \[ ] 高风险 |
+| MME      | Multimodal Embedding                  | 多模态向量          | 把文本、图像、音频等放入可比较空间，用于跨模态检索或一致性检查。      | 进阶检索/QA 能力，不应默认进入所有链路。      | \[ ] 按需  |
+| OCR      | Optical Character Recognition         | 光学字符识别         | 识别画面中的文字，例如标题卡、路牌、UI、烧录字幕。            | 视频本地化常见漏项，字幕之外的画面文字也可能要翻译。  | \[ ] 常用  |
+| OSText   | On-screen Text                        | 画面文字           | 视频画面里直接出现的文字内容。                       | 需要判断是否翻译、遮盖、重绘或保留。          | \[ ] 常用  |
+| LID      | Language Identification               | 语种识别           | 判断音频或文本属于哪种语言，处理未知源语种或多语种混说。          | 只有视频输入时很关键。                 | \[ ] 常用  |
+| TN       | Text Normalization                    | 文本规范化          | 将数字、日期、缩写、符号等转成适合翻译或 TTS 的文本。         | TTS 前尤其重要。                  | \[ ] 常用  |
+| G2P      | Grapheme-to-Phoneme                   | 字音转换           | 将文字转换为发音表示，用于 TTS、专名读音和多语种发音控制。       | 发音控制和配音质量相关。                | \[ ] 按需  |
+| CPS      | Characters Per Second                 | 每秒字符数          | 衡量字幕阅读速度。                             | 字幕 QA 常用。                   | \[ ] 指标  |
+| CPL      | Characters Per Line                   | 每行字符数          | 衡量字幕单行长度。                             | 字幕排版和可读性常用。                 | \[ ] 指标  |
+| FFmpeg   | Fast Forward MPEG                     | 音视频处理工具集       | 探测、抽取、转码、封装、烧录字幕、替换音轨。                | 媒体处理底座。                     |          |
+| FPS      | Frames Per Second                     | 帧率             | 影响时间码、字幕同步、镜头切分和音画同步。                 | 媒体基础。                       |          |
+| CFR      | Constant Frame Rate                   | 恒定帧率           | 每秒帧数稳定，时间轴更容易对齐。                      | 对齐更稳定。                      |          |
+| VFR      | Variable Frame Rate                   | 可变帧率           | 手机录屏和部分素材常见，会导致字幕、切片或对齐漂移。            | 常见同步风险。                     |          |
+| PTS      | Presentation Timestamp                | 显示时间戳          | 决定视频帧或音频帧何时显示或播放。                     | 媒体时间轴基础。                    |          |
+| DTS      | Decoding Timestamp                    | 解码时间戳          | 决定编码流解码顺序，和 PTS 不总是相同。                | 排查封装问题时出现。                  |          |
+| BGM      | Background Music                      | 背景音乐           | 配音版视频通常要保留、压低或从原声中分离。                 | 混音相关。                       |          |
+| SFX      | Sound Effects                         | 音效             | 本地化时通常应保留，避免替换人声时破坏场景声音。              | 混音相关。                       |          |
+| LUFS     | Loudness Units relative to Full Scale | 响度单位           | 用于判断最终音轨响度是否适合交付。                     | 音频 QA 指标。                   |          |
+| VAD      | Voice Activity Detection              | 语音活动检测         | 判断哪些时间段有人声，是 ASR 和 diarization 的前置过滤。 | 语音链路前置。                     |          |
+| SAD      | Speech Activity Detection             | 语音活动检测         | 和 VAD 近义，常见于 diarization 文献。          | pyannote.audio 等工具会使用该说法。   |          |
+| ASR      | Automatic Speech Recognition          | 自动语音识别         | 把源语音转成源语文本和初步时间段。                     | 主流程核心节点。                    | ★        |
+| STT      | Speech To Text                        | 语音转文字          | ASR 的通用说法。                            | 和 ASR 基本同义。                 |          |
+| FA       | Forced Alignment                      | 强制对齐           | 把已有文字或 ASR 文本对齐到音频时间轴，生成词级时间戳。        | 字幕和配音同步关键。                  |          |
+| WTS      | Word Timestamp                        | 词级时间戳          | 每个词的开始和结束时间，用于字幕、说话人合并和配音对齐。          | Forced Alignment 输出之一。      |          |
+| SRT      | SubRip Subtitle                       | SRT 字幕         | 最常见字幕交付格式。                            | 常见交付格式。                     |          |
+| VTT      | WebVTT                                | Web 字幕         | Web 播放器常用字幕格式。                        | Web 场景常用。                   |          |
+| ASS      | Advanced SubStation Alpha             | ASS 字幕         | 支持更复杂样式和特效的字幕格式。                      | 样式字幕。                       |          |
+| MT       | Machine Translation                   | 机器翻译           | 把源语文本转成目标语文本。                         | 本地化前置能力。                    |          |
+| TMS      | Translation Memory System             | 翻译记忆系统         | 复用历史翻译，保持术语和表达一致。                     | 长期内容一致性相关。                  |          |
+| SD       | Speaker Diarization                   | 说话人分离          | 判断“谁在什么时候说话”，输出匿名 speaker label。      | 多人说话、字幕归属和角色一致性常用。          | ★        |
+| SCD      | Speaker Change Detection              | 说话人变化检测        | 发现说话人切换点，是 diarization 子任务之一。         | Diarization 子任务。            |          |
+| OSD      | Overlapped Speech Detection           | 重叠语音检测         | 识别多人同时说话片段，影响 diarization 和字幕归属。      | Diarization 难点。             |          |
+| SID      | Speaker Identification                | 说话人身份识别        | 把匿名 speaker label 映射到已知身份，需要声纹库和授权。   | 高风险可选节点。                    | ★        |
+| SV       | Speaker Verification                  | 说话人验证          | 判断两段声音是否来自同一人。                        | 常用于 SID 或声纹检索后的确认。          | ★        |
+| SE       | Speaker Embedding                     | 说话人向量          | 把一段语音编码成声纹向量，用于聚类、识别或验证。              | 声纹检索和 diarization 的基础表示。    | ★        |
+| SR       | Speaker Retrieval                     | 说话人向量检索 / 声纹检索 | 用 speaker embedding 在声纹库中检索相似说话人候选。   | 检索只是召回候选，不等于确认身份。           | \[ ] 高风险 |
+| FD       | Face Detection                        | 人脸检测           | 在视频帧中找到人脸位置。                          | ASD 和画面人物绑定前置。              |          |
+| FT       | Face Tracking                         | 人脸跟踪           | 把跨帧人脸连成同一条 face track。                | ASD 前置。                     |          |
+| ReID     | Re-identification                     | 重识别            | 判断跨帧、跨镜头或跨片段对象是否为同一人。                 | 人脸/人物轨迹合并相关。                |          |
+| ASD      | Active Speaker Detection              | 活跃说话人检测        | 判断画面中哪张脸正在说话。                         | 多人同框时按需启用。                  |          |
+| TTS      | Text To Speech                        | 文本转语音          | 把目标语文本生成目标语音频。                        | 配音链路核心。                     |          |
+| VC       | Voice Conversion                      | 声音转换           | 把已有语音转换成目标音色或风格。                      | 配音增强能力。                     |          |
+| RVC      | Retrieval-based Voice Conversion      | 检索增强声音转换       | 常见开源声音转换路线之一，适合音色转换实验。                | VC 具体路线。                    |          |
+| VClo     | Voice Cloning                         | 声音克隆           | 用参考音频生成相似音色，涉及授权和滥用风险。                | 高风险可选能力。                    |          |
+| TSM      | Time Scale Modification               | 时间尺度修改         | 拉伸或压缩音频时长，尽量不改变音高。                    | 时长适配相关。                     |          |
+| SS       | Source Separation                     | 声源分离           | 把人声、伴奏、音效等从混合音频中分离。                   | 配音保留背景声时常用。                 |          |
+| A/V Sync | Audio Video Synchronization           | 音画同步           | 目标语音频、字幕、口型和画面时间一致。                   | 最终 QA 重点。                   |          |
+| Lip Sync | Lip Synchronization                   | 口型同步           | 让画面嘴型匹配目标语音频。                         | 高成本可选增强。                    |          |
+| Mux      | Multiplexing                          | 封装 / 复用        | 把视频流、音频流、字幕流合并进同一个容器文件。               | 输出交付相关。                     |          |
+| Burn-in  | Burn-in Subtitle                      | 字幕烧录           | 把字幕渲染进视频画面，输出后不可像外挂字幕一样编辑。            | 不可逆交付方式。                    |          |
+| Ducking  | Audio Ducking                         | 自动压低背景声        | 说话时降低 BGM/SFX 音量，让人声更清楚。              | 混音相关。                       |          |
+| WER      | Word Error Rate                       | 词错误率           | 衡量 ASR 转写错误。                          | ASR QA 指标。                  |          |
+| CER      | Character Error Rate                  | 字错误率           | 中文、日文等场景常用的 ASR 错误指标。                 | ASR/字幕 QA 指标。               |          |
+| DER      | Diarization Error Rate                | 说话人分离错误率       | 衡量 diarization 的漏检、虚警和说话人混淆。          | Diarization QA 指标。          |          |
+| JER      | Jaccard Error Rate                    | Jaccard 错误率    | 另一类 diarization 评估指标，避免长说话人主导结果。      | Diarization QA 指标。          |          |
+| MOS      | Mean Opinion Score                    | 主观听感评分         | 评价配音自然度、音质和可接受度。                      | 配音主观 QA 指标。                 |          |
 
 ## 端到端主线
 
@@ -106,39 +119,39 @@
 
 ## 输入形态
 
-| 输入资源 | 可以跳过或弱化的节点 | 仍然必须关注 |
-| --- | --- | --- |
-| 只有视频 + 目标语种 | 没有可跳过节点，通常要全链路处理 | ASR、对齐、翻译、字幕或配音、合成、QA。 |
-| 视频 + 已知源语种 | 可以弱化语言检测 | ASR 模型选择、专名、口音、源语标点。 |
-| 视频 + 源语 SRT/VTT | 可以弱化 ASR | 字幕清洗、强制对齐、翻译、本地化改写、时间轴重分段。 |
-| 视频 + 目标语 SRT/VTT | 可以跳过翻译 | 字幕格式、封装/烧录、阅读速度、配音生成、同步 QA。 |
-| 视频 + 目标语音频 | 可以跳过 TTS | 音频对齐、混音、响度、音画同步、封装。 |
-| 视频 + 多音轨或分轨录制 | 可以弱化 diarization | 流选择、说话人轨道映射、混音和最终封装。 |
+| 输入资源             | 可以跳过或弱化的节点       | 仍然必须关注                      |
+| ---------------- | ---------------- | --------------------------- |
+| 只有视频 + 目标语种      | 没有可跳过节点，通常要全链路处理 | ASR、对齐、翻译、字幕或配音、合成、QA。      |
+| 视频 + 已知源语种       | 可以弱化语言检测         | ASR 模型选择、专名、口音、源语标点。        |
+| 视频 + 源语 SRT/VTT  | 可以弱化 ASR         | 字幕清洗、强制对齐、翻译、本地化改写、时间轴重分段。  |
+| 视频 + 目标语 SRT/VTT | 可以跳过翻译           | 字幕格式、封装/烧录、阅读速度、配音生成、同步 QA。 |
+| 视频 + 目标语音频       | 可以跳过 TTS         | 音频对齐、混音、响度、音画同步、封装。         |
+| 视频 + 多音轨或分轨录制    | 可以弱化 diarization | 流选择、说话人轨道映射、混音和最终封装。        |
 
 ## 技术节点总览
 
-| 顺序 | 节点 | 必需性 | 输入 | 输出 | 关键技术 | 推荐开源方案 | 主要难点 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 交付定义 | 必需 | 视频、目标语种、交付要求 | 交付策略 | 字幕版、配音版、多音轨版、lip sync 版 | 无固定工具 | 交付形态不清会导致后面全链路返工。 |
-| 2 | 媒体流探测 | 必需 | 原始视频 | stream manifest | container、codec、stream、PTS/DTS、CFR/VFR | FFmpeg、ffprobe、MediaInfo | 多音轨、内嵌字幕、VFR、异常编码。 |
-| 3 | 音频抽取与规范化 | 必需 | 原始视频或音轨 | 规范化 wav | demux、resample、mono、loudness | FFmpeg、SoX、torchaudio、librosa | 采样率、声道、响度、截断、音轨选错。 |
-| 4 | 长视频分段 | 可选 | 视频、音频 | clips、scene list | shot detection、scene detection | PySceneDetect、TransNetV2 | 切点错、VFR 漂移、片段上下文丢失。 |
-| 5 | VAD/SAD | 常用必需 | wav | speech segments | VAD、SAD、threshold、hangover | Silero VAD、WebRTC VAD、pyannote.audio | 漏掉短句、误收音乐、边界切坏。 |
-| 6 | ASR/STT | 常用必需 | speech segments 或 wav | source transcript | Whisper、CTC/seq2seq、language ID | Whisper、faster-whisper、whisper.cpp | 口音、噪声、专名、代码切换、标点。 |
-| 7 | Forced Alignment | 常用必需 | wav、源文本 | word timestamps | alignment model、phoneme、word timestamp | WhisperX、Montreal Forced Aligner、aeneas | 语言支持、歌词/对白偏差、时间漂移。 |
-| 8 | 字幕切分 | 必需 | word timestamps、源文本 | source SRT/VTT | segmentation、reading speed、line break | pysubs2、Subtitle Edit、ffsubsync | 阅读速度、断句、镜头切换、短字幕闪烁。 |
-| 9 | 翻译与本地化 | 必需 | source text、术语表、上下文 | target text | MT、LLM rewrite、termbase、TMS | Argos Translate、NLLB、MarianMT/OPUS-MT、Bergamot、Ollama、llama.cpp、vLLM | 直译、术语不一致、语气错、目标语变长。 |
-| 10 | 说话人分离 | 按需 | wav、speech segments | speaker turns | diarization、speaker embedding、clustering、OSD | pyannote.audio、NVIDIA NeMo、SpeechBrain | 说话人数估计、重叠语音、声音相似。 |
-| 11 | 说话人身份识别 | 可选高风险 | speaker turns、声纹库 | known speaker labels | speaker verification、speaker identification | SpeechBrain、Resemblyzer、ECAPA-TDNN、FAISS | 需要授权、跨视频身份持久化、误识别风险。 |
-| 12 | 人脸检测与跟踪 | 可选 | 视频帧 | face tracks | face detection、tracking、re-id | MediaPipe、InsightFace、RetinaFace、OpenCV、ByteTrack | 遮挡、侧脸、切镜、同人 track 断裂。 |
-| 13 | ASD | 可选 | face tracks、audio windows | active face track | audio-visual fusion、lip motion、active score | TalkNet、Light-ASD | 画外音、多人同框、嘴动无声、音画不同步。 |
-| 14 | 目标字幕生成 | 常用必需 | target text、time windows | target SRT/VTT/ASS | subtitle timing、style、speaker label | pysubs2、Subtitle Edit、Aegisub | 目标语变长、阅读速度、字幕遮挡。 |
-| 15 | TTS/声音克隆 | 配音必需 | target text、voice setting | target speech chunks | TTS、voice cloning、voice conversion、prosody | Piper、CosyVoice、F5-TTS、GPT-SoVITS、OpenVoice、Coqui TTS/XTTS、RVC | 授权、发音、韵律、音色一致、跨语种自然度。 |
-| 16 | 时长适配 | 配音常用 | target speech、原时间窗 | fitted speech | TSM、tempo、pause control、sentence rewrite、lip sync | FFmpeg atempo、rubberband、pyrubberband、librosa、Wav2Lip、MuseTalk | 过度拉伸失真、语速不自然、句子溢出、口型生成伪影。 |
-| 17 | 声源分离 | 可选 | 原始混合音频 | vocals、accompaniment、stems | source separation、vocal isolation | Demucs、UVR、MDX-Net | 分离伪影、人声残留、BGM/SFX 被破坏。 |
-| 18 | 混音与响度 | 配音必需 | target speech、background bed | final audio track | mixing、ducking、fade、LUFS、limiter | FFmpeg filters、SoX、pyloudnorm、Audacity | 削波、响度不稳、目标语被背景声盖住。 |
-| 19 | 封装/烧录 | 必需 | video、audio、subtitle | localized video | mux、burn-in、stream mapping、codec | FFmpeg、MKVToolNix | 丢流、编码不兼容、字幕不可编辑、时间轴错。 |
-| 20 | 质检 | 必需 | localized video、源材料、中间产物 | QA report | decode check、sync check、WER/CER、DER、human review | ffprobe、ffmpeg、jiwer、pyannote.metrics、pysubs2、Subtitle Edit、自定义抽检脚本 | 指标和人工体验不一致，难例覆盖不足。 |
+| 顺序 | 节点               | 必需性   | 输入                           | 输出                         | 关键技术                                              | 推荐开源方案                                                               | 主要难点                      |
+| -- | ---------------- | ----- | ---------------------------- | -------------------------- | ------------------------------------------------- | -------------------------------------------------------------------- | ------------------------- |
+| 1  | 交付定义             | 必需    | 视频、目标语种、交付要求                 | 交付策略                       | 字幕版、配音版、多音轨版、lip sync 版                           | 无固定工具                                                                | 交付形态不清会导致后面全链路返工。         |
+| 2  | 媒体流探测            | 必需    | 原始视频                         | stream manifest            | container、codec、stream、PTS/DTS、CFR/VFR            | FFmpeg、ffprobe、MediaInfo                                             | 多音轨、内嵌字幕、VFR、异常编码。        |
+| 3  | 音频抽取与规范化         | 必需    | 原始视频或音轨                      | 规范化 wav                    | demux、resample、mono、loudness                      | FFmpeg、SoX、torchaudio、librosa                                        | 采样率、声道、响度、截断、音轨选错。        |
+| 4  | 长视频分段            | 可选    | 视频、音频                        | clips、scene list           | shot detection、scene detection                    | PySceneDetect、TransNetV2                                             | 切点错、VFR 漂移、片段上下文丢失。       |
+| 5  | VAD/SAD          | 常用必需  | wav                          | speech segments            | VAD、SAD、threshold、hangover                        | Silero VAD、WebRTC VAD、pyannote.audio                                 | 漏掉短句、误收音乐、边界切坏。           |
+| 6  | ASR/STT          | 常用必需  | speech segments 或 wav        | source transcript          | Whisper、CTC/seq2seq、language ID                   | Whisper、faster-whisper、whisper.cpp                                   | 口音、噪声、专名、代码切换、标点。         |
+| 7  | Forced Alignment | 常用必需  | wav、源文本                      | word timestamps            | alignment model、phoneme、word timestamp            | WhisperX、Montreal Forced Aligner、aeneas                              | 语言支持、歌词/对白偏差、时间漂移。        |
+| 8  | 字幕切分             | 必需    | word timestamps、源文本          | source SRT/VTT             | segmentation、reading speed、line break             | pysubs2、Subtitle Edit、ffsubsync                                      | 阅读速度、断句、镜头切换、短字幕闪烁。       |
+| 9  | 翻译与本地化           | 必需    | source text、术语表、上下文          | target text                | MT、LLM rewrite、termbase、TMS                       | Argos Translate、NLLB、MarianMT/OPUS-MT、Bergamot、Ollama、llama.cpp、vLLM | 直译、术语不一致、语气错、目标语变长。       |
+| 10 | 说话人分离            | 按需    | wav、speech segments          | speaker turns              | diarization、speaker embedding、clustering、OSD      | pyannote.audio、NVIDIA NeMo、SpeechBrain                               | 说话人数估计、重叠语音、声音相似。         |
+| 11 | 说话人身份识别          | 可选高风险 | speaker turns、声纹库            | known speaker labels       | speaker verification、speaker identification       | SpeechBrain、Resemblyzer、ECAPA-TDNN、FAISS                             | 需要授权、跨视频身份持久化、误识别风险。      |
+| 12 | 人脸检测与跟踪          | 可选    | 视频帧                          | face tracks                | face detection、tracking、re-id                     | MediaPipe、InsightFace、RetinaFace、OpenCV、ByteTrack                    | 遮挡、侧脸、切镜、同人 track 断裂。     |
+| 13 | ASD              | 可选    | face tracks、audio windows    | active face track          | audio-visual fusion、lip motion、active score       | TalkNet、Light-ASD                                                    | 画外音、多人同框、嘴动无声、音画不同步。      |
+| 14 | 目标字幕生成           | 常用必需  | target text、time windows     | target SRT/VTT/ASS         | subtitle timing、style、speaker label               | pysubs2、Subtitle Edit、Aegisub                                        | 目标语变长、阅读速度、字幕遮挡。          |
+| 15 | TTS/声音克隆         | 配音必需  | target text、voice setting    | target speech chunks       | TTS、voice cloning、voice conversion、prosody        | Piper、CosyVoice、F5-TTS、GPT-SoVITS、OpenVoice、Coqui TTS/XTTS、RVC       | 授权、发音、韵律、音色一致、跨语种自然度。     |
+| 16 | 时长适配             | 配音常用  | target speech、原时间窗           | fitted speech              | TSM、tempo、pause control、sentence rewrite、lip sync | FFmpeg atempo、rubberband、pyrubberband、librosa、Wav2Lip、MuseTalk       | 过度拉伸失真、语速不自然、句子溢出、口型生成伪影。 |
+| 17 | 声源分离             | 可选    | 原始混合音频                       | vocals、accompaniment、stems | source separation、vocal isolation                 | Demucs、UVR、MDX-Net                                                   | 分离伪影、人声残留、BGM/SFX 被破坏。    |
+| 18 | 混音与响度            | 配音必需  | target speech、background bed | final audio track          | mixing、ducking、fade、LUFS、limiter                  | FFmpeg filters、SoX、pyloudnorm、Audacity                               | 削波、响度不稳、目标语被背景声盖住。        |
+| 19 | 封装/烧录            | 必需    | video、audio、subtitle         | localized video            | mux、burn-in、stream mapping、codec                  | FFmpeg、MKVToolNix                                                    | 丢流、编码不兼容、字幕不可编辑、时间轴错。     |
+| 20 | 质检               | 必需    | localized video、源材料、中间产物     | QA report                  | decode check、sync check、WER/CER、DER、human review  | ffprobe、ffmpeg、jiwer、pyannote.metrics、pysubs2、Subtitle Edit、自定义抽检脚本  | 指标和人工体验不一致，难例覆盖不足。        |
 
 ## 节点拆解
 
@@ -447,20 +460,26 @@ Speaker Diarization 回答“谁在什么时候说话”。Speaker Identificatio
 
 ## 推荐开源方案速查
 
-| 领域 | 优先看 | 适合解决 | 注意事项 |
-| --- | --- | --- | --- |
-| 媒体处理 | FFmpeg、ffprobe、SoX、MKVToolNix | 抽音频、转码、封装、烧录字幕、验证流 | 不理解内容，只处理媒体流和字节层。 |
-| VAD/SAD | Silero VAD、WebRTC VAD、pyannote.audio | 语音区间检测 | VAD 漏检会直接损坏后续链路。 |
-| ASR | Whisper、faster-whisper、whisper.cpp | 源语音转写 | 专名、口音、噪声和长视频上下文仍要复核。 |
-| Forced Alignment | WhisperX、Montreal Forced Aligner、aeneas | 词级时间戳、字幕校准 | 语言支持和源文本质量决定效果上限。 |
-| Diarization | pyannote.audio、NVIDIA NeMo、SpeechBrain | 匿名说话人分离 | pyannote.audio 是本链路必须认识的重点方案。 |
-| Speaker ID | SpeechBrain、Resemblyzer、FAISS | 已知说话人匹配和声纹检索 | 需要授权、声纹库和隐私边界。 |
-| Face/ASD | MediaPipe、InsightFace、RetinaFace、TalkNet、Light-ASD | 人脸检测、跟踪、活跃说话人检测 | 画外音和剪辑切换会造成误判。 |
-| Subtitle | pysubs2、Subtitle Edit、Aegisub | 字幕生成、清洗、样式和时间轴 | 阅读速度和画面遮挡需要人工检查。 |
-| Translation | Argos Translate、NLLB、MarianMT/OPUS-MT、Bergamot、Ollama、llama.cpp、vLLM | 翻译和本地化改写 | 直译不是本地化，术语表和上下文很关键。 |
-| TTS/VC | Piper、CosyVoice、F5-TTS、Coqui TTS/XTTS、GPT-SoVITS、OpenVoice、RVC | 目标语配音、音色迁移 | 许可证、授权、音色相似度和滥用风险必须检查。 |
-| Source Separation | Demucs、UVR、MDX-Net | 分离人声、伴奏、背景声 | 分离伪影和 SFX 损坏要人工听检。 |
-| Mixing/QA | FFmpeg filters、pyloudnorm、jiwer、pyannote.metrics | 混音、响度、WER/CER、DER | 指标只是辅助，交付前必须抽检。 |
+| 阶段                        | 优先看                                                                  | 适合解决                              | 注意事项                               |
+| ------------------------- | -------------------------------------------------------------------- | --------------------------------- | ---------------------------------- |
+| 输入资源识别                    | ffprobe、FFmpeg、MediaInfo                                             | 检查视频、音轨、字幕流、编码、时长、帧率、VFR/CFR      | 先确认已有资源，避免重复跑 ASR、翻译或 diarization。 |
+| 媒体预处理                     | FFmpeg、SoX、torchaudio、librosa                                        | 抽音频、重采样、转 mono、响度预处理、生成模型输入 wav   | 不理解内容，只处理媒体流和音频数据。                 |
+| 长视频分段                     | PySceneDetect、TransNetV2                                             | 镜头切分、长视频拆片段、QA 抽检定位               | 切分是辅助，不应破坏语义上下文和字幕连续性。             |
+| VAD/SAD                   | Silero VAD、WebRTC VAD、pyannote.audio                                 | 语音区间检测、静音过滤、ASR/diarization 前置切段  | VAD 漏检会直接损坏后续链路。                   |
+| ASR/STT                   | Whisper、faster-whisper、whisper.cpp                                   | 源语音转写、语言识别、初步时间段                  | 专名、口音、噪声和长视频上下文仍要复核。               |
+| Forced Alignment          | WhisperX、Montreal Forced Aligner、aeneas                              | 词级时间戳、源字幕校准、ASR 时间轴修正             | 语言支持和源文本质量决定效果上限。                  |
+| 字幕处理                      | pysubs2、Subtitle Edit、Aegisub、ffsubsync                              | 字幕清洗、切分、重定时、样式和人工校对               | 阅读速度、断句、画面遮挡和时间轴漂移要人工抽检。           |
+| 翻译与本地化                    | Argos Translate、NLLB、MarianMT/OPUS-MT、Bergamot、Ollama、llama.cpp、vLLM | 翻译、术语统一、本地化改写、语气和上下文一致性检查         | 直译不是本地化，术语表和上下文很关键。                |
+| Diarization               | pyannote.audio、NVIDIA NeMo、SpeechBrain                               | 匿名说话人分离、speaker turns、重叠语音辅助判断    | pyannote.audio 是本链路必须认识的重点方案。      |
+| Speaker Verification / ID | SpeechBrain、Resemblyzer、ECAPA-TDNN、FAISS                             | 声纹向量、说话人验证、声纹检索、已知说话人候选召回         | 检索只是召回候选，不等于确认身份；需要授权和隐私边界。        |
+| Face Detection / Tracking | MediaPipe、InsightFace、RetinaFace、OpenCV、ByteTrack                    | 人脸检测、face track、跨帧跟踪、人物轨迹维护       | 遮挡、侧脸、切镜和 track 断裂会影响后续 ASD。       |
+| ASD                       | TalkNet、Light-ASD                                                    | 判断画面中哪张脸正在说话，把音频说话片段绑定到可见人物       | ASD 不是 VAD，也不是身份识别；画外音和剪辑切换会造成误判。  |
+| TTS / Voice Cloning / VC  | Piper、CosyVoice、F5-TTS、Coqui TTS/XTTS、GPT-SoVITS、OpenVoice、RVC       | 目标语配音、音色迁移、声音克隆和 voice conversion | 许可证、授权、音色相似度和滥用风险必须检查。             |
+| 时长适配 / Lip Sync           | FFmpeg atempo、rubberband、pyrubberband、librosa、Wav2Lip、MuseTalk       | 语速调整、时长拉伸压缩、停顿处理、口型同步增强           | Lip sync 是高成本可选节点，不应默认进入所有链路。      |
+| Source Separation         | Demucs、UVR、MDX-Net                                                   | 分离人声、伴奏、背景声，给配音保留 background bed  | 分离伪影和 SFX 损坏要人工听检。                 |
+| Mixing / Loudness         | FFmpeg filters、SoX、pyloudnorm、Audacity                               | 混音、ducking、fade、响度归一、削波检查         | 指标只是辅助，最终可懂度必须听检。                  |
+| Packaging                 | FFmpeg、ffprobe、MKVToolNix、libass                                     | 多音轨封装、字幕烧录/外挂、编码兼容、输出流验证          | 必须检查 `-map`，避免丢字幕、丢音轨或输出不可编辑。      |
+| QA / Metrics              | ffprobe、ffmpeg、jiwer、pyannote.metrics、pysubs2、Subtitle Edit、自定义抽检脚本  | 媒体完整性、WER/CER、DER/JER、字幕时间轴、人工抽检  | “能播放”不等于“可交付”；必须区分阻断级问题和可接受瑕疵。     |
 
 ## 总览提示词
 
@@ -474,14 +493,14 @@ Speaker Diarization 回答“谁在什么时候说话”。Speaker Identificatio
 - 主链路：交付定义 -> 媒体流探测 -> 音频抽取与规范化 -> VAD/SAD -> ASR/STT -> Forced Alignment -> 字幕切分 -> 翻译与本地化改写 -> Speaker Diarization -> 可选 Speaker Identification -> 可选 Face Detection/Tracking -> 可选 ASD -> TTS/Voice Cloning/Voice Conversion -> 时长适配 -> Source Separation -> 混音与响度 -> 封装/烧录 -> QA。
 - 每个节点的输入、输出、中间产物、关键技术、错误如何向后传播。
 - 推荐开源方案：FFmpeg、ffprobe、Silero VAD、WebRTC VAD、pyannote.audio、Whisper、faster-whisper、whisper.cpp、WhisperX、Montreal Forced Aligner、pysubs2、Subtitle Edit、Argos Translate、NLLB、MarianMT/OPUS-MT、Ollama、llama.cpp、vLLM、MediaPipe、InsightFace、TalkNet、Light-ASD、Piper、CosyVoice、F5-TTS、GPT-SoVITS、OpenVoice、RVC、Demucs、UVR、pyloudnorm、jiwer、pyannote.metrics。
-- 英文术语表：简称、英文全称、中文名、在链路中的作用。
+- 英文术语表：简称、英文全称、中文名、在链路中的作用、重要程度、备注。
 - 质检：媒体完整性、字幕同步、音画同步、ASR 错误、说话人错误、翻译质量、配音听感、响度、合规授权和人工抽检。
 
 输出结构建议：
 - 先给端到端主线。
 - 再给输入形态分支。
 - 再给节点矩阵：节点、必需性、输入、输出、关键技术、推荐开源方案、主要难点。
-- 再给英文术语表。
+- 再给英文术语表，并说明哪些术语是主流程、按需增强、质检辅助或高风险能力。
 - 最后给 QA 分层和阻断级问题。
 
 避免：
@@ -563,7 +582,8 @@ Speaker Diarization 回答“谁在什么时候说话”。Speaker Identificatio
 - 本文保持独立，不依赖其它提示词文档或历史素材。
 - 主线永远是“输入视频 + 目标语种 -> 质检本地化后的视频”。
 - 新增内容必须落到具体节点：输入、输出、关键技术、开源方案、难点、质检。
-- 英文简称必须进入术语表，不能只在正文里零散出现。
+- 英文简称必须进入术语表，不能只在正文里零散出现；新增术语要补齐重要程度和备注。
 - 推荐开源方案要写清适用节点和边界，不要只堆工具名。
 - `pyannote.audio` 必须出现在 VAD/SAD 或 Speaker Diarization 相关节点中，并说明它在说话人分离和语音分段里的位置。
 - 涉及声音克隆、说话人身份、人脸识别、云 API 或个人数据时，必须补充授权、隐私和人工复核边界。
+
