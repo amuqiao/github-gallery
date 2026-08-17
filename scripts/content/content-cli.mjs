@@ -92,7 +92,7 @@ function assertDate(value, label) {
 
 function usage() {
   console.log(`用法：
-  ./scripts/content.sh item new <hall> <github_project|ai_model|knowledge_article> <id> [options] [--added-at YYYY-MM-DD]
+  ./scripts/content.sh item new <hall> <github_project|ai_model|knowledge_article|apple_app> <id> [options] [--added-at YYYY-MM-DD]
   ./scripts/content.sh item note add <hall> <id> <note-id> [options] [--added-at YYYY-MM-DD]
   ./scripts/content.sh item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>] [--added-at YYYY-MM-DD]
   ./scripts/content.sh item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
@@ -773,6 +773,97 @@ function buildItemConfig(hall, kind, id, options) {
     };
   }
 
+  if (kind === "apple_app") {
+    const platforms = optionValues(options, "platform");
+    const distribution = optionValues(options, "distribution");
+    const tags = optionValues(options, "tag");
+    const platformSet = new Set(platforms);
+    const tagSet = new Set(tags);
+
+    for (const platform of platforms) {
+      if (platform !== "ios" && platform !== "macos") {
+        die(`apple_app --platform must be ios or macos: ${platform}`);
+      }
+    }
+    for (const tag of tags) {
+      assertId(tag, "tag id");
+    }
+    if (platforms.length === 0) {
+      die("apple_app item new requires at least one --platform");
+    }
+    if (distribution.length === 0) {
+      die("apple_app item new requires at least one --distribution");
+    }
+    if (tags.length === 0) {
+      die("apple_app item new requires at least one --tag");
+    }
+    if (platformSet.size !== platforms.length) {
+      die("apple_app --platform must not contain duplicates");
+    }
+    if (tagSet.size !== tags.length) {
+      die("apple_app --tag must not contain duplicates");
+    }
+    for (const platform of platformSet) {
+      if (!tagSet.has(platform)) {
+        die(`apple_app --tag must include platform tag: ${platform}`);
+      }
+    }
+    for (const platformTag of ["ios", "macos"]) {
+      if (tagSet.has(platformTag) && !platformSet.has(platformTag)) {
+        die(`apple_app --tag contains platform tag not listed in --platform: ${platformTag}`);
+      }
+    }
+
+    assertId(requiredOption(options, "maintenance-status"), "maintenance status id");
+
+    const profile = {
+      platforms,
+      distribution,
+      tags,
+      maintenance_status: requiredOption(options, "maintenance-status")
+    };
+    const pricing = optionalOption(options, "pricing");
+    const repo = optionalOption(options, "repo");
+    const website = optionalOption(options, "website");
+    const license = optionalOption(options, "license");
+    const languages = optionValues(options, "language");
+
+    if (pricing) {
+      profile.pricing = pricing;
+    }
+    if (repo) {
+      profile.repo = repo;
+    }
+    if (website) {
+      profile.website = website;
+    }
+    if (license) {
+      profile.license = license;
+    }
+    if (languages.length > 0) {
+      profile.languages = languages;
+    }
+
+    return {
+      schema_version: 2,
+      id,
+      hall,
+      kind,
+      title,
+      summary,
+      added_at: addedAt,
+      source: {
+        type: requiredOption(options, "source-type"),
+        url: requiredOption(options, "source-url")
+      },
+      body: {
+        type: "markdown",
+        path: "./index.md"
+      },
+      profile
+    };
+  }
+
   die(`unknown content item kind: ${kind}`);
 }
 
@@ -818,13 +909,30 @@ function itemNewAllowedOptions(kind) {
     ]);
   }
 
+  if (kind === "apple_app") {
+    return new Set([
+      ...commonOptions,
+      "source-type",
+      "source-url",
+      "platform",
+      "distribution",
+      "tag",
+      "maintenance-status",
+      "pricing",
+      "repo",
+      "website",
+      "license",
+      "language"
+    ]);
+  }
+
   die(`unknown content item kind: ${kind}`);
 }
 
 async function createItem(args) {
   const [hall, kind, id, ...rest] = args;
   if (!hall || !kind || !id) {
-    die("item new requires <hall> <github_project|ai_model|knowledge_article> <id>");
+    die("item new requires <hall> <github_project|ai_model|knowledge_article|apple_app> <id>");
   }
 
   assertId(hall, "hall id");

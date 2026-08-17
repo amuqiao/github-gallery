@@ -33,6 +33,22 @@ export function projectContentItemCard(
 ): ContentItemCardProjection {
   const sourceLabel = item.source.type;
 
+  if (item.kind === "apple_app") {
+    const profile = item.profile;
+    const resolvedTaxonomy = requireTaxonomy(item, taxonomy);
+    const platformLabels = profile.platforms.map(formatApplePlatform);
+    const primaryFacts = [platformLabels.join(" · "), profile.languages?.[0], profile.license].filter(
+      (fact): fact is string => Boolean(fact)
+    );
+
+    return {
+      kindLabel: platformLabels.length === 1 ? `${platformLabels[0]} App` : "Apple App",
+      primaryFacts,
+      tagPreview: profile.tags.slice(0, 4).map((tag) => getTag(resolvedTaxonomy, tag).label),
+      footerText: profile.distribution.join(" · ") || sourceLabel
+    };
+  }
+
   if (item.kind === "ai_model") {
     const profile = item.profile;
     const primaryFacts = [profile.provider, profile.formats.join(" · "), profile.runtimes.join(" · ")];
@@ -74,6 +90,36 @@ export function projectContentItemDetailHeader(
   item: ContentItem,
   taxonomy?: TaxonomyCatalog
 ): ContentItemDetailHeaderProjection {
+  if (item.kind === "apple_app") {
+    const profile = item.profile;
+    const resolvedTaxonomy = requireTaxonomy(item, taxonomy);
+    const maintenanceStatus = getProjectMaintenanceStatus(resolvedTaxonomy, profile.maintenance_status);
+    const tags = profile.tags.map((tag) => getTag(resolvedTaxonomy, tag));
+    const stats: ContentItemStat[] = [
+      { label: "平台", value: profile.platforms.map(formatApplePlatform).join(" · ") },
+      { label: "分发", value: profile.distribution.join(" · ") },
+      { label: "维护", value: maintenanceStatus.label }
+    ];
+
+    if (profile.pricing) {
+      stats.push({ label: "价格", value: profile.pricing });
+    }
+
+    if (profile.languages?.length) {
+      stats.push({ label: "语言", value: profile.languages.join(" · ") });
+    }
+
+    if (profile.license) {
+      stats.push({ label: "License", value: profile.license });
+    }
+
+    return {
+      kindLabel: "应用",
+      stats,
+      badges: tags.map((tag) => tag.label)
+    };
+  }
+
   if (item.kind === "ai_model") {
     const profile = item.profile;
 
@@ -129,6 +175,24 @@ export function projectContentItemSearch(
   item: ContentItem,
   taxonomy?: TaxonomyCatalog
 ): ContentItemSearchProjection {
+  if (item.kind === "apple_app") {
+    const profile = item.profile;
+    const resolvedTaxonomy = requireTaxonomy(item, taxonomy);
+
+    return {
+      labels: uniqueLabels([
+        "应用",
+        ...profile.platforms.map(formatApplePlatform),
+        ...profile.distribution,
+        ...profile.tags.map((tag) => getTag(resolvedTaxonomy, tag).label),
+        getProjectMaintenanceStatus(resolvedTaxonomy, profile.maintenance_status).label,
+        profile.pricing,
+        ...(profile.languages ?? []),
+        profile.license
+      ])
+    };
+  }
+
   if (item.kind === "ai_model") {
     const profile = item.profile;
 
@@ -210,4 +274,8 @@ function uniqueLabels(labels: Array<string | undefined>): string[] {
   }
 
   return result;
+}
+
+function formatApplePlatform(platform: "ios" | "macos"): string {
+  return platform === "ios" ? "iOS" : "macOS";
 }

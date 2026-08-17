@@ -1,0 +1,51 @@
+schema_version: 2
+id: lunarbar
+hall: app-store
+kind: apple_app
+title: LunarBar
+summary: 免费开源的 macOS 菜单栏农历日历，用极简状态栏入口查看农历、公共假日、系统日历和提醒。
+added_at: '2026-08-17'
+source:
+  type: github
+  url: https://github.com/LunarBar-app/LunarBar
+body:
+  type: markdown
+  path: ./index.md
+profile:
+  platforms:
+    - macos
+  distribution:
+    - GitHub Releases
+    - Homebrew Cask
+  tags:
+    - macos
+    - open-source
+    - github
+    - swift
+    - menubar
+    - calendar
+  maintenance_status: active
+  pricing: 免费
+  repo: https://github.com/LunarBar-app/LunarBar
+  license: MIT
+  languages:
+    - Swift
+blocks:
+  - type: links
+    items:
+      - label: Repository
+        url: https://github.com/LunarBar-app/LunarBar
+      - label: Releases
+        url: https://github.com/LunarBar-app/LunarBar/releases
+      - label: Homebrew Cask
+        url: https://formulae.brew.sh/cask/lunarbar
+  - type: highlights
+    items:
+      - 免费开源的 macOS 菜单栏农历日历。
+      - 从状态栏快速查看农历、公共假日、系统日历与提醒。
+      - 提供 GitHub Releases 与 Homebrew Cask 两种安装路径。
+  - type: use-cases
+    items:
+      - 在 Mac 状态栏保留一个轻量日历入口。
+      - 快速确认农历日期、节气和公共假日信息。
+      - 研究 Swift 实现的极简 macOS 菜单栏应用。

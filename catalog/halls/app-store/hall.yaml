@@ -1,0 +1,6 @@
+schema_version: 1
+id: app-store
+title: Mac / iOS Store
+summary: 面向 Mac 与 iOS 应用的策展入口，收录可安装、可研究或可作为产品参考的 Apple 平台应用。
+availability: active
+order: 4

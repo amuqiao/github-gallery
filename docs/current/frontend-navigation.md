@@ -11,7 +11,7 @@ Platform Hub
   `/` 展示展馆入口、模型样例和精选专题。
 
 Hall Hub
-  `/halls/github/`、`/halls/models/` 和 `/halls/lab/` 展示馆内 published content。
+  `/halls/github/`、`/halls/models/`、`/halls/app-store/` 和 `/halls/lab/` 展示馆内 published content。
 
 Canonical Detail
   `/halls/<hall>/items/<id>/` 展示 content item 详情。
@@ -30,6 +30,7 @@ Nested Notes
 | `/` | Platform hub，展示展馆入口、published 模型样例和 published content collection。 | `HallCard`、`ContentItemCard`、`ContentCollectionCard` |
 | `/halls/github/` | GitHub 展馆 hub，展示 published GitHub content item 和馆内 published collection。 | `Breadcrumbs`、`PageHeader`、`ContentItemCard`、`ContentCollectionCard` |
 | `/halls/models/` | 模型展馆入口，展示 published `ai_model` item。 | `Breadcrumbs`、`PageHeader`、`ContentItemCard` |
+| `/halls/app-store/` | Mac / iOS Store 展馆入口，展示 published `apple_app` item 和馆内 published collection。 | `Breadcrumbs`、`PageHeader`、`ContentItemCard`、`ContentCollectionCard` |
 | `/halls/lab/` | 实验室入口，展示临时收纳的 published content item 和馆内 published collection。 | `Breadcrumbs`、`PageHeader`、`ContentItemCard`、`ContentCollectionCard` |
 | `/halls/music/` | planned 音乐展馆占位页。 | `PlannedHallPage` |
 | `/halls/movies/` | planned 电影展馆占位页。 | `PlannedHallPage` |

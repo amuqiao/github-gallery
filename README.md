@@ -1,6 +1,6 @@
 # Gallery Platform
 
-一个基于合同驱动的静态展馆平台。当前包含 GitHub 展馆、模型展馆，以及预留的音乐和电影展馆入口。
+一个基于合同驱动的静态展馆平台。当前包含 GitHub 展馆、模型展馆、Mac / iOS Store、实验室，以及预留的音乐和电影展馆入口。
 
 ## Structure
 
@@ -76,6 +76,16 @@ Content bundle 发布入口：
   --access download \
   --format onnx \
   --runtime onnxruntime
+./scripts/content.sh item new app-store apple_app example-macos-app \
+  --title "Example macOS App" \
+  --summary "Example Apple platform app summary." \
+  --source-type github \
+  --source-url "https://github.com/example/example-macos-app" \
+  --platform macos \
+  --distribution "GitHub Releases" \
+  --tag macos \
+  --tag open-source \
+  --maintenance-status unknown
 ./scripts/content.sh import validate .tmp/import-batches/example-content-batch
 ./scripts/content.sh import apply .tmp/import-batches/example-content-batch
 ./scripts/content.sh item note import models example-model implementation-guide \

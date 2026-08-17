@@ -141,6 +141,55 @@ tags:
     description:
       zh: 包含浏览器界面或 Web 控制台的项目。
       en: Projects that include a browser-based interface.
+  - id: ios
+    name:
+      zh: iOS
+      en: iOS
+    description:
+      zh: 面向 iPhone 或 iPad 等 iOS 生态的应用或项目。
+      en: Apps or projects for the iOS ecosystem.
+  - id: macos
+    name:
+      zh: macOS
+      en: macOS
+    description:
+      zh: 面向 macOS 桌面系统的应用或项目。
+      en: Apps or projects for macOS desktop systems.
+  - id: open-source
+    name:
+      zh: 开源
+      en: Open Source
+    description:
+      zh: 源码公开并可按许可证使用、学习或再分发的项目。
+      en: Projects with publicly available source code under a license.
+  - id: github
+    name:
+      zh: GitHub
+      en: GitHub
+    description:
+      zh: 源码、发布或协作主要托管在 GitHub 上的项目。
+      en: Projects primarily hosted, released, or collaborated on GitHub.
+  - id: swift
+    name:
+      zh: Swift
+      en: Swift
+    description:
+      zh: 主要使用 Swift 构建的 Apple 平台应用或项目。
+      en: Apple-platform apps or projects built primarily with Swift.
+  - id: menubar
+    name:
+      zh: 菜单栏
+      en: Menu Bar
+    description:
+      zh: 以 macOS 菜单栏常驻入口为核心体验的应用。
+      en: Apps centered on a persistent macOS menu bar experience.
+  - id: calendar
+    name:
+      zh: 日历
+      en: Calendar
+    description:
+      zh: 日历、日期、节假日或时间管理相关应用。
+      en: Apps related to calendars, dates, holidays, or time management.
   - id: research
     name:
       zh: 研究

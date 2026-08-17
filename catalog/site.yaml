@@ -11,6 +11,8 @@ navigation:
     href: /halls/github/
   - label: 模型展馆
     href: /halls/models/
+  - label: Mac / iOS Store
+    href: /halls/app-store/
   - label: 实验室
     href: /halls/lab/
   - label: 专题

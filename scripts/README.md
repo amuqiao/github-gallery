@@ -22,7 +22,7 @@ deploy.sh    Docker 静态站点部署入口
 | `dev.sh` | Astro dev server 的 `start` / `stop` / `status` / `restart` / `logs`，以及 `preview`、`build` 的稳定入口。 | 部署、远程服务、GitHub API 抓取、content 生成。 |
 | `verify.sh` | content bundle、halls、taxonomy、site、内容资产和 static build 验证。 | README 或 `docs/` 漂移检查。 |
 | `content.sh` | content bundle item/collection 草稿创建、item note 添加、content import batch、`added_at` 缺失元数据补齐、publish/archive/restore 状态移动，以及 list/show/status 只读查询。 | 旧 project/root collection 维护、GitHub API 抓取、taxonomy 自动修改、物理删除。 |
-| `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 5 覆盖现场隔离、GitHub item、模型 item、notes、collection 的创建、发布、归档、恢复、手工编辑、重新发布、list/show/status、列表可见性、渲染内容断言、import batch create/replace/delete、最小回滚，以及确定性失败/幂等边界。 | 日常内容创建、真实 catalog 写入、默认发布门禁、中断故障注入覆盖。 |
+| `content-workflow-test.sh` | 在仓库外隔离副本中运行 content workflow 回归测试。当前 Phase 5 覆盖现场隔离、GitHub item、模型 item、Apple app item、notes、collection 的创建、发布、归档、恢复、手工编辑、重新发布、list/show/status、列表可见性、渲染内容断言、import batch create/replace/delete、最小回滚，以及确定性失败/幂等边界。 | 日常内容创建、真实 catalog 写入、默认发布门禁、中断故障注入覆盖。 |
 | `deploy.sh` | Docker 静态站点部署：全局 `check`，以及 `preview`、`standalone`、`proxy` 三种模式的 build/start/stop/restart/status。 | Astro dev server、数据库、队列、迁移、反向代理本体或远程云资源。 |
 
 ## Commands
@@ -66,6 +66,17 @@ Requires Bash, Node.js 20 or newer, and standard local process tools (`ps`, `pgr
   --topic "nonlinearity" \
   --topic "gradient-flow" \
   --audience "self-study" \
+  --added-at 2026-07-31
+./scripts/content.sh item new app-store apple_app example-macos-app \
+  --title "Example macOS App" \
+  --summary "Example Apple platform app summary." \
+  --source-type github \
+  --source-url "https://github.com/example/example-macos-app" \
+  --platform macos \
+  --distribution "GitHub Releases" \
+  --tag macos \
+  --tag open-source \
+  --maintenance-status unknown \
   --added-at 2026-07-31
 ./scripts/content.sh item note add models example-model quick-start \
   --title "Quick Start" \

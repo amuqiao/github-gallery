@@ -4,7 +4,7 @@
 
 ## Purpose
 
-`catalog/taxonomies.yaml` 是分类、标签和项目维护状态的受控词表。GitHub content item 只引用 `category id`、`tag id` 和 `maintenance_status id`，不直接写展示名或视觉颜色。
+`catalog/taxonomies.yaml` 是分类、标签和项目维护状态的受控词表。`github_project` content item 引用 `category id`、`tag id` 和 `maintenance_status id`；`apple_app` content item 引用 `tag id` 和 `maintenance_status id`。内容包不直接写展示名或视觉颜色。
 
 Hall availability 不属于 taxonomy。展馆入口的 `availability` 由 `catalog/halls/<id>/hall.yaml` 直接使用 `active` / `planned` 枚举。模型馆当前的 `tasks`、`modalities`、`formats`、`runtimes` 和 `access` 也不属于本 taxonomy 合同。
 
@@ -12,6 +12,7 @@ Hall availability 不属于 taxonomy。展馆入口的 `availability` 由 `catal
 catalog/taxonomies.yaml
   -> category/tag/project_maintenance_status id registry
   -> catalog/content/<state>/github/items/<id>/item.yaml profile references ids
+  -> catalog/content/<state>/app-store/items/<id>/item.yaml profile references ids
   -> content validator validates references
   -> frontend renders localized labels
 ```
@@ -66,7 +67,7 @@ tags:
 
 | Field | Rule |
 | --- | --- |
-| `id` | 必填，唯一，小写 kebab-case。作为 `github_project.profile.maintenance_status` 的引用。 |
+| `id` | 必填，唯一，小写 kebab-case。作为 `github_project.profile.maintenance_status` 或 `apple_app.profile.maintenance_status` 的引用。 |
 | `name.zh` | 必填，中文展示名。 |
 | `name.en` | 必填，英文展示名。 |
 | `description.zh` | 必填，中文说明。 |
@@ -92,6 +93,9 @@ project_maintenance_statuses:
 - `github_project.profile.category` 必须引用 `categories[].id`。
 - `github_project.profile.tags` 必须引用 `tags[].id`。
 - `github_project.profile.maintenance_status` 必须引用 `project_maintenance_statuses[].id`。
+- `apple_app.profile.tags` 必须引用 `tags[].id`。
+- `apple_app.profile.maintenance_status` 必须引用 `project_maintenance_statuses[].id`。
+- `apple_app.profile.tags` 中的 `ios` / `macos` 平台标签必须和 `apple_app.profile.platforms` 完全一致。
 
 重命名 `id` 属于破坏性路由变更。只修改展示名时，优先修改 `name.zh` 或 `name.en`，不要改 `id`。
 
@@ -102,7 +106,7 @@ project_maintenance_statuses:
 ```text
 category           = 这个项目属于哪个大领域
 tag                = 这个项目有什么能力、主题、技术路线或使用场景
-maintenance_status = 这个 GitHub 项目的维护状态
+maintenance_status = 这个项目或应用的维护状态
 ```
 
 不要为了一个很窄的主题新增 category。声音克隆、视频翻译、配音、字幕等应优先作为 tag。
@@ -125,5 +129,5 @@ maintenance_status 必须从 project_maintenance_statuses[].id 中选择一个�
 - 新增 item 必须同时提供 `zh` 和 `en` 的 `name`、`description`。
 - 新增 project maintenance status 后，如果前端会渲染它，还必须在 `src/presentation/maintenance-status-tones.ts` 增加展示 tone 映射。
 - 修改 `locale.default` 可以切换默认展示语言；新增第三语言必须先改代码合同。
-- 删除或重命名 id 前，先检查所有 GitHub content item 引用和公开页面展示影响。
+- 删除或重命名 id 前，先检查所有 GitHub content item、Apple app content item 引用和公开页面展示影响。
 - 更新后运行 `./scripts/verify.sh check`。

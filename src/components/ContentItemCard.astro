@@ -12,7 +12,7 @@ interface Props {
 }
 
 const { item, note, headingLevel = 3, order } = Astro.props;
-const taxonomy = item.kind === "github_project" ? await getTaxonomyCatalog() : undefined;
+const taxonomy = item.kind === "github_project" || item.kind === "apple_app" ? await getTaxonomyCatalog() : undefined;
 const card = projectContentItemCard(item, taxonomy);
 ---
 

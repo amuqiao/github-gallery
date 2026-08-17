@@ -203,11 +203,11 @@ async function readCollectionConfigs(publicationState, hall) {
 }
 
 function assertKnownContentTaxonomy(item, taxonomy) {
-  if (item.kind !== "github_project") {
+  if (item.kind !== "github_project" && item.kind !== "apple_app") {
     return;
   }
 
-  if (!taxonomy.categories.has(item.profile.category)) {
+  if (item.kind === "github_project" && !taxonomy.categories.has(item.profile.category)) {
     throw new Error(`${item.id} content item references unknown category: ${item.profile.category}`);
   }
 
@@ -217,8 +217,29 @@ function assertKnownContentTaxonomy(item, taxonomy) {
     }
   }
 
+  if (item.kind === "apple_app") {
+    assertAppleAppPlatformTags(item);
+  }
+
   if (!taxonomy.projectMaintenanceStatuses.has(item.profile.maintenance_status)) {
     throw new Error(`${item.id} content item references unknown maintenance_status: ${item.profile.maintenance_status}`);
+  }
+}
+
+function assertAppleAppPlatformTags(item) {
+  const platformSet = new Set(item.profile.platforms);
+  const tagSet = new Set(item.profile.tags);
+
+  for (const platform of platformSet) {
+    if (!tagSet.has(platform)) {
+      throw new Error(`${item.id} apple_app profile.tags must include platform tag: ${platform}`);
+    }
+  }
+
+  for (const platformTag of ["ios", "macos"]) {
+    if (tagSet.has(platformTag) && !platformSet.has(platformTag)) {
+      throw new Error(`${item.id} apple_app profile.tags contains platform tag not listed in platforms: ${platformTag}`);
+    }
   }
 }
 

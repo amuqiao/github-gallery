@@ -2,7 +2,7 @@
 
 本文解释当前已经实现的 `catalog/content/{drafts,published,archived}/` 内容包合同。可执行真相源是 `src/lib/catalog/catalog-schema.js`、`src/lib/catalog/content-validator.js` 和 `src/lib/catalog/content.ts`。
 
-当前 published content bundle 已驱动平台首页、GitHub 展馆首页、模型展馆首页和 canonical content 路由。旧 GitHub projects、root collections 和模型样例已迁移到 `catalog/content/published/`；legacy project/model/root collection 路由和数据目录已切除。
+当前 published content bundle 已驱动平台首页、GitHub 展馆首页、模型展馆首页、Mac / iOS Store 展馆首页和 canonical content 路由。旧 GitHub projects、root collections 和模型样例已迁移到 `catalog/content/published/`；legacy project/model/root collection 路由和数据目录已切除。
 
 ## Directory
 
@@ -45,7 +45,7 @@ catalog/content/published/github/collections/voice-cloning/
 | --- | --- |
 | `id` | 必填，必须匹配目录名。 |
 | `hall` | 必填，必须匹配所在 hall 目录。 |
-| `kind` | 必填，当前支持 `github_project`、`ai_model`、`knowledge_article`。 |
+| `kind` | 必填，当前支持 `github_project`、`ai_model`、`knowledge_article`、`apple_app`。 |
 | `title` | 必填，展示标题。 |
 | `summary` | 必填，最多 180 字符。 |
 | `source.type` | 必填，来源类型字符串。 |
@@ -99,6 +99,22 @@ catalog/content/published/github/collections/voice-cloning/
 | `topics` | 必填，主题数组，1 到 8 项。 |
 | `audience` | 可选，适合读者数组，最多 6 项。 |
 
+`apple_app.profile`：
+
+| Field | Rule |
+| --- | --- |
+| `platforms` | 必填，数组项只能是 `ios` 或 `macos`，1 到 2 项。 |
+| `distribution` | 必填，安装或分发方式，1 到 8 项。 |
+| `tags` | 必填，引用 `catalog/taxonomies.yaml` 的 tag id，1 到 8 项；`ios` / `macos` 平台标签必须和 `platforms` 完全一致。 |
+| `maintenance_status` | 必填，引用 `project_maintenance_statuses` id。 |
+| `pricing` | 可选，价格或商业模式展示事实。 |
+| `repo` | 可选，源码仓库 URL。 |
+| `website` | 可选，官网 URL。 |
+| `license` | 可选，展示事实。 |
+| `languages` | 可选，展示事实。 |
+
+`source` 表示内容条目的主来源，并由详情页的 source row 展示；`apple_app.profile.repo` / `website` 是结构化应用事实；`blocks.links` 是页面可见的策展链接清单。三者可以指向同一站点，但职责不同，不用其中一个字段隐式替代另一个字段。
+
 ## Collection
 
 `collection.yaml` 当前使用 `schema_version: 2`，并且从属于某个 hall。
@@ -129,7 +145,7 @@ catalog/content/published/github/collections/voice-cloning/
 当前已实现的维护入口是 `./scripts/content.sh`：
 
 ```sh
-./scripts/content.sh item new <hall> <github_project|ai_model|knowledge_article> <id> ...
+./scripts/content.sh item new <hall> <github_project|ai_model|knowledge_article|apple_app> <id> ...
 ./scripts/content.sh item note add <hall> <id> <note-id> ...
 ./scripts/content.sh item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>]
 ./scripts/content.sh item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
@@ -146,7 +162,7 @@ catalog/content/published/github/collections/voice-cloning/
 ./scripts/content.sh status <hall> <item|collection> <id>
 ```
 
-`item new`、`collection new` 和 `import apply` 写入 `drafts`。`item note add` 只在 draft item 上创建 note 骨架。`item note import` 从外部 `.md` 或 `.html` 文件新增 note，目标 state 必须显式写为 `drafts` 或 `published`；HTML import 必须显式声明 `--display site` 或 `--display standalone`。`item note replace` 只替换已有 note 文件正文，不修改 note 元数据。写入 `drafts` 后运行 `./scripts/verify.sh catalog`，写入 `published` 后运行 `./scripts/verify.sh release`。`publish` 从 `drafts` 移到 `published` 并运行 `./scripts/verify.sh release`。`archive` 从 `published` 移到 `archived`。`restore` 从 `archived` 移回 `drafts`，不会直接发布。
+`apple_app` 的 `item new` 必填参数包括 `--source-type`、`--source-url`、至少一个 `--platform`、至少一个 `--distribution`、至少一个 `--tag` 和 `--maintenance-status`；平台只支持 `ios` 与 `macos`，且平台标签必须随 `--platform` 一起写入。`item new`、`collection new` 和 `import apply` 写入 `drafts`。`item note add` 只在 draft item 上创建 note 骨架。`item note import` 从外部 `.md` 或 `.html` 文件新增 note，目标 state 必须显式写为 `drafts` 或 `published`；HTML import 必须显式声明 `--display site` 或 `--display standalone`。`item note replace` 只替换已有 note 文件正文，不修改 note 元数据。写入 `drafts` 后运行 `./scripts/verify.sh catalog`，写入 `published` 后运行 `./scripts/verify.sh release`。`publish` 从 `drafts` 移到 `published` 并运行 `./scripts/verify.sh release`。`archive` 从 `published` 移到 `archived`。`restore` 从 `archived` 移回 `drafts`，不会直接发布。
 
 `list`、`show` 和 `status` 是只读查询命令，不加 `.data/catalog-write.lock`，不运行 `verify.sh`，也不触发 Astro build。`list` 可以不带过滤条件、只带 publication state、只带 active hall，或同时带 publication state 和 active hall；未知 hall 和 planned hall 会失败。输出合同：
 
@@ -169,7 +185,7 @@ Content import batch 合同见 [`content-import-batch.md`](./content-import-batc
 - `item.yaml` / `collection.yaml` schema。
 - 目录名与 `id` 一致。
 - `hall` 与目录 hall 一致。
-- GitHub profile 的 taxonomy 引用。
+- GitHub project 和 Apple app profile 的 taxonomy 引用。
 - GitHub related project 引用和 publication state 规则。
 - body 和 notes 文件存在，且不是 symlink。
 - body 和 notes 路径不能越出内容包目录。
@@ -192,4 +208,4 @@ Content import batch 合同见 [`content-import-batch.md`](./content-import-batc
 
 `drafts` 和 `archived` content bundle 不生成公开 canonical 页面，也不会进入 `/halls/models/` 的已发布模型列表或馆内专题列表。
 
-平台首页和 GitHub 展馆页同样只读取 published content：`/` 使用 published content 计算 hall item 数、模型样例和精选专题；`/halls/github/` 只展示 published `github_project` item 和 GitHub hall 的 published collection。
+平台首页、GitHub 展馆页、模型展馆页和 Mac / iOS Store 展馆页同样只读取 published content：`/` 使用 published content 计算 hall item 数、模型样例和精选专题；`/halls/github/` 展示 published `github_project` item 和 GitHub hall 的 published collection；`/halls/models/` 展示 published `ai_model` item；`/halls/app-store/` 展示 published `apple_app` item 和 app-store hall 的 published collection。

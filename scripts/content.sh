@@ -16,7 +16,7 @@ usage() {
   管理 catalog/content/{drafts,published,archived}/ 下的 content bundle 骨架和发布状态。
 
 命令：
-  item new <hall> <github_project|ai_model|knowledge_article> <id> [options] [--added-at YYYY-MM-DD]
+  item new <hall> <github_project|ai_model|knowledge_article|apple_app> <id> [options] [--added-at YYYY-MM-DD]
   item note add <hall> <id> <note-id> [options] [--added-at YYYY-MM-DD]
   item note import <hall> <id> <note-id> --state <drafts|published> --file <path> --title <title> --summary <summary> [--display <site|standalone>] [--added-at YYYY-MM-DD]
   item note replace <hall> <id> <note-id> --state <drafts|published> --file <path>
@@ -65,6 +65,18 @@ usage() {
     --topic "梯度流" \\
     --audience "自学者" \\
     --added-at 2026-07-31
+
+  ./scripts/content.sh item new app-store apple_app lunarbar \\
+    --title "LunarBar" \\
+    --summary "免费开源的 macOS 菜单栏农历日历。" \\
+    --source-type github \\
+    --source-url "https://github.com/LunarBar-app/LunarBar" \\
+    --platform macos \\
+    --distribution "GitHub Releases" \\
+    --tag macos \\
+    --tag open-source \\
+    --maintenance-status unknown \\
+    --added-at 2026-08-17
 
   ./scripts/content.sh item note add models htdemucs-ft-onnx quick-start \\
     --title "快速试用" \\

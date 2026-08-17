@@ -17,6 +17,7 @@ run_date=""
 github_item_id=""
 model_item_id=""
 knowledge_item_id=""
+app_item_id=""
 model_collection_id=""
 markdown_note_id="quick-start"
 html_note_id="html-fragment"
@@ -513,6 +514,7 @@ initialize_fixture_ids() {
   github_item_id="workflow-github-$run_stamp"
   model_item_id="workflow-model-$run_stamp"
   knowledge_item_id="workflow-knowledge-$run_stamp"
+  app_item_id="workflow-app-$run_stamp"
   model_collection_id="workflow-models-$run_stamp"
   import_item_id="workflow-import-model-$run_stamp"
   import_collection_id="workflow-import-models-$run_stamp"
@@ -525,6 +527,7 @@ initialize_fixture_ids() {
 assert_published_routes_exist() {
   assert_copy_path_exists "dist/halls/github/items/$github_item_id/index.html"
   assert_copy_path_exists "dist/halls/lab/items/$knowledge_item_id/index.html"
+  assert_copy_path_exists "dist/halls/app-store/items/$app_item_id/index.html"
   assert_copy_path_exists "dist/halls/lab/items/$knowledge_item_id/notes/$knowledge_note_id/index.html"
   assert_copy_path_exists "dist/halls/models/items/$model_item_id/index.html"
   assert_copy_path_exists "dist/halls/models/items/$model_item_id/notes/$markdown_note_id/index.html"
@@ -536,6 +539,7 @@ assert_published_routes_exist() {
 assert_published_routes_missing() {
   assert_copy_path_missing "dist/halls/github/items/$github_item_id/index.html"
   assert_copy_path_missing "dist/halls/lab/items/$knowledge_item_id/index.html"
+  assert_copy_path_missing "dist/halls/app-store/items/$app_item_id/index.html"
   assert_copy_path_missing "dist/halls/lab/items/$knowledge_item_id/notes/$knowledge_note_id/index.html"
   assert_copy_path_missing "dist/halls/models/items/$model_item_id/index.html"
   assert_copy_path_missing "dist/halls/models/items/$model_item_id/notes/$markdown_note_id/index.html"
@@ -548,6 +552,7 @@ assert_published_routes_missing() {
 assert_public_indexes_include_fixtures() {
   assert_copy_file_contains "dist/halls/github/index.html" "$github_item_id"
   assert_copy_file_contains "dist/halls/lab/index.html" "$knowledge_item_id"
+  assert_copy_file_contains "dist/halls/app-store/index.html" "$app_item_id"
   assert_copy_file_contains "dist/halls/models/index.html" "$model_item_id"
   assert_copy_file_contains "dist/halls/models/collections/index.html" "$model_collection_id"
 }
@@ -555,6 +560,7 @@ assert_public_indexes_include_fixtures() {
 assert_public_indexes_omit_fixtures() {
   assert_copy_file_not_contains "dist/halls/github/index.html" "$github_item_id"
   assert_copy_file_not_contains "dist/halls/lab/index.html" "$knowledge_item_id"
+  assert_copy_file_not_contains "dist/halls/app-store/index.html" "$app_item_id"
   assert_copy_file_not_contains "dist/halls/models/index.html" "$model_item_id"
   assert_copy_file_not_contains "dist/halls/models/collections/index.html" "$model_collection_id"
 }
@@ -562,6 +568,7 @@ assert_public_indexes_omit_fixtures() {
 assert_republished_content_rendered() {
   assert_copy_file_contains "dist/halls/github/items/$github_item_id/index.html" "WORKFLOW-SENTINEL-GITHUB-REPUBLISH"
   assert_copy_file_contains "dist/halls/lab/items/$knowledge_item_id/index.html" "WORKFLOW-SENTINEL-KNOWLEDGE-REPUBLISH"
+  assert_copy_file_contains "dist/halls/app-store/items/$app_item_id/index.html" "WORKFLOW-SENTINEL-APP-REPUBLISH"
   assert_copy_file_contains "dist/halls/lab/items/$knowledge_item_id/notes/$knowledge_note_id/index.html" "WORKFLOW-SENTINEL-KNOWLEDGE-NOTE"
   assert_copy_file_contains "dist/halls/models/items/$model_item_id/index.html" "WORKFLOW-SENTINEL-MODEL-REPUBLISH"
   assert_copy_file_contains "dist/halls/models/items/$model_item_id/notes/$markdown_note_id/index.html" "WORKFLOW-SENTINEL-MARKDOWN-NOTE"
@@ -606,6 +613,9 @@ run_readonly_content_commands() {
   assert_copy_command_output_contains "list-pub-lab-knowledge" \
     $'published\tlab\titem\t'"$knowledge_item_id"$'\tWorkflow Knowledge Fixture' \
     ./scripts/content.sh list published lab
+  assert_copy_command_output_contains "list-pub-app-store" \
+    $'published\tapp-store\titem\t'"$app_item_id"$'\tWorkflow App Fixture' \
+    ./scripts/content.sh list published app-store
   assert_copy_command_output_contains "status-header" \
     $'state\thall\ttype\tid\tpath' \
     ./scripts/content.sh status models item "$model_item_id"
@@ -615,6 +625,9 @@ run_readonly_content_commands() {
   assert_copy_command_output_contains "status-model" \
     $'published\tmodels\titem\t'"$model_item_id"$'\tcatalog/content/published/models/items/'"$model_item_id" \
     ./scripts/content.sh status models item "$model_item_id"
+  assert_copy_command_output_contains "status-app" \
+    $'published\tapp-store\titem\t'"$app_item_id"$'\tcatalog/content/published/app-store/items/'"$app_item_id" \
+    ./scripts/content.sh status app-store item "$app_item_id"
   assert_copy_command_output_contains "status-collection" \
     $'published\tmodels\tcollection\t'"$model_collection_id"$'\tcatalog/content/published/models/collections/'"$model_collection_id" \
     ./scripts/content.sh status models collection "$model_collection_id"
@@ -631,6 +644,10 @@ run_readonly_content_commands() {
     ./scripts/content.sh show lab item "$knowledge_item_id"
   assert_copy_command_output_contains "show-knowledge-note" "$knowledge_note_id" \
     ./scripts/content.sh show lab item "$knowledge_item_id"
+  assert_copy_command_output_contains "show-app-kind" "kind: apple_app" \
+    ./scripts/content.sh show app-store item "$app_item_id"
+  assert_copy_command_output_contains "show-app-platform" "platforms:" \
+    ./scripts/content.sh show app-store item "$app_item_id"
   assert_copy_command_output_contains "show-collection-state" "# state: published" \
     ./scripts/content.sh show models collection "$model_collection_id"
   assert_copy_command_output_contains "show-collection-item" "item: $model_item_id" \
@@ -748,6 +765,7 @@ run_content_lifecycle() {
   event "FIXTURE" "github" "$github_item_id"
   event "FIXTURE" "model" "$model_item_id"
   event "FIXTURE" "knowledge" "$knowledge_item_id"
+  event "FIXTURE" "app" "$app_item_id"
   event "FIXTURE" "collection" "$model_collection_id"
 
   run_in_copy "github-new" \
@@ -801,6 +819,31 @@ run_content_lifecycle() {
   assert_copy_command_output_contains "list-draft-lab" \
     $'drafts\tlab\titem\t'"$knowledge_item_id"$'\tWorkflow Knowledge Fixture' \
     ./scripts/content.sh list drafts lab
+
+  run_in_copy "app-new" \
+    ./scripts/content.sh item new app-store apple_app "$app_item_id" \
+      --title "Workflow App Fixture" \
+      --summary "用于验证 Mac / iOS Store 内容工作流的临时应用。" \
+      --source-type github \
+      --source-url "https://github.com/example/$app_item_id" \
+      --platform macos \
+      --distribution "GitHub Releases" \
+      --distribution "Homebrew Cask" \
+      --tag macos \
+      --tag open-source \
+      --maintenance-status unknown \
+      --pricing "Free" \
+      --repo "https://github.com/example/$app_item_id" \
+      --license MIT \
+      --language Swift
+  assert_copy_path_exists "catalog/content/drafts/app-store/items/$app_item_id/item.yaml"
+  assert_copy_path_missing "dist/halls/app-store/items/$app_item_id/index.html"
+  assert_copy_command_output_contains "status-app-draft" \
+    $'drafts\tapp-store\titem\t'"$app_item_id"$'\tcatalog/content/drafts/app-store/items/'"$app_item_id" \
+    ./scripts/content.sh status app-store item "$app_item_id"
+  assert_copy_command_output_contains "list-draft-app-store" \
+    $'drafts\tapp-store\titem\t'"$app_item_id"$'\tWorkflow App Fixture' \
+    ./scripts/content.sh list drafts app-store
 
   run_in_copy "note-md" \
     ./scripts/content.sh item note add models "$model_item_id" "$markdown_note_id" \
@@ -888,6 +931,7 @@ run_content_lifecycle() {
 
   run_in_copy "publish-git" ./scripts/content.sh publish github item "$github_item_id"
   run_in_copy "publish-knowledge" ./scripts/content.sh publish lab item "$knowledge_item_id"
+  run_in_copy "publish-app" ./scripts/content.sh publish app-store item "$app_item_id"
   run_in_copy "publish-model" ./scripts/content.sh publish models item "$model_item_id"
   run_in_copy "publish-col" ./scripts/content.sh publish models collection "$model_collection_id"
   run_in_copy "verify-release" ./scripts/verify.sh release
@@ -931,12 +975,14 @@ run_content_lifecycle() {
   run_in_copy "archive-col" ./scripts/content.sh archive models collection "$model_collection_id"
   run_in_copy "archive-model" ./scripts/content.sh archive models item "$model_item_id"
   run_in_copy "archive-knowledge" ./scripts/content.sh archive lab item "$knowledge_item_id"
+  run_in_copy "archive-app" ./scripts/content.sh archive app-store item "$app_item_id"
   run_in_copy "archive-git" ./scripts/content.sh archive github item "$github_item_id"
   run_in_copy "verify-archived" ./scripts/verify.sh release
   assert_published_routes_missing
   assert_public_indexes_omit_fixtures
   assert_copy_path_exists "catalog/content/archived/github/items/$github_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/archived/lab/items/$knowledge_item_id/item.yaml"
+  assert_copy_path_exists "catalog/content/archived/app-store/items/$app_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/archived/models/items/$model_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/archived/models/collections/$model_collection_id/collection.yaml"
   assert_copy_command_output_contains "status-model-archived" \
@@ -948,10 +994,12 @@ run_content_lifecycle() {
 
   run_in_copy "restore-model" ./scripts/content.sh restore models item "$model_item_id"
   run_in_copy "restore-knowledge" ./scripts/content.sh restore lab item "$knowledge_item_id"
+  run_in_copy "restore-app" ./scripts/content.sh restore app-store item "$app_item_id"
   run_in_copy "restore-col" ./scripts/content.sh restore models collection "$model_collection_id"
   run_in_copy "restore-git" ./scripts/content.sh restore github item "$github_item_id"
   assert_copy_path_exists "catalog/content/drafts/github/items/$github_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/drafts/lab/items/$knowledge_item_id/item.yaml"
+  assert_copy_path_exists "catalog/content/drafts/app-store/items/$app_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/drafts/models/items/$model_item_id/item.yaml"
   assert_copy_path_exists "catalog/content/drafts/models/collections/$model_collection_id/collection.yaml"
   assert_copy_command_output_contains "status-model-restored" \
@@ -962,6 +1010,8 @@ run_content_lifecycle() {
     "# Workflow GitHub Fixture\n\nWORKFLOW-SENTINEL-GITHUB-REPUBLISH\n"
   write_copy_file "catalog/content/drafts/lab/items/$knowledge_item_id/index.md" \
     "# Workflow Knowledge Fixture\n\nWORKFLOW-SENTINEL-KNOWLEDGE-REPUBLISH\n"
+  write_copy_file "catalog/content/drafts/app-store/items/$app_item_id/index.md" \
+    "# Workflow App Fixture\n\nWORKFLOW-SENTINEL-APP-REPUBLISH\n"
   write_copy_file "catalog/content/drafts/models/items/$model_item_id/index.md" \
     "# Workflow Model Fixture\n\nWORKFLOW-SENTINEL-MODEL-REPUBLISH\n"
   write_copy_file "catalog/content/drafts/models/items/$model_item_id/notes/$markdown_note_id.md" \
@@ -973,6 +1023,7 @@ run_content_lifecycle() {
 
   run_in_copy "republish-git" ./scripts/content.sh publish github item "$github_item_id"
   run_in_copy "republish-knowledge" ./scripts/content.sh publish lab item "$knowledge_item_id"
+  run_in_copy "republish-app" ./scripts/content.sh publish app-store item "$app_item_id"
   run_in_copy "republish-model" ./scripts/content.sh publish models item "$model_item_id"
   run_in_copy "republish-col" ./scripts/content.sh publish models collection "$model_collection_id"
   run_in_copy "verify-repub" ./scripts/verify.sh release
@@ -1002,6 +1053,8 @@ run_failure_idempotency_lifecycle() {
   local planned_hall_path="catalog/content/drafts/music"
   local planned_item_path="$planned_hall_path/items/$planned_item_id"
   local wrong_kind_option_item_id="workflow-knowledge-wrong-option-$run_stamp"
+  local missing_platform_app_id="workflow-app-missing-platform-$run_stamp"
+  local mismatched_platform_app_id="workflow-app-platform-mismatch-$run_stamp"
   local before_path
   local before_collection
   local before_archived
@@ -1033,6 +1086,31 @@ run_failure_idempotency_lifecycle() {
       --topic "catalog-contract" \
       --provider "Workflow Lab"
   assert_copy_path_missing "catalog/content/drafts/lab/items/$wrong_kind_option_item_id"
+
+  expect_copy_failure_contains "app-missing-platform" "requires at least one --platform" \
+    ./scripts/content.sh item new app-store apple_app "$missing_platform_app_id" \
+      --title "Workflow Missing Platform App" \
+      --summary "Apple app 缺少平台参数应失败。" \
+      --source-type github \
+      --source-url "https://github.com/example/$missing_platform_app_id" \
+      --distribution "GitHub Releases" \
+      --tag macos \
+      --maintenance-status unknown
+  assert_copy_path_missing "catalog/content/drafts/app-store/items/$missing_platform_app_id"
+  assert_no_copy_transient_bundle_paths "app-store" "items" "$missing_platform_app_id"
+
+  expect_copy_failure_contains "app-platform-tag-mismatch" "must include platform tag: ios" \
+    ./scripts/content.sh item new app-store apple_app "$mismatched_platform_app_id" \
+      --title "Workflow Platform Mismatch App" \
+      --summary "Apple app 平台字段和平台标签不一致应失败。" \
+      --source-type github \
+      --source-url "https://github.com/example/$mismatched_platform_app_id" \
+      --platform ios \
+      --distribution "GitHub Releases" \
+      --tag macos \
+      --maintenance-status unknown
+  assert_copy_path_missing "catalog/content/drafts/app-store/items/$mismatched_platform_app_id"
+  assert_no_copy_transient_bundle_paths "app-store" "items" "$mismatched_platform_app_id"
 
   before_parent="$(copy_path_snapshot "$draft_collections_parent_path")"
   expect_copy_failure_contains "missing-ref-col" "references unknown item" \

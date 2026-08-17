@@ -40,7 +40,7 @@ const [site, hall, body, memberCollections, relatedItems] = await Promise.all([
 ]);
 const BodyContent = body.type === "markdown" ? body.Content : undefined;
 const htmlFragment = body.type === "html" ? body.html : undefined;
-const taxonomy = item.kind === "github_project" ? await getTaxonomyCatalog() : undefined;
+const taxonomy = item.kind === "github_project" || item.kind === "apple_app" ? await getTaxonomyCatalog() : undefined;
 const header = projectContentItemDetailHeader(item, taxonomy);
 let sectionNumber = 1;
 const notesSectionIndex = item.notes.length > 0 ? String(sectionNumber++).padStart(2, "0") : undefined;

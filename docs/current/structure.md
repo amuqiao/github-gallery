@@ -100,6 +100,7 @@ scripts/verify.sh catalog|content
 | `/` | published content, halls, site config |
 | `/halls/github/` | published `github_project` content and GitHub hall collections |
 | `/halls/models/` | published `ai_model` content |
+| `/halls/app-store/` | published `apple_app` content and app-store hall collections |
 | `/halls/lab/` | published content and collections for temporary lab curation |
 | `/halls/music/` | planned hall config |
 | `/halls/movies/` | planned hall config |
@@ -116,7 +117,7 @@ Legacy root routes such as `/projects/*`, `/collections/*`, `/categories/*`, `/t
 
 `catalog/halls/` owns hall availability and sort order. A `planned` hall may have an entry page but cannot own content bundles or collection index routes.
 
-`catalog/taxonomies.yaml` owns category, tag, and project maintenance status labels. GitHub content items store only taxonomy ids in `profile`.
+`catalog/taxonomies.yaml` owns category, tag, and project maintenance status labels. GitHub project content items store category, tag, and maintenance status ids in `profile`; Apple app content items store tag and maintenance status ids in `profile`.
 
 `catalog/site.yaml` owns top navigation and site metadata.
 

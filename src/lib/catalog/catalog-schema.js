@@ -246,6 +246,37 @@ export const knowledgeArticleProfileSchema = z
   })
   .strict();
 
+export const appleAppProfileSchema = z
+  .object({
+    platforms: z.array(z.enum(["ios", "macos"])).min(1).max(2),
+    distribution: z.array(nonEmptyString).min(1).max(8),
+    tags: z.array(z.string().regex(slugPattern)).min(1).max(8),
+    maintenance_status: z.string().regex(slugPattern),
+    pricing: nonEmptyString.optional(),
+    repo: z.string().url().optional(),
+    website: z.string().url().optional(),
+    license: nonEmptyString.optional(),
+    languages: z.array(nonEmptyString).min(1).optional()
+  })
+  .strict()
+  .superRefine((profile, ctx) => {
+    if (new Set(profile.platforms).size !== profile.platforms.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "apple_app platforms must not contain duplicates",
+        path: ["platforms"]
+      });
+    }
+
+    if (new Set(profile.tags).size !== profile.tags.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "apple_app tags must not contain duplicates",
+        path: ["tags"]
+      });
+    }
+  });
+
 const contentItemBaseSchema = z
   .object({
     schema_version: z.literal(2),
@@ -274,6 +305,10 @@ export const contentItemConfigSchema = z.discriminatedUnion("kind", [
   contentItemBaseSchema.extend({
     kind: z.literal("knowledge_article"),
     profile: knowledgeArticleProfileSchema
+  }),
+  contentItemBaseSchema.extend({
+    kind: z.literal("apple_app"),
+    profile: appleAppProfileSchema
   })
 ]);
 
